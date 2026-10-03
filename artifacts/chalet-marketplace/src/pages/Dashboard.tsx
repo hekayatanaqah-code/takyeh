@@ -19,6 +19,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ServiceCoverageEditor } from "@/components/service/ServiceCoverageEditor";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9304,7 +9305,7 @@ function ServiceDetailsTab() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [form, setForm] = useState<Record<string, any> | null>(null);
   const [coverageTags, setCoverageTags] = useState<string[]>([]);
-  const [coverageSearch, setCoverageSearch] = useState("");
+  const hydratedProviderId = useRef<number | null>(null);
   const [featureTags, setFeatureTags] = useState<string[]>([]);
   const [newFeature, setNewFeature] = useState("");
   const [logoUrl, setLogoUrl] = useState<string>("");
@@ -9313,7 +9314,7 @@ function ServiceDetailsTab() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
 
-  const { data: serviceCities = [], isLoading: citiesLoading, isError: citiesError, refetch: reloadCities } = useQuery<{ id: number; name: string }[]>({
+  const { data: serviceCities = [], isLoading: citiesLoading, isError: citiesError, refetch: reloadCities } = useQuery<{ id: number; name: string; regionId: number }[]>({
     queryKey: ["service-locations", "cities", "all"],
     queryFn: async () => {
       const r = await apiFetch("/service-cities");
@@ -9324,24 +9325,48 @@ function ServiceDetailsTab() {
     refetchOnMount: "always",
   });
 
+  const { data: serviceRegions = [], isLoading: regionsLoading, isError: regionsError, refetch: reloadRegions } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["service-locations", "regions"],
+    queryFn: async () => {
+      const r = await apiFetch("/service-regions");
+      if (!r.ok) throw new Error("تعذر تحميل مناطق الخدمات");
+      return r.json();
+    },
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+
   const { data: provider, isLoading } = useQuery({
     queryKey: ["service-provider-detail", providerId],
     queryFn: async () => {
-      const r = await apiFetch(`/providers/${providerId}`);
-      if (!r.ok) return null;
-      return r.json();
+      const r = await apiFetch("/providers/my/approved");
+      if (!r.ok) throw new Error("تعذر تحميل بيانات الخدمة");
+      const rows = await r.json();
+      return rows.find((row: { id: number }) => row.id === providerId) ?? null;
     },
     enabled: !!providerId,
   });
 
-  /* Reset form whenever provider data or providerId changes */
+  const needsRegistrationCity = !!provider?.submissionId && !String(provider?.city ?? "").trim();
+  const { data: originalSubmission, isPending: registrationPending, isError: registrationError, refetch: reloadRegistration } = useQuery<{ city: string }>({
+    queryKey: ["service-details-registration-city", providerId, provider?.submissionId],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/submissions/${provider.submissionId}`);
+      if (!r.ok) throw new Error("تعذر جلب المدينة من التسجيل");
+      return r.json();
+    },
+    enabled: needsRegistrationCity,
+  });
+
+  /* Hydrate once per service; background refreshes must not erase unsaved edits. */
   useEffect(() => {
-    if (provider) {
+    if (provider && !(needsRegistrationCity && registrationPending) && hydratedProviderId.current !== providerId) {
+      hydratedProviderId.current = providerId;
       setForm({
         businessName: provider.businessName ?? "",
         descriptionAr: provider.descriptionAr ?? "",
         whatsappNumber: fromAr(provider.whatsappNumber ?? ""),
-        city: provider.city ?? "",
+        city: String(provider.city ?? "").trim() || String(originalSubmission?.city ?? "").trim(),
         yearsOfExperience: provider.yearsOfExperience ?? "",
         requiresInsurance: Boolean(provider.requiresInsurance),
         requiresContract: Boolean(provider.requiresContract),
@@ -9350,19 +9375,21 @@ function ServiceDetailsTab() {
         insuranceAmount: provider.insuranceAmount == null ? "" : String(provider.insuranceAmount),
       });
       setCoverageTags([...new Set<string>(provider.coverageTags ?? [])]);
-      setFeatureTags(provider.customFeatureTags ?? []);
+      setFeatureTags((provider.customFeatureTags ?? []).map((tag: string) => toAr(tag)));
       const photos: string[] = provider.galleryPhotos ?? [];
-      const mainIndex = photos.indexOf(provider.logoUrl);
-      const photoOrder = mainIndex > 0
-        ? [mainIndex, ...photos.map((_, index) => index).filter(index => index !== mainIndex)]
-        : photos.map((_, index) => index);
-      setLogoUrl(provider.logoUrl || photos[0] || "");
-      setGalleryPhotos(photoOrder.map(index => photos[index]));
-      setPhotoCaptions(photoOrder.map(index => provider.photoCaptions?.[index] ?? ""));
+      setLogoUrl(provider.logoUrl ?? "");
+      setGalleryPhotos(photos);
+      setPhotoCaptions(photos.map((_, index) => provider.photoCaptions?.[index] ?? ""));
     }
-  }, [provider, providerId]);
+  }, [provider, providerId, originalSubmission, needsRegistrationCity, registrationPending]);
 
-  if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+  useEffect(() => {
+    if (originalSubmission?.city?.trim()) {
+      setForm(previous => previous && !previous.city?.trim() ? { ...previous, city: originalSubmission.city.trim() } : previous);
+    }
+  }, [originalSubmission]);
+
+  if (isLoading || (needsRegistrationCity && registrationPending)) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   if (!provider || !form) return <div className="py-12 text-center text-muted-foreground">تعذر تحميل البيانات</div>;
 
   async function handleSave() {
@@ -9382,9 +9409,10 @@ function ServiceDetailsTab() {
         method: "PATCH",
         body: JSON.stringify({
           ...currentForm,
+          city: currentForm.city.trim(),
           insuranceAmount: currentForm.requiresInsurance ? currentForm.insuranceAmount : null,
           coverageTags,
-          customFeatureTags: featureTags,
+          customFeatureTags: featureTags.map(fromAr),
           yearsOfExperience: currentForm.yearsOfExperience ? Number(currentForm.yearsOfExperience) : null,
           logoUrl: logoUrl || null,
           galleryPhotos,
@@ -9392,6 +9420,8 @@ function ServiceDetailsTab() {
         }),
       });
       if (!r.ok) throw new Error();
+      const updatedProvider = await r.json();
+      queryClient.setQueryData(["service-provider-detail", providerId], updatedProvider);
       queryClient.invalidateQueries({ queryKey: ["service-provider-detail", providerId] });
       queryClient.invalidateQueries({ queryKey: ["my-approved-providers"] });
       toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات الخدمة بنجاح" });
@@ -9437,27 +9467,11 @@ function ServiceDetailsTab() {
     } finally { setDeleting(false); }
   }
 
-  const allKingdomCoverage = "جميع مناطق المملكة";
   const cityOptions = [...new Set<string>([
     ...(provider.city ? [provider.city] : []),
     ...(form.city ? [form.city] : []),
-    ...serviceCities.map(city => city.name),
-  ])];
-  const coverageCityOptions = [...new Set([
-    ...cityOptions,
-    ...(provider.coverageTags ?? []).filter((city: string) => city !== allKingdomCoverage),
-    ...coverageTags.filter(city => city !== allKingdomCoverage),
-  ])];
-  const visibleCoverageCities = coverageCityOptions.filter(city => city.includes(coverageSearch.trim()));
-  const kingdomSelected = coverageTags.includes(allKingdomCoverage);
-  const allVisibleSelected = visibleCoverageCities.length > 0 && visibleCoverageCities.every(city => coverageTags.includes(city));
-
-  function toggleCoverageCity(city: string) {
-    setCoverageTags(previous => {
-      const cities = previous.filter(value => value !== allKingdomCoverage);
-      return cities.includes(city) ? cities.filter(value => value !== city) : [...cities, city];
-    });
-  }
+    ...serviceCities.filter(city => serviceRegions.some(region => region.id === city.regionId)).map(city => city.name),
+  ])].filter(city => city.trim());
 
   async function handleLogoUpload(file: File) {
     setUploadingLogo(true);
@@ -9480,7 +9494,6 @@ function ServiceDetailsTab() {
 
   function removeGalleryItem(idx: number) {
     const remainingPhotos = galleryPhotos.filter((_, index) => index !== idx);
-    if (galleryPhotos[idx] === logoUrl) setLogoUrl(remainingPhotos[0] ?? "");
     setGalleryPhotos(remainingPhotos);
     setPhotoCaptions(galleryPhotos.flatMap((_, index) => index === idx ? [] : [photoCaptions[index] ?? ""]));
   }
@@ -9492,7 +9505,6 @@ function ServiceDetailsTab() {
   function setMainFromGallery(idx: number) {
     const photo = galleryPhotos[idx];
     if (!photo) return;
-    setLogoUrl(photo);
     const order = [idx, ...galleryPhotos.map((_, index) => index).filter(index => index !== idx)];
     setGalleryPhotos(order.map(index => galleryPhotos[index]));
     setPhotoCaptions(order.map(index => photoCaptions[index] ?? ""));
@@ -9512,6 +9524,31 @@ function ServiceDetailsTab() {
           className={`rounded-xl gap-1.5 text-xs font-bold ${provider.isActive ? "border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20" : "border-green-400 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"}`}>
           {toggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : provider.isActive ? <><X className="w-3.5 h-3.5" />إيقاف الخدمة</> : <><CheckCircle className="w-3.5 h-3.5" />تفعيل الخدمة</>}
         </Button>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3" data-testid="service-logo-section">
+        <h3 className="text-sm font-bold text-foreground">شعار الخدمة (الصورة الرئيسية للنشاط)</h3>
+        <div className="flex items-center gap-4 flex-wrap">
+          {logoUrl ? (
+            <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-border bg-muted shrink-0">
+              <img src={`${BASE}${logoUrl}`} alt="شعار الخدمة" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = ""; }} />
+              <button type="button" onClick={() => setLogoUrl("")} aria-label="إزالة شعار الخدمة"
+                className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ) : (
+            <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border bg-muted/40 flex items-center justify-center text-muted-foreground shrink-0">
+              <ImageIcon className="w-7 h-7 opacity-40" />
+            </div>
+          )}
+          <label className={`cursor-pointer flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted transition-colors text-sm font-semibold ${uploadingLogo ? "opacity-60 pointer-events-none" : ""}`}>
+            {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+            {logoUrl ? "تغيير الشعار" : "رفع شعار"}
+            <input type="file" accept="image/*" aria-label="رفع شعار الخدمة" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ""; }} disabled={uploadingLogo} />
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">الشعار مستقل عن غلاف معرض الصور؛ لا يتغير عند اختيار صورة رئيسية للمعرض أو حذف صوره.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -9535,13 +9572,18 @@ function ServiceDetailsTab() {
         </div>
         {/* City */}
         <div className="space-y-1.5">
-          <label className="text-sm font-semibold text-foreground">المدينة الرئيسية</label>
-          <Select value={form.city} onValueChange={v => setForm({ ...form, city: v })}>
-            <SelectTrigger className="rounded-xl" aria-label="المدينة الرئيسية"><SelectValue placeholder="اختر المدينة">{form.city || undefined}</SelectValue></SelectTrigger>
-            <SelectContent>
-              {cityOptions.map(city => <SelectItem key={city} value={city}>{city}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <label htmlFor={`service-main-city-${providerId}`} className="text-sm font-semibold text-foreground">المدينة الرئيسية</label>
+          <select id={`service-main-city-${providerId}`} aria-label="المدينة الرئيسية" dir="rtl"
+            value={form.city} onChange={event => setForm({ ...form, city: event.target.value })}
+            className="h-9 w-full rounded-xl border border-input bg-background px-3 text-sm text-right shadow-sm focus:outline-none focus:ring-1 focus:ring-ring">
+            <option value="" disabled>اختر المدينة الرئيسية</option>
+            {cityOptions.map(city => <option key={city} value={city}>{city}</option>)}
+          </select>
+          {registrationError && (
+            <p className="text-xs text-destructive" role="alert">تعذر جلب المدينة من طلب التسجيل.{" "}
+              <button type="button" className="underline" onClick={() => void reloadRegistration()}>إعادة المحاولة</button>
+            </p>
+          )}
           {citiesLoading && <p className="text-xs text-muted-foreground">جارٍ تحميل المدن المتاحة…</p>}
           {citiesError && (
             <p className="text-xs text-destructive" role="alert">
@@ -9618,52 +9660,23 @@ function ServiceDetailsTab() {
       </div>
 
       {/* Coverage Tags */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <label className="text-sm font-semibold text-foreground">نطاق التغطية الجغرافية</label>
-          <div className="flex items-center gap-3 flex-wrap">
-            <button type="button" disabled={visibleCoverageCities.length === 0}
-              onClick={() => setCoverageTags(previous => allVisibleSelected
-                ? previous.filter(city => !visibleCoverageCities.includes(city))
-                : [...new Set([...previous.filter(city => city !== allKingdomCoverage), ...visibleCoverageCities])])}
-              className="text-xs font-semibold text-primary hover:underline disabled:opacity-50">
-              {allVisibleSelected ? (coverageSearch.trim() ? "إلغاء تحديد نتائج البحث" : "إلغاء تحديد المدن") : (coverageSearch.trim() ? "تحديد نتائج البحث" : "تحديد كل المدن")}
-            </button>
-            <button type="button" disabled={coverageTags.length === 0} onClick={() => setCoverageTags([])}
-              className="text-xs font-semibold text-muted-foreground hover:text-destructive disabled:opacity-50">
-              إلغاء تحديد الكل
-            </button>
-          </div>
-        </div>
-        <button type="button" aria-pressed={kingdomSelected}
-          onClick={() => setCoverageTags(previous => previous.includes(allKingdomCoverage) ? [] : [allKingdomCoverage])}
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-colors ${kingdomSelected ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border"}`}>
-          <CheckCircle className="w-3.5 h-3.5" />تغطية جميع مناطق المملكة
-        </button>
-        <Input value={coverageSearch} onChange={event => setCoverageSearch(event.target.value)}
-          placeholder="ابحث عن مدينة لتحديدها أو إلغاء تحديدها" aria-label="البحث في مدن نطاق التغطية" className="rounded-xl" />
-        <div role="group" aria-label="مدن نطاق التغطية" className="flex flex-wrap gap-2 p-3 bg-muted rounded-xl min-h-[60px] max-h-60 overflow-y-auto">
-          {visibleCoverageCities.map(city => (
-            <button key={city} type="button"
-              aria-pressed={coverageTags.includes(city)}
-              onClick={() => toggleCoverageCity(city)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${coverageTags.includes(city) ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground border border-border hover:border-primary"}`}>
-              {coverageTags.includes(city) && <CheckCircle className="w-3.5 h-3.5" />}
-              {city}
-            </button>
-          ))}
-          {visibleCoverageCities.length === 0 && <p className="text-xs text-muted-foreground">{citiesLoading ? "جارٍ تحميل المدن…" : citiesError ? "تعذر تحميل المدن. يمكنك إعادة المحاولة من حقل المدينة الرئيسية." : "لا توجد مدن مطابقة."}</p>}
-        </div>
-        <p className="text-xs text-muted-foreground" aria-live="polite">{kingdomSelected ? "نطاق التغطية: جميع مناطق المملكة" : `محدّد: ${toAr(coverageTags.length)} مدينة. البحث لا يلغي اختياراتك الأخرى.`}</p>
-      </div>
+      <ServiceCoverageEditor
+        regions={serviceRegions}
+        cities={serviceCities.filter(city => serviceRegions.some(region => region.id === city.regionId))}
+        value={coverageTags}
+        onChange={setCoverageTags}
+        loading={citiesLoading || regionsLoading}
+        error={citiesError || regionsError}
+        onRetry={() => { void reloadCities(); void reloadRegions(); }}
+      />
 
       {/* Feature Tags */}
-      <div className="space-y-2">
+      <div className="space-y-2" dir="rtl">
         <label className="text-sm font-semibold text-foreground">مميزات الخدمة</label>
         <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-xl min-h-[48px]">
           {featureTags.map(tag => (
             <span key={tag} className="flex items-center gap-1.5 bg-background border border-border rounded-full px-3 py-1 text-xs font-semibold">
-              {tag}
+              <bdi dir="rtl">{toAr(tag)}</bdi>
               <button type="button" onClick={() => setFeatureTags(prev => prev.filter(t => t !== tag))} className="text-muted-foreground hover:text-red-500 transition-colors">
                 <X className="w-3 h-3" />
               </button>
@@ -9672,8 +9685,8 @@ function ServiceDetailsTab() {
           {featureTags.length === 0 && <span className="text-xs text-muted-foreground">لا توجد مميزات — أضف مميزات تظهر في صفحة الخدمة</span>}
         </div>
         <div className="flex gap-2">
-          <Input value={newFeature} onChange={e => setNewFeature(e.target.value)} placeholder="مثال: خدمة 24 ساعة، تغطية كاملة..." className="rounded-xl flex-1"
-            onKeyDown={e => { if (e.key === "Enter" && newFeature.trim()) { setFeatureTags(p => [...p, newFeature.trim()]); setNewFeature(""); } }} />
+          <Input dir="rtl" aria-label="إضافة ميزة للخدمة" value={newFeature} onChange={e => setNewFeature(toAr(e.target.value))} placeholder="مثال: خدمة ٢٤ ساعة، تغطية كاملة..." className="rounded-xl flex-1 text-right"
+            onKeyDown={e => { if (e.key === "Enter" && newFeature.trim()) { e.preventDefault(); setFeatureTags(p => [...p, newFeature.trim()]); setNewFeature(""); } }} />
           <Button type="button" variant="outline" className="rounded-xl"
             onClick={() => { if (newFeature.trim()) { setFeatureTags(p => [...p, newFeature.trim()]); setNewFeature(""); } }}>
             <Plus className="w-4 h-4" />
@@ -9687,31 +9700,6 @@ function ServiceDetailsTab() {
           <ImageIcon className="w-4 h-4 text-amber-500" />
           الصور والوسائط
         </h3>
-
-        {/* Main / Logo Image */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-muted-foreground">الصورة الرئيسية للخدمة</label>
-          <div className="flex items-center gap-4 flex-wrap">
-            {logoUrl ? (
-              <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-border bg-muted shrink-0">
-                <img src={`${BASE}${logoUrl}`} alt="logo" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).src = ""; }} />
-                <button type="button" onClick={() => setLogoUrl("")}
-                  className="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            ) : (
-              <div className="w-24 h-24 rounded-xl border-2 border-dashed border-border bg-muted/40 flex items-center justify-center text-muted-foreground shrink-0">
-                <ImageIcon className="w-7 h-7 opacity-40" />
-              </div>
-            )}
-            <label className={`cursor-pointer flex items-center gap-2 px-4 py-2 rounded-xl border border-border bg-card hover:bg-muted transition-colors text-sm font-semibold ${uploadingLogo ? "opacity-60 pointer-events-none" : ""}`}>
-              {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-              {logoUrl ? "تغيير الصورة" : "رفع صورة"}
-              <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ""; }} disabled={uploadingLogo} />
-            </label>
-          </div>
-        </div>
 
         {/* Gallery */}
         <div className="space-y-2">
@@ -9739,15 +9727,15 @@ function ServiceDetailsTab() {
                         className="absolute top-1 left-1 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    {logoUrl === url && (
+                    {idx === 0 && (
                       <span className="absolute top-1 right-1 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">رئيسية</span>
                     )}
                   </div>
-                  <Button type="button" variant={logoUrl === url ? "default" : "outline"} size="sm"
+                  <Button type="button" variant={idx === 0 ? "default" : "outline"} size="sm"
                     className="w-full h-auto min-h-8 gap-1 px-2 py-1.5 text-xs whitespace-normal"
-                    aria-pressed={logoUrl === url} onClick={() => setMainFromGallery(idx)}>
+                    aria-pressed={idx === 0} onClick={() => setMainFromGallery(idx)}>
                     <Star className="w-3 h-3 shrink-0" />
-                    {logoUrl === url ? "الصورة الرئيسية" : "تحديد الصورة الرئيسية"}
+                    {idx === 0 ? "الصورة الرئيسية للمعرض" : "تحديد الصورة الرئيسية"}
                   </Button>
                   <Input
                     value={photoCaptions[idx] ?? ""}
@@ -9762,7 +9750,7 @@ function ServiceDetailsTab() {
         </div>
       </div>
 
-      <p className="text-xs text-muted-foreground">اختر الصورة الرئيسية لتظهر أولًا كغلاف لخدمتك، ثم اضغط «حفظ التعديلات». يبقى وصف كل صورة مرتبطًا بها عند تغيير ترتيبها.</p>
+      <p className="text-xs text-muted-foreground">اختر الصورة الرئيسية لتظهر أولًا كغلاف للمعرض، ثم اضغط «حفظ التعديلات». تبقى الأوصاف مرتبطة بصورها، ولا يتغير شعار الخدمة.</p>
 
       {/* Save */}
       <div className="flex justify-end pt-2">
