@@ -12450,7 +12450,7 @@ function ServiceSeasonsTab() {
                       {globalSeasons.map(s => {
                         const registered = seasons.some(row => row.globalSeasonId === s.id);
                         return <option key={s.id} value={s.id} disabled={registered}>
-                          {s.nameAr} — {formatDualDate(s.startDate).gregorian} إلى {formatDualDate(s.endDate).gregorian}{registered ? " (مسجل بالفعل)" : ""}
+                          {s.nameAr}{registered ? " (مسجل بالفعل)" : ""}
                         </option>;
                       })}
                     </select>}
