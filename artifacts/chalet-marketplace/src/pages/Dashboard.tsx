@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback, createContext, useContext, Fragment, type ReactElement, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import QRCode from "qrcode";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ServiceCoverageEditor } from "@/components/service/ServiceCoverageEditor";
 import { ServicePrimaryCitySelector } from "@/components/service/ServicePrimaryCitySelector";
+import OwnerHub, { type OwnerHubActivity } from "@/components/owner/OwnerHub";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25289,10 +25290,17 @@ function SubscriptionAccountBanner({
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
+  const search = useSearch();
+  const routeParams = new URLSearchParams(search);
+  const ownerView = routeParams.get("view");
+  const requestedServiceRaw = routeParams.get("serviceId");
+  const requestedServiceId = requestedServiceRaw && /^\d+$/.test(requestedServiceRaw)
+    && Number.isSafeInteger(Number(requestedServiceRaw)) && Number(requestedServiceRaw) > 0
+      ? Number(requestedServiceRaw) : null;
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
   const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
-  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<number | null>(requestedServiceId);
   const [serviceView, setServiceView] = useState<"manage" | "submissions">("manage");
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
@@ -25393,6 +25401,7 @@ export default function Dashboard() {
     bookingsCalPref?: string;
     reportsCalPref?: string;
     salaryCalPref?: string;
+    fullName?: string;
   };
   const {
     data: ownerProfile,
@@ -25437,20 +25446,21 @@ export default function Dashboard() {
     enabled: isStaff || ((isAuthenticated || isImpersonating) && canSeeChalets),
   });
 
-  const { data: ownerChalets = [], isLoading: ownerChaletsLoading } = useQuery<any[]>({
-    queryKey: ["owner", "chalets"],
+  const { data: ownerChalets = [], isLoading: ownerChaletsLoading, isError: ownerChaletsError, refetch: retryOwnerChalets } = useQuery<any[]>({
+    queryKey: ["owner", "chalets", isImpersonating ? impersonation.ownerId : user?.id],
     queryFn: async () => {
       const r = await apiFetch("/owner/chalets");
-      return r.ok ? r.json() : [];
+      if (!r.ok) throw new Error("تعذّر تحميل العقارات");
+      return r.json();
     },
     enabled: isStaff || ((isAuthenticated || isImpersonating) && canSeeChalets),
   });
 
-  const { data: planLimits } = useQuery<OwnerPlanLimits>({
+  const { data: planLimits, isError: planLimitsError, refetch: retryPlanLimits } = useQuery<OwnerPlanLimits>({
     queryKey: ["owner", "plan-limits"],
     queryFn: async () => {
       const r = await apiFetch("/owner/plan-limits");
-      if (!r.ok) return { plan: "trial", active: true, scope: "full", chaletLimit: 1, chaletCount: 0, serviceLimit: 1, serviceCount: 0 };
+      if (!r.ok) throw new Error("تعذّر التحقق من الاشتراك");
       return r.json();
     },
     enabled: isAuthenticated || isImpersonating,
@@ -25484,6 +25494,8 @@ export default function Dashboard() {
       ? "admin-finance"
       : dashMode === "admin-finance" && !canAccessFinancialAdmin
         ? businessType === "service" ? "services" : "chalets"
+      : !actAsStaff && requestedServiceId && canSeeServices
+        ? "services"
       : !actAsStaff && businessType === "service"
       ? "services"
       : !actAsStaff && businessType === "chalet"
@@ -25499,11 +25511,12 @@ export default function Dashboard() {
     },
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff && canSeeServices,
   });
-  const { data: myApprovedProviders = [] } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string; requiresInsurance: boolean; requiresContract: boolean; insuranceAmount: string | null }[]>({
-    queryKey: ["my-approved-providers"],
+  const { data: myApprovedProviders = [], isLoading: providersLoading, isError: providersError, refetch: retryProviders } = useQuery<{ id: number; isActive: boolean; businessName: string; category: string; city: string; logoUrl: string | null; requiresInsurance: boolean; requiresContract: boolean; insuranceAmount: string | null }[]>({
+    queryKey: ["my-approved-providers", isImpersonating ? impersonation.ownerId : user?.id],
     queryFn: async () => {
       const r = await apiFetch("/providers/my/approved");
-      return r.ok ? r.json() : [];
+      if (!r.ok) throw new Error("تعذّر تحميل الخدمات");
+      return r.json();
     },
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff && canSeeServices,
   });
@@ -25516,6 +25529,36 @@ export default function Dashboard() {
   const atServiceLimit = planLimits
     ? planLimits.active === false || (planLimits.serviceCount ?? myServiceSubmissions.length + myApprovedProviders.length) >= planLimits.serviceLimit
     : false;
+
+  const showOwnerHub = !actAsStaff && !isImpersonating && !requestedServiceRaw
+    && ownerView !== "manage";
+
+  useEffect(() => {
+    const previousTitle = document.title;
+    document.title = showOwnerHub ? "أنشطتي | تكية" : "لوحة إدارة النشاط | تكية";
+    return () => { document.title = previousTitle; };
+  }, [showOwnerHub]);
+
+  useEffect(() => {
+    if (actAsStaff || isImpersonating) return;
+    if (requestedServiceId) {
+      setDashMode("services");
+      setSelectedServiceId(requestedServiceId);
+      setSelectedServiceTab("details");
+      setServiceView("manage");
+    }
+    setAccountSettingsOpen(ownerView === "account");
+    if (ownerView === "manage") {
+      setServiceView("submissions");
+      setActiveTab("chalets");
+    }
+  }, [search, actAsStaff, isImpersonating]);
+
+  function selectService(id: number) {
+    setSelectedServiceId(id);
+    setSelectedServiceTab("details");
+    if (!isImpersonating && !actAsStaff && requestedServiceRaw) navigate(`/dashboard?serviceId=${id}`);
+  }
 
   /* Auto-set dashMode based on businessType when profile loads; also seed calendar prefs from DB */
   useEffect(() => {
@@ -25542,13 +25585,14 @@ export default function Dashboard() {
   /* Preserve a valid selection; recover when the selected service is removed. */
   useEffect(() => {
     if (activeDashMode !== "services") return;
+    if (!actAsStaff && !isImpersonating && requestedServiceRaw) return;
     if (myApprovedProviders.some((provider) => provider.id === selectedServiceId)) return;
     const nextServiceId = myApprovedProviders[0]?.id ?? null;
     if (nextServiceId !== selectedServiceId) {
       setSelectedServiceId(nextServiceId);
       setSelectedServiceTab("details");
     }
-  }, [activeDashMode, myApprovedProviders, selectedServiceId]);
+  }, [activeDashMode, myApprovedProviders, selectedServiceId, requestedServiceRaw, actAsStaff, isImpersonating]);
 
   useEffect(() => {
     if (planLimits?.scope !== "property" || dashMode !== "admin-finance") return;
@@ -25730,7 +25774,9 @@ export default function Dashboard() {
   const isFullyLoading  = isLoadingAuth
     || impersonationLoading
     || ownerSwitchLoading
-    || (!actAsStaff && (isAuthenticated || isImpersonating) && ownerProfileLoading);
+    || (!actAsStaff && (isAuthenticated || isImpersonating) && ownerProfileLoading)
+    || (!actAsStaff && !isImpersonating && !!requestedServiceId
+      && (providersLoading || selectedServiceId !== requestedServiceId));
   const canAccess       = isAuthenticated || isStaff || isImpersonating;
 
   useEffect(() => {
@@ -25756,6 +25802,82 @@ export default function Dashboard() {
   }
 
   if (!canAccess) return null;
+
+  if (!actAsStaff && !isImpersonating && requestedServiceRaw
+    && (!requestedServiceId || providersError || !myApprovedProviders.some(p => p.id === requestedServiceId))) {
+    return <div className="min-h-screen bg-background" dir="rtl">
+      <Navbar />
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center space-y-4">
+        <h1 className="text-xl font-bold">{providersError ? "تعذّر تحميل الخدمة" : "الخدمة غير متاحة في حسابك"}</h1>
+        <Button onClick={() => navigate("/dashboard")}>العودة إلى أنشطتي</Button>
+        {providersError && <Button variant="outline" onClick={() => { void retryProviders(); }}>إعادة المحاولة</Button>}
+      </div>
+    </div>;
+  }
+
+  if (showOwnerHub) {
+    const resolveLogo = (url: string | null | undefined) =>
+      url ? (/^https?:\/\//i.test(url) ? url : `${BASE}${url.startsWith("/") ? "" : "/"}${url}`) : null;
+    const activities: OwnerHubActivity[] = [
+      ...(canSeeChalets ? ownerChalets.map((c: any) => ({
+        key: `chalet-${c.id}`, kind: "chalet" as const, id: c.id,
+        name: c.nameAr, city: c.city || c.location || "",
+        logoUrl: resolveLogo(c.logoUrl), isActive: c.isActive === true,
+        href: `/my-chalet/${c.submissionId}`,
+      })) : []),
+      ...(canSeeServices ? myApprovedProviders.map(p => ({
+        key: `service-${p.id}`, kind: "service" as const, id: p.id,
+        name: p.businessName, city: p.city, logoUrl: resolveLogo(p.logoUrl),
+        isActive: p.isActive, href: `/dashboard?serviceId=${p.id}`,
+      })) : []),
+    ];
+    return <ImpersonationCtx.Provider value={{ isReadOnly, onBlockedEdit }}>
+      <div className="min-h-screen bg-background" dir="rtl">
+        <Navbar />
+        <main className="container mx-auto max-w-6xl px-4 py-8 sm:py-12">
+          <OwnerHub
+            ownerName={ownerProfile?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "حساب المالك"}
+            activities={activities}
+            loading={(canSeeChalets && ownerChaletsLoading) || (canSeeServices && providersLoading)}
+            error={(canSeeChalets && ownerChaletsError) || (canSeeServices && providersError) ? "تعذّر تحميل بعض أنشطتك. أعد المحاولة لعرض القائمة كاملة." : null}
+            onRetry={() => { if (canSeeChalets) void retryOwnerChalets(); if (canSeeServices) void retryProviders(); }}
+            onOpenActivity={activity => navigate(activity.href)}
+            canAddChalet={canSeeChalets}
+            canAddService={canSeeServices}
+            onAddActivity={kind => {
+              if (!planLimits) {
+                toast({ title: planLimitsError ? "تعذّر التحقق من الاشتراك" : "يرجى الانتظار",
+                  description: planLimitsError ? "أعد المحاولة للتحقق من صلاحية إضافة نشاط." : "جارٍ التحقق من صلاحيات الاشتراك. أعد المحاولة بعد لحظات.",
+                  variant: planLimitsError ? "destructive" : "default" });
+                if (planLimitsError) void retryPlanLimits();
+                return;
+              }
+              if (planLimits.active === false) { navigate("/subscription"); return; }
+              if (kind === "chalet" ? headerAtChaletLimit : atServiceLimit) { setShowHeaderAddon(kind); return; }
+              navigate(kind === "chalet" ? "/add-chalet" : "/add-service-provider");
+            }}
+            onAccountSettings={() => navigate("/dashboard?view=account")}
+            onSubscription={() => navigate("/subscription")}
+            onManageRequests={() => navigate("/dashboard?view=manage")}
+          />
+        </main>
+        <Dialog open={accountSettingsOpen} onOpenChange={open => { setAccountSettingsOpen(open); if (!open) navigate("/dashboard"); }}>
+          <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6" dir="rtl">
+            <DialogHeader className="sr-only">
+              <DialogTitle>إعدادات الحساب</DialogTitle>
+              <DialogDescription>تعديل بيانات الحساب وكلمة المرور وتفضيلات الإشعارات</DialogDescription>
+            </DialogHeader>
+            <OwnerProfileTab />
+          </DialogContent>
+        </Dialog>
+        <UpgradePlanDialog open={showHeaderAddon !== null && !!freeAccess} onClose={() => setShowHeaderAddon(null)}
+          onRequestAddon={() => {}} context={showHeaderAddon ?? "chalet"} active={planLimits?.active}
+          extraPrice={showHeaderAddon === "service" ? planLimits?.extraServicePrice : planLimits?.extraChaletPrice} freeAccess />
+        <AddonPaymentModal open={showHeaderAddon !== null && !freeAccess} onClose={() => setShowHeaderAddon(null)}
+          addonType={showHeaderAddon ?? "chalet"} selectableType />
+      </div>
+    </ImpersonationCtx.Provider>;
+  }
 
   return (
     <ImpersonationCtx.Provider value={{ isReadOnly, onBlockedEdit }}>
@@ -25853,6 +25975,13 @@ export default function Dashboard() {
         </div>
       )}
       <Navbar />
+      {!actAsStaff && !isImpersonating && (
+        <div className="container mx-auto max-w-4xl px-4 pt-5">
+          <Button variant="outline" className="rounded-xl gap-2" onClick={() => navigate("/dashboard")}>
+            <ArrowRight className="w-4 h-4" /> العودة إلى أنشطتي
+          </Button>
+        </div>
+      )}
       {!actAsStaff && !freeAccess && subscription && isSubscriptionExpiryWarning(subscription)
         && (subscription.reminderPreviewMilestone !== undefined || (!isStaff && !isImpersonating)) && (() => {
         const isPreview = subscription.reminderPreviewMilestone !== undefined;
@@ -26203,12 +26332,12 @@ export default function Dashboard() {
                 </div>
                 <ServiceSubmissionsTab
                   onManageCalendar={(providerId) => {
-                    setSelectedServiceId(providerId);
+                    selectService(providerId);
                     setSelectedServiceTab("calendar");
                     setServiceView("manage");
                   }}
                   onEditProvider={(providerId) => {
-                    setSelectedServiceId(providerId);
+                    selectService(providerId);
                     setSelectedServiceTab("details");
                     setServiceView("manage");
                   }}
@@ -26228,7 +26357,7 @@ export default function Dashboard() {
                       aria-selected={selectedServiceId === p.id}
                       aria-controls={`service-panel-${p.id}`}
                       tabIndex={selectedServiceId === p.id ? 0 : -1}
-                      onClick={() => { setSelectedServiceId(p.id); setSelectedServiceTab("details"); }}
+                      onClick={() => selectService(p.id)}
                       onKeyDown={(event) => {
                         let nextIndex: number;
                         if (event.key === "ArrowLeft") nextIndex = (index + 1) % myApprovedProviders.length;
@@ -26237,7 +26366,7 @@ export default function Dashboard() {
                         else if (event.key === "End") nextIndex = myApprovedProviders.length - 1;
                         else return;
                         event.preventDefault();
-                        setSelectedServiceId(myApprovedProviders[nextIndex].id);
+                        selectService(myApprovedProviders[nextIndex].id);
                         setSelectedServiceTab("details");
                         const nextTab = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex];
                         nextTab?.focus({ preventScroll: true });
@@ -28108,6 +28237,7 @@ function OwnerSupportTab() {
 /* ── Owner Account Settings Tab ────────────────────────────── */
 function OwnerProfileTab() {
   const { toast } = useToast();
+  const profileQueryClient = useQueryClient();
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
   function apiFetch(path: string, opts?: RequestInit) {
     return fetch(`${BASE}/api${path}`, { credentials: "include", headers: { "Content-Type": "application/json", ...(opts?.headers ?? {}) }, ...opts });
@@ -28309,6 +28439,7 @@ function OwnerProfileTab() {
       if (!r.ok) { toast({ title: "خطأ", description: d.error ?? "فشل الحفظ", variant: "destructive" }); return; }
       toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات حسابك بنجاح" });
       setInitName(fullName.trim());
+      void profileQueryClient.invalidateQueries({ queryKey: ["owner", "profile-btype"] });
       setCurrentPw(""); setNewPw(""); setConfirmPw(""); setShowPwSection(false);
     } finally { setSaving(false); }
   }
