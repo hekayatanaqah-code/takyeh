@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Link } from "wouter";
 import {
   Building2,
   Briefcase,
@@ -26,6 +27,8 @@ export interface OwnerToolbarProps {
   onSubscription: () => void;
   onManageRequests: () => void;
   onLogout: () => void;
+  navigation?: ReactNode;
+  showHomeLink?: boolean;
 }
 
 export default function OwnerToolbar(p: OwnerToolbarProps) {
@@ -41,7 +44,7 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
   return (
     <section dir="rtl" className="w-full max-w-full overflow-x-hidden" data-testid="owner-toolbar">
       <div className="rounded-3xl border border-border bg-gradient-to-l from-accent to-card p-4 sm:px-6 sm:py-4">
-        <div className="flex items-start justify-between gap-3 lg:items-center">
+        <div className="flex flex-wrap items-start gap-3 lg:items-center">
           <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground sm:text-sm">أهلاً بك</p>
             <h1 className="break-words text-xl font-extrabold leading-tight sm:text-2xl" data-testid="text-owner-name">
@@ -59,13 +62,20 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
           >
             <LogOut />
           </Button>
-          <div className="hidden min-w-0 flex-wrap justify-end gap-2 lg:flex">
+          <div className="grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:min-w-0 lg:flex-wrap lg:justify-end [&>*]:min-w-0 [&>*]:whitespace-normal [&>*]:text-xs sm:[&>*]:text-sm">
             <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} />
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 lg:hidden [&>*]:min-w-0 [&>*]:whitespace-normal [&>*]:text-xs sm:[&>*]:text-sm">
-          <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} mobile />
-        </div>
+        {(p.navigation || p.showHomeLink) && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+            {p.navigation}
+            {p.showHomeLink && (
+              <Link href="/" className="text-xs font-semibold text-muted-foreground hover:text-primary">
+                الرئيسية · تصفح المنصة
+              </Link>
+            )}
+          </div>
+        )}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -106,36 +116,32 @@ function Actions({
   p,
   canAny,
   onAdd,
-  mobile,
 }: {
   p: OwnerToolbarProps;
   canAny: boolean;
   onAdd: () => void;
-  mobile?: boolean;
 }) {
-  // Test ids only on one rendering (desktop) to stay unique in the DOM.
-  const id = (s: string) => (mobile ? `${s}-mobile` : s);
   return (
     <>
       <Button
         onClick={onAdd}
         disabled={!canAny}
-        className={`rounded-full font-bold ${mobile ? "col-span-2" : ""}`}
-        data-testid={id("button-add-activity")}
+        className="col-span-2 rounded-full font-bold lg:col-span-1"
+        data-testid="button-add-activity"
       >
         <Plus /> إضافة نشاط/خدمة جديدة
       </Button>
-      <Button variant="outline" className="rounded-full" onClick={p.onSubscription} data-testid={id("button-subscription")}>
+      <Button variant="outline" className="rounded-full" onClick={p.onSubscription} data-testid="button-subscription">
         <CreditCard /> الاشتراك والباقات
       </Button>
-      <Button variant="outline" className="rounded-full" onClick={p.onAccountSettings} data-testid={id("button-account-settings")}>
+      <Button variant="outline" className="rounded-full" onClick={p.onAccountSettings} data-testid="button-account-settings">
         <Settings /> الإعدادات الشخصية
       </Button>
       <Button
         variant="ghost"
-        className={`rounded-full ${mobile ? "col-span-2" : ""}`}
+        className="col-span-2 rounded-full lg:col-span-1"
         onClick={p.onManageRequests}
-        data-testid={id("button-manage-requests")}
+        data-testid="button-manage-requests"
       >
         <ClipboardList /> طلبات التسجيل
       </Button>

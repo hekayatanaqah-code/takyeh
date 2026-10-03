@@ -25939,7 +25939,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      <Navbar />
+      {(activeDashMode !== "services" || actAsStaff || isImpersonating) && <Navbar />}
       {!actAsStaff && !isImpersonating && (
         <div className="container mx-auto max-w-6xl px-4 pt-6">
           <OwnerToolbar
@@ -25951,6 +25951,30 @@ export default function Dashboard() {
             onSubscription={() => navigate("/subscription")}
             onManageRequests={openRegistrationRequests}
             onLogout={logout}
+            showHomeLink={activeDashMode === "services"}
+            navigation={activeDashMode === "services" ? (
+              <div className="flex flex-wrap items-center gap-2" aria-label="الأقسام العامة للخدمات">
+                <Button
+                  type="button"
+                  variant={serviceView === "manage" && myApprovedProviders.length > 0 ? "default" : "outline"}
+                  className="gap-2 rounded-xl"
+                  aria-pressed={serviceView === "manage" && myApprovedProviders.length > 0}
+                  disabled={myApprovedProviders.length === 0}
+                  onClick={() => setServiceView("manage")}
+                >
+                  <Star className="w-4 h-4" />إدارة الخدمات
+                </Button>
+                <Button
+                  type="button"
+                  variant={serviceView === "submissions" || myApprovedProviders.length === 0 ? "default" : "outline"}
+                  className="gap-2 rounded-xl"
+                  aria-pressed={serviceView === "submissions" || myApprovedProviders.length === 0}
+                  onClick={() => setServiceView("submissions")}
+                >
+                  <Archive className="w-4 h-4" />متابعة الطلبات
+                </Button>
+              </div>
+            ) : undefined}
           />
         </div>
       )}
@@ -26265,12 +26289,12 @@ export default function Dashboard() {
             animate={{ opacity: 1, y: 0 }}
             className="space-y-5"
           >
-            {dashboardSubscription && (freeAccess || !isSubscriptionExpiryWarning(dashboardSubscription)) && (
+            {isImpersonating && dashboardSubscription && (freeAccess || !isSubscriptionExpiryWarning(dashboardSubscription)) && (
               <SubscriptionAccountBanner subscription={dashboardSubscription} onManage={() => navigate("/subscription")} />
             )}
 
-            {/* Header */}
-            <div className="flex items-start justify-between gap-4 flex-wrap">
+            {/* Legacy administrator navigation; owners use the unified toolbar. */}
+            {isImpersonating && <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
                   <Star className="w-5 h-5 text-amber-500" />
@@ -26296,10 +26320,10 @@ export default function Dashboard() {
                   aria-pressed={serviceView === "submissions" || myApprovedProviders.length === 0}
                   onClick={() => setServiceView("submissions")}
                 >
-                  <Archive className="w-4 h-4" />الطلبات والتقديمات
+                  <Archive className="w-4 h-4" />متابعة الطلبات
                 </Button>
               </div>
-            </div>
+            </div>}
 
             {/* Cross-owner shortcut to admin section */}
             {isCrossOwner && canAccessFinancialAdmin && (
@@ -26317,9 +26341,9 @@ export default function Dashboard() {
 
             {/* Account-wide requests are independent of the selected service. */}
              {serviceView === "submissions" || myApprovedProviders.length === 0 ? (
-              <section className="space-y-4" aria-label="الطلبات والتقديمات لجميع الخدمات">
+              <section className="space-y-4" aria-label="متابعة الطلبات لجميع الخدمات">
                 <div>
-                  <h3 className="text-lg font-bold">الطلبات والتقديمات</h3>
+                  <h3 className="text-lg font-bold">متابعة الطلبات</h3>
                   <p className="text-sm text-muted-foreground">عرض الطلبات والتقديمات لجميع خدماتك، وليس للخدمة المختارة فقط.</p>
                 </div>
                 <ServiceSubmissionsTab
@@ -26337,48 +26361,6 @@ export default function Dashboard() {
               </section>
             ) : (
               <>
-                {/* ── Service Selector Tabs ─────────────────────────── */}
-                <div className="min-w-0 w-full space-y-2">
-                  <p className="text-sm font-semibold text-muted-foreground">اختر الخدمة التي تريد إدارتها</p>
-                  <div className="w-full overflow-x-auto pb-1">
-                  <div role="tablist" aria-label="خدماتي المستقلة" aria-orientation="horizontal" dir="rtl" className="flex w-max min-w-full gap-2">
-                  {myApprovedProviders.map((p, index) => (
-                    <button key={p.id} type="button"
-                      role="tab"
-                      id={`service-tab-${p.id}`}
-                      aria-selected={selectedServiceId === p.id}
-                      aria-controls={`service-panel-${p.id}`}
-                      tabIndex={selectedServiceId === p.id ? 0 : -1}
-                      onClick={() => selectService(p.id)}
-                      onKeyDown={(event) => {
-                        let nextIndex: number;
-                        if (event.key === "ArrowLeft") nextIndex = (index + 1) % myApprovedProviders.length;
-                        else if (event.key === "ArrowRight") nextIndex = (index - 1 + myApprovedProviders.length) % myApprovedProviders.length;
-                        else if (event.key === "Home") nextIndex = 0;
-                        else if (event.key === "End") nextIndex = myApprovedProviders.length - 1;
-                        else return;
-                        event.preventDefault();
-                        selectService(myApprovedProviders[nextIndex].id);
-                        setSelectedServiceTab("details");
-                        const nextTab = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex];
-                        nextTab?.focus({ preventScroll: true });
-                        nextTab?.scrollIntoView({ block: "nearest", inline: "nearest" });
-                      }}
-                      title={p.businessName}
-                      className={`flex shrink-0 items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-all border whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 ${
-                        selectedServiceId === p.id
-                          ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-400 dark:border-amber-700 shadow-sm"
-                          : "bg-card text-muted-foreground border-border hover:text-foreground hover:border-amber-300"
-                      }`}>
-                      <span className="text-base">{(SERVICE_CATEGORY_LABELS[p.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? "✨").split(" ")[0]}</span>
-                      <span>{p.businessName}</span>
-                      {!p.isActive && <span className="text-xs opacity-60">(متوقف)</span>}
-                    </button>
-                  ))}
-                  </div>
-                  </div>
-                </div>
-
                 {/* ── Service ERP Dashboard ─────────────────────────── */}
                 {selectedServiceId !== null && (() => {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
@@ -26400,9 +26382,8 @@ export default function Dashboard() {
                   return (
                     <ServiceErpCtx.Provider key={selectedServiceId} value={{ providerId: selectedServiceId }}>
                       <section
-                        role="tabpanel"
                         id={`service-panel-${selectedServiceId}`}
-                        aria-labelledby={`service-tab-${selectedServiceId}`}
+                        aria-labelledby={`service-name-${selectedServiceId}`}
                         className="min-w-0 space-y-5"
                       >
                       {/* Provider header card */}
@@ -26411,9 +26392,26 @@ export default function Dashboard() {
                           {(SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? "✨").split(" ")[0]}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="font-extrabold text-foreground">{selectedProvider?.businessName}</p>
+                          <p id={`service-name-${selectedServiceId}`} className="font-extrabold text-foreground">{selectedProvider?.businessName}</p>
                           <p className="text-xs text-muted-foreground">{selectedProvider?.city} · {SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? selectedProvider?.category}</p>
                         </div>
+                        {myApprovedProviders.length > 1 && (
+                          <Select value={String(selectedServiceId)} onValueChange={value => {
+                            selectService(Number(value));
+                            setSelectedServiceTab("details");
+                          }}>
+                            <SelectTrigger aria-label="تبديل الخدمة" className="w-full sm:w-52 min-w-0 [&>span]:truncate">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent dir="rtl">
+                              {myApprovedProviders.map(provider => (
+                                <SelectItem key={provider.id} value={String(provider.id)}>
+                                  {provider.businessName}{!provider.isActive ? " (متوقف)" : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                         <div className="flex items-center gap-2 flex-wrap">
                           {selectedProvider?.isActive ? (
                             <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2.5 py-1 rounded-full font-bold">نشط ✓</span>
