@@ -179,7 +179,7 @@ export default function OwnerChaletDetail() {
         <AlertCircle className="w-12 h-12 text-destructive" />
         <p className="text-lg font-bold">تعذّر تحميل بيانات الشاليه</p>
         <Link href="/dashboard">
-          <Button variant="outline">العودة إلى أنشطتي</Button>
+          <Button variant="outline">العودة إلى لوحة التحكم</Button>
         </Link>
       </div>
     );
@@ -197,7 +197,7 @@ export default function OwnerChaletDetail() {
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
           {/* Back arrow — standalone at far right (RTL start) */}
           <Link href="/dashboard" className="shrink-0">
-            <button aria-label="العودة إلى أنشطتي" title="العودة إلى أنشطتي" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-muted/60 transition-colors text-muted-foreground">
+            <button aria-label="العودة إلى لوحة التحكم" title="العودة إلى لوحة التحكم" className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-muted/60 transition-colors text-muted-foreground">
               <ArrowRight className="w-4 h-4" />
             </button>
           </Link>

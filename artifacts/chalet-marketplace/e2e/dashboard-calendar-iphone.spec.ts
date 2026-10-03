@@ -110,8 +110,8 @@ test("owner dashboard calendar remains usable in an iPhone viewport", async ({ p
   await page.getByRole("button", { name: "دخول", exact: true }).click();
 
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByTestId("owner-hub")).toBeVisible();
-  await page.getByRole("button", { name: "طلبات التسجيل" }).click();
+  await expect(page.getByTestId("owner-toolbar")).toBeVisible();
+  await expect(page.getByTestId("owner-hub")).toHaveCount(0);
   await expect(page.getByText(submission.nameAr).first()).toBeVisible();
   await page.getByRole("button", { name: "إغلاق أيام" }).click();
   await expect(page.getByRole("dialog")).toContainText(`إغلاق أيام — ${submission.nameAr}`);

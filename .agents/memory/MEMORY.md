@@ -42,4 +42,4 @@
 - [Dynamic marketplace catalogs](dynamic-marketplace-catalogs.md) — active categories appear before inventory exists; admin filters retain historical values and reconcile dependent cities.
 - [Administrative inventory display](admin-inventory-display.md) — no property pricing-method controls; show actual owner identity alongside property and service names.
 - [Service media identity](service-media-identity.md) — the service logo and gallery cover are separate roles; gallery operations must never replace or delete the logo.
-- [Owner navigation](owner-navigation.md) — owners start at the activity hub; explicit activity selection stays stable while account settings and subscriptions remain account-wide.
+- [Owner navigation](owner-navigation.md) — no intermediate Hub; service owners enter the active-service dashboard directly, with account controls in an integrated top toolbar.

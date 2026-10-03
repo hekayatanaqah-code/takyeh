@@ -1,10 +1,10 @@
 ---
 name: Owner navigation
-description: Product intent for the owner's home and account-wide versus activity-specific navigation.
+description: Direct owner dashboard entry and account-wide toolbar controls.
 ---
 
-The owner's home is the starting point after sign-in, before choosing a particular activity. It must list the owner's properties and services and offer account settings, subscription plans, and activity creation. Opening one activity should select that exact activity, not whichever activity happens to be first.
+There must be no independent intermediate Hub page. A service owner enters the active service's dashboard directly. The greeting with the owner's name and the controls for adding an activity/service, subscriptions/plans, personal settings, and registration requests belong at the top of the real dashboard as a flexible toolbar.
 
-**Why:** The user requested a primary hub for flexible navigation between multiple activities, separate from each activity's management screen.
+**Why:** The user explicitly replaced the earlier separate-Hub requirement with direct service-dashboard entry and an integrated toolbar.
 
-**How to apply:** Preserve explicit activity links across reloads and browser navigation, and provide a return to the owner's activity list. Keep personal settings, subscriptions, and submission requests account-wide. Preserve existing staff and administrator-impersonation entry paths; they are not ordinary owner sign-ins. Reuse existing subscription capacity checks when adding activities.
+**How to apply:** Prefer an active service for ordinary default entry, but preserve an explicitly selected owned service across reloads and browser navigation. Keep activity switching inside the dashboard and settings, subscriptions, and registration requests account-wide. Preserve property-only, staff, and administrator-impersonation management paths. Reuse existing subscription capacity checks when adding activities. Use the button label «طلبات التسجيل».

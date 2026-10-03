@@ -21,7 +21,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ServiceCoverageEditor } from "@/components/service/ServiceCoverageEditor";
 import { ServicePrimaryCitySelector } from "@/components/service/ServicePrimaryCitySelector";
-import OwnerHub, { type OwnerHubActivity } from "@/components/owner/OwnerHub";
+import OwnerToolbar from "@/components/owner/OwnerToolbar";
+import { initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25297,7 +25298,7 @@ export default function Dashboard() {
   const requestedServiceId = requestedServiceRaw && /^\d+$/.test(requestedServiceRaw)
     && Number.isSafeInteger(Number(requestedServiceRaw)) && Number(requestedServiceRaw) > 0
       ? Number(requestedServiceRaw) : null;
-  const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance">("chalets");
+  const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance" | null>(null);
   const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(requestedServiceId);
@@ -25486,24 +25487,8 @@ export default function Dashboard() {
       ? { plan: "trial", status: "active", expiresAt: null, paymentStatus: "paid", freeAccess }
       : null;
 
-  /* Render only modules granted by the current subscription. The property-only
-     package keeps bookings and property management available. */
-  const canAccessFinancialAdmin = isStaff || actAsStaff || planLimits?.scope !== "property";
-  const activeDashMode: "chalets" | "services" | "admin-finance" =
-    dashMode === "admin-finance" && canAccessFinancialAdmin
-      ? "admin-finance"
-      : dashMode === "admin-finance" && !canAccessFinancialAdmin
-        ? businessType === "service" ? "services" : "chalets"
-      : !actAsStaff && requestedServiceId && canSeeServices
-        ? "services"
-      : !actAsStaff && businessType === "service"
-      ? "services"
-      : !actAsStaff && businessType === "chalet"
-        ? "chalets"
-        : dashMode;
-
   /* ── My independent service submissions & approved providers ── */
-  const { data: myServiceSubmissions = [] } = useQuery<{ id: number; status: string; businessName: string }[]>({
+  const { data: myServiceSubmissions = [], isLoading: serviceSubmissionsLoading } = useQuery<{ id: number; status: string; businessName: string }[]>({
     queryKey: ["my-service-submissions"],
     queryFn: async () => {
       const r = await apiFetch("/providers/my/submissions");
@@ -25521,6 +25506,22 @@ export default function Dashboard() {
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff && canSeeServices,
   });
 
+  /* Ordinary owners enter an activity dashboard, never a separate hub. */
+  const effectiveDashMode = dashMode ?? (actAsStaff || isImpersonating ? "chalets" : initialOwnerDashboardMode(
+    businessType, myApprovedProviders.length, myServiceSubmissions.length, providersError,
+  ));
+  const canAccessFinancialAdmin = isStaff || actAsStaff || planLimits?.scope !== "property";
+  const activeDashMode: "chalets" | "services" | "admin-finance" =
+    effectiveDashMode === "admin-finance" && canAccessFinancialAdmin
+      ? "admin-finance"
+      : effectiveDashMode === "admin-finance" && !canAccessFinancialAdmin
+        ? businessType === "service" ? "services" : "chalets"
+      : !actAsStaff && businessType === "service"
+        ? "services"
+      : !actAsStaff && businessType === "chalet"
+        ? "chalets"
+      : effectiveDashMode;
+
   /* Cross-owner logic: user has BOTH chalets AND service providers */
   const isCrossOwner = (ownerChalets?.length ?? 0) > 0 && myApprovedProviders.length > 0;
   const headerAtChaletLimit = planLimits
@@ -25530,34 +25531,59 @@ export default function Dashboard() {
     ? planLimits.active === false || (planLimits.serviceCount ?? myServiceSubmissions.length + myApprovedProviders.length) >= planLimits.serviceLimit
     : false;
 
-  const showOwnerHub = !actAsStaff && !isImpersonating && !requestedServiceRaw
-    && ownerView !== "manage";
-
   useEffect(() => {
+    if (actAsStaff || isImpersonating) return;
     const previousTitle = document.title;
-    document.title = showOwnerHub ? "أنشطتي | تكية" : "لوحة إدارة النشاط | تكية";
+    document.title = activeDashMode === "services" ? "لوحة تحكم الخدمة | تكية" : "لوحة تحكم المالك | تكية";
     return () => { document.title = previousTitle; };
-  }, [showOwnerHub]);
+  }, [activeDashMode, actAsStaff, isImpersonating]);
 
   useEffect(() => {
     if (actAsStaff || isImpersonating) return;
     if (requestedServiceId) {
       setDashMode("services");
-      setSelectedServiceId(requestedServiceId);
-      setSelectedServiceTab("details");
-      setServiceView("manage");
+      if (selectedServiceId !== requestedServiceId) {
+        setSelectedServiceId(requestedServiceId);
+        setSelectedServiceTab("details");
+      }
+      if (ownerView !== "account") setServiceView(ownerView === "requests" || ownerView === "manage" ? "submissions" : "manage");
     }
     setAccountSettingsOpen(ownerView === "account");
-    if (ownerView === "manage") {
+    if (ownerView === "manage" || ownerView === "requests") {
       setServiceView("submissions");
       setActiveTab("chalets");
+      if (ownerView === "requests" && canSeeServices) setDashMode("services");
     }
-  }, [search, actAsStaff, isImpersonating]);
+  }, [search, actAsStaff, isImpersonating, canSeeServices]);
 
   function selectService(id: number) {
     setSelectedServiceId(id);
     setSelectedServiceTab("details");
-    if (!isImpersonating && !actAsStaff && requestedServiceRaw) navigate(`/dashboard?serviceId=${id}`);
+    if (!isImpersonating && !actAsStaff) navigate(`/dashboard?serviceId=${id}`);
+  }
+
+  function addOwnerActivity(kind: "chalet" | "service") {
+    if (!planLimits) {
+      toast({ title: planLimitsError ? "تعذّر التحقق من الاشتراك" : "يرجى الانتظار",
+        description: planLimitsError ? "أعد المحاولة للتحقق من صلاحية إضافة نشاط." : "جارٍ التحقق من صلاحيات الاشتراك. أعد المحاولة بعد لحظات.",
+        variant: planLimitsError ? "destructive" : "default" });
+      if (planLimitsError) void retryPlanLimits();
+      return;
+    }
+    if (planLimits.active === false) { navigate("/subscription"); return; }
+    if (kind === "chalet" ? headerAtChaletLimit : atServiceLimit) { setShowHeaderAddon(kind); return; }
+    navigate(kind === "chalet" ? "/add-chalet" : "/add-service-provider");
+  }
+
+  function openRegistrationRequests() {
+    if (canSeeServices) {
+      setDashMode("services");
+      setServiceView("submissions");
+    } else {
+      setDashMode("chalets");
+      setActiveTab("chalets");
+    }
+    navigate(`/dashboard?${canSeeServices && selectedServiceId ? `serviceId=${selectedServiceId}&` : ""}view=requests`);
   }
 
   /* Auto-set dashMode based on businessType when profile loads; also seed calendar prefs from DB */
@@ -25587,7 +25613,7 @@ export default function Dashboard() {
     if (activeDashMode !== "services") return;
     if (!actAsStaff && !isImpersonating && requestedServiceRaw) return;
     if (myApprovedProviders.some((provider) => provider.id === selectedServiceId)) return;
-    const nextServiceId = myApprovedProviders[0]?.id ?? null;
+    const nextServiceId = selectOwnerService(myApprovedProviders, selectedServiceId);
     if (nextServiceId !== selectedServiceId) {
       setSelectedServiceId(nextServiceId);
       setSelectedServiceTab("details");
@@ -25775,6 +25801,9 @@ export default function Dashboard() {
     || impersonationLoading
     || ownerSwitchLoading
     || (!actAsStaff && (isAuthenticated || isImpersonating) && ownerProfileLoading)
+    || (!actAsStaff && !isImpersonating && canSeeServices && (providersLoading || serviceSubmissionsLoading))
+    || (!actAsStaff && !isImpersonating && !requestedServiceRaw && activeDashMode === "services" && !providersError
+      && myApprovedProviders.length > 0 && !myApprovedProviders.some(p => p.id === selectedServiceId))
     || (!actAsStaff && !isImpersonating && !!requestedServiceId
       && (providersLoading || selectedServiceId !== requestedServiceId));
   const canAccess       = isAuthenticated || isStaff || isImpersonating;
@@ -25809,74 +25838,10 @@ export default function Dashboard() {
       <Navbar />
       <div className="mx-auto max-w-3xl px-4 py-16 text-center space-y-4">
         <h1 className="text-xl font-bold">{providersError ? "تعذّر تحميل الخدمة" : "الخدمة غير متاحة في حسابك"}</h1>
-        <Button onClick={() => navigate("/dashboard")}>العودة إلى أنشطتي</Button>
+        <Button onClick={() => navigate("/dashboard")}>العودة إلى لوحة التحكم</Button>
         {providersError && <Button variant="outline" onClick={() => { void retryProviders(); }}>إعادة المحاولة</Button>}
       </div>
     </div>;
-  }
-
-  if (showOwnerHub) {
-    const resolveLogo = (url: string | null | undefined) =>
-      url ? (/^https?:\/\//i.test(url) ? url : `${BASE}${url.startsWith("/") ? "" : "/"}${url}`) : null;
-    const activities: OwnerHubActivity[] = [
-      ...(canSeeChalets ? ownerChalets.map((c: any) => ({
-        key: `chalet-${c.id}`, kind: "chalet" as const, id: c.id,
-        name: c.nameAr, city: c.city || c.location || "",
-        logoUrl: resolveLogo(c.logoUrl), isActive: c.isActive === true,
-        href: `/my-chalet/${c.submissionId}`,
-      })) : []),
-      ...(canSeeServices ? myApprovedProviders.map(p => ({
-        key: `service-${p.id}`, kind: "service" as const, id: p.id,
-        name: p.businessName, city: p.city, logoUrl: resolveLogo(p.logoUrl),
-        isActive: p.isActive, href: `/dashboard?serviceId=${p.id}`,
-      })) : []),
-    ];
-    return <ImpersonationCtx.Provider value={{ isReadOnly, onBlockedEdit }}>
-      <div className="min-h-screen bg-background" dir="rtl">
-        <Navbar />
-        <main className="container mx-auto max-w-6xl px-4 py-8 sm:py-12">
-          <OwnerHub
-            ownerName={ownerProfile?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "حساب المالك"}
-            activities={activities}
-            loading={(canSeeChalets && ownerChaletsLoading) || (canSeeServices && providersLoading)}
-            error={(canSeeChalets && ownerChaletsError) || (canSeeServices && providersError) ? "تعذّر تحميل بعض أنشطتك. أعد المحاولة لعرض القائمة كاملة." : null}
-            onRetry={() => { if (canSeeChalets) void retryOwnerChalets(); if (canSeeServices) void retryProviders(); }}
-            onOpenActivity={activity => navigate(activity.href)}
-            canAddChalet={canSeeChalets}
-            canAddService={canSeeServices}
-            onAddActivity={kind => {
-              if (!planLimits) {
-                toast({ title: planLimitsError ? "تعذّر التحقق من الاشتراك" : "يرجى الانتظار",
-                  description: planLimitsError ? "أعد المحاولة للتحقق من صلاحية إضافة نشاط." : "جارٍ التحقق من صلاحيات الاشتراك. أعد المحاولة بعد لحظات.",
-                  variant: planLimitsError ? "destructive" : "default" });
-                if (planLimitsError) void retryPlanLimits();
-                return;
-              }
-              if (planLimits.active === false) { navigate("/subscription"); return; }
-              if (kind === "chalet" ? headerAtChaletLimit : atServiceLimit) { setShowHeaderAddon(kind); return; }
-              navigate(kind === "chalet" ? "/add-chalet" : "/add-service-provider");
-            }}
-            onAccountSettings={() => navigate("/dashboard?view=account")}
-            onSubscription={() => navigate("/subscription")}
-            onManageRequests={() => navigate("/dashboard?view=manage")}
-          />
-        </main>
-        <Dialog open={accountSettingsOpen} onOpenChange={open => { setAccountSettingsOpen(open); if (!open) navigate("/dashboard"); }}>
-          <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6" dir="rtl">
-            <DialogHeader className="sr-only">
-              <DialogTitle>إعدادات الحساب</DialogTitle>
-              <DialogDescription>تعديل بيانات الحساب وكلمة المرور وتفضيلات الإشعارات</DialogDescription>
-            </DialogHeader>
-            <OwnerProfileTab />
-          </DialogContent>
-        </Dialog>
-        <UpgradePlanDialog open={showHeaderAddon !== null && !!freeAccess} onClose={() => setShowHeaderAddon(null)}
-          onRequestAddon={() => {}} context={showHeaderAddon ?? "chalet"} active={planLimits?.active}
-          extraPrice={showHeaderAddon === "service" ? planLimits?.extraServicePrice : planLimits?.extraChaletPrice} freeAccess />
-        <AddonPaymentModal open={showHeaderAddon !== null && !freeAccess} onClose={() => setShowHeaderAddon(null)}
-          addonType={showHeaderAddon ?? "chalet"} selectableType />
-      </div>
-    </ImpersonationCtx.Provider>;
   }
 
   return (
@@ -25976,10 +25941,17 @@ export default function Dashboard() {
       )}
       <Navbar />
       {!actAsStaff && !isImpersonating && (
-        <div className="container mx-auto max-w-4xl px-4 pt-5">
-          <Button variant="outline" className="rounded-xl gap-2" onClick={() => navigate("/dashboard")}>
-            <ArrowRight className="w-4 h-4" /> العودة إلى أنشطتي
-          </Button>
+        <div className="container mx-auto max-w-6xl px-4 pt-6">
+          <OwnerToolbar
+            ownerName={ownerProfile?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "حساب المالك"}
+            canAddChalet={canSeeChalets}
+            canAddService={canSeeServices}
+            onAddActivity={addOwnerActivity}
+            onAccountSettings={() => setAccountSettingsOpen(true)}
+            onSubscription={() => navigate("/subscription")}
+            onManageRequests={openRegistrationRequests}
+            onLogout={logout}
+          />
         </div>
       )}
       {!actAsStaff && !freeAccess && subscription && isSubscriptionExpiryWarning(subscription)
@@ -26032,10 +26004,11 @@ export default function Dashboard() {
         );
       })()}
 
-      <div className="container mx-auto px-4 py-10 max-w-4xl">
+      <div className={`container mx-auto px-4 py-6 ${!actAsStaff && !isImpersonating ? "max-w-6xl" : "max-w-4xl"}`}>
 
 
         {/* Profile Card — adapts for owner vs staff */}
+        {(actAsStaff || isImpersonating) && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -26172,6 +26145,7 @@ export default function Dashboard() {
             )}
           </div>
         </motion.div>
+        )}
         <UpgradePlanDialog
           open={showHeaderAddon !== null && !!freeAccess}
           onClose={() => setShowHeaderAddon(null)}
@@ -26187,7 +26161,12 @@ export default function Dashboard() {
           addonType={showHeaderAddon ?? "chalet"}
           selectableType
         />
-        <Dialog open={accountSettingsOpen} onOpenChange={setAccountSettingsOpen}>
+        <Dialog open={accountSettingsOpen} onOpenChange={open => {
+          setAccountSettingsOpen(open);
+          if (!open && ownerView === "account") {
+            navigate(`/dashboard${selectedServiceId ? `?serviceId=${selectedServiceId}` : ""}`, { replace: true });
+          }
+        }}>
           <DialogContent className="max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6" dir="rtl">
             <DialogHeader className="sr-only">
               <DialogTitle>إعدادات الحساب</DialogTitle>
@@ -26265,8 +26244,21 @@ export default function Dashboard() {
           </motion.div>
         )}
 
+        {activeDashMode === "services" && !actAsStaff && providersError && (
+          <div role="alert" className="mb-5 rounded-2xl border border-destructive/30 bg-card p-6 text-center space-y-3">
+            <p className="font-semibold">تعذّر تحميل خدماتك</p>
+            <Button variant="outline" onClick={() => { void retryProviders(); }}>إعادة المحاولة</Button>
+          </div>
+        )}
+        {activeDashMode === "chalets" && ownerChaletsError && (
+          <div role="alert" className="mb-5 rounded-2xl border border-destructive/30 bg-card p-6 text-center space-y-3">
+            <p className="font-semibold">تعذّر تحميل العقارات</p>
+            <Button variant="outline" onClick={() => { void retryOwnerChalets(); }}>إعادة المحاولة</Button>
+          </div>
+        )}
+
         {/* ══ SERVICES MODE — Full ERP ═════════════════════════════════ */}
-        {activeDashMode === "services" && !actAsStaff && (
+        {activeDashMode === "services" && !actAsStaff && !providersError && (
           <motion.div
             key="services-mode"
             initial={{ opacity: 0, y: 8 }}
