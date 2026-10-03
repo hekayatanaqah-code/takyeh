@@ -8750,13 +8750,19 @@ function GlobalSeasonsTab() {
         </div>
       ) : (
         <div className="space-y-3">
-          {seasons.map((season) => (
+          {seasons.map((season) => {
+            const start = formatDualDate(season.startDate.split("T")[0]);
+            const end = formatDualDate(season.endDate.split("T")[0]);
+            return (
             <div key={season.id} className="rounded-2xl border border-slate-700 bg-slate-800/60 p-4 flex items-center gap-4">
               <span className="w-11 h-11 rounded-xl shrink-0 border border-white/10" style={{ backgroundColor: season.color || "#f59e0b" }} />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-white">{season.nameAr}</p>
+                <p className="text-xs font-medium text-amber-300 mt-1">
+                  هجري: من {start.hijri} إلى {end.hijri}
+                </p>
                 <p className="text-xs text-slate-400 mt-1">
-                  {season.startDate.split("T")[0].split("-").reverse().join("/")} ← {season.endDate.split("T")[0].split("-").reverse().join("/")}
+                  ميلادي: من {start.gregorian} م إلى {end.gregorian} م
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -8766,7 +8772,8 @@ function GlobalSeasonsTab() {
                 <Button variant="ghost" size="icon" onClick={() => { if (window.confirm("هل تريد حذف هذا الموسم؟")) deleteMutation.mutate(season.id); }} disabled={deleteMutation.isPending} className="text-red-400 hover:text-red-300"><Trash2 className="w-4 h-4" /></Button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
