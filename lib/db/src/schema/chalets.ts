@@ -1119,6 +1119,7 @@ export const serviceSeasonsTable = pgTable("service_seasons", {
   id: serial("id").primaryKey(),
   providerId: integer("provider_id").notNull().references(() => serviceProvidersTable.id, { onDelete: "cascade" }),
   ownerId: text("owner_id").notNull(),
+  globalSeasonId: integer("global_season_id").references(() => globalSeasonsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   startDate: text("start_date").notNull(),
   endDate: text("end_date").notNull(),
@@ -1126,7 +1127,9 @@ export const serviceSeasonsTable = pgTable("service_seasons", {
   multiplier: numeric("multiplier", { precision: 4, scale: 2 }).notNull().default("1.00"),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("service_seasons_provider_global_unique").on(table.providerId, table.globalSeasonId),
+]);
 export type ServiceSeason = typeof serviceSeasonsTable.$inferSelect;
 
 /* ── Owner customers (shared across properties and services) ── */

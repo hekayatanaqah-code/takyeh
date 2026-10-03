@@ -21,6 +21,120 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /providers/global-seasons:
+    get:
+      operationId: listServiceGlobalSeasons
+      tags: [providers]
+      summary: List active platform-managed seasons for service providers
+      responses:
+        "200":
+          description: Active shared definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceGlobalSeason"
+        "401":
+          description: Authentication required
+  /providers/my/approved/{id}/seasons:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    get:
+      operationId: listServiceSeasons
+      tags: [providers]
+      summary: List owner-scoped service seasons with current public definitions
+      responses:
+        "200":
+          description: Registered seasons
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceSeason"
+        "404":
+          description: Provider not owned by caller
+    post:
+      operationId: createServiceSeason
+      tags: [providers]
+      summary: Register a public season or create a private season
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceSeasonInput"
+      responses:
+        "201":
+          description: Registered season
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSeason"
+        "404":
+          description: Provider not owned by caller
+        "409":
+          description: Public season already registered for this provider
+        "422":
+          description: Invalid dates or public season unavailable
+  /providers/my/approved/{id}/seasons/{seasonId}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      - name: seasonId
+        in: path
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+    patch:
+      operationId: updateServiceSeason
+      tags: [providers]
+      summary: Update private season details or owner notes for a public season
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateServiceSeasonInput"
+      responses:
+        "200":
+          description: Updated season
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSeason"
+        "404":
+          description: Season not owned by caller or belongs to another provider
+        "422":
+          description: Invalid dates or attempted modification of shared definition
+    delete:
+      operationId: deleteServiceSeason
+      tags: [providers]
+      summary: Remove a season from this service without changing its public definition
+      responses:
+        "200":
+          description: Season removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+        "404":
+          description: Season not owned by caller or belongs to another provider
   /healthz:
     get:
       operationId: healthCheck
@@ -293,6 +407,87 @@ components:
       schema:
         type: string
   schemas:
+    ServiceGlobalSeason:
+      type: object
+      required: [id, nameAr, startDate, endDate]
+      properties:
+        id:
+          type: integer
+        nameAr:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+    CreateServiceSeasonInput:
+      type: object
+      description: Supply globalSeasonId for a shared definition; otherwise name, startDate and endDate are required. Shared name and dates are server-owned.
+      properties:
+        globalSeasonId:
+          type: [integer, 'null']
+          minimum: 1
+        name:
+          type: string
+          minLength: 1
+        startDate:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        endDate:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        priceLabel:
+          type: [string, 'null']
+        multiplier:
+          type: string
+          default: "1.00"
+        isActive:
+          type: boolean
+          default: true
+    UpdateServiceSeasonInput:
+      type: object
+      description: Public season names and dates cannot be edited here.
+      properties:
+        name:
+          type: string
+          minLength: 1
+        startDate:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        endDate:
+          type: string
+          pattern: '^\d{4}-\d{2}-\d{2}$'
+        priceLabel:
+          type: [string, 'null']
+        multiplier:
+          type: string
+        isActive:
+          type: boolean
+    ServiceSeason:
+      type: object
+      required: [id, providerId, ownerId, globalSeasonId, name, startDate, endDate, priceLabel, multiplier, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        providerId:
+          type: integer
+        ownerId:
+          type: string
+        globalSeasonId:
+          type: [integer, 'null']
+        name:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        priceLabel:
+          type: [string, 'null']
+        multiplier:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
     AdminBroadcastRecipient:
       type: object
       properties:

@@ -9,6 +9,144 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary List active platform-managed seasons for service providers
+ */
+export const ListServiceGlobalSeasonsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "nameAr": zod.string(),
+  "startDate": zod.string(),
+  "endDate": zod.string()
+})
+export const ListServiceGlobalSeasonsResponse = zod.array(ListServiceGlobalSeasonsResponseItem)
+
+
+/**
+ * @summary List owner-scoped service seasons with current public definitions
+ */
+
+
+
+export const ListServiceSeasonsParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const ListServiceSeasonsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "ownerId": zod.string(),
+  "globalSeasonId": zod.number().int().nullable(),
+  "name": zod.string(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "priceLabel": zod.string().nullable(),
+  "multiplier": zod.string(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string()
+})
+export const ListServiceSeasonsResponse = zod.array(ListServiceSeasonsResponseItem)
+
+
+/**
+ * @summary Register a public season or create a private season
+ */
+
+
+
+export const CreateServiceSeasonParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+
+
+export const createServiceSeasonBodyStartDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createServiceSeasonBodyEndDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createServiceSeasonBodyMultiplierDefault = `1.00`;
+export const createServiceSeasonBodyIsActiveDefault = true;
+
+export const CreateServiceSeasonBody = zod.object({
+  "globalSeasonId": zod.number().int().min(1).nullish(),
+  "name": zod.string().min(1).optional(),
+  "startDate": zod.string().regex(createServiceSeasonBodyStartDateRegExp).optional(),
+  "endDate": zod.string().regex(createServiceSeasonBodyEndDateRegExp).optional(),
+  "priceLabel": zod.string().nullish(),
+  "multiplier": zod.string().default(createServiceSeasonBodyMultiplierDefault),
+  "isActive": zod.boolean().default(createServiceSeasonBodyIsActiveDefault)
+}).describe('Supply globalSeasonId for a shared definition; otherwise name, startDate and endDate are required. Shared name and dates are server-owned.')
+
+export const CreateServiceSeasonResponse = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "ownerId": zod.string(),
+  "globalSeasonId": zod.number().int().nullable(),
+  "name": zod.string(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "priceLabel": zod.string().nullable(),
+  "multiplier": zod.string(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update private season details or owner notes for a public season
+ */
+
+
+
+
+export const UpdateServiceSeasonParams = zod.object({
+  "id": zod.coerce.number().int().min(1),
+  "seasonId": zod.coerce.number().int().min(1)
+})
+
+
+export const updateServiceSeasonBodyStartDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const updateServiceSeasonBodyEndDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const UpdateServiceSeasonBody = zod.object({
+  "name": zod.string().min(1).optional(),
+  "startDate": zod.string().regex(updateServiceSeasonBodyStartDateRegExp).optional(),
+  "endDate": zod.string().regex(updateServiceSeasonBodyEndDateRegExp).optional(),
+  "priceLabel": zod.string().nullish(),
+  "multiplier": zod.string().optional(),
+  "isActive": zod.boolean().optional()
+}).describe('Public season names and dates cannot be edited here.')
+
+export const UpdateServiceSeasonResponse = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "ownerId": zod.string(),
+  "globalSeasonId": zod.number().int().nullable(),
+  "name": zod.string(),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "priceLabel": zod.string().nullable(),
+  "multiplier": zod.string(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Remove a season from this service without changing its public definition
+ */
+
+
+
+
+export const DeleteServiceSeasonParams = zod.object({
+  "id": zod.coerce.number().int().min(1),
+  "seasonId": zod.coerce.number().int().min(1)
+})
+
+export const DeleteServiceSeasonResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

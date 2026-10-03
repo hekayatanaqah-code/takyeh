@@ -6,6 +6,7 @@ import {
   serviceProvidersTable,
   serviceBlockedDatesTable,
   serviceSeasonsTable,
+  globalSeasonsTable,
   serviceAppointmentsTable,
   serviceInsurancesTable,
   serviceReviewInvitationsTable,
@@ -20,6 +21,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, ne, desc, isNull, gte, sql, inArray, or } from "drizzle-orm";
 import { z } from "zod";
+import { CreateServiceSeasonBody, UpdateServiceSeasonBody } from "@workspace/api-zod";
 import { randomBytes } from "crypto";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
@@ -257,6 +259,18 @@ router.get("/search-options", async (_req, res) => {
   cities.push(...legacyNames.map((name, index) => ({ id: -(index + 1), name })));
 
   return res.json({ categories, cities });
+});
+
+// Static catalog route must precede /:id.
+router.get("/global-seasons", requireAuth, async (_req: any, res) => {
+  const rows = await db.select({
+    id: globalSeasonsTable.id,
+    nameAr: globalSeasonsTable.nameAr,
+    startDate: globalSeasonsTable.startDate,
+    endDate: globalSeasonsTable.endDate,
+  }).from(globalSeasonsTable).where(eq(globalSeasonsTable.isActive, true))
+    .orderBy(globalSeasonsTable.startDate, globalSeasonsTable.id);
+  return res.json(rows);
 });
 
 /* ── Public: single provider ──────────────────────── */
@@ -793,12 +807,30 @@ router.delete("/my/approved/:id/blocked-dates/:dateId", requireAuth, async (req:
    SERVICE ERP — SEASONS
    ════════════════════════════════════════════════════════ */
 
+async function serviceSeasonResponse(row: typeof serviceSeasonsTable.$inferSelect) {
+  if (!row.globalSeasonId) return row;
+  const [definition] = await db.select().from(globalSeasonsTable)
+    .where(eq(globalSeasonsTable.id, row.globalSeasonId)).limit(1);
+  return definition ? {
+    ...row, name: definition.nameAr, startDate: definition.startDate,
+    endDate: definition.endDate, isActive: row.isActive && definition.isActive,
+  } : row;
+}
+
 router.get("/my/approved/:id/seasons", requireAuth, async (req: any, res) => {
   const providerId = Number(req.params.id);
-  const rows = await db.select().from(serviceSeasonsTable)
+  const [provider] = await db.select({ id: serviceProvidersTable.id }).from(serviceProvidersTable)
+    .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user.id))).limit(1);
+  if (!provider) return res.status(404).json({ error: "المزود غير موجود" });
+  const rows = await db.select({ season: serviceSeasonsTable, definition: globalSeasonsTable })
+    .from(serviceSeasonsTable)
+    .leftJoin(globalSeasonsTable, eq(serviceSeasonsTable.globalSeasonId, globalSeasonsTable.id))
     .where(and(eq(serviceSeasonsTable.providerId, providerId), eq(serviceSeasonsTable.ownerId, req.user.id)))
     .orderBy(desc(serviceSeasonsTable.createdAt));
-  return res.json(rows);
+  return res.json(rows.map(({ season, definition }) => definition ? {
+    ...season, name: definition.nameAr, startDate: definition.startDate,
+    endDate: definition.endDate, isActive: season.isActive && definition.isActive,
+  } : season));
 });
 
 router.post("/my/approved/:id/seasons", requireAuth, async (req: any, res) => {
@@ -806,46 +838,59 @@ router.post("/my/approved/:id/seasons", requireAuth, async (req: any, res) => {
   const [provider] = await db.select().from(serviceProvidersTable).where(eq(serviceProvidersTable.id, providerId)).limit(1);
   if (!provider || provider.ownerId !== req.user.id) return res.status(404).json({ error: "المزود غير موجود" });
 
-  const schema = z.object({
-    name: z.string().min(1),
-    startDate: z.string().min(1),
-    endDate: z.string().min(1),
-    priceLabel: z.string().optional().nullable(),
-    multiplier: z.string().optional().default("1.00"),
-    isActive: z.boolean().optional().default(true),
+  const schema = CreateServiceSeasonBody.extend({
+    name: z.string().trim().min(1).optional(),
+    startDate: canonicalGregorianDate.optional(),
+    endDate: canonicalGregorianDate.optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
 
+  let { name, startDate, endDate } = parsed.data;
+  if (parsed.data.globalSeasonId) {
+    const [definition] = await db.select().from(globalSeasonsTable)
+      .where(and(eq(globalSeasonsTable.id, parsed.data.globalSeasonId), eq(globalSeasonsTable.isActive, true))).limit(1);
+    if (!definition) return res.status(422).json({ error: "الموسم العام غير متاح" });
+    name = definition.nameAr; startDate = definition.startDate; endDate = definition.endDate;
+  }
+  if (!name || !startDate || !endDate || endDate < startDate) {
+    return res.status(422).json({ error: "اسم الموسم والتواريخ مطلوبة، ويجب ألا يسبق تاريخ الانتهاء تاريخ البدء" });
+  }
   const [row] = await db.insert(serviceSeasonsTable).values({
-    providerId, ownerId: req.user.id, ...parsed.data,
-  }).returning();
-  return res.status(201).json(row);
+    providerId, ownerId: req.user.id, ...parsed.data, name, startDate, endDate,
+  }).onConflictDoNothing({ target: [serviceSeasonsTable.providerId, serviceSeasonsTable.globalSeasonId] }).returning();
+  if (!row) return res.status(409).json({ error: "هذا الموسم العام مسجل لهذه الخدمة بالفعل" });
+  return res.status(201).json(await serviceSeasonResponse(row));
 });
 
 router.patch("/my/approved/:id/seasons/:seasonId", requireAuth, async (req: any, res) => {
   const seasonId = Number(req.params.seasonId);
-  const [row] = await db.select().from(serviceSeasonsTable).where(eq(serviceSeasonsTable.id, seasonId)).limit(1);
+  const [row] = await db.select().from(serviceSeasonsTable)
+    .where(and(eq(serviceSeasonsTable.id, seasonId), eq(serviceSeasonsTable.providerId, Number(req.params.id)))).limit(1);
   if (!row || row.ownerId !== req.user.id) return res.status(404).json({ error: "الموسم غير موجود" });
 
-  const schema = z.object({
-    name: z.string().min(1).optional(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    priceLabel: z.string().optional().nullable(),
-    multiplier: z.string().optional(),
-    isActive: z.boolean().optional(),
+  const schema = UpdateServiceSeasonBody.extend({
+    name: z.string().trim().min(1).optional(),
+    startDate: canonicalGregorianDate.optional(),
+    endDate: canonicalGregorianDate.optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة" });
 
+  if (row.globalSeasonId && ["name", "startDate", "endDate", "globalSeasonId"].some(key => key in req.body)) {
+    return res.status(422).json({ error: "اسم الموسم العام وتواريخه تُدار من إدارة المنصة" });
+  }
+  if ((parsed.data.endDate ?? row.endDate) < (parsed.data.startDate ?? row.startDate)) {
+    return res.status(422).json({ error: "تاريخ الانتهاء يجب ألا يسبق تاريخ البدء" });
+  }
   const [updated] = await db.update(serviceSeasonsTable).set(parsed.data).where(eq(serviceSeasonsTable.id, seasonId)).returning();
-  return res.json(updated);
+  return res.json(await serviceSeasonResponse(updated));
 });
 
 router.delete("/my/approved/:id/seasons/:seasonId", requireAuth, async (req: any, res) => {
   const seasonId = Number(req.params.seasonId);
-  const [row] = await db.select().from(serviceSeasonsTable).where(eq(serviceSeasonsTable.id, seasonId)).limit(1);
+  const [row] = await db.select().from(serviceSeasonsTable)
+    .where(and(eq(serviceSeasonsTable.id, seasonId), eq(serviceSeasonsTable.providerId, Number(req.params.id)))).limit(1);
   if (!row || row.ownerId !== req.user.id) return res.status(404).json({ error: "الموسم غير موجود" });
   await db.delete(serviceSeasonsTable).where(eq(serviceSeasonsTable.id, seasonId));
   return res.json({ ok: true });

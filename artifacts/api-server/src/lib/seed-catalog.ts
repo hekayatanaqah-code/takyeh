@@ -55,6 +55,10 @@ export async function seedCatalogIfEmpty() {
   /* ── Chalet logo column ── */
   await db.execute(sql`ALTER TABLE chalet_submissions ADD COLUMN IF NOT EXISTS logo_url TEXT`);
 
+  /* Existing private service seasons remain private; public definitions stay linked. */
+  await db.execute(sql`ALTER TABLE service_seasons ADD COLUMN IF NOT EXISTS global_season_id INTEGER REFERENCES global_seasons(id) ON DELETE CASCADE`);
+  await db.execute(sql`CREATE UNIQUE INDEX IF NOT EXISTS service_seasons_provider_global_unique ON service_seasons(provider_id, global_season_id)`);
+
   /* ── Owner Refunds table ── */
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS owner_refunds (

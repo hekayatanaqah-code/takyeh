@@ -5,6 +5,66 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ServiceGlobalSeason {
+  id: number;
+  nameAr: string;
+  startDate: string;
+  endDate: string;
+}
+
+/**
+ * Supply globalSeasonId for a shared definition; otherwise name, startDate and endDate are required. Shared name and dates are server-owned.
+ */
+export interface CreateServiceSeasonInput {
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  globalSeasonId?: number | null;
+  /** @minLength 1 */
+  name?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  startDate?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  endDate?: string;
+  /** @nullable */
+  priceLabel?: string | null;
+  multiplier?: string;
+  isActive?: boolean;
+}
+
+/**
+ * Public season names and dates cannot be edited here.
+ */
+export interface UpdateServiceSeasonInput {
+  /** @minLength 1 */
+  name?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  startDate?: string;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  endDate?: string;
+  /** @nullable */
+  priceLabel?: string | null;
+  multiplier?: string;
+  isActive?: boolean;
+}
+
+export interface ServiceSeason {
+  id: number;
+  providerId: number;
+  ownerId: string;
+  /** @nullable */
+  globalSeasonId: number | null;
+  name: string;
+  startDate: string;
+  endDate: string;
+  /** @nullable */
+  priceLabel: string | null;
+  multiplier: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export type AdminBroadcastRecipientChannelsItem = typeof AdminBroadcastRecipientChannelsItem[keyof typeof AdminBroadcastRecipientChannelsItem];
 
 
@@ -224,6 +284,10 @@ export interface Chalet {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type DeleteServiceSeason200 = {
+  ok: boolean;
+};
 
 export type GetChaletsParams = {
 /**

@@ -30,7 +30,9 @@ import type {
   BeginBrowserLoginParams,
   Chalet,
   ChaletSubmission,
+  CreateServiceSeasonInput,
   CreateSubmissionRequest,
+  DeleteServiceSeason200,
   ErrorResponse,
   GetAdminBroadcastRecipientsParams,
   GetChaletsParams,
@@ -39,7 +41,10 @@ import type {
   OwnerFreeAccessGrantResponse,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
-  SubmissionResponse
+  ServiceGlobalSeason,
+  ServiceSeason,
+  SubmissionResponse,
+  UpdateServiceSeasonInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -68,6 +73,464 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListServiceGlobalSeasonsUrl = () => {
+
+
+
+
+  return `/api/providers/global-seasons`
+}
+
+/**
+ * @summary List active platform-managed seasons for service providers
+ */
+export const listServiceGlobalSeasons = async ( options?: Parameters<typeof customFetch>[1]): Promise<ServiceGlobalSeason[]> => {
+
+  return customFetch<ServiceGlobalSeason[]>(getListServiceGlobalSeasonsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListServiceGlobalSeasonsQueryKey = () => {
+    return [
+    `/api/providers/global-seasons`
+    ] as const;
+    }
+
+
+export const getListServiceGlobalSeasonsQueryOptions = <TData = Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListServiceGlobalSeasonsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listServiceGlobalSeasons>>> = ({ signal }) => listServiceGlobalSeasons({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListServiceGlobalSeasonsQueryResult = NonNullable<Awaited<ReturnType<typeof listServiceGlobalSeasons>>>
+export type ListServiceGlobalSeasonsQueryError = ErrorType<void>
+
+
+export function useListServiceGlobalSeasons<TData = Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listServiceGlobalSeasons>>,
+          TError,
+          Awaited<ReturnType<typeof listServiceGlobalSeasons>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListServiceGlobalSeasons<TData = Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listServiceGlobalSeasons>>,
+          TError,
+          Awaited<ReturnType<typeof listServiceGlobalSeasons>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListServiceGlobalSeasons<TData = Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List active platform-managed seasons for service providers
+ */
+
+export function useListServiceGlobalSeasons<TData = Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceGlobalSeasons>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListServiceGlobalSeasonsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListServiceSeasonsUrl = (id: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${id}/seasons`
+}
+
+/**
+ * @summary List owner-scoped service seasons with current public definitions
+ */
+export const listServiceSeasons = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<ServiceSeason[]> => {
+
+  return customFetch<ServiceSeason[]>(getListServiceSeasonsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListServiceSeasonsQueryKey = (id: number,) => {
+    return [
+    `/api/providers/my/approved/${id}/seasons`
+    ] as const;
+    }
+
+
+export const getListServiceSeasonsQueryOptions = <TData = Awaited<ReturnType<typeof listServiceSeasons>>, TError = ErrorType<void>>(id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceSeasons>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListServiceSeasonsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listServiceSeasons>>> = ({ signal }) => listServiceSeasons(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listServiceSeasons>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListServiceSeasonsQueryResult = NonNullable<Awaited<ReturnType<typeof listServiceSeasons>>>
+export type ListServiceSeasonsQueryError = ErrorType<void>
+
+
+export function useListServiceSeasons<TData = Awaited<ReturnType<typeof listServiceSeasons>>, TError = ErrorType<void>>(
+ id: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceSeasons>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listServiceSeasons>>,
+          TError,
+          Awaited<ReturnType<typeof listServiceSeasons>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListServiceSeasons<TData = Awaited<ReturnType<typeof listServiceSeasons>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceSeasons>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listServiceSeasons>>,
+          TError,
+          Awaited<ReturnType<typeof listServiceSeasons>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListServiceSeasons<TData = Awaited<ReturnType<typeof listServiceSeasons>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceSeasons>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List owner-scoped service seasons with current public definitions
+ */
+
+export function useListServiceSeasons<TData = Awaited<ReturnType<typeof listServiceSeasons>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceSeasons>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListServiceSeasonsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateServiceSeasonUrl = (id: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${id}/seasons`
+}
+
+/**
+ * @summary Register a public season or create a private season
+ */
+export const createServiceSeason = async (id: number,
+    createServiceSeasonInput: CreateServiceSeasonInput, options?: Parameters<typeof customFetch>[1]): Promise<ServiceSeason> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ServiceSeason>(getCreateServiceSeasonUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createServiceSeasonInput)
+  }
+);}
+
+
+
+
+
+export const getCreateServiceSeasonMutationKey = () => ['createServiceSeason'] as const;
+
+export const getCreateServiceSeasonMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createServiceSeason>>, TError,CreateServiceSeasonMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createServiceSeason>>, TError,CreateServiceSeasonMutationVariables, TContext> => {
+
+const mutationKey = getCreateServiceSeasonMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createServiceSeason>>, CreateServiceSeasonMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createServiceSeason(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateServiceSeasonMutationResult = NonNullable<Awaited<ReturnType<typeof createServiceSeason>>>
+    export type CreateServiceSeasonMutationBody = BodyType<CreateServiceSeasonInput>
+    export type CreateServiceSeasonMutationError = ErrorType<void>
+    export type CreateServiceSeasonMutationVariables = {id: number;data: BodyType<CreateServiceSeasonInput>}
+
+    /**
+ * @summary Register a public season or create a private season
+ */
+export const useCreateServiceSeason = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createServiceSeason>>, TError,CreateServiceSeasonMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createServiceSeason>>,
+        TError,
+        CreateServiceSeasonMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateServiceSeasonMutationOptions(options), queryClient);
+    }
+
+export const getUpdateServiceSeasonUrl = (id: number,
+    seasonId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${id}/seasons/${seasonId}`
+}
+
+/**
+ * @summary Update private season details or owner notes for a public season
+ */
+export const updateServiceSeason = async (id: number,
+    seasonId: number,
+    updateServiceSeasonInput: UpdateServiceSeasonInput, options?: Parameters<typeof customFetch>[1]): Promise<ServiceSeason> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ServiceSeason>(getUpdateServiceSeasonUrl(id,seasonId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateServiceSeasonInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateServiceSeasonMutationKey = () => ['updateServiceSeason'] as const;
+
+export const getUpdateServiceSeasonMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceSeason>>, TError,UpdateServiceSeasonMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateServiceSeason>>, TError,UpdateServiceSeasonMutationVariables, TContext> => {
+
+const mutationKey = getUpdateServiceSeasonMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateServiceSeason>>, UpdateServiceSeasonMutationVariables> = (props) => {
+          const {id,seasonId,data} = props ?? {};
+
+          return  updateServiceSeason(id,seasonId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateServiceSeasonMutationResult = NonNullable<Awaited<ReturnType<typeof updateServiceSeason>>>
+    export type UpdateServiceSeasonMutationBody = BodyType<UpdateServiceSeasonInput>
+    export type UpdateServiceSeasonMutationError = ErrorType<void>
+    export type UpdateServiceSeasonMutationVariables = {id: number;seasonId: number;data: BodyType<UpdateServiceSeasonInput>}
+
+    /**
+ * @summary Update private season details or owner notes for a public season
+ */
+export const useUpdateServiceSeason = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceSeason>>, TError,UpdateServiceSeasonMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateServiceSeason>>,
+        TError,
+        UpdateServiceSeasonMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateServiceSeasonMutationOptions(options), queryClient);
+    }
+
+export const getDeleteServiceSeasonUrl = (id: number,
+    seasonId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${id}/seasons/${seasonId}`
+}
+
+/**
+ * @summary Remove a season from this service without changing its public definition
+ */
+export const deleteServiceSeason = async (id: number,
+    seasonId: number, options?: Parameters<typeof customFetch>[1]): Promise<DeleteServiceSeason200> => {
+
+  return customFetch<DeleteServiceSeason200>(getDeleteServiceSeasonUrl(id,seasonId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteServiceSeasonMutationKey = () => ['deleteServiceSeason'] as const;
+
+export const getDeleteServiceSeasonMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteServiceSeason>>, TError,DeleteServiceSeasonMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteServiceSeason>>, TError,DeleteServiceSeasonMutationVariables, TContext> => {
+
+const mutationKey = getDeleteServiceSeasonMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteServiceSeason>>, DeleteServiceSeasonMutationVariables> = (props) => {
+          const {id,seasonId} = props ?? {};
+
+          return  deleteServiceSeason(id,seasonId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteServiceSeasonMutationResult = NonNullable<Awaited<ReturnType<typeof deleteServiceSeason>>>
+
+    export type DeleteServiceSeasonMutationError = ErrorType<void>
+    export type DeleteServiceSeasonMutationVariables = {id: number;seasonId: number}
+
+    /**
+ * @summary Remove a season from this service without changing its public definition
+ */
+export const useDeleteServiceSeason = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteServiceSeason>>, TError,DeleteServiceSeasonMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteServiceSeason>>,
+        TError,
+        DeleteServiceSeasonMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteServiceSeasonMutationOptions(options), queryClient);
+    }
 
 export const getHealthCheckUrl = () => {
 
