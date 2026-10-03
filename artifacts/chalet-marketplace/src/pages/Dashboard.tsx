@@ -20,6 +20,7 @@ import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ServiceCoverageEditor } from "@/components/service/ServiceCoverageEditor";
+import { ServicePrimaryCitySelector } from "@/components/service/ServicePrimaryCitySelector";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9467,12 +9468,6 @@ function ServiceDetailsTab() {
     } finally { setDeleting(false); }
   }
 
-  const cityOptions = [...new Set<string>([
-    ...(provider.city ? [provider.city] : []),
-    ...(form.city ? [form.city] : []),
-    ...serviceCities.filter(city => serviceRegions.some(region => region.id === city.regionId)).map(city => city.name),
-  ])].filter(city => city.trim());
-
   async function handleLogoUpload(file: File) {
     setUploadingLogo(true);
     try {
@@ -9572,23 +9567,14 @@ function ServiceDetailsTab() {
         </div>
         {/* City */}
         <div className="space-y-1.5">
-          <label htmlFor={`service-main-city-${providerId}`} className="text-sm font-semibold text-foreground">المدينة الرئيسية</label>
-          <select id={`service-main-city-${providerId}`} aria-label="المدينة الرئيسية" dir="rtl"
-            value={form.city} onChange={event => setForm({ ...form, city: event.target.value })}
-            className="h-9 w-full rounded-xl border border-input bg-background px-3 text-sm text-right shadow-sm focus:outline-none focus:ring-1 focus:ring-ring">
-            <option value="" disabled>اختر المدينة الرئيسية</option>
-            {cityOptions.map(city => <option key={city} value={city}>{city}</option>)}
-          </select>
+          <ServicePrimaryCitySelector key={providerId}
+            value={form.city} onChange={city => setForm(previous => previous ? { ...previous, city } : previous)}
+            regions={serviceRegions} cities={serviceCities}
+            loading={citiesLoading || regionsLoading} error={citiesError || regionsError}
+            onRetry={() => { void reloadCities(); void reloadRegions(); }} />
           {registrationError && (
             <p className="text-xs text-destructive" role="alert">تعذر جلب المدينة من طلب التسجيل.{" "}
               <button type="button" className="underline" onClick={() => void reloadRegistration()}>إعادة المحاولة</button>
-            </p>
-          )}
-          {citiesLoading && <p className="text-xs text-muted-foreground">جارٍ تحميل المدن المتاحة…</p>}
-          {citiesError && (
-            <p className="text-xs text-destructive" role="alert">
-              تعذر تحميل المدن المتاحة. المدينة المحفوظة لم تتغير.{" "}
-              <button type="button" className="underline" onClick={() => void reloadCities()}>إعادة المحاولة</button>
             </p>
           )}
         </div>
