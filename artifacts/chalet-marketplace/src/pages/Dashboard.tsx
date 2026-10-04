@@ -25956,7 +25956,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {(actAsStaff || isImpersonating) && <Navbar />}
+      <Navbar ownerDashboard={!actAsStaff && !isImpersonating} />
       {!actAsStaff && !isImpersonating && (
         <div className="container mx-auto max-w-6xl px-4 pt-6">
           <OwnerToolbar
@@ -25968,7 +25968,6 @@ export default function Dashboard() {
             onSubscription={() => navigate("/subscription")}
             onManageRequests={openRegistrationRequests}
             onLogout={logout}
-            showHomeLink
             requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
             navigation={<OwnerDashboardNavigation
               mode={activeDashMode}

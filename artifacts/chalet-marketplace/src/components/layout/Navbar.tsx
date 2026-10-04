@@ -7,7 +7,7 @@ import { useStaffAuth } from "@/lib/useStaffAuth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-export function Navbar() {
+export function Navbar({ ownerDashboard = false }: { ownerDashboard?: boolean }) {
   const [location] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
   const { isStaff } = useStaffAuth();
@@ -28,12 +28,12 @@ export function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+      <header data-testid="platform-navbar" className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+        <div className={`container mx-auto px-4 min-h-16 flex items-center justify-between gap-3 ${ownerDashboard ? "max-w-6xl py-2" : "h-16"}`}>
 
-          <div className="flex items-center gap-3">
+          <div className={`flex items-center gap-3 ${ownerDashboard ? "w-full justify-between min-w-0" : ""}`}>
             {/* Logo */}
-            <Link href="/" className="flex items-center gap-2 group">
+            <Link href="/" className="flex min-w-0 items-center gap-2 group">
               {logoUrl ? (
                 <img
                   src={logoUrl}
@@ -51,15 +51,15 @@ export function Navbar() {
             {location !== "/" && (
               <Link
                 href="/"
-                className="rounded-full border border-border bg-background px-3 py-1.5 text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-accent"
+                className="shrink-0 rounded-full border border-border bg-background px-3 py-1.5 text-xs sm:text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-accent"
               >
-                الرئيسية
+                {ownerDashboard ? "الرئيسية / تصفح المنصة" : "الرئيسية"}
               </Link>
             )}
           </div>
 
           {/* Desktop actions */}
-          <div className="hidden md:flex items-center gap-3">
+          {!ownerDashboard && <div className="hidden md:flex items-center gap-3">
             {!isLoading && (
               isAuthenticated ? (
                 <div className="flex items-center gap-1">
@@ -88,7 +88,7 @@ export function Navbar() {
                 </div>
               ) : null
             )}
-          </div>
+          </div>}
 
         </div>
       </header>

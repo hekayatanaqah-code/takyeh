@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "wouter";
 import {
   Building2,
   Briefcase,
@@ -28,7 +27,6 @@ export interface OwnerToolbarProps {
   onManageRequests: () => void;
   onLogout: () => void;
   navigation?: ReactNode;
-  showHomeLink?: boolean;
   requestsOpen?: boolean;
 }
 
@@ -67,14 +65,9 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
             <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} />
           </div>
         </div>
-        {(p.navigation || p.showHomeLink) && (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+        {p.navigation && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
             {p.navigation}
-            {p.showHomeLink && (
-              <Link href="/" className="text-xs font-semibold text-muted-foreground hover:text-primary">
-                الرئيسية · تصفح المنصة
-              </Link>
-            )}
           </div>
         )}
       </div>
