@@ -35,7 +35,7 @@ export default function OwnerDashboardNavigation(p: Props) {
             variant={active ? "default" : "outline"}
             aria-pressed={active}
             className={`h-auto min-h-20 min-w-0 justify-start gap-3 whitespace-normal rounded-2xl border-2 px-5 py-4 text-start text-lg font-bold shadow-sm transition-colors [&_svg]:size-6 ${
-              active ? "border-primary bg-primary/10 text-primary hover:bg-primary/15" : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-accent"
+              active ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/25 ring-2 ring-primary/30 hover:bg-primary/90" : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-accent"
             }`}
             title={item.label}
             onClick={() => p.onSelect(item.mode)}

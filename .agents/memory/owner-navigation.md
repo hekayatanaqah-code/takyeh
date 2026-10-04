@@ -20,3 +20,9 @@ Account buttons inside the greeting should share one horizontal row on wide scre
 **Why:** The user asked for larger, very clear text and independent management sections, superseding the earlier combined account-and-management row.
 
 **How to apply:** Keep equal-height account controls with legible text, and give primary section navigation its own prominent treatment. Preserve permissions, activity choices, and all existing actions.
+
+عند الضغط على بطاقة «الشؤون الإدارية والمالية» وهي تحمل عدد إشعارات، يُفتح تبويب «الإشعارات» الفرعي مباشرةً.
+
+**Why:** المستخدم طلب هذا التوجيه صراحةً ضمن تحسين تجربة لوحة تحكم المالك، مع الحفاظ على المنطق التشغيلي الحالي.
+
+**How to apply:** اجعل الضغط على البطاقة هو سبب التوجيه؛ لا تحوّل المستخدم تلقائياً بعيداً عن تبويبه أثناء وصول إشعارات جديدة، ولا تفرض تبويب الإشعارات عندما لا تحمل البطاقة تنبيهات.

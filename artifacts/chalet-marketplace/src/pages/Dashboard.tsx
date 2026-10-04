@@ -24,6 +24,8 @@ import { ServicePrimaryCitySelector } from "@/components/service/ServicePrimaryC
 import OwnerToolbar from "@/components/owner/OwnerToolbar";
 import OwnerDashboardNavigation, { type OwnerDashboardMode } from "@/components/owner/OwnerDashboardNavigation";
 import ServiceIdentityLogo from "@/components/owner/ServiceIdentityLogo";
+import OwnerSubnav from "@/components/owner/OwnerSubnav";
+import OwnerStatAmount from "@/components/owner/OwnerStatAmount";
 import { initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14402,9 +14404,9 @@ function RevenueTab() {
               إجمالي مبيعات الشهر
             </div>
             {svcLoading ? <Skeleton className="h-7 w-24" /> : (
-              <div className="text-2xl font-bold text-blue-700">{fmtN(svcSales)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <OwnerStatAmount amount={fmtN(svcSales)} className="text-blue-700 dark:text-blue-400" />
             )}
-            <div className="text-[11px] text-muted-foreground">إجمالي قيمة حجوزات الخدمات في الشهر المحدد</div>
+            <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي قيمة حجوزات الخدمات في الشهر المحدد</div>
           </div>
           <div className="bg-green-50/60 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
@@ -14412,9 +14414,9 @@ function RevenueTab() {
               المبالغ المحصّلة
             </div>
             {svcLoading ? <Skeleton className="h-7 w-24" /> : (
-              <div className="text-2xl font-bold text-green-700">{fmtN(svcCollected)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <OwnerStatAmount amount={fmtN(svcCollected)} className="text-green-700 dark:text-green-400" />
             )}
-            <div className="text-[11px] text-muted-foreground">إجمالي العربون أو المبلغ المدفوع المسجل</div>
+            <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي العربون أو المبلغ المدفوع المسجل</div>
           </div>
           <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
@@ -14422,9 +14424,9 @@ function RevenueTab() {
               مستحقات معلقة
             </div>
             {svcLoading ? <Skeleton className="h-7 w-24" /> : (
-              <div className="text-2xl font-bold text-amber-600">{fmtN(svcPending)} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <OwnerStatAmount amount={fmtN(svcPending)} className="text-amber-600 dark:text-amber-400" />
             )}
-            <div className="text-[11px] text-muted-foreground">متبقي لم يُحصّل من ضيوف الخدمات حتى الآن</div>
+            <div className="text-sm font-medium leading-relaxed text-foreground/80">متبقي لم يُحصّل من ضيوف الخدمات حتى الآن</div>
           </div>
         </div>
 
@@ -14813,11 +14815,9 @@ function RevenueTab() {
             إجمالي مبيعات الشهر
           </div>
           {loading ? <Skeleton className="h-10 w-32" /> : (
-            <div className="text-3xl font-extrabold text-blue-700 dark:text-blue-400 tabular-nums">
-              {fmtN(big3.sales)}<span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
-            </div>
+            <OwnerStatAmount amount={fmtN(big3.sales)} className="text-blue-700 dark:text-blue-400" />
           )}
-          <div className="text-[11px] text-blue-600 dark:text-blue-500">إجمالي قيمة الحجوزات في الشهر المحدد</div>
+          <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي قيمة الحجوزات في الشهر المحدد</div>
         </div>
 
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 border-2 border-green-300 dark:border-green-700 rounded-2xl p-5 space-y-2">
@@ -14826,11 +14826,9 @@ function RevenueTab() {
             المبالغ المحصّلة
           </div>
           {loading ? <Skeleton className="h-10 w-32" /> : (
-            <div className="text-3xl font-extrabold text-green-700 dark:text-green-400 tabular-nums">
-              {fmtN(big3.collected)}<span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
-            </div>
+            <OwnerStatAmount amount={fmtN(big3.collected)} className="text-green-700 dark:text-green-400" />
           )}
-          <div className="text-[11px] text-green-600 dark:text-green-500">تحويل بنكي + نقدي — عربون + متبقي محصّل</div>
+          <div className="text-sm font-medium leading-relaxed text-foreground/80">تحويل بنكي + نقدي — عربون + متبقي محصّل</div>
         </div>
 
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 border-2 border-amber-300 dark:border-amber-700 rounded-2xl p-5 space-y-2">
@@ -14839,11 +14837,9 @@ function RevenueTab() {
             مستحقات معلقة
           </div>
           {loading ? <Skeleton className="h-10 w-32" /> : (
-            <div className="text-3xl font-extrabold text-amber-700 dark:text-amber-400 tabular-nums">
-              {fmtN(big3.pending)}<span className="text-base font-normal text-muted-foreground ms-1.5">ر.س</span>
-            </div>
+            <OwnerStatAmount amount={fmtN(big3.pending)} className="text-amber-700 dark:text-amber-400" />
           )}
-          <div className="text-[11px] text-amber-600 dark:text-amber-500">متبقٍ لم يُحصَّل من الضيوف حتى الآن</div>
+          <div className="text-sm font-medium leading-relaxed text-foreground/80">متبقٍ لم يُحصَّل من الضيوف حتى الآن</div>
         </div>
       </div>
 
@@ -20930,9 +20926,9 @@ function ReportsTab() {
                 ].map((stat) => (
                   <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
-                    <p className={`text-xl font-bold leading-none ${stat.valueColor}`}>{stat.value}</p>
-                    <p className="text-xs text-muted-foreground leading-tight">{stat.label}</p>
-                    <p className="text-[10px] text-muted-foreground/60">{stat.note}</p>
+                    <p className={`break-words text-2xl sm:text-3xl font-bold leading-tight ${stat.valueColor}`}>{stat.value}</p>
+                    <p className="text-sm font-medium text-foreground leading-relaxed">{stat.label}</p>
+                    <p className="text-sm text-foreground/80 leading-relaxed">{stat.note}</p>
                   </div>
                 ))}
               </div>
@@ -25593,6 +25589,9 @@ export default function Dashboard() {
   }
 
   function switchOwnerDashboard(mode: OwnerDashboardMode) {
+    if (mode === "admin-finance" && unreadNotifCount + unreadSupportCount > 0) {
+      setAdminFinanceTab("notifications");
+    }
     setDashMode(mode);
     setServiceView("manage");
     setAccountSettingsOpen(false);
@@ -26437,10 +26436,11 @@ export default function Dashboard() {
                       </div>
 
                       {/* ERP Tab bar */}
-                      <div className="flex flex-wrap gap-x-0.5 gap-y-1 border-b border-border pb-2 -mx-1 px-1">
+                      <OwnerSubnav label="تبويبات إدارة الخدمة" className="gap-x-0.5 gap-y-1 pb-2 px-1">
                         {serviceErpTabs.map(tab => (
                           <button key={tab.id} type="button"
                             onClick={() => setSelectedServiceTab(tab.id)}
+                            aria-pressed={selectedServiceTab === tab.id}
                             className={`relative flex items-center gap-1.5 px-3.5 py-3 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
                               selectedServiceTab === tab.id
                                 ? "border-amber-500 text-amber-600 dark:text-amber-400"
@@ -26449,7 +26449,7 @@ export default function Dashboard() {
                             {tab.icon}{tab.label}
                           </button>
                         ))}
-                      </div>
+                      </OwnerSubnav>
 
                       {/* ERP Tab Content — core operations only */}
                       <div className="min-h-[300px]">
@@ -26517,11 +26517,12 @@ export default function Dashboard() {
               </div>
 
               {/* Tab bar */}
-              <div className="flex flex-wrap gap-x-1 gap-y-3 border-b border-border pb-3 -mx-1 px-1">
+              <OwnerSubnav label="تبويبات الشؤون الإدارية والمالية" className="gap-x-1 gap-y-3 pb-3 px-1 pt-1">
                 {afTabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setAdminFinanceTab(tab.id as any)}
+                    aria-pressed={adminFinanceTab === tab.id}
                     className={`relative flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
                       adminFinanceTab === tab.id
                         ? `border-current ${tab.color}`
@@ -26542,7 +26543,7 @@ export default function Dashboard() {
                     )}
                   </button>
                 ))}
-              </div>
+              </OwnerSubnav>
 
               {/* ── Unit Selector (for Revenue / Expenses / Ledger tabs — Reports has its own inline filter) ── */}
               {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "ledger") && (
@@ -26676,11 +26677,12 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-x-1 gap-y-1 mb-6 border-b border-border pb-2 -mx-1 px-1">
+        <OwnerSubnav label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              aria-pressed={activeTab === tab.id}
               className={`relative flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
                 activeTab === tab.id
                   ? "border-primary text-primary"
@@ -26691,7 +26693,7 @@ export default function Dashboard() {
               {tab.label}
             </button>
           ))}
-        </div>
+        </OwnerSubnav>
 
         {/* Tab Content */}
         {activeTab === "chalets" && (
