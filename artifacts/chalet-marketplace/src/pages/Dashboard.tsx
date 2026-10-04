@@ -26517,16 +26517,16 @@ export default function Dashboard() {
               </div>
 
               {/* Tab bar */}
-              <OwnerSubnav label="تبويبات الشؤون الإدارية والمالية" className="gap-x-1 gap-y-3 pb-3 px-1 pt-1">
+              <OwnerSubnav highContrast label="تبويبات الشؤون الإدارية والمالية" className="gap-x-1 gap-y-3 pb-3 px-1 pt-1">
                 {afTabs.map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setAdminFinanceTab(tab.id as any)}
                     aria-pressed={adminFinanceTab === tab.id}
-                    className={`relative flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+                    className={`relative flex items-center gap-2 px-4 py-3 text-base font-semibold border-b-2 transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
                       adminFinanceTab === tab.id
-                        ? `border-current ${tab.color}`
-                        : "border-transparent text-muted-foreground hover:text-foreground"
+                        ? "border-primary bg-primary/10 text-gray-900 dark:bg-primary/20 dark:text-gray-50"
+                        : "border-transparent text-gray-700 hover:bg-gray-200/70 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-slate-800 dark:hover:text-white"
                     }`}
                   >
                     {tab.icon}
@@ -26677,16 +26677,16 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        <OwnerSubnav label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
+        <OwnerSubnav highContrast label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               aria-pressed={activeTab === tab.id}
-              className={`relative flex items-center gap-2 px-4 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+              className={`relative flex items-center gap-2 px-4 py-3 text-base font-semibold border-b-2 transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
                 activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                  ? "border-primary bg-primary/10 text-gray-900 dark:bg-primary/20 dark:text-gray-50"
+                  : "border-transparent text-gray-700 hover:bg-gray-200/70 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-slate-800 dark:hover:text-white"
               }`}
             >
               {tab.icon}
