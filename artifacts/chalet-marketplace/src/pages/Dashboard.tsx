@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { ServiceCoverageEditor } from "@/components/service/ServiceCoverageEditor";
 import { ServicePrimaryCitySelector } from "@/components/service/ServicePrimaryCitySelector";
 import OwnerToolbar from "@/components/owner/OwnerToolbar";
+import OwnerDashboardNavigation, { type OwnerDashboardMode } from "@/components/owner/OwnerDashboardNavigation";
 import { initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25540,13 +25541,17 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (actAsStaff || isImpersonating) return;
+    const requestedMode = new URLSearchParams(search).get("mode");
     if (requestedServiceId) {
-      setDashMode("services");
+      setDashMode(requestedMode === "admin-finance" || requestedMode === "chalets" ? requestedMode : "services");
       if (selectedServiceId !== requestedServiceId) {
         setSelectedServiceId(requestedServiceId);
         setSelectedServiceTab("details");
       }
       if (ownerView !== "account") setServiceView(ownerView === "requests" || ownerView === "manage" ? "submissions" : "manage");
+    }
+    if (requestedMode === "admin-finance" || requestedMode === "chalets" || requestedMode === "services") {
+      setDashMode(requestedMode);
     }
     setAccountSettingsOpen(ownerView === "account");
     if (ownerView === "manage" || ownerView === "requests") {
@@ -25584,6 +25589,18 @@ export default function Dashboard() {
       setActiveTab("chalets");
     }
     navigate(`/dashboard?${canSeeServices && selectedServiceId ? `serviceId=${selectedServiceId}&` : ""}view=requests`);
+  }
+
+  function switchOwnerDashboard(mode: OwnerDashboardMode) {
+    setDashMode(mode);
+    setServiceView("manage");
+    setAccountSettingsOpen(false);
+    if (!actAsStaff && !isImpersonating) {
+      const params = new URLSearchParams();
+      if (selectedServiceId) params.set("serviceId", String(selectedServiceId));
+      params.set("mode", mode);
+      navigate(`/dashboard?${params.toString()}`);
+    }
   }
 
   /* Auto-set dashMode based on businessType when profile loads; also seed calendar prefs from DB */
@@ -25939,7 +25956,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {(activeDashMode !== "services" || actAsStaff || isImpersonating) && <Navbar />}
+      {(actAsStaff || isImpersonating) && <Navbar />}
       {!actAsStaff && !isImpersonating && (
         <div className="container mx-auto max-w-6xl px-4 pt-6">
           <OwnerToolbar
@@ -25951,30 +25968,17 @@ export default function Dashboard() {
             onSubscription={() => navigate("/subscription")}
             onManageRequests={openRegistrationRequests}
             onLogout={logout}
-            showHomeLink={activeDashMode === "services"}
-            navigation={activeDashMode === "services" ? (
-              <div className="flex flex-wrap items-center gap-2" aria-label="الأقسام العامة للخدمات">
-                <Button
-                  type="button"
-                  variant={serviceView === "manage" && myApprovedProviders.length > 0 ? "default" : "outline"}
-                  className="gap-2 rounded-xl"
-                  aria-pressed={serviceView === "manage" && myApprovedProviders.length > 0}
-                  disabled={myApprovedProviders.length === 0}
-                  onClick={() => setServiceView("manage")}
-                >
-                  <Star className="w-4 h-4" />إدارة الخدمات
-                </Button>
-                <Button
-                  type="button"
-                  variant={serviceView === "submissions" || myApprovedProviders.length === 0 ? "default" : "outline"}
-                  className="gap-2 rounded-xl"
-                  aria-pressed={serviceView === "submissions" || myApprovedProviders.length === 0}
-                  onClick={() => setServiceView("submissions")}
-                >
-                  <Archive className="w-4 h-4" />متابعة الطلبات
-                </Button>
-              </div>
-            ) : undefined}
+            showHomeLink
+            requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
+            navigation={<OwnerDashboardNavigation
+              mode={activeDashMode}
+              requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
+              canSeeChalets={canSeeChalets}
+              canSeeServices={canSeeServices}
+              canAccessFinance={canAccessFinancialAdmin}
+              unreadCount={unreadNotifCount + unreadSupportCount}
+              onSelect={switchOwnerDashboard}
+            />}
           />
         </div>
       )}
@@ -26200,8 +26204,8 @@ export default function Dashboard() {
           </DialogContent>
         </Dialog>
 
-        {/* ── Dashboard Mode Switcher (owners only, not staff) ── */}
-        {!actAsStaff && (
+        {/* Legacy impersonation navigation; ordinary owners navigate inside the greeting. */}
+        {!actAsStaff && isImpersonating && (
           <motion.div
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -26326,7 +26330,7 @@ export default function Dashboard() {
             </div>}
 
             {/* Cross-owner shortcut to admin section */}
-            {isCrossOwner && canAccessFinancialAdmin && (
+            {isImpersonating && isCrossOwner && canAccessFinancialAdmin && (
               <div className="bg-primary/5 border border-primary/20 rounded-2xl px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-sm text-primary font-semibold">
                   <Zap className="w-4 h-4" />
@@ -26465,7 +26469,7 @@ export default function Dashboard() {
                         {selectedServiceTab === "messages" && <OwnerMessageSettingsTab establishmentName={selectedProvider?.businessName} providerId={selectedServiceId} />}
                       </div>
                       {/* Shortcut to admin-finance */}
-                      {canAccessFinancialAdmin && <div className="mt-4 pt-4 border-t border-border">
+                      {isImpersonating && canAccessFinancialAdmin && <div className="mt-4 pt-4 border-t border-border">
                         <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" />الإيرادات والمصروفات والموظفون والتقارير → </p>
                         <button type="button" onClick={() => setDashMode("admin-finance")}
                           className="text-xs font-semibold text-primary underline underline-offset-2 hover:opacity-80">
@@ -26631,7 +26635,7 @@ export default function Dashboard() {
           <>
 
         {/* Subscription / Account Settings — clickable banner */}
-        {dashboardSubscription && (freeAccess || !isSubscriptionExpiryWarning(dashboardSubscription)) && (
+        {(actAsStaff || isImpersonating) && dashboardSubscription && (freeAccess || !isSubscriptionExpiryWarning(dashboardSubscription)) && (
           <SubscriptionAccountBanner subscription={dashboardSubscription} onManage={() => navigate("/subscription")} />
         )}
 
@@ -26641,7 +26645,7 @@ export default function Dashboard() {
         )}
 
         {/* ── My Services Summary Card (in chalets mode only, hidden for chalet-only accounts) ── */}
-        {!actAsStaff && canSeeServices && activeDashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
+        {!actAsStaff && isImpersonating && canSeeServices && activeDashMode === "chalets" && (myServiceSubmissions.length > 0 || myApprovedProviders.length > 0) && (
           <motion.button
             type="button"
             initial={{ opacity: 0, y: 6 }}

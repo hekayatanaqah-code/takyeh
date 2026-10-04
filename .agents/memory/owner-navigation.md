@@ -7,10 +7,10 @@ There must be no independent intermediate Hub page. A service owner enters the a
 
 **Why:** The user explicitly replaced the earlier separate-Hub requirement with direct service-dashboard entry and an integrated toolbar.
 
-**How to apply:** Prefer an active service for ordinary default entry, but preserve an explicitly selected owned service across reloads and browser navigation. Keep activity switching inside the dashboard and settings, subscriptions, and registration requests account-wide. Preserve property-only, staff, and administrator-impersonation management paths. Reuse existing subscription capacity checks when adding activities. Use the account-wide button label «طلبات التسجيل» and the service requests button label «متابعة الطلبات».
+**How to apply:** Prefer an active service for ordinary default entry, but preserve an explicitly selected owned service across reloads and browser navigation. Keep activity switching inside the dashboard and settings, subscriptions, and registration requests account-wide. Preserve property-only, staff, and administrator-impersonation management paths. Reuse existing subscription capacity checks when adding activities. Use a single account-wide requests action labeled «متابعة الطلبات».
 
-The service-owner interface must have a single top control toolbar, not stacked account/navigation/subscription headers. Do not show separate “اختر الخدمة التي تريد إدارتها” cards above an already displayed activity. Offer compact activity switching only when multiple services exist.
+The entire owner dashboard must have a single top control toolbar inside the owner's greeting box, not stacked account/navigation/subscription headers. Put property/service and financial-administration navigation inside that same box, with no repeated switcher or finance shortcut below it. Do not show separate “اختر الخدمة التي تريد إدارتها” cards above an already displayed activity. Offer compact activity switching only when multiple services exist.
 
-**Why:** The user explicitly requested removing clutter and overlapping service selectors while retaining the greeting and basic account controls in one toolbar.
+**Why:** The user repeatedly requested eliminating stacked and duplicated navigation, and clarified that this applies to the entire owner dashboard, including direct transitions between service management and financial administration.
 
 **How to apply:** Keep the selected activity's identity and activation status in its actual dashboard. Preserve important expiry alerts and access to subscriptions rather than removing those capabilities along with redundant banners.

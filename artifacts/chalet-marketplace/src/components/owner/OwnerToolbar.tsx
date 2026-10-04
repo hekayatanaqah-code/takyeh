@@ -29,6 +29,7 @@ export interface OwnerToolbarProps {
   onLogout: () => void;
   navigation?: ReactNode;
   showHomeLink?: boolean;
+  requestsOpen?: boolean;
 }
 
 export default function OwnerToolbar(p: OwnerToolbarProps) {
@@ -138,12 +139,13 @@ function Actions({
         <Settings /> الإعدادات الشخصية
       </Button>
       <Button
-        variant="ghost"
+        variant={p.requestsOpen ? "default" : "outline"}
+        aria-pressed={!!p.requestsOpen}
         className="col-span-2 rounded-full lg:col-span-1"
         onClick={p.onManageRequests}
         data-testid="button-manage-requests"
       >
-        <ClipboardList /> طلبات التسجيل
+        <ClipboardList /> متابعة الطلبات
       </Button>
     </>
   );
