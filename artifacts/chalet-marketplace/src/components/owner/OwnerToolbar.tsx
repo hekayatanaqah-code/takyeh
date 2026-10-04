@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import {
   Building2,
   Briefcase,
@@ -26,7 +26,6 @@ export interface OwnerToolbarProps {
   onSubscription: () => void;
   onManageRequests: () => void;
   onLogout: () => void;
-  navigation?: ReactNode;
   requestsOpen?: boolean;
 }
 
@@ -45,8 +44,8 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
       <div className="rounded-3xl border border-border bg-gradient-to-l from-accent to-card p-4 sm:px-6 sm:py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted-foreground sm:text-sm">أهلاً بك</p>
-            <h1 className="break-words text-xl font-extrabold leading-tight sm:text-2xl" data-testid="text-owner-name">
+            <p className="text-base text-muted-foreground">أهلاً بك</p>
+            <h1 className="break-words text-2xl font-extrabold leading-tight sm:text-3xl" data-testid="text-owner-name">
               {p.ownerName}
             </h1>
           </div>
@@ -63,11 +62,10 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
           </Button>
         </div>
         <div
-          className="mt-4 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-flow-col xl:auto-cols-fr xl:grid-cols-none"
+          className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
           data-testid="owner-toolbar-actions"
         >
           <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} />
-          {p.navigation}
         </div>
       </div>
 
@@ -114,26 +112,27 @@ function Actions({
   canAny: boolean;
   onAdd: () => void;
 }) {
+  const actionClassName = "min-h-12 h-auto min-w-0 gap-2 whitespace-normal rounded-xl px-3 py-3 text-base font-semibold [&_svg]:size-5 [&_svg]:shrink-0";
   return (
     <>
       <Button
         onClick={onAdd}
         disabled={!canAny}
-        className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] font-bold sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4"
+        className={actionClassName}
         data-testid="button-add-activity"
       >
         <Plus /> إضافة نشاط
       </Button>
-      <Button variant="outline" className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4" onClick={p.onSubscription} data-testid="button-subscription">
+      <Button variant="outline" className={actionClassName} onClick={p.onSubscription} data-testid="button-subscription">
         <CreditCard /> الاشتراك والباقات
       </Button>
-      <Button variant="outline" className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4" onClick={p.onAccountSettings} data-testid="button-account-settings">
+      <Button variant="outline" className={actionClassName} onClick={p.onAccountSettings} data-testid="button-account-settings">
         <Settings /> الإعدادات الشخصية
       </Button>
       <Button
         variant={p.requestsOpen ? "default" : "outline"}
         aria-pressed={!!p.requestsOpen}
-        className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4"
+        className={actionClassName}
         onClick={p.onManageRequests}
         data-testid="button-manage-requests"
       >

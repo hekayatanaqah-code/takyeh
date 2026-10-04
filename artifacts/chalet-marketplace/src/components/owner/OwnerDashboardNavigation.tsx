@@ -17,13 +17,14 @@ export default function OwnerDashboardNavigation(p: Props) {
   const items = [
     { mode: "chalets" as const, label: "إدارة عقاراتي", icon: Building2, visible: p.canSeeChalets },
     { mode: "services" as const, label: "إدارة خدماتي", icon: Star, visible: p.canSeeServices },
-    { mode: "admin-finance" as const, label: "الشؤون المالية", icon: Briefcase, visible: p.canAccessFinance },
+    { mode: "admin-finance" as const, label: "الشؤون الإدارية والمالية", icon: Briefcase, visible: p.canAccessFinance },
   ];
 
   return (
     <nav
       aria-label="أقسام لوحة تحكم المالك"
-      className="contents"
+      className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none"
+      data-testid="owner-primary-navigation"
     >
       {items.filter(item => item.visible).map(item => {
         const active = p.mode === item.mode && !p.requestsOpen;
@@ -33,15 +34,17 @@ export default function OwnerDashboardNavigation(p: Props) {
             type="button"
             variant={active ? "default" : "outline"}
             aria-pressed={active}
-            className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4"
-            title={item.mode === "admin-finance" ? "الشؤون المالية والإدارية" : item.label}
+            className={`h-auto min-h-20 min-w-0 justify-start gap-3 whitespace-normal rounded-2xl border-2 px-5 py-4 text-start text-lg font-bold shadow-sm transition-colors [&_svg]:size-6 ${
+              active ? "border-primary bg-primary/10 text-primary hover:bg-primary/15" : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-accent"
+            }`}
+            title={item.label}
             onClick={() => p.onSelect(item.mode)}
             data-testid={`owner-nav-${item.mode}`}
           >
-            <item.icon className="h-4 w-4 shrink-0" />
+            <item.icon className="h-6 w-6 shrink-0" />
             {item.label}
             {item.mode === "admin-finance" && p.unreadCount > 0 && (
-              <span className="shrink-0 rounded-full bg-destructive px-1 text-[10px] text-destructive-foreground" aria-label={`${p.unreadCount.toLocaleString("ar-SA")} إشعارات غير مقروءة`}>
+              <span className="ms-auto shrink-0 rounded-full bg-destructive px-2 text-sm text-destructive-foreground" aria-label={`${p.unreadCount.toLocaleString("ar-SA")} إشعارات غير مقروءة`}>
                 {p.unreadCount > 99 ? "٩٩+" : p.unreadCount.toLocaleString("ar-SA")}
               </span>
             )}

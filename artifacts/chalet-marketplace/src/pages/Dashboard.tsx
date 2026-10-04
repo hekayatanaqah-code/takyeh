@@ -23,6 +23,7 @@ import { ServiceCoverageEditor } from "@/components/service/ServiceCoverageEdito
 import { ServicePrimaryCitySelector } from "@/components/service/ServicePrimaryCitySelector";
 import OwnerToolbar from "@/components/owner/OwnerToolbar";
 import OwnerDashboardNavigation, { type OwnerDashboardMode } from "@/components/owner/OwnerDashboardNavigation";
+import ServiceIdentityLogo from "@/components/owner/ServiceIdentityLogo";
 import { initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25969,7 +25970,8 @@ export default function Dashboard() {
             onManageRequests={openRegistrationRequests}
             onLogout={logout}
             requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
-            navigation={<OwnerDashboardNavigation
+          />
+          <OwnerDashboardNavigation
               mode={activeDashMode}
               requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
               canSeeChalets={canSeeChalets}
@@ -25977,7 +25979,6 @@ export default function Dashboard() {
               canAccessFinance={canAccessFinancialAdmin}
               unreadCount={unreadNotifCount + unreadSupportCount}
               onSelect={switchOwnerDashboard}
-            />}
           />
         </div>
       )}
@@ -26391,12 +26392,10 @@ export default function Dashboard() {
                       >
                       {/* Provider header card */}
                       <div className="bg-card border border-border rounded-2xl px-5 py-4 flex items-center gap-4 flex-wrap">
-                        <div className="w-11 h-11 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-xl font-bold shrink-0">
-                          {(SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? "✨").split(" ")[0]}
-                        </div>
+                        <ServiceIdentityLogo logoUrl={selectedProvider.logoUrl} name={selectedProvider.businessName} />
                         <div className="flex-1 min-w-0">
-                          <p id={`service-name-${selectedServiceId}`} className="font-extrabold text-foreground">{selectedProvider?.businessName}</p>
-                          <p className="text-xs text-muted-foreground">{selectedProvider?.city} · {SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? selectedProvider?.category}</p>
+                          <p id={`service-name-${selectedServiceId}`} className="text-xl font-extrabold text-foreground">{selectedProvider?.businessName}</p>
+                          <p className="text-sm text-muted-foreground">{selectedProvider?.city} · {SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? selectedProvider?.category}</p>
                         </div>
                         {myApprovedProviders.length > 1 && (
                           <Select value={String(selectedServiceId)} onValueChange={value => {
