@@ -43,7 +43,7 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
   return (
     <section dir="rtl" className="w-full max-w-full overflow-x-hidden" data-testid="owner-toolbar">
       <div className="rounded-3xl border border-border bg-gradient-to-l from-accent to-card p-4 sm:px-6 sm:py-4">
-        <div className="flex flex-wrap items-start gap-3 lg:items-center">
+        <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground sm:text-sm">أهلاً بك</p>
             <h1 className="break-words text-xl font-extrabold leading-tight sm:text-2xl" data-testid="text-owner-name">
@@ -53,7 +53,7 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="shrink-0 rounded-full text-muted-foreground lg:order-last"
+            className="shrink-0 rounded-full text-muted-foreground"
             onClick={p.onLogout}
             aria-label="تسجيل الخروج"
             title="تسجيل الخروج"
@@ -61,15 +61,14 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
           >
             <LogOut />
           </Button>
-          <div className="grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:min-w-0 lg:flex-wrap lg:justify-end [&>*]:min-w-0 [&>*]:whitespace-normal [&>*]:text-xs sm:[&>*]:text-sm">
-            <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} />
-          </div>
         </div>
-        {p.navigation && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border/60 pt-3">
-            {p.navigation}
-          </div>
-        )}
+        <div
+          className="mt-4 grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-flow-col xl:auto-cols-fr xl:grid-cols-none"
+          data-testid="owner-toolbar-actions"
+        >
+          <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} />
+          {p.navigation}
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -120,21 +119,21 @@ function Actions({
       <Button
         onClick={onAdd}
         disabled={!canAny}
-        className="col-span-2 rounded-full font-bold lg:col-span-1"
+        className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] font-bold sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4"
         data-testid="button-add-activity"
       >
-        <Plus /> إضافة نشاط/خدمة جديدة
+        <Plus /> إضافة نشاط
       </Button>
-      <Button variant="outline" className="rounded-full" onClick={p.onSubscription} data-testid="button-subscription">
+      <Button variant="outline" className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4" onClick={p.onSubscription} data-testid="button-subscription">
         <CreditCard /> الاشتراك والباقات
       </Button>
-      <Button variant="outline" className="rounded-full" onClick={p.onAccountSettings} data-testid="button-account-settings">
+      <Button variant="outline" className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4" onClick={p.onAccountSettings} data-testid="button-account-settings">
         <Settings /> الإعدادات الشخصية
       </Button>
       <Button
         variant={p.requestsOpen ? "default" : "outline"}
         aria-pressed={!!p.requestsOpen}
-        className="col-span-2 rounded-full lg:col-span-1"
+        className="h-11 min-w-0 gap-1 whitespace-nowrap rounded-xl px-1.5 text-[11px] sm:gap-1.5 sm:px-2 sm:text-xs [&_svg]:size-3.5 sm:[&_svg]:size-4"
         onClick={p.onManageRequests}
         data-testid="button-manage-requests"
       >

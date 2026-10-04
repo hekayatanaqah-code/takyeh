@@ -14,3 +14,9 @@ The entire owner dashboard must keep the platform's primary header above the own
 **Why:** The user repeatedly requested eliminating duplicated owner navigation, then explicitly clarified that the branded platform header must remain separate above the greeting box, including direct transitions between service management and financial administration.
 
 **How to apply:** Keep the selected activity's identity and activation status in its actual dashboard. Preserve important expiry alerts and access to subscriptions rather than removing those capabilities along with redundant banners.
+
+All account and management buttons inside the greeting must share one horizontal row on wide screens or one balanced responsive grid on narrower screens; do not separate account actions and management navigation into independently wrapping rows.
+
+**Why:** The user explicitly requested a clean, visually light arrangement without awkward two-line button wrapping.
+
+**How to apply:** Keep equal-height controls and concise visible labels while preserving permissions, activity choices, and all existing actions.
