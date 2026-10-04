@@ -41,14 +41,12 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
 
   return (
     <section dir="rtl" className="w-full max-w-full overflow-x-hidden" data-testid="owner-toolbar">
-      <div className="rounded-3xl border border-border bg-gradient-to-l from-accent to-card p-4 sm:px-6 sm:py-4">
+      <div className="rounded-3xl border border-border bg-gradient-to-l from-accent to-card px-4 py-3 sm:px-6">
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-base text-muted-foreground">أهلاً بك</p>
-            <h1 className="break-words text-2xl font-extrabold leading-tight sm:text-3xl" data-testid="text-owner-name">
-              {p.ownerName}
-            </h1>
-          </div>
+          <h1 className="flex min-w-0 flex-1 flex-row items-baseline gap-2 text-2xl leading-snug sm:text-3xl" data-testid="text-owner-name">
+            <span className="shrink-0 whitespace-nowrap text-base font-normal text-muted-foreground sm:text-lg">أهلاً بك،</span>{" "}
+            <bdi className="min-w-0 break-words font-bold text-foreground">{p.ownerName}</bdi>
+          </h1>
           <Button
             variant="ghost"
             size="icon"
@@ -62,7 +60,7 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
           </Button>
         </div>
         <div
-          className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
           data-testid="owner-toolbar-actions"
         >
           <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} />
