@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { MapPin, Mail, Instagram, Twitter, Building2, LogIn } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { toHijriComponents } from "@/lib/hijri";
@@ -22,6 +22,8 @@ function TikTokIcon({ className }: { className?: string }) {
 }
 
 export function Footer() {
+  const [location] = useLocation();
+  const isHomepage = location === "/";
   const { data: settings = {} } = useQuery<Record<string, string>>({
     queryKey: ["page-content"],
     queryFn: async () => {
@@ -53,12 +55,12 @@ export function Footer() {
   const hasSocial = showInstagram || showTwitter || showSnapchat || showTikTok;
 
   return (
-    <footer className="bg-foreground text-background pt-12 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-12 mt-auto">
+    <footer className={`bg-foreground text-background ${isHomepage ? "pt-12" : "pt-8"} pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-12 mt-auto`}>
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+        <div className={`grid grid-cols-1 items-start gap-8 md:gap-12 ${isHomepage ? "md:grid-cols-3" : "mx-auto max-w-4xl md:grid-cols-2"}`}>
 
           {/* Brand */}
-          <div className="space-y-4">
+          {isHomepage && <div className="space-y-4">
             <div className="flex items-center gap-2">
               {logoUrl ? (
                 <img
@@ -76,7 +78,7 @@ export function Footer() {
             <p className="text-background/70 text-sm leading-relaxed max-w-xs">
               {settings.footer_desc || "المنصة الأولى لحجز الشاليهات والاستراحات الفاخرة في منطقة القصيم. اكتشف أجمل الأماكن لقضاء أوقات لا تُنسى."}
             </p>
-          </div>
+          </div>}
 
           {/* Navigation Links */}
           <div className="space-y-4">
@@ -104,7 +106,7 @@ export function Footer() {
 
           {/* Contact */}
           <div id="footer-contact" className="space-y-4">
-            <h3 className="text-lg font-semibold border-b border-background/20 pb-2 inline-block">تواصل معنا</h3>
+            <h3 className="text-lg font-semibold border-b border-background/20 pb-2 block">تواصل معنا</h3>
             <ul className="space-y-3">
               <li>
                 <a href={waLink} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}
@@ -157,7 +159,7 @@ export function Footer() {
         </div>
 
         {/* Dedicated owner and provider portal */}
-        <div className="mt-10 rounded-2xl border border-primary/40 bg-background/10 px-5 py-6 sm:px-8">
+        {isHomepage && <div className="mt-10 rounded-2xl border border-primary/40 bg-background/10 px-5 py-6 sm:px-8">
           <div className="flex flex-col gap-5 text-center sm:flex-row sm:items-center sm:justify-between sm:text-right">
             <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
@@ -179,9 +181,9 @@ export function Footer() {
               دخول الشركاء
             </Link>
           </div>
-        </div>
+        </div>}
 
-        <div className="border-t border-background/20 mt-12 pt-6 px-2 text-center text-sm leading-7 text-background/50">
+        <div className={`border-t border-background/20 ${isHomepage ? "mt-12" : "mt-8"} pt-6 px-2 text-center text-sm leading-7 text-background/50`}>
           {(() => {
             const now = new Date();
             const hijriYear = toHijriComponents(now).year.toLocaleString("ar-SA");
