@@ -14,3 +14,9 @@ Owner password sessions need an explicit owner-application identity. Legacy emai
 **Why:** Historical password logins can use an external user ID without an account link; revoking only owner aliases misses them, while broad email matching can revoke another account's sessions.
 
 **How to apply:** Prefer the explicit application identity and durable mapping for revocation. Serialize recovery-link issuance and consumption on the same account lock and reject issuance based on an obsolete password snapshot.
+
+شاشة «نسيت كلمة المرور» تعتمد على حقل واحد للجوال أو البريد فقط، دون مسار أو زر أو حالة عرض لاستعادة حساب الموظف باسم المستخدم.
+
+**Why:** المستخدم كرّر طلب حذف خيار استعادة الموظف باسم المستخدم نهائياً من الواجهة ومن حالة المكوّن، وليس مجرد إخفائه بصرياً.
+
+**How to apply:** لا تعِد خيارات أسماء المستخدمين عند تعديل واجهة الاستعادة. هذا قيد على واجهة الاستعادة، وليس طلباً لإزالة أسماء المستخدمين من تسجيل دخول الموظفين.

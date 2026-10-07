@@ -16,14 +16,13 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
   const [error, setError]           = useState<string | null>(null);
   const [sent, setSent]             = useState(false);
 
-  const [staffMode, setStaffMode] = useState(false);
   const [channel, setChannel] = useState<"email" | "whatsapp" | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!identifier.trim()) return;
     const norm = normalizeIdentifier(identifier);
-    if (!isAdmin && !staffMode && norm.kind === "other") {
+    if (norm.kind === "other") {
       setError("أدخل رقم جوال سعودي صحيح مثل 05XXXXXXXX أو بريداً إلكترونياً صحيحاً");
       return;
     }
@@ -35,9 +34,8 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          identifier: isAdmin || staffMode ? identifier.trim() : norm.value,
+          identifier: norm.value,
           portalType,
-          ...(!isAdmin && staffMode ? { identifierType: "username" } : {}),
         }),
       });
       const data = await r.json().catch(() => ({}));
@@ -63,9 +61,9 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
             <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4 bg-amber-500/10">
               <CheckCircle2 className="w-8 h-8 text-amber-400" />
             </div>
-            <h2 className="text-lg font-bold mb-2 text-slate-100">تم الإرسال</h2>
+            <h2 className="text-lg font-bold mb-2 text-slate-100" role="status">تم استلام طلب الاستعادة</h2>
             <p className="text-sm leading-relaxed mb-6 text-slate-400">
-              إذا كان البريد الإلكتروني أو اسم المستخدم مسجلاً لدينا، ستصلك رسالة تحتوي على رابط إعادة تعيين كلمة المرور خلال دقائق.
+              إذا كان رقم الجوال أو البريد الإلكتروني مطابقاً لحساب مسجل لدينا، سيصلك رابط إعادة تعيين كلمة المرور عبر القناة المتاحة خلال دقائق.
             </p>
             <a href={backHref} className="flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300">
               <ArrowRight className="w-4 h-4 rotate-180" />
@@ -82,15 +80,17 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
             <Mail className="w-6 h-6 text-amber-400" />
           </div>
           <h1 className="font-bold text-slate-200">نسيت كلمة المرور؟</h1>
-          <p className="text-xs mt-1 text-slate-500">أدخل بريدك الإلكتروني أو اسم المستخدم وسنرسل لك رابط إعادة التعيين</p>
+          <p className="text-xs mt-1 text-slate-400">أدخل رقم جوالك أو بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين</p>
         </div>
         <div className="w-full max-w-sm rounded-2xl p-6 bg-slate-900 border border-slate-800 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="block text-sm font-medium text-slate-400">البريد الإلكتروني أو اسم المستخدم</label>
+              <label htmlFor="forgot-identifier" className="block text-sm font-medium text-slate-400">{AUTH_LABELS.identifier}</label>
               <input
+                id="forgot-identifier"
                 type="text"
-                placeholder="username أو email"
+                autoComplete="off"
+                placeholder={AUTH_LABELS.identifierPlaceholder}
                 value={identifier}
                 onChange={(e) => { setIdentifier(e.target.value); setError(null); }}
                 dir="ltr"
@@ -160,13 +160,13 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="forgot-identifier" className="block text-sm font-semibold text-[#4A4A4A] mb-2">{staffMode ? "اسم المستخدم" : AUTH_LABELS.identifier}</label>
+                <label htmlFor="forgot-identifier" className="block text-sm font-semibold text-[#4A4A4A] mb-2">{AUTH_LABELS.identifier}</label>
                 <input
                   id="forgot-identifier"
                   type="text"
-                  autoComplete="username"
+                  autoComplete="off"
                   aria-describedby="forgot-help"
-                  placeholder={staffMode ? "أدخل اسم المستخدم" : AUTH_LABELS.identifierPlaceholder}
+                  placeholder={AUTH_LABELS.identifierPlaceholder}
                   value={identifier}
                   onChange={(e) => { setIdentifier(e.target.value); setError(null); }}
                   dir="rtl"
@@ -177,18 +177,8 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
               </div>
 
               <p id="forgot-help" className="text-xs text-[#656565] leading-relaxed -mt-2">
-                {staffMode
-                  ? "سيتم إرسال رابط الاستعادة إلى القناة المسجلة لحساب الموظف إن وجدت."
-                  : "سيتم اختيار قناة الإرسال المتاحة تلقائياً بحسب ما تدخله. الإرسال عبر واتساب يعتمد على توفر الخدمة وقت الطلب."}
+                سيتم اختيار قناة الإرسال المتاحة تلقائياً بحسب ما تدخله. الإرسال عبر واتساب يعتمد على توفر الخدمة وقت الطلب.
               </p>
-              <button
-                type="button"
-                data-testid="button-toggle-staff-mode"
-                onClick={() => { setStaffMode((v) => !v); setError(null); setSent(false); setChannel(null); setIdentifier(""); }}
-                className="text-xs text-[#8C6246] font-medium hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8C6246] rounded"
-              >
-                {staffMode ? "العودة للاستعادة برقم الجوال أو البريد الإلكتروني" : "استعادة حساب موظف باسم المستخدم"}
-              </button>
 
               {error && (
                 <div role="alert" className="rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-3">
