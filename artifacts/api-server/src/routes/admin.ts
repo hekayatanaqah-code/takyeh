@@ -1226,15 +1226,31 @@ router.get("/owners", async (_req, res) => {
   const appRows = await db.execute<{
     id: number; full_name: string; phone: string; created_at: string;
     user_id: string | null; deleted_at: string | null;
+    has_activity: boolean;
   }>(
-    sql`SELECT oa.id, oa.full_name, oa.phone, oa.created_at, oa.deleted_at, oal.user_id
+    sql`SELECT oa.id, oa.full_name, oa.phone, oa.created_at, oa.deleted_at, oal.user_id,
+               activity.has_activity
         FROM owner_applications oa
-        LEFT JOIN owner_account_links oal ON oal.owner_application_id = oa.id
+        LEFT JOIN owner_account_links oal
+          ON oal.owner_application_id = oa.id AND oal.user_id !~ '^owner_[0-9]+$'
+        LEFT JOIN LATERAL (
+          SELECT (
+            EXISTS (
+              SELECT 1 FROM chalet_submissions cs
+              WHERE cs.owner_id IN ('owner_' || oa.id::text, oal.user_id)
+            ) OR EXISTS (
+              SELECT 1 FROM service_provider_submissions ss
+              WHERE ss.owner_id IN ('owner_' || oa.id::text, oal.user_id)
+            )
+          ) AS has_activity
+        ) activity ON TRUE
         ORDER BY oa.created_at ASC`
   );
   const ownerAliases = new Map<string, string>();
   const deletedOwnerIds = new Set<string>();
-  const appByOwnerId = new Map<string, { fullName: string; phone: string; createdAt: string }>();
+  const appByOwnerId = new Map<string, {
+    fullName: string; phone: string; createdAt: string; hasActivity: boolean;
+  }>();
   for (const a of (appRows as any).rows) {
     const legacyOwnerId = `owner_${a.id}`;
     const canonicalOwnerId = a.user_id || legacyOwnerId;
@@ -1248,6 +1264,7 @@ router.get("/owners", async (_req, res) => {
       fullName: a.full_name ?? "",
       phone: a.phone ?? "",
       createdAt: a.created_at ?? "",
+      hasActivity: a.has_activity,
     };
     appByOwnerId.set(canonicalOwnerId, app);
   }
@@ -1332,6 +1349,12 @@ router.get("/owners", async (_req, res) => {
     return next;
   };
 
+  // Registered accounts are the base set, independent of inventory approval.
+  // Keep canonical IDs so activity on a legacy alias cannot duplicate an owner.
+  for (const [ownerId, account] of appByOwnerId) {
+    ensureOwner(ownerId, account.phone, account.createdAt);
+  }
+
   for (const row of propertyRows) {
     if (!row.ownerId) continue;
     const ownerId = ownerAliases.get(row.ownerId) ?? row.ownerId;
@@ -1363,16 +1386,6 @@ router.get("/owners", async (_req, res) => {
     });
   }
 
-  for (const a of (appRows as any).rows) {
-    const ownerId = ownerAliases.get(`owner_${a.id}`) ?? `owner_${a.id}`;
-    if (deletedOwnerIds.has(ownerId)) continue;
-    ensureOwner(ownerId, a.phone ?? "", a.created_at ?? null);
-  }
-  for (const grant of grantRows) {
-    const ownerId = ownerAliases.get(grant.ownerId) ?? grant.ownerId;
-    if (!deletedOwnerIds.has(ownerId)) ensureOwner(ownerId);
-  }
-
   const countCategories = (assets: OwnerAsset[]) => {
     const counts = new Map<string, number>();
     for (const asset of assets) counts.set(asset.category, (counts.get(asset.category) ?? 0) + 1);
@@ -1399,6 +1412,8 @@ router.get("/owners", async (_req, res) => {
       ownerId: owner.ownerId,
       ownerName: app?.fullName || owner.ownerId,
       ownerKind,
+      isRegistered: !!app,
+      hasActivity: app?.hasActivity ?? (propertyCount > 0 || serviceCount > 0),
       propertyCount,
       serviceCount,
       propertyCategories: countCategories(owner.properties),

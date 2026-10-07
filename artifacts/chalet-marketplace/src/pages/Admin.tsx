@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { refreshCatalogsAfterWrite } from "@/lib/query-client";
+import { matchesOwnerDirectoryTab, ownerWhatsAppUrl, type OwnerDirectoryTab } from "@/lib/owner-directory";
 import InventoryFilters, { type InventoryFilterState } from "@/components/admin/InventoryFilters";
 import { useInventoryCatalogs } from "@/hooks/useInventoryCatalogs";
 import { emptyInventoryFilters, filterAndSortInventory, servicePricingOptions, type InventoryDescriptor } from "@/lib/inventory-filters";
@@ -193,6 +194,8 @@ interface Owner {
   ownerId: string;
   ownerName: string;
   ownerKind: 'property'|'service'|'both'|'none';
+  isRegistered: boolean;
+  hasActivity: boolean;
   propertyCount: number;
   serviceCount: number;
   propertyCategories: Array<{name:string;count:number}>;
@@ -1618,7 +1621,7 @@ function DeleteSafeModal({
 }
 
 function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
-  const [mainTab, setMainTab]             = useState<"property" | "service" | "both">("property");
+  const [mainTab, setMainTab]             = useState<OwnerDirectoryTab>("all");
   const [search, setSearch]               = useState("");
   const [regionFilter, setRegionFilter]   = useState("");
   const [cityFilter, setCityFilter]       = useState("");
@@ -1659,7 +1662,10 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       if (!r.ok) throw new Error("فشل التحميل");
       return r.json() as Promise<Owner[]>;
     },
+    refetchInterval: 30_000,
   });
+  const registeredOwnerCount = owners.filter(owner => owner.isRegistered).length;
+  const ownersWithoutActivity = owners.filter(owner => matchesOwnerDirectoryTab(owner, "none"));
 
   const { data: grantPlans = [] } = useQuery<Plan[]>({
     queryKey: ["admin", "plans"],
@@ -1872,12 +1878,8 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
   // Base list by main tab
   const baseOwners = useMemo(() => {
-    return owners.filter(o => {
-      if (o.ownerKind === 'none') return false;
-      if (mainTab === 'property') return o.ownerKind === 'property';
-      if (mainTab === 'service') return o.ownerKind === 'service';
-      return o.ownerKind === 'both' && o.propertyCount > 0 && o.serviceCount > 0;
-    }).sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+    return owners.filter(owner => matchesOwnerDirectoryTab(owner, mainTab))
+      .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
   }, [owners, mainTab]);
 
   const dynamicPropertyCats = useMemo(() => {
@@ -1898,8 +1900,10 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return baseOwners.filter(o => {
-      if (q && !o.ownerName.toLowerCase().includes(q) && !o.whatsappNumber.includes(q)) return false;
-      const locations = mainTab === "service" ? o.serviceLocations : o.propertyLocations;
+      if (q && !o.ownerName.toLowerCase().includes(q) && !fromAr(o.whatsappNumber).includes(fromAr(q))) return false;
+      const locations = mainTab === "service" ? o.serviceLocations
+        : mainTab === "all" || mainTab === "both" ? [...o.propertyLocations, ...o.serviceLocations]
+        : o.propertyLocations;
       if (regionFilter && !locations.some((location) => location.region === regionFilter)) return false;
       if (cityFilter && !locations.some((location) =>
         location.city === cityFilter && (!regionFilter || location.region === regionFilter)
@@ -1978,8 +1982,8 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-white">إدارة الملاك</h2>
-          <p className="text-slate-400 text-sm mt-1">
-            {owners.length > 0 ? `${toAr(owners.length)} مالك إجمالي` : "لا يوجد ملاك بعد"}
+          <p className="text-slate-400 text-sm mt-1" data-testid="registered-owner-total">
+            {isLoading ? "جاري تحميل الملاك…" : `إجمالي الملاك: ${toAr(registeredOwnerCount)}`}
             {selected.size > 0 && <span className="mr-2 text-amber-400">— {toAr(selected.size)} محدّد</span>}
           </p>
         </div>
@@ -1992,6 +1996,18 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
       {/* ── Main Tabs ── */}
       <div className="flex flex-wrap gap-2 border-b border-slate-700 pb-2">
+        <button
+          onClick={() => setMainTab("all")}
+          aria-pressed={mainTab === "all"}
+          data-testid="owners-tab-all"
+          className={`px-4 py-2 font-bold text-sm rounded-t-lg transition-colors border-b-2 ${
+            mainTab === "all" ? "text-amber-400 border-amber-400 bg-amber-500/5"
+              : "text-slate-400 border-transparent hover:text-white"
+          }`}
+        >
+          جميع الملاك
+          <span className="mr-1.5 text-xs bg-slate-800 px-1.5 py-0.5 rounded-full text-slate-300">{toAr(owners.length)}</span>
+        </button>
         <button
           onClick={() => setMainTab("property")}
           className={`px-4 py-2 font-bold text-sm rounded-t-lg transition-colors border-b-2 ${
@@ -2031,7 +2047,22 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
             {toAr(owners.filter(o => o.ownerKind === 'both' && o.propertyCount > 0 && o.serviceCount > 0).length)}
           </span>
         </button>
+        <button
+          onClick={() => setMainTab("none")}
+          aria-pressed={mainTab === "none"}
+          data-testid="owners-tab-without-activity"
+          className={`px-4 py-2 font-bold text-sm rounded-t-lg transition-colors border-b-2 ${
+            mainTab === "none" ? "text-amber-400 border-amber-400 bg-amber-500/5"
+              : "text-slate-400 border-transparent hover:text-white"
+          }`}
+        >
+          ملاك بدون عقارات/خدمات
+          <span className="mr-1.5 text-xs bg-slate-800 px-1.5 py-0.5 rounded-full text-slate-300">{toAr(ownersWithoutActivity.length)}</span>
+        </button>
       </div>
+      {mainTab === "none" && (
+        <p className="text-sm text-slate-400">حسابات مسجلة لم تضف أي عقار أو خدمة بعد، مرتبة من الأحدث إلى الأقدم.</p>
+      )}
 
       {/* ── Sub-categories (Dynamic) ── */}
       {mainTab === "property" && dynamicPropertyCats.length > 0 && (
@@ -2108,6 +2139,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
         <select
           value={regionFilter}
           onChange={(e) => setRegionFilter(e.target.value)}
+          disabled={mainTab === "none"}
           className="bg-slate-900 border border-slate-600 rounded-lg text-sm text-slate-200 px-3 py-2 focus:outline-none focus:border-amber-500/60"
         >
           <option value="">كل المناطق</option>
@@ -2217,6 +2249,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
               {mainTab === 'property' && <TableHead className="text-slate-300 text-right font-semibold">العقارات ({toAr(baseOwners.reduce((s,o)=>s+o.propertyCount,0))})</TableHead>}
               {mainTab === 'service' && <TableHead className="text-slate-300 text-right font-semibold">الخدمات ({toAr(baseOwners.reduce((s,o)=>s+o.serviceCount,0))})</TableHead>}
               {mainTab === 'both' && <TableHead className="text-slate-300 text-right font-semibold">النشاط (عقار + خدمة)</TableHead>}
+              {(mainTab === "all" || mainTab === "none") && <TableHead className="text-slate-300 text-right font-semibold">النشاط</TableHead>}
               <TableHead className="text-slate-300 text-right font-semibold">الجوال / واتساب</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">التسجيل / الاشتراك</TableHead>
               <TableHead className="text-slate-300 text-right font-semibold">إجراءات</TableHead>
@@ -2283,7 +2316,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                       </div>
                     </>
                   )}
-                  {mainTab === 'both' && (
+                  {(mainTab === 'both' || (mainTab === "all" && owner.ownerKind !== "none")) && (
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
                         <span className="text-slate-200 text-xs bg-slate-700 px-1.5 py-0.5 rounded">{toAr(owner.propertyCount)} عقار</span>
@@ -2296,6 +2329,11 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                     </div>
                   )}
                   <div className="flex items-center gap-1 mt-1.5">
+                    {(mainTab === "none" || (mainTab === "all" && owner.ownerKind === "none")) && (
+                      <span className="text-xs text-slate-400">
+                        {owner.hasActivity ? "لا توجد أنشطة معتمدة بعد" : "لم يضف عقاراً أو خدمة بعد"}
+                      </span>
+                    )}
                     {owner.region && <span className="text-slate-500 text-[10px]">{owner.region}</span>}
                     {owner.region && owner.location && <span className="text-slate-600 text-[10px]">←</span>}
                     {owner.location && <span className="text-slate-500 text-[10px]">{owner.location}</span>}
@@ -2306,11 +2344,12 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
                 <TableCell>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-slate-300 font-mono text-sm ltr text-right">{toAr(owner.whatsappNumber)}</span>
-                    <a href={`https://wa.me/${owner.whatsappNumber}`} target="_blank" rel="noopener noreferrer"
+                    <span className="text-slate-300 font-mono text-sm text-right" dir="ltr">{owner.whatsappNumber ? toAr(owner.whatsappNumber) : "غير مسجّل"}</span>
+                    {ownerWhatsAppUrl(owner.whatsappNumber) && <a href={ownerWhatsAppUrl(owner.whatsappNumber)!} target="_blank" rel="noopener noreferrer"
+                      aria-label={`مراسلة ${owner.ownerName} عبر واتساب`}
                       className="text-[10px] text-green-400 hover:text-green-300 flex items-center gap-1 w-fit bg-green-500/10 px-1.5 py-0.5 rounded">
                       مراسلة واتساب
-                    </a>
+                    </a>}
                   </div>
                 </TableCell>
 
