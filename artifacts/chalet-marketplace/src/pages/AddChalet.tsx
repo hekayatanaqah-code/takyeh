@@ -855,6 +855,7 @@ export default function AddChalet() {
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+          qc.invalidateQueries({ queryKey: ["/api/submissions"] });
           setSubmitted(true);
         },
         onError: async (err: unknown) => {
@@ -1002,12 +1003,18 @@ export default function AddChalet() {
                         رسوم الإضافة {toAr(Number(planLimits.extraChaletPrice))} ر.س لمرة واحدة؛ تُضاف إلى اشتراكك الحالي بعد تأكيد الدفع.
                       </p>
                     )}
-                    <Button variant="outline" onClick={() => navigate("/subscription")}>عرض الباقات والتجديد</Button>
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                      <Button variant="outline" onClick={() => navigate("/subscription")}>عرض الباقات والتجديد</Button>
+                      <Button variant="outline" onClick={() => navigate("/dashboard?mode=chalets")}>الذهاب إلى لوحة التحكم</Button>
+                    </div>
                   </div>
                 ) : (
-                  <Button className="mt-8" onClick={resetForm}>
-                    إضافة شاليه آخر
-                  </Button>
+                  <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <Button onClick={resetForm}>
+                      إضافة شاليه آخر
+                    </Button>
+                    <Button variant="outline" onClick={() => navigate("/dashboard?mode=chalets")}>الذهاب إلى لوحة التحكم</Button>
+                  </div>
                 )}
               </>
             )}
