@@ -13,5 +13,6 @@ export interface PropertyIdentityInput {
   location: string;
   /** @minLength 1 */
   district: string;
+  /** @pattern ^[0-9٠-٩۰-۹]+$ */
   whatsappNumber: string;
 }

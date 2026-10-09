@@ -26,9 +26,9 @@ export interface CreateSubmissionRequest {
   propertyType?: string;
   /** Number of sections (قسم واحد، قسمين منفصلة) */
   sections?: string;
-  /** Optional Google Maps or website link */
+  /** Google Maps link; sharing the same location between properties is allowed */
   mapsUrl?: string;
-  /** Instagram or Snapchat profile link for verification */
+  /** Instagram or Snapchat profile URL or account handle */
   socialLink?: string;
   /** Chalet description in Arabic */
   descriptionAr: string;

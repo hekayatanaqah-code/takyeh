@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { db } from "@workspace/db";
 import { chaletSubmissionsTable, chaletsTable, ownerTempSessionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
@@ -8,6 +8,10 @@ import { sendAdminNewSubmissionEmail } from "../lib/email";
 import { ownerPlanAccess } from "../lib/subscription-access";
 import { checkPropertyIdentity } from "../lib/property-identity";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
+import { hasPropertySocialConflict, socialAccountIdentity } from "../lib/property-social-account";
+
+const whatsappSchema = z.string().regex(/^[0-9٠-٩۰-۹]+$/, "رقم الواتساب يقبل الأرقام فقط")
+  .transform(normalizeCustomerPhone).pipe(z.string().regex(/^05\d{8}$/, "رقم واتساب غير صحيح"));
 
 const SubmissionBodyStrict = CreateSubmissionBody.extend({
   nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب (حرفان على الأقل)"),
@@ -16,7 +20,7 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
   location: z.string().trim().min(2, "المدينة مطلوبة"),
   district: z.string().trim().min(1, "الحي مطلوب"),
   descriptionAr: z.string().trim().min(3, "الوصف قصير جداً (٣ أحرف على الأقل)"),
-  whatsappNumber: z.string().transform(normalizeCustomerPhone).pipe(z.string().regex(/^05\d{8}$/, "رقم واتساب غير صحيح")),
+  whatsappNumber: whatsappSchema,
   pricePerNight: z.number().min(0),
   priceMorning: z.number().nullable().optional(),
   priceEvening: z.number().nullable().optional(),
@@ -29,7 +33,7 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
   dailyPrices: z.record(z.string(), z.record(z.string(), z.number())).nullable().optional(),
   seasonalDisclaimer: z.boolean().optional(),
   mapsUrl: z.string().optional().nullable().or(z.literal("")),
-  socialLink: z.string().optional().nullable(),
+  socialLink: z.string().trim().refine(value => !!socialAccountIdentity(value), "أدخل رابط حساب Instagram / Snapchat أو معرف حساب صحيح").optional().nullable(),
   photos: z.array(z.string().trim().min(1).refine(value => value !== "error", "صورة غير صالحة")).min(1, "أضف صورة رئيسية واحدة على الأقل").max(15, "الحد الأقصى للصور هو 15"),
   videoUrl: z.string().optional(),
   logoUrl: z.string().optional().nullable(),
@@ -51,7 +55,7 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
 
 const router = Router();
 
-router.post("/check-identity", async (req, res) => {
+async function hasRegistrationSession(req: Request) {
   let authenticated = req.isAuthenticated();
   if (!authenticated && req.cookies?.owner_temp_session) {
     const [session] = await db.select({ id: ownerTempSessionsTable.id })
@@ -60,12 +64,32 @@ router.post("/check-identity", async (req, res) => {
         sql`${ownerTempSessionsTable.expiresAt} > now()`)).limit(1);
     authenticated = !!session;
   }
+  return authenticated;
+}
+
+router.post("/check-social-account", async (req, res) => {
+  if (!await hasRegistrationSession(req)) return res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
+  const parsed = z.object({
+    socialLink: z.string().trim().refine(value => !!socialAccountIdentity(value)),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "أدخل رابط حساب Instagram / Snapchat أو معرف حساب صحيح." });
+  const duplicate = await hasPropertySocialConflict(parsed.data.socialLink);
+  return res.json({
+    available: !duplicate,
+    fieldErrors: duplicate ? {
+      socialLink: ["حساب التواصل هذا مرتبط بعقار آخر مسجل مسبقاً. يرجى استخدام حساب مختلف."],
+    } : {},
+  });
+});
+
+router.post("/check-identity", async (req, res) => {
+  const authenticated = await hasRegistrationSession(req);
   if (!authenticated) return res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
   const parsed = z.object({
     nameAr: z.string().trim().min(2),
     location: z.string().trim().min(2),
     district: z.string().trim().min(1),
-    whatsappNumber: z.string().transform(normalizeCustomerPhone).pipe(z.string().regex(/^05\d{8}$/)),
+    whatsappNumber: whatsappSchema,
   }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "تحقق من الاسم والمدينة والحي ورقم الواتساب" });
   const flags = await checkPropertyIdentity(parsed.data);
@@ -266,50 +290,26 @@ router.post("/", async (req, res) => {
 
   /* ── Full-scan duplicate check — collect ALL conflicts before returning ── */
   const dupFields: string[] = [];
-  let mapsIsDup = false;
   // Run all checks in parallel
   const [
     identity,
-    [dupSubSoc],  [dupChaletSoc],
-    [dupSubMap],  [dupChaletMap],
+    socialConflict,
   ] = await Promise.all([
     checkPropertyIdentity(data),
-    data.socialLink
-      ? db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
-          .where(and(sql`lower(${chaletSubmissionsTable.socialLink}) = lower(${data.socialLink})`, ne(chaletSubmissionsTable.status, "rejected"))).limit(1)
-      : Promise.resolve([null]),
-    data.socialLink
-      ? db.select({ id: chaletsTable.id }).from(chaletsTable)
-          .where(sql`lower(${chaletsTable.socialLink}) = lower(${data.socialLink})`).limit(1)
-      : Promise.resolve([null]),
-
-    data.mapsUrl
-      ? db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
-          .where(and(sql`lower(${chaletSubmissionsTable.mapsUrl}) = lower(${data.mapsUrl})`, ne(chaletSubmissionsTable.status, "rejected"))).limit(1)
-      : Promise.resolve([null]),
-    data.mapsUrl
-      ? db.select({ id: chaletsTable.id }).from(chaletsTable)
-          .where(sql`lower(${chaletsTable.mapsUrl}) = lower(${data.mapsUrl})`).limit(1)
-      : Promise.resolve([null]),
+    data.socialLink ? hasPropertySocialConflict(data.socialLink) : Promise.resolve(false),
   ]);
 
-  // Collect hits (maps first — highest priority)
-  if (dupSubMap || dupChaletMap) { dupFields.push("موقع الشاليه على الخريطة"); mapsIsDup = true; }
+  // A shared map pin is valid for complexes and neighboring properties.
   if (identity.whatsappConflict) dupFields.push("رقم الواتساب");
-  if (dupSubSoc || dupChaletSoc) dupFields.push("رابط الإنستقرام");
+  if (socialConflict) dupFields.push("حساب التواصل");
   if (identity.nameConflict) dupFields.push("الاسم والمدينة والحي");
 
   if (dupFields.length > 0) {
     let error: string;
-    if (mapsIsDup && dupFields.length === 1) {
-      error = "⚠️ موقع الشاليه على الخريطة مسجل مسبقاً — يُرجح أن هذا العقار مسجّل بالفعل في المنصة. يُرجى التواصل مع الإدارة.";
-    } else if (mapsIsDup) {
-      const rest = dupFields.filter(f => f !== "موقع الشاليه على الخريطة").join("، ");
-      error = `⚠️ موقع الشاليه على الخريطة مسجل مسبقاً — يُرجح أن هذا العقار مسجّل بالفعل. البيانات التالية مسجلة أيضاً: (${rest}).`;
-    } else if (dupFields.length === 1) {
+    if (dupFields.length === 1) {
       const labels: Record<string, string> = {
         "رقم الواتساب": "عفواً، رقم الواتساب هذا مسجل مسبقاً.",
-        "رابط الإنستقرام": "عفواً، رابط الإنستقرام هذا مسجل مسبقاً.",
+        "حساب التواصل": "حساب التواصل هذا مرتبط بعقار آخر مسجل مسبقاً.",
         "الاسم والمدينة والفئة": "عفواً، يوجد شاليه بنفس هذا الاسم في هذه المدينة والفئة.",
         "الاسم والمدينة والحي": "هذا العقار مسجل مسبقاً بنفس الاسم والمدينة والحي.",
       };
@@ -317,7 +317,7 @@ router.post("/", async (req, res) => {
     } else {
       error = `عفواً، البيانات التالية مسجلة مسبقاً: (${dupFields.join("، ")}).`;
     }
-    return res.status(409).json({ error, fields: dupFields, mapsConflict: mapsIsDup });
+    return res.status(409).json({ error, fields: dupFields });
   }
 
   // Lock the owner's property quota until the submission is committed. Without
@@ -443,7 +443,7 @@ router.patch("/:id", async (req, res) => {
   const body = z.object({
     nameAr: z.string().trim().min(2).optional(),
     descriptionAr: z.string().trim().min(3).optional(),
-    whatsappNumber: z.string().trim().min(9).optional(),
+    whatsappNumber: whatsappSchema.optional(),
     region: z.string().trim().min(2).optional(),
     suggestedCityName: z.string().trim().min(2).nullable().optional(),
     location: z.string().trim().min(2).optional(),
@@ -456,7 +456,7 @@ router.patch("/:id", async (req, res) => {
     amenities: z.array(z.string()).optional(),
     mapsUrl: z.string().nullable().optional(),
     videoUrl: z.string().nullable().optional(),
-    socialLink: z.string().nullable().optional(),
+    socialLink: z.string().trim().refine(value => !value || !!socialAccountIdentity(value)).nullable().optional(),
     maxGuests: z.number().int().min(1).nullable().optional(),
     bedrooms: z.number().int().min(0).nullable().optional(),
     termsAndConditions: z.string().nullable().optional(),
@@ -471,37 +471,34 @@ router.patch("/:id", async (req, res) => {
 
   /* ── Full-scan duplicate check — collect ALL conflicts (excluding this submission) ── */
   const patchDupFields: string[] = [];
-  let patchMapsIsDup = false;
 
   // Fetch current submission to resolve effective values for unchanged fields
   const [currentSub] = await db.select().from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, id)).limit(1);
   const checkWa   = d.whatsappNumber ?? currentSub?.whatsappNumber ?? "";
   const checkSoc  = d.socialLink     !== undefined ? d.socialLink  : currentSub?.socialLink ?? null;
-  const checkMap  = d.mapsUrl        !== undefined ? d.mapsUrl     : currentSub?.mapsUrl    ?? null;
   const checkName = d.nameAr         ?? currentSub?.nameAr         ?? "";
   const checkLoc  = d.location       ?? currentSub?.location       ?? "";
-  const checkCat  = d.propertyType   !== undefined ? d.propertyType : currentSub?.propertyType ?? null;
-  const hasEditCat = !!(checkCat && checkCat !== "__other__");
+  const checkDistrict = d.district !== undefined ? d.district : currentSub?.district ?? "";
 
   const patchSubNameWhere: Parameters<typeof and>[0][] = [
     sql`lower(${chaletSubmissionsTable.nameAr}) = lower(${checkName})`,
     sql`lower(${chaletSubmissionsTable.location}) = lower(${checkLoc})`,
+    sql`lower(coalesce(${chaletSubmissionsTable.district}, '')) = lower(${checkDistrict ?? ""})`,
     ne(chaletSubmissionsTable.status, "rejected"),
     ne(chaletSubmissionsTable.id, id),
   ];
-  if (hasEditCat) patchSubNameWhere.push(sql`lower(coalesce(${chaletSubmissionsTable.propertyType}, '')) = lower(${checkCat})`);
 
   const patchChaletNameWhere: Parameters<typeof and>[0][] = [
     sql`lower(${chaletsTable.nameAr}) = lower(${checkName})`,
     sql`lower(${chaletsTable.location}) = lower(${checkLoc})`,
+    sql`lower(coalesce(${chaletsTable.district}, '')) = lower(${checkDistrict ?? ""})`,
+    sql`${chaletsTable.submissionId} IS DISTINCT FROM ${id}`,
   ];
-  if (hasEditCat) patchChaletNameWhere.push(sql`lower(coalesce(${chaletsTable.category}, coalesce(${chaletsTable.propertyType}, ''))) = lower(${checkCat})`);
 
   const [
     [pDupSubName], [pDupChaletName],
     [pDupSubWa],   [pDupChaletWa],
-    [pDupSubSoc],  [pDupChaletSoc],
-    [pDupSubMap],  [pDupChaletMap],
+    patchSocialConflict,
   ] = await Promise.all([
     db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable).where(and(...patchSubNameWhere)).limit(1),
     db.select({ id: chaletsTable.id }).from(chaletsTable).where(and(...patchChaletNameWhere)).limit(1),
@@ -510,47 +507,27 @@ router.patch("/:id", async (req, res) => {
       .where(and(eq(chaletSubmissionsTable.whatsappNumber, checkWa), ne(chaletSubmissionsTable.status, "rejected"), ne(chaletSubmissionsTable.id, id))).limit(1),
     db.select({ id: chaletsTable.id }).from(chaletsTable).where(eq(chaletsTable.whatsappNumber, checkWa)).limit(1),
 
-    checkSoc
-      ? db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
-          .where(and(sql`lower(${chaletSubmissionsTable.socialLink}) = lower(${checkSoc})`, ne(chaletSubmissionsTable.status, "rejected"), ne(chaletSubmissionsTable.id, id))).limit(1)
-      : Promise.resolve([null]),
-    checkSoc
-      ? db.select({ id: chaletsTable.id }).from(chaletsTable).where(sql`lower(${chaletsTable.socialLink}) = lower(${checkSoc})`).limit(1)
-      : Promise.resolve([null]),
-
-    checkMap
-      ? db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
-          .where(and(sql`lower(${chaletSubmissionsTable.mapsUrl}) = lower(${checkMap})`, ne(chaletSubmissionsTable.status, "rejected"), ne(chaletSubmissionsTable.id, id))).limit(1)
-      : Promise.resolve([null]),
-    checkMap
-      ? db.select({ id: chaletsTable.id }).from(chaletsTable).where(sql`lower(${chaletsTable.mapsUrl}) = lower(${checkMap})`).limit(1)
-      : Promise.resolve([null]),
+    checkSoc ? hasPropertySocialConflict(checkSoc, id) : Promise.resolve(false),
   ]);
 
-  if (pDupSubMap || pDupChaletMap) { patchDupFields.push("موقع الشاليه على الخريطة"); patchMapsIsDup = true; }
   if (pDupSubWa  || pDupChaletWa)  patchDupFields.push("رقم الواتساب");
-  if (pDupSubSoc || pDupChaletSoc) patchDupFields.push("رابط الإنستقرام");
-  if (pDupSubName || pDupChaletName) patchDupFields.push(hasEditCat ? "الاسم والمدينة والفئة" : "الاسم والمدينة");
+  if (patchSocialConflict) patchDupFields.push("حساب التواصل");
+  if (pDupSubName || pDupChaletName) patchDupFields.push("الاسم والمدينة والحي");
 
   if (patchDupFields.length > 0) {
     let error: string;
-    if (patchMapsIsDup && patchDupFields.length === 1) {
-      error = "⚠️ موقع الشاليه على الخريطة مسجل مسبقاً — يُرجح أن هذا العقار مسجّل بالفعل في المنصة. يُرجى التواصل مع الإدارة.";
-    } else if (patchMapsIsDup) {
-      const rest = patchDupFields.filter(f => f !== "موقع الشاليه على الخريطة").join("، ");
-      error = `⚠️ موقع الشاليه على الخريطة مسجل مسبقاً — يُرجح أن هذا العقار مسجّل بالفعل. البيانات التالية مسجلة أيضاً: (${rest}).`;
-    } else if (patchDupFields.length === 1) {
+    if (patchDupFields.length === 1) {
       const labels: Record<string, string> = {
         "رقم الواتساب": "عفواً، رقم الواتساب هذا مسجل مسبقاً.",
-        "رابط الإنستقرام": "عفواً، رابط الإنستقرام هذا مسجل مسبقاً.",
+        "حساب التواصل": "حساب التواصل هذا مرتبط بعقار آخر مسجل مسبقاً.",
         "الاسم والمدينة والفئة": "عفواً، يوجد شاليه بنفس هذا الاسم في هذه المدينة والفئة.",
-        "الاسم والمدينة": "عذراً، هذا الاسم مستخدم مسبقاً في هذه المدينة. يرجى اختيار اسم مختلف أو إضافة تمييز للحي.",
+        "الاسم والمدينة والحي": "هذا العقار مسجل مسبقاً بنفس الاسم والمدينة والحي.",
       };
       error = labels[patchDupFields[0]] ?? `عفواً، ${patchDupFields[0]} مسجل مسبقاً.`;
     } else {
       error = `عفواً، البيانات التالية مسجلة مسبقاً: (${patchDupFields.join("، ")}).`;
     }
-    return res.status(409).json({ error, fields: patchDupFields, mapsConflict: patchMapsIsDup });
+    return res.status(409).json({ error, fields: patchDupFields });
   }
 
   /* Build the update object — reset to pending but PRESERVE adminNote for admin context */

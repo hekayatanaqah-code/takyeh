@@ -41,6 +41,8 @@ import type {
   OwnerFreeAccessGrantResponse,
   PropertyIdentityInput,
   PropertyIdentityResult,
+  PropertySocialAccountInput,
+  PropertySocialAccountResult,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   ServiceGlobalSeason,
@@ -1542,6 +1544,94 @@ export const useRequestUploadUrl = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRequestUploadUrlMutationOptions(options), queryClient);
+    }
+
+export const getCheckPropertySocialAccountUrl = () => {
+
+
+
+
+  return `/api/submissions/check-social-account`
+}
+
+/**
+ * @summary Check Instagram or Snapchat identity before the media step
+ */
+export const checkPropertySocialAccount = async (propertySocialAccountInput: PropertySocialAccountInput, options?: Parameters<typeof customFetch>[1]): Promise<PropertySocialAccountResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PropertySocialAccountResult>(getCheckPropertySocialAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propertySocialAccountInput)
+  }
+);}
+
+
+
+
+
+export const getCheckPropertySocialAccountMutationKey = () => ['checkPropertySocialAccount'] as const;
+
+export const getCheckPropertySocialAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkPropertySocialAccount>>, TError,CheckPropertySocialAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkPropertySocialAccount>>, TError,CheckPropertySocialAccountMutationVariables, TContext> => {
+
+const mutationKey = getCheckPropertySocialAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkPropertySocialAccount>>, CheckPropertySocialAccountMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  checkPropertySocialAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckPropertySocialAccountMutationResult = NonNullable<Awaited<ReturnType<typeof checkPropertySocialAccount>>>
+    export type CheckPropertySocialAccountMutationBody = BodyType<PropertySocialAccountInput>
+    export type CheckPropertySocialAccountMutationError = ErrorType<void>
+    export type CheckPropertySocialAccountMutationVariables = {data: BodyType<PropertySocialAccountInput>}
+
+    /**
+ * @summary Check Instagram or Snapchat identity before the media step
+ */
+export const useCheckPropertySocialAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkPropertySocialAccount>>, TError,CheckPropertySocialAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof checkPropertySocialAccount>>,
+        TError,
+        CheckPropertySocialAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCheckPropertySocialAccountMutationOptions(options), queryClient);
     }
 
 export const getCheckPropertyIdentityUrl = () => {

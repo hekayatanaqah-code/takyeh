@@ -335,6 +335,22 @@ export const RequestUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary Check Instagram or Snapchat identity before the media step
+ */
+
+
+
+export const CheckPropertySocialAccountBody = zod.object({
+  "socialLink": zod.string().min(1).describe('Instagram/Snapchat profile URL, @handle, or platform:handle')
+})
+
+export const CheckPropertySocialAccountResponse = zod.object({
+  "available": zod.boolean(),
+  "fieldErrors": zod.record(zod.string(), zod.array(zod.string()))
+})
+
+
+/**
  * @summary Check property identity before proceeding with registration
  */
 export const checkPropertyIdentityBodyNameArMin = 2;
@@ -342,13 +358,14 @@ export const checkPropertyIdentityBodyNameArMin = 2;
 export const checkPropertyIdentityBodyLocationMin = 2;
 
 
+export const checkPropertyIdentityBodyWhatsappNumberRegExp = new RegExp('^[0-9٠-٩۰-۹]+$');
 
 
 export const CheckPropertyIdentityBody = zod.object({
   "nameAr": zod.string().min(checkPropertyIdentityBodyNameArMin),
   "location": zod.string().min(checkPropertyIdentityBodyLocationMin),
   "district": zod.string().min(1),
-  "whatsappNumber": zod.string()
+  "whatsappNumber": zod.string().regex(checkPropertyIdentityBodyWhatsappNumberRegExp)
 })
 
 export const CheckPropertyIdentityResponse = zod.object({
@@ -397,8 +414,8 @@ export const CreateSubmissionBody = zod.object({
   "district": zod.string().min(1).describe('Required district or neighborhood name'),
   "propertyType": zod.string().optional().describe('Property type (شالية، مزرعة، استراحة، مخيم)'),
   "sections": zod.string().optional().describe('Number of sections (قسم واحد، قسمين منفصلة)'),
-  "mapsUrl": zod.string().optional().describe('Optional Google Maps or website link'),
-  "socialLink": zod.string().optional().describe('Instagram or Snapchat profile link for verification'),
+  "mapsUrl": zod.string().optional().describe('Google Maps link; sharing the same location between properties is allowed'),
+  "socialLink": zod.string().optional().describe('Instagram or Snapchat profile URL or account handle'),
   "descriptionAr": zod.string().describe('Chalet description in Arabic'),
   "pricePerNight": zod.number().describe('Average price per night in SAR'),
   "amenities": zod.array(zod.string()).optional().describe('List of selected amenity keys'),

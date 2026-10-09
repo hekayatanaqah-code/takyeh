@@ -46,6 +46,7 @@ import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
+import { hasPropertySocialConflict, socialAccountIdentity } from "../lib/property-social-account";
 import { normalizeSaudiMobile } from "../lib/passwordRecovery";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
 import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys, getOwnerFreeAccess } from "../lib/subscription-access";
@@ -5228,6 +5229,18 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   }
 
   const body = req.body as Record<string, any>;
+  if (body.whatsappNumber !== undefined && !/^[0-9٠-٩۰-۹]+$/.test(String(body.whatsappNumber))) {
+    return res.status(400).json({ error: "رقم الواتساب يقبل الأرقام فقط" });
+  }
+  if (body.socialLink != null && typeof body.socialLink !== "string") {
+    return res.status(400).json({ error: "أدخل رابط حساب أو معرف صحيح." });
+  }
+  if (body.socialLink?.trim()) {
+    if (!socialAccountIdentity(body.socialLink)) return res.status(400).json({ error: "أدخل رابط حساب Instagram / Snapchat أو معرف حساب صحيح." });
+    if (await hasPropertySocialConflict(body.socialLink, submissionId)) {
+      return res.status(409).json({ error: "حساب التواصل هذا مرتبط بعقار آخر مسجل مسبقاً." });
+    }
+  }
   const requiredMediaAndTerms = z.object({
     photos: z.array(z.string().trim().min(1).refine(value => value !== "error"))
       .min(1, "أضف صورة رئيسية واحدة على الأقل").max(15).optional(),

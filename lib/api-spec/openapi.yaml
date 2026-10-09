@@ -345,6 +345,28 @@ paths:
               schema:
                 $ref: "#/components/schemas/RequestUploadUrlResponse"
 
+  /submissions/check-social-account:
+    post:
+      operationId: checkPropertySocialAccount
+      tags: [submissions]
+      summary: Check Instagram or Snapchat identity before the media step
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropertySocialAccountInput"
+      responses:
+        "200":
+          description: Social account availability
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertySocialAccountResult"
+        "400":
+          description: Invalid profile link or handle
+        "401":
+          description: Authentication required
   /submissions/check-identity:
     post:
       operationId: checkPropertyIdentity
@@ -679,6 +701,26 @@ components:
         objectPath:
           type: string
 
+    PropertySocialAccountInput:
+      type: object
+      required: [socialLink]
+      properties:
+        socialLink:
+          type: string
+          minLength: 1
+          description: Instagram/Snapchat profile URL, @handle, or platform:handle
+    PropertySocialAccountResult:
+      type: object
+      required: [available, fieldErrors]
+      properties:
+        available:
+          type: boolean
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
     PropertyIdentityInput:
       type: object
       required: [nameAr, location, district, whatsappNumber]
@@ -694,6 +736,7 @@ components:
           minLength: 1
         whatsappNumber:
           type: string
+          pattern: "^[0-9٠-٩۰-۹]+$"
     PropertyIdentityResult:
       type: object
       required: [available, fieldErrors, warning]
@@ -738,10 +781,10 @@ components:
           description: Number of sections (قسم واحد، قسمين منفصلة)
         mapsUrl:
           type: string
-          description: Optional Google Maps or website link
+          description: Google Maps link; sharing the same location between properties is allowed
         socialLink:
           type: string
-          description: Instagram or Snapchat profile link for verification
+          description: Instagram or Snapchat profile URL or account handle
         descriptionAr:
           type: string
           description: Chalet description in Arabic

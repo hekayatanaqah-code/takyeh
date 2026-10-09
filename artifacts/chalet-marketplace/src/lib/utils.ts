@@ -29,6 +29,11 @@ export function fromAr(v: string): string {
     .replace(/٩/g, "9");
 }
 
+/** Keep WhatsApp input numeric while accepting Arabic and Persian keyboard digits. */
+export function whatsappDigits(value: string): string {
+  return fromAr(value).replace(/[۰-۹]/g, digit => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))).replace(/\D/g, "");
+}
+
 /**
  * hijriAndGregorian — formats a date as:
  * "١٢ ذو القعدة ١٤٤٧ هـ | ١ مايو ٢٠٢٦ م"

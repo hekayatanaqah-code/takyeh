@@ -1,10 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { fromAr, toAr } from "@/lib/utils";
+import { fromAr, toAr, whatsappDigits } from "@/lib/utils";
 import { useSearch, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { checkPropertyIdentity, useCreateSubmission } from "@workspace/api-client-react";
-import PropertyTimeSelect from "@/components/PropertyTimeSelect";
+import { checkPropertyIdentity, checkPropertySocialAccount, useCreateSubmission } from "@workspace/api-client-react";
+import PropertyTimePicker from "@/components/PropertyTimePicker";
 import { Navbar } from "@/components/layout/Navbar";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { Button } from "@/components/ui/button";
@@ -247,6 +247,7 @@ export default function AddChalet() {
       validationRequest.current?.abort();
     };
   }, [form.nameAr, form.whatsappNumber, form.location, citySelectVal, customCity, selectedDistrict, customDistrict, form.termsAndConditions]);
+  useEffect(() => () => { validationRequest.current?.abort(); }, [form.socialLink, form.mapsUrl]);
 
   const validatePhotos = (): Record<string, string[]> => {
     if (isUploading || isUploadingVideo || isUploadingLogo || photos.some(p => !p.url)) {
@@ -269,6 +270,13 @@ export default function AddChalet() {
     if (!/^(?:05\d{8}|5\d{8}|(?:\+?966|00966)5\d{8})$/.test(fromAr(form.whatsappNumber).replace(/[\s()-]/g, ""))) errs.whatsappNumber = ["أدخل رقم واتساب سعودي صحيح، مثل ٠٥XXXXXXXX."];
     if (!form.termsAndConditions.trim()) errs.termsAndConditions = ["الشروط والأحكام الخاصة مطلوبة"];
     if (propertyType === "__other__" && !suggestedCategoryName.trim()) errs.propertyType = ["يرجى كتابة اسم الفئة المقترحة"];
+    return errs;
+  };
+
+  const validateStep2 = (): Record<string, string[]> => {
+    const errs: Record<string, string[]> = {};
+    if (!form.socialLink.trim()) errs.socialLink = ["أدخل رابط حساب Instagram / Snapchat أو معرف الحساب."];
+    if (!form.mapsUrl.trim()) errs.mapsUrl = ["رابط الموقع على الخريطة مطلوب."];
     return errs;
   };
 
@@ -303,6 +311,37 @@ export default function AddChalet() {
       } catch {
         if (!controller.signal.aborted) {
           setFieldErrors({ general: ["تعذّر التحقق من تكرار البيانات. حاول مرة أخرى قبل المتابعة."] });
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        return;
+      } finally {
+        validationRequest.current = null;
+        setCheckingIdentity(false);
+      }
+    }
+    if (step === 2) {
+      const errs = validateStep2();
+      if (Object.keys(errs).length) {
+        setFieldErrors(errs);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      const controller = new AbortController();
+      validationRequest.current = controller;
+      setCheckingIdentity(true);
+      setFieldErrors({});
+      try {
+        const result = await checkPropertySocialAccount({ socialLink: form.socialLink.trim() }, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (!result.available) {
+          setFieldErrors(result.fieldErrors);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          const apiError = error as { data?: { error?: string } };
+          setFieldErrors({ socialLink: [apiError.data?.error || "تعذّر التحقق من حساب التواصل. حاول مرة أخرى قبل المتابعة."] });
           window.scrollTo({ top: 0, behavior: "smooth" });
         }
         return;
@@ -378,7 +417,7 @@ export default function AddChalet() {
     if (!editSub) return;
     setForm({
       nameAr: editSub.nameAr ?? "",
-      whatsappNumber: editSub.whatsappNumber ?? "",
+      whatsappNumber: whatsappDigits(editSub.whatsappNumber ?? ""),
       location: editSub.location ?? "",
       mapsUrl: editSub.mapsUrl ?? editSub.websiteUrl ?? "",
       socialLink: editSub.socialLink ?? "",
@@ -455,7 +494,7 @@ export default function AddChalet() {
   }, [editSub, regions, selectedRegionId]);
 
   const handleChange = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => ({ ...prev, [field]: field === "whatsappNumber" ? whatsappDigits(value) : value }));
   };
 
   const toggleAmenity = (key: string) => {
@@ -624,7 +663,7 @@ export default function AddChalet() {
     }
     return {
       nameAr: form.nameAr,
-      whatsappNumber: form.whatsappNumber,
+      whatsappNumber: whatsappDigits(form.whatsappNumber),
       region: regions.find((region) => region.id === selectedRegionId)?.name ?? "",
       location: locationOverride ?? form.location,
       suggestedCityName: citySelectVal === "__other__" ? customCity.trim() : undefined,
@@ -673,10 +712,10 @@ export default function AddChalet() {
     e.preventDefault();
     setFieldErrors({});
     mutation.reset();
-    const requiredErrors = { ...validateStep1(), ...validatePhotos() };
+    const requiredErrors = { ...validateStep1(), ...validateStep2(), ...validatePhotos() };
     if (Object.keys(requiredErrors).length) {
       setFieldErrors(requiredErrors);
-      if (!isEditMode) setStep(Object.keys(validateStep1()).length ? 1 : 3);
+      if (!isEditMode) setStep(Object.keys(validateStep1()).length ? 1 : Object.keys(validateStep2()).length ? 2 : 3);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -1038,7 +1077,7 @@ export default function AddChalet() {
                       </Label>
                       <div className="relative">
                         <Phone className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
-                        <Input id="whatsappNumber" type="tel" inputMode="tel" data-no-arabic
+                        <Input id="whatsappNumber" type="text" inputMode="numeric" pattern="[0-9٠-٩]*" data-no-arabic
                           placeholder="٠٥XXXXXXXX" value={toAr(form.whatsappNumber)}
                           onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value))}
                           required aria-invalid={!!fieldErrors.whatsappNumber}
@@ -1477,11 +1516,11 @@ export default function AddChalet() {
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                              <PropertyTimeSelect label="وقت دخول الفترة الصباحية" value={morningCheckIn} onChange={setMorningCheckIn} />
+                              <PropertyTimePicker label="وقت دخول الفترة الصباحية" value={morningCheckIn} onChange={setMorningCheckIn} />
                             </div>
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                              <PropertyTimeSelect label="وقت خروج الفترة الصباحية" value={morningCheckOut} onChange={setMorningCheckOut} />
+                              <PropertyTimePicker label="وقت خروج الفترة الصباحية" value={morningCheckOut} onChange={setMorningCheckOut} />
                             </div>
                           </div>
                         </div>
@@ -1492,11 +1531,11 @@ export default function AddChalet() {
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                              <PropertyTimeSelect label="وقت دخول الفترة المسائية" value={eveningCheckIn} onChange={setEveningCheckIn} />
+                              <PropertyTimePicker label="وقت دخول الفترة المسائية" value={eveningCheckIn} onChange={setEveningCheckIn} />
                             </div>
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                              <PropertyTimeSelect label="وقت خروج الفترة المسائية" value={eveningCheckOut} onChange={setEveningCheckOut} />
+                              <PropertyTimePicker label="وقت خروج الفترة المسائية" value={eveningCheckOut} onChange={setEveningCheckOut} />
                             </div>
                           </div>
                         </div>
@@ -1507,11 +1546,11 @@ export default function AddChalet() {
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                              <PropertyTimeSelect label="وقت دخول اليوم الكامل" value={fullDayCheckIn} onChange={setFullDayCheckIn} />
+                              <PropertyTimePicker label="وقت دخول اليوم الكامل" value={fullDayCheckIn} onChange={setFullDayCheckIn} />
                             </div>
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                              <PropertyTimeSelect label="وقت خروج اليوم الكامل" value={fullDayCheckOut} onChange={setFullDayCheckOut} />
+                              <PropertyTimePicker label="وقت خروج اليوم الكامل" value={fullDayCheckOut} onChange={setFullDayCheckOut} />
                             </div>
                           </div>
                         </div>
@@ -1541,25 +1580,27 @@ export default function AddChalet() {
                     <div className="space-y-2">
                       <Label htmlFor="socialLink" className="text-base font-medium flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 text-primary" />
-                        رابط حساب الشاليه (Instagram / Snapchat){" "}
+                        رابط أو معرف حساب الشاليه (Instagram / Snapchat){" "}
                         <span className="text-destructive">*</span>
                       </Label>
                       <div className="relative">
                         <Instagram className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
                         <Input
                           id="socialLink"
-                          type="url"
-                          placeholder="https://www.instagram.com/your_chalet"
+                          type="text"
+                          placeholder="https://www.instagram.com/your_chalet أو @your_chalet"
                           value={form.socialLink}
                           onChange={(e) => handleChange("socialLink", e.target.value)}
                           required
-                          className="h-12 text-base pr-10"
+                          aria-invalid={!!fieldErrors.socialLink}
+                          className={`h-12 text-base pr-10 ${fieldErrors.socialLink ? "border-destructive" : ""}`}
                           dir="ltr"
                         />
                       </div>
                       <p className="text-xs text-muted-foreground">
                         يُستخدم للتحقق من هويتك وإظهار شارة "موثق ✅" على بطاقة الشاليه
                       </p>
+                      <p className="text-xs text-muted-foreground">سيُفحص الحساب قبل الخطوة التالية. يمكنك إدخال الرابط أو @المعرف؛ ولتحديد المنصة استخدم instagram:المعرف أو snapchat:المعرف.</p>
                     </div>
 
                     <div className="space-y-2">
@@ -1584,6 +1625,7 @@ export default function AddChalet() {
                       <p className="text-xs text-muted-foreground">
                         افتح خرائط جوجل → اضغط على موقع الشاليه → شارك الرابط هنا
                       </p>
+                      <p className="text-xs text-muted-foreground">يمكن مشاركة رابط الموقع نفسه بين عقارات المجمع أو الشاليهات المجاورة.</p>
                     </div>
                   </div>
                 </div>
