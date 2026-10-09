@@ -3,6 +3,16 @@ export interface SelectableOwnerService {
   isActive: boolean;
 }
 
+/** Pending/draft submissions also count as activities: keep their management accessible. */
+export function hasOwnerActivities(
+  propertyCount: number,
+  propertySubmissionCount: number,
+  serviceCount: number,
+  serviceSubmissionCount: number,
+): boolean {
+  return [propertyCount, propertySubmissionCount, serviceCount, serviceSubmissionCount].some(count => count > 0);
+}
+
 /** Keep an explicit owned selection; otherwise prefer a live service. */
 export function selectOwnerService(
   services: SelectableOwnerService[],

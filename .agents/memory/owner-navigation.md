@@ -9,7 +9,7 @@ There must be no independent intermediate Hub page. A service owner enters the a
 
 **How to apply:** Prefer an active service for ordinary default entry, but preserve an explicitly selected owned service across reloads and browser navigation. Keep activity switching inside the dashboard and settings, subscriptions, and registration requests account-wide. Preserve property-only, staff, and administrator-impersonation management paths. Reuse existing subscription capacity checks when adding activities. Use a single account-wide requests action labeled «متابعة الطلبات».
 
-The entire owner dashboard must keep the platform's primary header above the owner's greeting box: platform logo/name and one “الرئيسية / تصفح المنصة” control. The greeting box below it contains account actions only. Property/service management and “الشؤون الإدارية والمالية” are distinct primary sections immediately below the greeting, not mixed among account actions. Do not repeat those primary choices elsewhere or duplicate the platform-home link inside the greeting. Do not show separate “اختر الخدمة التي تريد إدارتها” cards above an already displayed activity. Offer compact activity switching only when multiple services exist.
+The entire owner dashboard must keep the platform's primary header above the owner's greeting box: platform logo/name and one “الرئيسية / تصفح المنصة” control. The greeting box below it contains account actions only. For owners with an added activity, property/service management and “الشؤون الإدارية والمالية” are distinct primary sections immediately below the greeting, not mixed among account actions. Do not repeat those primary choices elsewhere or duplicate the platform-home link inside the greeting. Do not show separate “اختر الخدمة التي تريد إدارتها” cards above an already displayed activity. Offer compact activity switching only when multiple services exist.
 
 **Why:** After consolidating navigation, the user explicitly requested separating the major management sections from simple account controls while preserving the branded platform header and direct section transitions.
 
@@ -26,3 +26,9 @@ Account buttons inside the greeting should share one horizontal row on wide scre
 **Why:** المستخدم طلب هذا التوجيه صراحةً ضمن تحسين تجربة لوحة تحكم المالك، مع الحفاظ على المنطق التشغيلي الحالي.
 
 **How to apply:** اجعل الضغط على البطاقة هو سبب التوجيه؛ لا تحوّل المستخدم تلقائياً بعيداً عن تبويبه أثناء وصول إشعارات جديدة، ولا تفرض تبويب الإشعارات عندما لا تحمل البطاقة تنبيهات.
+
+عند عدم إضافة أي عقار أو خدمة، تبقى خيارات الحساب العلوية فقط وتُخفى أقسام الإدارة والتبويبات كلها. تعرض المساحة الوسطى بطاقة «لا توجد عقارات أو خدمات مضافة بعد» وزر «+ أضف عقارك أو خدمتك الأولى الآن»، داخل لوحة المالك نفسها لا في صفحة Hub منفصلة.
+
+**Why:** المستخدم طلب واجهة بسيطة للحساب الخالي من الأنشطة، مع إبقاء إضافة النشاط والباقات والإعدادات ومتابعة الطلبات متاحة.
+
+**How to apply:** طلب إضافة محفوظ، ولو كان مسودة أو قيد المراجعة، ليس حساباً لم يضف شيئاً. لا تعرض هذه الحالة أثناء التحميل أو عند فشل تحميل الأنشطة، ولا توسّعها إلى مسارات الموظفين أو معاينة الإدارة. استخدم مسار الإضافة الحالي وفحوص السعة والاشتراك، مع اختيار نوع النشاط أولاً للحسابات التي تدعم النوعين.

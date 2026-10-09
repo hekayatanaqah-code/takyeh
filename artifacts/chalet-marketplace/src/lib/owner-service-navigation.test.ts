@@ -1,12 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { initialOwnerDashboardMode, selectOwnerService } from "./owner-service-navigation";
+import { hasOwnerActivities, initialOwnerDashboardMode, selectOwnerService } from "./owner-service-navigation";
 
 const services = [
   { id: 1, isActive: false },
   { id: 2, isActive: true },
   { id: 3, isActive: true },
 ];
+
+test("the onboarding empty state requires no properties, services or submissions", () => {
+  assert.equal(hasOwnerActivities(0, 0, 0, 0), false);
+  assert.equal(hasOwnerActivities(1, 0, 0, 0), true);
+  assert.equal(hasOwnerActivities(0, 0, 1, 0), true);
+  assert.equal(hasOwnerActivities(0, 1, 0, 0), true);
+  assert.equal(hasOwnerActivities(0, 0, 0, 1), true);
+});
 
 test("direct entry prefers the first active service over an earlier inactive service", () => {
   assert.equal(selectOwnerService(services, null), 2);

@@ -25,11 +25,12 @@ import { Input } from "@/components/ui/input";
 import { ServiceCoverageEditor } from "@/components/service/ServiceCoverageEditor";
 import { ServicePrimaryCitySelector } from "@/components/service/ServicePrimaryCitySelector";
 import OwnerToolbar from "@/components/owner/OwnerToolbar";
+import OwnerEmptyState from "@/components/owner/OwnerEmptyState";
 import OwnerDashboardNavigation, { type OwnerDashboardMode } from "@/components/owner/OwnerDashboardNavigation";
 import ServiceIdentityLogo from "@/components/owner/ServiceIdentityLogo";
 import OwnerSubnav from "@/components/owner/OwnerSubnav";
 import OwnerStatAmount from "@/components/owner/OwnerStatAmount";
-import { initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
+import { hasOwnerActivities, initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25335,6 +25336,7 @@ export default function Dashboard() {
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [activityChoiceOpen, setActivityChoiceOpen] = useState(false);
   const [showHeaderAddon, setShowHeaderAddon] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
   const [clientListMode, setClientListMode] = useState<"unified" | "separate">(() => (localStorage.getItem("svc_client_mode") as any) ?? "unified");
@@ -25465,11 +25467,11 @@ export default function Dashboard() {
   const canSeeServices = businessType === "service" || businessType === "both";
 
   /* ── Submissions: use apiFetch (credentials: include) + wait for auth ── */
-  const { data: submissions, isLoading: submissionsLoading } = useQuery<any[]>({
+  const { data: submissions, isLoading: submissionsLoading, isError: submissionsError, refetch: retrySubmissions } = useQuery<any[]>({
     queryKey: ["/api/submissions"],
     queryFn: async () => {
       const r = await apiFetch("/submissions");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذّر تحميل طلبات العقارات");
       return r.json();
     },
     /* Don't fire until we know the auth state; prevents spurious 401 on mount */
@@ -25517,11 +25519,12 @@ export default function Dashboard() {
       : null;
 
   /* ── My independent service submissions & approved providers ── */
-  const { data: myServiceSubmissions = [], isLoading: serviceSubmissionsLoading } = useQuery<{ id: number; status: string; businessName: string }[]>({
+  const { data: myServiceSubmissions = [], isLoading: serviceSubmissionsLoading, isError: serviceSubmissionsError, refetch: retryServiceSubmissions } = useQuery<{ id: number; status: string; businessName: string }[]>({
     queryKey: ["my-service-submissions"],
     queryFn: async () => {
       const r = await apiFetch("/providers/my/submissions");
-      return r.ok ? r.json() : [];
+      if (!r.ok) throw new Error("تعذّر تحميل طلبات الخدمات");
+      return r.json();
     },
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff && canSeeServices,
   });
@@ -25844,11 +25847,21 @@ export default function Dashboard() {
   }, []);
 
   const isLoadingAuth = authLoading || staffLoading;
+  const ownerInventoryLoading =
+    (canSeeChalets && (ownerChaletsLoading || submissionsLoading))
+    || (canSeeServices && (providersLoading || serviceSubmissionsLoading));
+  const ownerInventoryFailed =
+    (canSeeChalets && (ownerChaletsError || submissionsError))
+    || (canSeeServices && (providersError || serviceSubmissionsError));
+  const showOwnerEmptyState = !actAsStaff && !isImpersonating && businessType !== null
+    && !ownerInventoryLoading && !ownerInventoryFailed
+    && !hasOwnerActivities(ownerChalets.length, submissions?.length ?? 0, myApprovedProviders.length, myServiceSubmissions.length);
 
   const isFullyLoading  = isLoadingAuth
     || impersonationLoading
     || ownerSwitchLoading
     || (!actAsStaff && (isAuthenticated || isImpersonating) && ownerProfileLoading)
+    || (!actAsStaff && !isImpersonating && ownerInventoryLoading)
     || (!actAsStaff && !isImpersonating && canSeeServices && (providersLoading || serviceSubmissionsLoading))
     || (!actAsStaff && !isImpersonating && !requestedServiceRaw && activeDashMode === "services" && !providersError
       && myApprovedProviders.length > 0 && !myApprovedProviders.some(p => p.id === selectedServiceId))
@@ -25995,13 +26008,15 @@ export default function Dashboard() {
             canAddChalet={canSeeChalets}
             canAddService={canSeeServices}
             onAddActivity={addOwnerActivity}
+            activityChoiceOpen={activityChoiceOpen}
+            onActivityChoiceOpenChange={setActivityChoiceOpen}
             onAccountSettings={() => setAccountSettingsOpen(true)}
             onSubscription={() => navigate("/subscription")}
             onManageRequests={openRegistrationRequests}
             onLogout={logout}
-            requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
+            requestsOpen={showOwnerEmptyState ? ownerView === "requests" : activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
           />
-          <OwnerDashboardNavigation
+          {!showOwnerEmptyState && <OwnerDashboardNavigation
               mode={activeDashMode}
               requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
               canSeeChalets={canSeeChalets}
@@ -26009,10 +26024,10 @@ export default function Dashboard() {
               canAccessFinance={canAccessFinancialAdmin}
               unreadCount={unreadNotifCount + unreadSupportCount}
               onSelect={switchOwnerDashboard}
-          />
+          />}
         </div>
       )}
-      {!actAsStaff && !freeAccess && subscription && isSubscriptionExpiryWarning(subscription)
+      {!showOwnerEmptyState && !actAsStaff && !freeAccess && subscription && isSubscriptionExpiryWarning(subscription)
         && (subscription.reminderPreviewMilestone !== undefined || (!isStaff && !isImpersonating)) && (() => {
         const isPreview = subscription.reminderPreviewMilestone !== undefined;
         const daysRemaining = subscriptionDaysRemaining(subscription);
@@ -26234,6 +26249,15 @@ export default function Dashboard() {
           </DialogContent>
         </Dialog>
 
+        {showOwnerEmptyState && <OwnerEmptyState
+          requestsOpen={ownerView === "requests"}
+          onAdd={() => {
+            if (canSeeChalets && canSeeServices) setActivityChoiceOpen(true);
+            else addOwnerActivity(canSeeServices ? "service" : "chalet");
+          }}
+        />}
+
+        {!showOwnerEmptyState && <>
         {/* Legacy impersonation navigation; ordinary owners navigate inside the greeting. */}
         {!actAsStaff && isImpersonating && (
           <motion.div
@@ -26302,21 +26326,21 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {activeDashMode === "services" && !actAsStaff && providersError && (
+        {activeDashMode === "services" && !actAsStaff && (providersError || serviceSubmissionsError) && (
           <div role="alert" className="mb-5 rounded-2xl border border-destructive/30 bg-card p-6 text-center space-y-3">
             <p className="font-semibold">تعذّر تحميل خدماتك</p>
-            <Button variant="outline" onClick={() => { void retryProviders(); }}>إعادة المحاولة</Button>
+            <Button variant="outline" onClick={() => { void retryProviders(); void retryServiceSubmissions(); }}>إعادة المحاولة</Button>
           </div>
         )}
-        {activeDashMode === "chalets" && ownerChaletsError && (
+        {activeDashMode === "chalets" && (ownerChaletsError || submissionsError) && (
           <div role="alert" className="mb-5 rounded-2xl border border-destructive/30 bg-card p-6 text-center space-y-3">
             <p className="font-semibold">تعذّر تحميل العقارات</p>
-            <Button variant="outline" onClick={() => { void retryOwnerChalets(); }}>إعادة المحاولة</Button>
+            <Button variant="outline" onClick={() => { void retryOwnerChalets(); void retrySubmissions(); }}>إعادة المحاولة</Button>
           </div>
         )}
 
         {/* ══ SERVICES MODE — Full ERP ═════════════════════════════════ */}
-        {activeDashMode === "services" && !actAsStaff && !providersError && (
+        {activeDashMode === "services" && !actAsStaff && !providersError && !serviceSubmissionsError && (
           <motion.div
             key="services-mode"
             initial={{ opacity: 0, y: 8 }}
@@ -26661,7 +26685,7 @@ export default function Dashboard() {
         })()}
 
         {/* ══ CHALETS MODE ═════════════════════════════════════════════ */}
-        {(actAsStaff || (activeDashMode === "chalets" && canSeeChalets)) && (
+        {(actAsStaff || (activeDashMode === "chalets" && canSeeChalets)) && !ownerChaletsError && !submissionsError && (
           <>
 
         {/* Subscription / Account Settings — clickable banner */}
@@ -26771,6 +26795,7 @@ export default function Dashboard() {
         )}
           </>
         )}
+        </>}
       </div>
     </div>
     </ImpersonationCtx.Provider>

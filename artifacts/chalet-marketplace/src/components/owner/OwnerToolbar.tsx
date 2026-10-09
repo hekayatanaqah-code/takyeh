@@ -27,10 +27,14 @@ export interface OwnerToolbarProps {
   onManageRequests: () => void;
   onLogout: () => void;
   requestsOpen?: boolean;
+  activityChoiceOpen?: boolean;
+  onActivityChoiceOpenChange?: (open: boolean) => void;
 }
 
 export default function OwnerToolbar(p: OwnerToolbarProps) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = p.activityChoiceOpen ?? localOpen;
+  const setOpen = p.onActivityChoiceOpenChange ?? setLocalOpen;
   const canAny = p.canAddChalet || p.canAddService;
 
   const choose = (k: "chalet" | "service") => {
