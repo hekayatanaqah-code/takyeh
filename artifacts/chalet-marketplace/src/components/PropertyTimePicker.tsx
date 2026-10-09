@@ -17,6 +17,7 @@ export default function PropertyTimePicker({ value, onChange, label }: {
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(() => parts(value));
+  const [periodChosen, setPeriodChosen] = useState(!!value);
   const selected = arabicTimeTo24h(value);
   const current = parts(value);
   const display = selected
@@ -29,7 +30,7 @@ export default function PropertyTimePicker({ value, onChange, label }: {
     setOpen(false);
   };
   return (
-    <Popover open={open} onOpenChange={next => { if (next) setDraft(parts(value)); setOpen(next); }}>
+    <Popover open={open} onOpenChange={next => { if (next) { setDraft(parts(value)); setPeriodChosen(!!value); } setOpen(next); }}>
       <PopoverTrigger asChild>
         <Button type="button" variant="outline" className="h-auto min-h-10 w-full justify-between gap-1 px-2 text-xs font-normal" dir="rtl" aria-label={label}>
           <span className="whitespace-normal">{display}</span>
@@ -59,14 +60,22 @@ export default function PropertyTimePicker({ value, onChange, label }: {
         </div>
         <div role="group" aria-label="الفترة" className="grid grid-cols-2 gap-1.5">
           {[{ value: "am", title: "صباحاً" }, { value: "pm", title: "مساءً" }].map(period => (
-            <Button key={period.value} type="button" variant={draft.period === period.value ? "default" : "outline"}
-              aria-pressed={draft.period === period.value} className={choiceClass} onClick={() => setDraft(previous => ({ ...previous, period: period.value }))}>
+            <Button key={period.value} type="button" variant={periodChosen && draft.period === period.value ? "default" : "outline"}
+              aria-pressed={periodChosen && draft.period === period.value} className={choiceClass} onClick={() => {
+                setDraft(previous => ({ ...previous, period: period.value, minute: previous.minute === 30 ? 30 : 0 }));
+                setPeriodChosen(true);
+              }}>
               {period.title}
             </Button>
           ))}
         </div>
+        <p role="status" className="text-xs text-muted-foreground">
+          {periodChosen
+            ? `الوقت المحدد: ${toAr(draft.hour)}:${toAr(String(draft.minute).padStart(2, "0"))} ${draft.period === "am" ? "صباحاً" : "مساءً"}`
+            : "اختر صباحاً أو مساءً لتفعيل تأكيد الوقت"}
+        </p>
         <div className="flex gap-2 border-t pt-3">
-          <Button type="button" className="h-11 flex-1 rounded-lg" disabled={draft.minute !== 0 && draft.minute !== 30} onClick={apply}>تأكيد الوقت</Button>
+          <Button type="button" className="h-11 flex-1 rounded-lg" disabled={!periodChosen || (draft.minute !== 0 && draft.minute !== 30)} onClick={apply}>تأكيد الوقت</Button>
           <Button type="button" variant="ghost" className="h-11 rounded-lg" onClick={() => { onChange(""); setOpen(false); }}>مسح</Button>
         </div>
       </PopoverContent>

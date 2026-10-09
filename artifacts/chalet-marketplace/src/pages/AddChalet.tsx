@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { checkPropertyIdentity, checkPropertySocialAccount, useCreateSubmission } from "@workspace/api-client-react";
 import PropertyTimePicker from "@/components/PropertyTimePicker";
+import { toast } from "@/hooks/use-toast";
 import { Navbar } from "@/components/layout/Navbar";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,27 @@ import {
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+function serverFieldErrors(body: { details?: Record<string, string[]>; fields?: string[]; error?: string } | undefined, fallback: string) {
+  const errors: Record<string, string[]> = {};
+  for (const [field, messages] of Object.entries(body?.details ?? {})) {
+    if (Array.isArray(messages) && messages.length) errors[field] = messages;
+  }
+  if (Object.keys(errors).length) return errors;
+  const message = body?.error || fallback;
+  const duplicateFields: Record<string, string[]> = {
+    "رقم الواتساب": ["whatsappNumber"],
+    "حساب التواصل": ["socialLink"],
+    "رابط الإنستقرام": ["socialLink"],
+    "الاسم والمدينة والحي": ["nameAr", "location", "district"],
+  };
+  for (const label of body?.fields ?? []) {
+    for (const field of duplicateFields[label] ?? []) errors[field] = [message];
+  }
+  if (!Object.keys(errors).length && (message.includes("حساب التواصل") || message.includes("Instagram"))) errors.socialLink = [message];
+  if (!Object.keys(errors).length && message.includes("رقم الواتساب")) errors.whatsappNumber = [message];
+  return Object.keys(errors).length ? errors : { general: [message] };
+}
 
 interface RegionOption { id: number; name: string; }
 interface CityOption { id: number; name: string; regionId: number | null; }
@@ -241,6 +263,34 @@ export default function AddChalet() {
   const [identityWarning, setIdentityWarning] = useState<string | null>(null);
   const validationRequest = useRef<AbortController | null>(null);
 
+  const reportErrors = (errors: Record<string, string[]>, revealStep = false) => {
+    setFieldErrors(errors);
+    const messages = Object.values(errors).flat().filter(Boolean);
+    if (!messages.length) return;
+    if (revealStep && !isEditMode) {
+      const basicFields = ["nameAr", "region", "location", "district", "whatsappNumber", "propertyType", "sections", "descriptionAr", "termsAndConditions"];
+      if (basicFields.some(field => errors[field])) setStep(1);
+      else if (errors.socialLink || errors.mapsUrl) setStep(2);
+      else if (errors.photos) setStep(3);
+    }
+    toast({ variant: "destructive", placement: "bottom-center", title: "يرجى تصحيح البيانات",
+      description: messages.join(" — "), duration: 7000 });
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+  };
+  const fieldError = (field: string) => fieldErrors[field]?.length ? (
+    <p id={`${field}-error`} className="text-xs text-destructive">{fieldErrors[field].join(" — ")}</p>
+  ) : null;
+
+  useEffect(() => {
+    const errors: Record<string, string[]> = {};
+    if (uploadError) errors.photos = [uploadError];
+    if (videoError) errors.videoUrl = [videoError];
+    if (logoError) errors.logoUrl = [logoError];
+    if (Object.keys(errors).length) reportErrors(errors);
+  // Only announce new upload failures, not subsequent form edits.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadError, videoError, logoError]);
+
   useEffect(() => {
     setIdentityWarning(null);
     return () => {
@@ -285,8 +335,7 @@ export default function AddChalet() {
     if (step === 1) {
       const errs = validateStep1();
       if (Object.keys(errs).length > 0) {
-        setFieldErrors(errs);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        reportErrors(errs);
         return;
       }
       const controller = new AbortController();
@@ -303,15 +352,13 @@ export default function AddChalet() {
         }, { signal: controller.signal });
         if (controller.signal.aborted) return;
         if (!result.available) {
-          setFieldErrors(result.fieldErrors);
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          reportErrors(result.fieldErrors);
           return;
         }
         setIdentityWarning(result.warning);
       } catch {
         if (!controller.signal.aborted) {
-          setFieldErrors({ general: ["تعذّر التحقق من تكرار البيانات. حاول مرة أخرى قبل المتابعة."] });
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          reportErrors({ general: ["تعذّر التحقق من تكرار البيانات. حاول مرة أخرى قبل المتابعة."] });
         }
         return;
       } finally {
@@ -322,8 +369,7 @@ export default function AddChalet() {
     if (step === 2) {
       const errs = validateStep2();
       if (Object.keys(errs).length) {
-        setFieldErrors(errs);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        reportErrors(errs);
         return;
       }
       const controller = new AbortController();
@@ -334,15 +380,13 @@ export default function AddChalet() {
         const result = await checkPropertySocialAccount({ socialLink: form.socialLink.trim() }, { signal: controller.signal });
         if (controller.signal.aborted) return;
         if (!result.available) {
-          setFieldErrors(result.fieldErrors);
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          reportErrors(result.fieldErrors);
           return;
         }
       } catch (error) {
         if (!controller.signal.aborted) {
           const apiError = error as { data?: { error?: string } };
-          setFieldErrors({ socialLink: [apiError.data?.error || "تعذّر التحقق من حساب التواصل. حاول مرة أخرى قبل المتابعة."] });
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          reportErrors({ socialLink: [apiError.data?.error || "تعذّر التحقق من حساب التواصل. حاول مرة أخرى قبل المتابعة."] });
         }
         return;
       } finally {
@@ -353,8 +397,7 @@ export default function AddChalet() {
     if (step === 3) {
       const errs = validatePhotos();
       if (Object.keys(errs).length) {
-        setFieldErrors(errs);
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        reportErrors(errs);
         return;
       }
     }
@@ -495,6 +538,12 @@ export default function AddChalet() {
 
   const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: field === "whatsappNumber" ? whatsappDigits(value) : value }));
+    setFieldErrors(previous => {
+      if (!previous[field]) return previous;
+      const next = { ...previous };
+      delete next[field];
+      return next;
+    });
   };
 
   const toggleAmenity = (key: string) => {
@@ -714,13 +763,12 @@ export default function AddChalet() {
     mutation.reset();
     const requiredErrors = { ...validateStep1(), ...validateStep2(), ...validatePhotos() };
     if (Object.keys(requiredErrors).length) {
-      setFieldErrors(requiredErrors);
+      reportErrors(requiredErrors);
       if (!isEditMode) setStep(Object.keys(validateStep1()).length ? 1 : Object.keys(validateStep2()).length ? 2 : 3);
-      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     if (!isEditMode && !planLimits) {
-      setFieldErrors({ general: ["تعذّر التحقق من حالة الاشتراك. أعد تحميل الصفحة وحاول مجدداً."] });
+      reportErrors({ general: ["تعذّر التحقق من حالة الاشتراك. أعد تحميل الصفحة وحاول مجدداً."] });
       return;
     }
     if (!isEditMode && planLimits && (
@@ -739,7 +787,7 @@ export default function AddChalet() {
     if (selectedDistrict === "__other__") {
       const trimmedDistrict = customDistrict.trim();
       if (!trimmedDistrict) {
-        setFieldErrors({ district: ["يجب إدخال اسم الحي أو المنطقة"] });
+        reportErrors({ district: ["يجب إدخال اسم الحي أو المنطقة"] });
         return;
       }
       if (resolvedCityId) {
@@ -764,14 +812,14 @@ export default function AddChalet() {
 
     /* ── Validate category suggestion when "other" is selected ── */
     if (propertyType === "__other__" && !suggestedCategoryName.trim()) {
-      setFieldErrors({ propertyType: ["يرجى كتابة اسم الفئة المقترحة"] });
+      reportErrors({ propertyType: ["يرجى كتابة اسم الفئة المقترحة"] });
       return;
     }
 
 
     /* ── District is required ── */
     if (!resolvedDistrict) {
-      setFieldErrors({ district: ["الحي أو المنطقة مطلوب"] });
+      reportErrors({ district: ["الحي أو المنطقة مطلوب"] });
       return;
     }
 
@@ -789,13 +837,13 @@ export default function AddChalet() {
         if (!r.ok) {
           const errBody = await r.json().catch(() => ({}));
           const msg = errBody?.error ?? "حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى";
-          setFieldErrors({ general: [msg] });
+          reportErrors(serverFieldErrors(errBody, msg), true);
           return;
         }
         setEditSaved(true);
         setTimeout(() => navigate(`/my-chalet/${editId}`), 1200);
       } catch {
-        setFieldErrors({ general: ["حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى"] });
+        reportErrors({ general: ["حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى"] });
       } finally {
         setEditSaving(false);
       }
@@ -811,19 +859,17 @@ export default function AddChalet() {
         },
         onError: async (err: unknown) => {
           try {
-            const apiErr = err as { data?: { details?: Record<string, string[]>; error?: string; upgradeRequired?: boolean } };
-            if (apiErr?.data?.details && typeof apiErr.data.details === "object") {
-              setFieldErrors(apiErr.data.details);
-            } else if (apiErr?.data?.error && typeof apiErr.data.error === "string") {
-              setFieldErrors({ general: [apiErr.data.error] });
-            }
+            const apiErr = err as { data?: { details?: Record<string, string[]>; fields?: string[]; error?: string; upgradeRequired?: boolean } };
+            reportErrors(serverFieldErrors(apiErr.data, "حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى"), true);
             if (apiErr?.data?.upgradeRequired) {
               const refreshed = await refetchPlanLimits();
               const currentLimits = refreshed.data ?? planLimits;
               if (currentLimits?.active === false) navigate("/subscription");
               else setShowAddonPayment(true);
             }
-          } catch {}
+          } catch {
+            reportErrors({ general: ["حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى"] });
+          }
         },
       }
     );
@@ -1003,7 +1049,12 @@ export default function AddChalet() {
             )}
 
             <div className="bg-card border border-border rounded-3xl p-6 md:p-10 shadow-sm">
-              <form onSubmit={handleSubmit} className="space-y-8">
+              <form onSubmit={handleSubmit} onInvalidCapture={event => {
+                event.preventDefault();
+                const input = event.target as HTMLInputElement;
+                reportErrors({ ...validateStep1(), ...validateStep2(),
+                  [input.id || "general"]: [input.id === "mapsUrl" ? "أدخل رابط موقع صحيحاً." : "يرجى إكمال هذا الحقل والتحقق من صحة البيانات."] }, true);
+              }} className="space-y-8">
 
                 {/* ── Step Progress Bar (new submission only) ── */}
                 {!isEditMode && (
@@ -1067,8 +1118,11 @@ export default function AddChalet() {
                         value={form.nameAr}
                         onChange={(e) => handleChange("nameAr", e.target.value)}
                         required
-                        className="h-12 text-base"
+                        aria-invalid={!!fieldErrors.nameAr}
+                        aria-describedby={fieldErrors.nameAr ? "nameAr-error" : undefined}
+                        className={`h-12 text-base ${fieldErrors.nameAr ? "border-destructive ring-1 ring-destructive" : ""}`}
                       />
+                      {fieldError("nameAr")}
                     </div>
 
                     <div className="space-y-2">
@@ -1081,8 +1135,10 @@ export default function AddChalet() {
                           placeholder="٠٥XXXXXXXX" value={toAr(form.whatsappNumber)}
                           onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value))}
                           required aria-invalid={!!fieldErrors.whatsappNumber}
+                          aria-describedby={fieldErrors.whatsappNumber ? "whatsappNumber-error" : undefined}
                           className={`h-12 text-base pr-10 ${fieldErrors.whatsappNumber ? "border-destructive" : ""}`} />
                       </div>
+                      {fieldError("whatsappNumber")}
                       <p className="text-xs text-muted-foreground">يتم التحقق من الرقم وبيانات العقار عند الضغط على «التالي».</p>
                     </div>
 
@@ -1102,7 +1158,7 @@ export default function AddChalet() {
                             setCustomDistrict("");
                           }}
                         >
-                          <SelectTrigger className={`h-12 text-base ${fieldErrors.region ? "border-red-500 ring-1 ring-red-500" : ""}`}>
+                          <SelectTrigger aria-invalid={!!fieldErrors.region} aria-describedby={fieldErrors.region ? "region-error" : undefined} className={`h-12 text-base ${fieldErrors.region ? "border-red-500 ring-1 ring-red-500" : ""}`}>
                             <div className="flex items-center gap-2">
                               <MapPin className="w-4 h-4 text-muted-foreground" />
                               <SelectValue placeholder="اختر المنطقة" />
@@ -1114,9 +1170,7 @@ export default function AddChalet() {
                             ))}
                           </SelectContent>
                         </Select>
-                        {fieldErrors.region && (
-                          <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.region[0]}</p>
-                        )}
+                        {fieldError("region")}
                       </div>
 
                       <div className="space-y-2">
@@ -1136,7 +1190,7 @@ export default function AddChalet() {
                           disabled={!selectedRegionId}
                           required
                         >
-                          <SelectTrigger className="h-12 text-base">
+                          <SelectTrigger aria-invalid={!!fieldErrors.location} aria-describedby={fieldErrors.location ? "location-error" : undefined} className={`h-12 text-base ${fieldErrors.location ? "border-destructive ring-1 ring-destructive" : ""}`}>
                             <div className="flex items-center gap-2">
                               <MapPin className="w-4 h-4 text-muted-foreground" />
                               <SelectValue placeholder={selectedRegionId ? "اختر المدينة" : "اختر المنطقة أولاً"} />
@@ -1156,12 +1210,12 @@ export default function AddChalet() {
                             value={customCity}
                             onChange={(event) => setCustomCity(event.target.value)}
                             placeholder="اكتب اسم المدينة"
-                            className="h-12 text-base"
+                            aria-invalid={!!fieldErrors.location}
+                            aria-describedby={fieldErrors.location ? "location-error" : undefined}
+                            className={`h-12 text-base ${fieldErrors.location ? "border-destructive" : ""}`}
                           />
                         )}
-                        {fieldErrors.location && (
-                          <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.location[0]}</p>
-                        )}
+                        {fieldError("location")}
                       </div>
                     </div>
 
@@ -1177,7 +1231,7 @@ export default function AddChalet() {
                           }}
                           disabled={!selectedCityId || citySelectVal === "__other__"}
                         >
-                          <SelectTrigger className="h-12 text-base">
+                          <SelectTrigger id="district" aria-invalid={!!fieldErrors.district} aria-describedby={fieldErrors.district ? "district-error" : undefined} className={`h-12 text-base ${fieldErrors.district ? "border-destructive ring-1 ring-destructive" : ""}`}>
                             <div className="flex items-center gap-2">
                               <Building2 className="w-4 h-4 text-muted-foreground" />
                               <SelectValue placeholder={!selectedCityId ? "اختر المدينة أولاً" : districts.length > 0 ? "اختر الحي" : "لا توجد أحياء مسجلة"} />
@@ -1200,9 +1254,7 @@ export default function AddChalet() {
                             className={`h-12 text-base ${fieldErrors.district ? "border-red-500 ring-1 ring-red-500" : ""}`}
                           />
                         )}
-                        {fieldErrors.district && (
-                          <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.district[0]}</p>
-                        )}
+                        {fieldError("district")}
                       </div>
 
                     {/* Property Type */}
@@ -1212,7 +1264,7 @@ export default function AddChalet() {
                           نوع العقار <span className="text-destructive">*</span>
                         </Label>
                         <Select value={propertyType} onValueChange={(v) => { setPropertyType(v); if (v !== "__other__") setSuggestedCategoryName(""); }} required>
-                          <SelectTrigger className="h-12 text-base">
+                          <SelectTrigger aria-invalid={!!fieldErrors.propertyType} aria-describedby={fieldErrors.propertyType ? "propertyType-error" : undefined} className={`h-12 text-base ${fieldErrors.propertyType ? "border-destructive ring-1 ring-destructive" : ""}`}>
                             <SelectValue placeholder="اختر نوع العقار" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1229,14 +1281,14 @@ export default function AddChalet() {
                               value={suggestedCategoryName}
                               onChange={(e) => setSuggestedCategoryName(e.target.value)}
                               placeholder="مثال: شاليه مائي، بيت شعر..."
-                              className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                              aria-invalid={!!fieldErrors.propertyType}
+                              aria-describedby={fieldErrors.propertyType ? "propertyType-error" : undefined}
+                              className={`w-full border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring ${fieldErrors.propertyType ? "border-destructive" : "border-input"}`}
                             />
                             <p className="text-xs text-muted-foreground">سيتحقق الفريق من اقتراحك ويضيف الفئة إذا كانت مناسبة.</p>
                           </div>
                         )}
-                        {fieldErrors.propertyType && (
-                          <p className="text-xs text-red-600 dark:text-red-400">{fieldErrors.propertyType[0]}</p>
-                        )}
+                        {fieldError("propertyType")}
                       </div>
 
                       <div className="space-y-2">
@@ -1244,7 +1296,7 @@ export default function AddChalet() {
                           عدد الأقسام <span className="text-destructive">*</span>
                         </Label>
                         <Select value={sections} onValueChange={setSections} required>
-                          <SelectTrigger className="h-12 text-base">
+                          <SelectTrigger aria-invalid={!!fieldErrors.sections} aria-describedby={fieldErrors.sections ? "sections-error" : undefined} className={`h-12 text-base ${fieldErrors.sections ? "border-destructive ring-1 ring-destructive" : ""}`}>
                             <SelectValue placeholder="اختر عدد الأقسام" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1252,6 +1304,7 @@ export default function AddChalet() {
                             <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
                           </SelectContent>
                         </Select>
+                        {fieldError("sections")}
                       </div>
                     </div>
 
@@ -1317,10 +1370,13 @@ export default function AddChalet() {
                           value={form.descriptionAr}
                           onChange={(e) => handleChange("descriptionAr", e.target.value)}
                           required
-                          className="min-h-[120px] text-base pr-10 resize-none overflow-hidden"
+                          aria-invalid={!!fieldErrors.descriptionAr}
+                          aria-describedby={fieldErrors.descriptionAr ? "descriptionAr-error" : undefined}
+                          className={`min-h-[120px] text-base pr-10 resize-none overflow-hidden ${fieldErrors.descriptionAr ? "border-destructive" : ""}`}
                           onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
                         />
                       </div>
+                      {fieldError("descriptionAr")}
                     </div>
 
                     {/* ── Terms & Conditions ── */}
@@ -1337,11 +1393,13 @@ export default function AddChalet() {
                         value={form.termsAndConditions}
                         required
                         aria-invalid={!!fieldErrors.termsAndConditions}
+                        aria-describedby={fieldErrors.termsAndConditions ? "termsAndConditions-error" : undefined}
                         onChange={(e) => handleChange("termsAndConditions", e.target.value)}
-                        className="min-h-[140px] text-sm resize-none overflow-hidden leading-relaxed"
+                        className={`min-h-[140px] text-sm resize-none overflow-hidden leading-relaxed ${fieldErrors.termsAndConditions ? "border-destructive ring-1 ring-destructive" : ""}`}
                         dir="rtl"
                         onInput={(e) => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`; }}
                       />
+                      {fieldError("termsAndConditions")}
                       <p className="text-xs text-muted-foreground">
                         اكتب كل شرط في سطر مستقل. تظهر هذه الشروط في صفحة الشاليه وفي رسالة تأكيد الحجز.
                       </p>
@@ -1593,10 +1651,12 @@ export default function AddChalet() {
                           onChange={(e) => handleChange("socialLink", e.target.value)}
                           required
                           aria-invalid={!!fieldErrors.socialLink}
+                          aria-describedby={fieldErrors.socialLink ? "socialLink-error" : undefined}
                           className={`h-12 text-base pr-10 ${fieldErrors.socialLink ? "border-destructive" : ""}`}
                           dir="ltr"
                         />
                       </div>
+                      {fieldError("socialLink")}
                       <p className="text-xs text-muted-foreground">
                         يُستخدم للتحقق من هويتك وإظهار شارة "موثق ✅" على بطاقة الشاليه
                       </p>
@@ -1618,10 +1678,13 @@ export default function AddChalet() {
                           value={form.mapsUrl}
                           onChange={(e) => handleChange("mapsUrl", e.target.value)}
                           required
-                          className="h-12 text-base pr-10"
+                          aria-invalid={!!fieldErrors.mapsUrl}
+                          aria-describedby={fieldErrors.mapsUrl ? "mapsUrl-error" : undefined}
+                          className={`h-12 text-base pr-10 ${fieldErrors.mapsUrl ? "border-destructive ring-1 ring-destructive" : ""}`}
                           dir="ltr"
                         />
                       </div>
+                      {fieldError("mapsUrl")}
                       <p className="text-xs text-muted-foreground">
                         افتح خرائط جوجل → اضغط على موقع الشاليه → شارك الرابط هنا
                       </p>
@@ -1661,7 +1724,7 @@ export default function AddChalet() {
                           >
                             <div
                               className="relative aspect-square rounded-xl overflow-hidden border group"
-                              style={{ borderColor: idx === 0 ? "#16a34a" : undefined, borderWidth: idx === 0 ? 2 : 1 }}
+                              style={{ borderColor: fieldErrors.photos ? "#dc2626" : idx === 0 ? "#16a34a" : undefined, borderWidth: idx === 0 || fieldErrors.photos ? 2 : 1 }}
                             >
                               <img
                                 src={photo.preview}
@@ -1729,8 +1792,12 @@ export default function AddChalet() {
                       onDragLeave={() => setIsDragging(false)}
                       onDrop={handleDrop}
                       onClick={() => fileInputRef.current?.click()}
+                      aria-invalid={!!fieldErrors.photos}
+                      aria-describedby={fieldErrors.photos ? "photos-error" : undefined}
                       className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${
-                        isDragging
+                        fieldErrors.photos
+                          ? "border-destructive bg-destructive/5"
+                          : isDragging
                           ? "border-primary bg-primary/10"
                           : "border-border hover:border-primary/50 hover:bg-primary/5"
                       }`}
@@ -1775,12 +1842,10 @@ export default function AddChalet() {
                     </p>
                   )}
 
-                  {uploadError && (
-                    <p className="text-sm text-destructive mt-2">{uploadError}</p>
-                  )}
+                  {fieldError("photos")}
 
                   {/* ── Video Upload ── */}
-                  <div className="mt-6 pt-5 border-t border-border">
+                  <div className={`mt-6 pt-5 border-t border-border ${fieldErrors.videoUrl ? "rounded-xl ring-2 ring-destructive p-3" : ""}`}>
                     <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                       🎥 رفع فيديو للشاليه
                       <span className="font-normal text-muted-foreground text-xs">(فيديو واحد فقط — اختياري)</span>
@@ -1839,13 +1904,11 @@ export default function AddChalet() {
                         />
                       </div>
                     )}
-                    {videoError && (
-                      <p className="text-sm text-destructive mt-2">{videoError}</p>
-                    )}
+                    {fieldError("videoUrl")}
                   </div>
 
                   {/* ── Logo Upload ── */}
-                  <div className="mt-6 pt-5 border-t border-border">
+                  <div className={`mt-6 pt-5 border-t border-border ${fieldErrors.logoUrl ? "rounded-xl ring-2 ring-destructive p-3" : ""}`}>
                     <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
                       🏷️ شعار الشاليه (لوجو)
                       <span className="font-normal text-muted-foreground text-xs">(اختياري — يظهر في نتائج البحث والعقود)</span>
@@ -1896,7 +1959,7 @@ export default function AddChalet() {
                       className="hidden"
                       onChange={handleLogoInput}
                     />
-                    {logoError && <p className="text-sm text-destructive mt-2">{logoError}</p>}
+                    {fieldError("logoUrl")}
                   </div>
                 </div>
 
