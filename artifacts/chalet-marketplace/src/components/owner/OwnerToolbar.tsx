@@ -36,6 +36,7 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
   const open = p.activityChoiceOpen ?? localOpen;
   const setOpen = p.onActivityChoiceOpenChange ?? setLocalOpen;
   const canAny = p.canAddChalet || p.canAddService;
+  const choiceClassName = "flex items-center gap-3 rounded-xl border border-border p-4 text-start transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out hover:border-primary/40 hover:bg-accent hover:shadow-md motion-safe:hover:-translate-y-0.5 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none";
 
   const choose = (k: "chalet" | "service") => {
     if (k === "chalet" ? !p.canAddChalet : !p.canAddService) return;
@@ -83,20 +84,26 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
               disabled={!p.canAddChalet}
               onClick={() => choose("chalet")}
               data-testid="choice-add-chalet"
-              className="flex items-center gap-3 rounded-xl border border-border p-4 text-start transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none"
+              className={choiceClassName}
             >
-              <Building2 className="h-6 w-6 text-primary" />
-              <span className="font-bold">عقار (شاليه / استراحة)</span>
+              <Building2 className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+              <span className="min-w-0 space-y-1">
+                <span className="block font-bold">عقار (شاليه / استراحة / مزرعة)</span>
+                <span className="block text-sm leading-relaxed text-muted-foreground">تأجير وحدة سكنية أو مرفق ترفيهي للمستأجرين</span>
+              </span>
             </button>
             <button
               type="button"
               disabled={!p.canAddService}
               onClick={() => choose("service")}
               data-testid="choice-add-service"
-              className="flex items-center gap-3 rounded-xl border border-border p-4 text-start transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:pointer-events-none"
+              className={choiceClassName}
             >
-              <Briefcase className="h-6 w-6 text-primary" />
-              <span className="font-bold">خدمة</span>
+              <Briefcase className="h-6 w-6 shrink-0 text-primary" aria-hidden="true" />
+              <span className="min-w-0 space-y-1">
+                <span className="block font-bold">خدمة مساندة / إضافية</span>
+                <span className="block text-sm leading-relaxed text-muted-foreground">توفير خدمات للحجوزات مثل: الضيافة، العشاء، الصوتيات، والتنظيم</span>
+              </span>
             </button>
           </div>
         </DialogContent>
