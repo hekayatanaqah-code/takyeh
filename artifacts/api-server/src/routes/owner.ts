@@ -46,6 +46,7 @@ import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
+import { normalizeSaudiMobile } from "../lib/passwordRecovery";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
 import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys, getOwnerFreeAccess } from "../lib/subscription-access";
 import { getOwnerAccountDiscount } from "../lib/subscription-discounts";
@@ -3433,39 +3434,45 @@ const PERM_KEYS = [
 router.post("/staff", async (req, res) => {
   const ownerId = req.user!.id;
   const body = z.object({
-    name: z.string().min(1),
-    baseSalary: z.number().nonnegative(),
-    username: z.string().min(3).optional(),
-    password: z.string().min(6).optional(),
+    name: z.string().trim().min(1, "الاسم الكامل مطلوب"),
+    phoneNum: z.string({ required_error: "رقم الجوال مطلوب" })
+      .transform(value => normalizeSaudiMobile(value))
+      .refine((value): value is string => value !== null, "أدخل رقم جوال سعودي صحيح"),
+    baseSalary: z.number({ required_error: "الراتب الأساسي مطلوب" }).finite()
+      .nonnegative("الراتب الأساسي لا يمكن أن يكون سالباً").max(99_999_999.99),
+    grantAccess: z.boolean().default(false),
     permissions: z.record(z.boolean()).optional(),
     assignedToType: z.enum(["all", "chalet", "service"]).optional(),
     assignedToId: z.number().int().positive().optional(),
     nationalId: z.string().optional(),
-    phoneNum: z.string().optional(),
     birthDate: z.string().optional(),
     hireDate: z.string().optional(),
   }).safeParse(req.body);
-  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
+
+  if (body.data.grantAccess) {
+    // Do not create credentials or claim an invitation until a functioning
+    // WhatsApp activation provider has been connected.
+    return res.status(503).json({
+      code: "staff_invitation_unavailable",
+      error: "دعوات تفعيل الموظفين عبر واتساب غير متاحة حالياً. لم تتم إضافة الموظف؛ يلزم ربط خدمة واتساب أولاً لمنحه صلاحية دخول.",
+    });
+  }
 
   const values: Record<string, unknown> = {
     ownerId,
     name: body.data.name,
     baseSalary: String(body.data.baseSalary),
-    permissions: body.data.permissions ?? {},
+    permissions: {},
+    username: null,
+    passwordHash: null,
     assignedToType: body.data.assignedToType ?? "all",
     assignedToId: body.data.assignedToId ?? null,
     nationalId: body.data.nationalId || null,
-    phoneNum: body.data.phoneNum || null,
+    phoneNum: body.data.phoneNum,
     birthDate: body.data.birthDate || null,
     hireDate: body.data.hireDate || null,
   };
-
-  if (body.data.username) {
-    values.username = body.data.username.trim();
-    if (body.data.password) {
-      values.passwordHash = await bcrypt.hash(body.data.password, 10);
-    }
-  }
 
   const [row] = await db
     .insert(ownerStaffTable)
