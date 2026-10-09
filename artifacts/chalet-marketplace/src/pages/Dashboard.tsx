@@ -14,6 +14,7 @@ import type { PermKey, StaffPermissions } from "@/lib/staffPermissions";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { normalizeIdentifier } from "@/lib/authLabels";
+import { employeeDigits, EMPTY_NEW_STAFF_FORM, STAFF_JOB_TITLES } from "@/lib/employeeForm";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17075,7 +17076,7 @@ function StaffTab() {
   const _nowStaff = new Date();
   const currentMonth = `${_nowStaff.getFullYear()}-${String(_nowStaff.getMonth() + 1).padStart(2, "0")}`;
   /* ── state ── */
-  const [addForm, setAddForm] = useState({ name: "", baseSalary: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "" });
+  const [addForm, setAddForm] = useState({ ...EMPTY_NEW_STAFF_FORM });
   const [addGrantAccess, setAddGrantAccess] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
   const [addPerms, setAddPerms] = useState<StaffPermissions>({});
@@ -17267,7 +17268,7 @@ function StaffTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "staff"] });
-      setAddForm({ name: "", baseSalary: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "" });
+      setAddForm({ ...EMPTY_NEW_STAFF_FORM });
       setAddGrantAccess(false);
       setAddPerms({});
       setAddAssignType("all");
@@ -17413,7 +17414,7 @@ function StaffTab() {
       <Dialog open={showAddStaff} onOpenChange={(open) => {
         if (!open && !addStaff.isPending) {
           setShowAddStaff(false);
-          setAddForm({ name: "", baseSalary: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "" });
+          setAddForm({ ...EMPTY_NEW_STAFF_FORM });
           setAddGrantAccess(false);
           setAddPerms({});
           setAddAssignType("all");
@@ -17435,8 +17436,13 @@ function StaffTab() {
               const salaryText = fromAr(addForm.baseSalary).trim().replace(/[٬,]/g, "").replace("٫", ".");
               const s = Number(salaryText);
               const phone = normalizeIdentifier(addForm.phoneNum);
-              if (!addForm.name.trim() || !salaryText || !Number.isFinite(s) || s < 0 || s > 99_999_999.99 || phone.kind !== "phone") {
+              if (!addForm.name.trim() || !salaryText || !Number.isFinite(s) || s < 0 || s > 99_999_999.99 || !/^05\d{8}$/.test(addForm.phoneNum) || phone.kind !== "phone") {
                 toast({ title: "تحقق من بيانات الموظف", description: "الاسم الكامل ورقم جوال سعودي صحيح والراتب الأساسي غير السالب حقول مطلوبة.", variant: "destructive" });
+                return;
+              }
+              const jobTitle = addForm.jobTitle === "other" ? addForm.customJobTitle.trim() : addForm.jobTitle;
+              if (addForm.jobTitle === "other" && !jobTitle) {
+                toast({ title: "المسمى الوظيفي مطلوب", description: "أدخل المسمى الوظيفي عند اختيار «أخرى».", variant: "destructive" });
                 return;
               }
               addStaff.mutate({
@@ -17447,6 +17453,8 @@ function StaffTab() {
                 assignedToType: addAssignType,
                 assignedToId: addAssignType !== "all" && addAssignId ? Number(addAssignId) : undefined,
                 nationalId: addForm.nationalId || undefined,
+                jobTitle: jobTitle || undefined,
+                email: addForm.email.trim() || undefined,
                 phoneNum: phone.value,
                 birthDate: addForm.birthDate || undefined,
                 hireDate: addForm.hireDate || undefined,
@@ -17462,7 +17470,7 @@ function StaffTab() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="new-staff-phone">رقم الجوال <span className="text-destructive">*</span></Label>
-                <Input id="new-staff-phone" placeholder="05xxxxxxxx" value={addForm.phoneNum} onChange={(e) => setAddForm((f) => ({ ...f, phoneNum: e.target.value }))} className="h-11" inputMode="tel" dir="ltr" autoComplete="tel" required disabled={addStaff.isPending} />
+                <Input id="new-staff-phone" type="text" placeholder="٠٥٠٠٠٠٠٠٠٠" value={toAr(addForm.phoneNum)} onChange={(e) => setAddForm((f) => ({ ...f, phoneNum: employeeDigits(e.target.value) }))} className="h-11" inputMode="numeric" maxLength={10} pattern="٠٥[٠-٩]{8}" title="أدخل ١٠ أرقام تبدأ بـ ٠٥" dir="ltr" autoComplete="tel-national" required disabled={addStaff.isPending} />
                 <p className="text-xs text-muted-foreground">المرجع الأساسي للموظف، ويُستخدم لدعوة التفعيل عند منحه دخولاً.</p>
               </div>
               <div className="space-y-1.5">
@@ -17477,24 +17485,48 @@ function StaffTab() {
               <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5" /> البيانات الشخصية <span className="font-normal">(اختياري)</span>
               </p>
-              <div className="grid grid-cols-2 gap-3">
-                <Input placeholder="رقم الهوية / الإقامة" value={addForm.nationalId} onChange={(e) => setAddForm((f) => ({ ...f, nationalId: e.target.value }))} className="h-10 text-sm" inputMode="numeric" />
-                <div>
-                  <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ الميلاد</label>
-                  <DualCalendarPicker
-                    value={addForm.birthDate}
-                    onChange={(value) => setAddForm((f) => ({ ...f, birthDate: value }))}
-                    placeholder="اختر تاريخ الميلاد"
-                    mode="gregorian"
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                  />
+              <div className="grid grid-cols-2 gap-x-3 gap-y-4 items-start">
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="new-staff-job-title" className="text-xs text-muted-foreground">المسمى الوظيفي</Label>
+                  <Select value={addForm.jobTitle || "none"} disabled={addStaff.isPending} onValueChange={(value) => setAddForm((f) => ({ ...f, jobTitle: value === "none" ? "" : value, customJobTitle: "" }))}>
+                    <SelectTrigger id="new-staff-job-title" className="h-10 w-full text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">بدون مسمى وظيفي</SelectItem>
+                      {STAFF_JOB_TITLES.map((title) => <SelectItem key={title} value={title}>{title}</SelectItem>)}
+                      <SelectItem value="other">أخرى</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {addForm.jobTitle === "other" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-staff-custom-job-title" className="text-xs text-muted-foreground">اكتب المسمى الوظيفي</Label>
+                      <Input id="new-staff-custom-job-title" placeholder="المسمى الوظيفي" value={addForm.customJobTitle} onChange={(e) => setAddForm((f) => ({ ...f, customJobTitle: e.target.value }))} maxLength={120} className="h-10 text-sm" required disabled={addStaff.isPending} />
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <label className="text-[10px] text-muted-foreground mb-1 block">تاريخ التعيين</label>
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="new-staff-email" className="text-xs text-muted-foreground">البريد الإلكتروني (اختياري)</Label>
+                  <Input id="new-staff-email" type="email" placeholder="البريد الإلكتروني" value={addForm.email} onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))} maxLength={254} className="h-10 text-sm" dir="ltr" autoComplete="email" disabled={addStaff.isPending} />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <Label htmlFor="new-staff-national-id" className="text-xs text-muted-foreground">رقم الهوية / الإقامة</Label>
+                  <Input id="new-staff-national-id" placeholder="رقم الهوية / الإقامة" value={toAr(addForm.nationalId)} onChange={(e) => setAddForm((f) => ({ ...f, nationalId: employeeDigits(e.target.value) }))} className="h-10 text-sm" type="text" inputMode="numeric" maxLength={10} pattern="[٠-٩]{1,10}" dir="ltr" disabled={addStaff.isPending} />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <label className="text-xs text-muted-foreground block">تاريخ التعيين</label>
                   <DualCalendarPicker
                     value={addForm.hireDate}
                     onChange={(value) => setAddForm((f) => ({ ...f, hireDate: value }))}
                     placeholder="اختر تاريخ التعيين"
+                    mode="gregorian"
+                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  />
+                </div>
+                <div className="min-w-0 space-y-1.5">
+                  <label className="text-xs text-muted-foreground block">تاريخ الميلاد</label>
+                  <DualCalendarPicker
+                    value={addForm.birthDate}
+                    onChange={(value) => setAddForm((f) => ({ ...f, birthDate: value }))}
+                    placeholder="اختر تاريخ الميلاد"
                     mode="gregorian"
                     className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                   />
@@ -17588,7 +17620,7 @@ function StaffTab() {
             <DialogFooter className="gap-2 pt-1">
               <Button type="button" variant="outline" disabled={addStaff.isPending} onClick={() => {
                 setShowAddStaff(false);
-                setAddForm({ name: "", baseSalary: "", nationalId: "", phoneNum: "", birthDate: "", hireDate: "" });
+                setAddForm({ ...EMPTY_NEW_STAFF_FORM });
                 setAddGrantAccess(false);
                 setAddPerms({});
                 setAddAssignType("all");

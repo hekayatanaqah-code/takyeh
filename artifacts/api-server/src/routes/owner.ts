@@ -3436,6 +3436,7 @@ router.post("/staff", async (req, res) => {
   const body = z.object({
     name: z.string().trim().min(1, "الاسم الكامل مطلوب"),
     phoneNum: z.string({ required_error: "رقم الجوال مطلوب" })
+      .regex(/^[0-9٠-٩۰-۹]{10}$/, "رقم الجوال يجب أن يتكون من ١٠ أرقام فقط تبدأ بـ ٠٥")
       .transform(value => normalizeSaudiMobile(value))
       .refine((value): value is string => value !== null, "أدخل رقم جوال سعودي صحيح"),
     baseSalary: z.number({ required_error: "الراتب الأساسي مطلوب" }).finite()
@@ -3444,7 +3445,10 @@ router.post("/staff", async (req, res) => {
     permissions: z.record(z.boolean()).optional(),
     assignedToType: z.enum(["all", "chalet", "service"]).optional(),
     assignedToId: z.number().int().positive().optional(),
-    nationalId: z.string().optional(),
+    nationalId: z.string().regex(/^[0-9٠-٩۰-۹]{0,10}$/, "رقم الهوية / الإقامة يقبل أرقاماً فقط وبحد أقصى ١٠ أرقام")
+      .transform(value => value.replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))).replace(/[۰-۹]/g, digit => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))).optional(),
+    jobTitle: z.string().trim().max(120).optional(),
+    email: z.union([z.string().trim().email("أدخل بريداً إلكترونياً صحيحاً").max(254), z.literal("")]).optional(),
     birthDate: z.string().optional(),
     hireDate: z.string().optional(),
   }).safeParse(req.body);
@@ -3469,6 +3473,8 @@ router.post("/staff", async (req, res) => {
     assignedToType: body.data.assignedToType ?? "all",
     assignedToId: body.data.assignedToId ?? null,
     nationalId: body.data.nationalId || null,
+    jobTitle: body.data.jobTitle || null,
+    email: body.data.email || null,
     phoneNum: body.data.phoneNum,
     birthDate: body.data.birthDate || null,
     hireDate: body.data.hireDate || null,

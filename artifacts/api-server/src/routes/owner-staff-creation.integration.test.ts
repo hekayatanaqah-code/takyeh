@@ -89,6 +89,39 @@ it("accepts explicitly entered zero salary and defaults to no platform access", 
   assert.equal(row.username, null);
 });
 
+it("rejects nonnumeric or overlong mobile and identity inputs even when sent directly", async () => {
+  for (const phoneNum of ["05000000000", "5500000000", "+966500000000", "050-000000", "050000000a"]) {
+    assert.equal((await createStaff({ ...valid, phoneNum })).status, 400, phoneNum);
+  }
+  for (const nationalId of ["12345678901", "123abc", "123-456", "١٢٣a"]) {
+    assert.equal((await createStaff({ ...valid, nationalId })).status, 400, nationalId);
+  }
+  assert.equal((await createStaff({ ...valid, email: "not-an-email" })).status, 400);
+  assert.equal((await createStaff({ ...valid, jobTitle: "a".repeat(121) })).status, 400);
+});
+
+it("persists optional job title and email with normalized identity and retains them on reload", async () => {
+  const response = await createStaff({
+    ...valid, nationalId: "١٢٣٤٥٦٧٨٩٠",
+    jobTitle: " منسق فعاليات ", email: " employee@example.test ",
+    birthDate: "1990-01-01", hireDate: "2026-10-01",
+  });
+  assert.equal(response.status, 201);
+  const row = await response.json() as SafeStaff;
+  assert.equal(row.jobTitle, "منسق فعاليات");
+  assert.equal(row.email, "employee@example.test");
+  assert.equal(row.nationalId, "1234567890");
+  assert.equal(row.birthDate, "1990-01-01");
+  assert.equal(row.hireDate, "2026-10-01");
+  const [stored] = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.id, row.id));
+  assert.equal(stored.jobTitle, row.jobTitle);
+  assert.equal(stored.email, row.email);
+  const responseList = await fetch(`${baseUrl}/api/owner/staff`, { headers: { authorization: `Bearer ${sessionId}` } });
+  const reloaded = (await responseList.json() as SafeStaff[]).find(staff => staff.id === row.id);
+  assert.equal(reloaded?.jobTitle, row.jobTitle);
+  assert.equal(reloaded?.email, row.email);
+});
+
 it("never creates a partial login account or claims WhatsApp delivery while the provider is unavailable", async () => {
   const beforeRows = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
   const response = await createStaff({ ...valid, grantAccess: true, permissions: { dashboardAccess: true } });

@@ -795,6 +795,8 @@ export const ownerStaffTable = pgTable("owner_staff", {
   assignedToId: integer("assigned_to_id"),
   nationalId: text("national_id"),
   phoneNum: text("phone_num"),
+  jobTitle: text("job_title"),
+  email: text("email"),
   birthDate: text("birth_date"),
   hireDate: text("hire_date"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
