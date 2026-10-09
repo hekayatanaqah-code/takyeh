@@ -39,6 +39,8 @@ import type {
   HealthStatus,
   OwnerFreeAccessGrantInput,
   OwnerFreeAccessGrantResponse,
+  PropertyIdentityInput,
+  PropertyIdentityResult,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   ServiceGlobalSeason,
@@ -1540,6 +1542,94 @@ export const useRequestUploadUrl = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRequestUploadUrlMutationOptions(options), queryClient);
+    }
+
+export const getCheckPropertyIdentityUrl = () => {
+
+
+
+
+  return `/api/submissions/check-identity`
+}
+
+/**
+ * @summary Check property identity before proceeding with registration
+ */
+export const checkPropertyIdentity = async (propertyIdentityInput: PropertyIdentityInput, options?: Parameters<typeof customFetch>[1]): Promise<PropertyIdentityResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PropertyIdentityResult>(getCheckPropertyIdentityUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propertyIdentityInput)
+  }
+);}
+
+
+
+
+
+export const getCheckPropertyIdentityMutationKey = () => ['checkPropertyIdentity'] as const;
+
+export const getCheckPropertyIdentityMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkPropertyIdentity>>, TError,CheckPropertyIdentityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkPropertyIdentity>>, TError,CheckPropertyIdentityMutationVariables, TContext> => {
+
+const mutationKey = getCheckPropertyIdentityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkPropertyIdentity>>, CheckPropertyIdentityMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  checkPropertyIdentity(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckPropertyIdentityMutationResult = NonNullable<Awaited<ReturnType<typeof checkPropertyIdentity>>>
+    export type CheckPropertyIdentityMutationBody = BodyType<PropertyIdentityInput>
+    export type CheckPropertyIdentityMutationError = ErrorType<void>
+    export type CheckPropertyIdentityMutationVariables = {data: BodyType<PropertyIdentityInput>}
+
+    /**
+ * @summary Check property identity before proceeding with registration
+ */
+export const useCheckPropertyIdentity = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkPropertyIdentity>>, TError,CheckPropertyIdentityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof checkPropertyIdentity>>,
+        TError,
+        CheckPropertyIdentityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCheckPropertyIdentityMutationOptions(options), queryClient);
     }
 
 export const getGetMySubmissionsUrl = () => {

@@ -6,15 +6,17 @@ import { eq, and, ne, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
 import { ownerPlanAccess } from "../lib/subscription-access";
+import { checkPropertyIdentity } from "../lib/property-identity";
+import { normalizeCustomerPhone } from "../lib/customerPhone";
 
 const SubmissionBodyStrict = CreateSubmissionBody.extend({
   nameAr: z.string().trim().min(2, "اسم الشاليه مطلوب (حرفان على الأقل)"),
   region: z.string().trim().min(2, "المنطقة مطلوبة"),
   suggestedCityName: z.string().trim().min(2).optional(),
   location: z.string().trim().min(2, "المدينة مطلوبة"),
-  district: z.string().trim().optional(),
+  district: z.string().trim().min(1, "الحي مطلوب"),
   descriptionAr: z.string().trim().min(3, "الوصف قصير جداً (٣ أحرف على الأقل)"),
-  whatsappNumber: z.string().trim().min(9, "رقم واتساب غير صحيح"),
+  whatsappNumber: z.string().transform(normalizeCustomerPhone).pipe(z.string().regex(/^05\d{8}$/, "رقم واتساب غير صحيح")),
   pricePerNight: z.number().min(0),
   priceMorning: z.number().nullable().optional(),
   priceEvening: z.number().nullable().optional(),
@@ -28,10 +30,10 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
   seasonalDisclaimer: z.boolean().optional(),
   mapsUrl: z.string().optional().nullable().or(z.literal("")),
   socialLink: z.string().optional().nullable(),
-  photos: z.array(z.string()).max(15, "الحد الأقصى للصور هو 15").optional(),
+  photos: z.array(z.string().trim().min(1).refine(value => value !== "error", "صورة غير صالحة")).min(1, "أضف صورة رئيسية واحدة على الأقل").max(15, "الحد الأقصى للصور هو 15"),
   videoUrl: z.string().optional(),
   logoUrl: z.string().optional().nullable(),
-  termsAndConditions: z.string().optional().nullable(),
+  termsAndConditions: z.string().trim().min(1, "الشروط والأحكام الخاصة مطلوبة"),
   maxGuests: z.number().int().min(1).nullable().optional(),
   bedrooms: z.number().int().min(0).nullable().optional(),
   propertyType: z.string().trim().optional().nullable(),
@@ -48,6 +50,36 @@ const SubmissionBodyStrict = CreateSubmissionBody.extend({
 });
 
 const router = Router();
+
+router.post("/check-identity", async (req, res) => {
+  let authenticated = req.isAuthenticated();
+  if (!authenticated && req.cookies?.owner_temp_session) {
+    const [session] = await db.select({ id: ownerTempSessionsTable.id })
+      .from(ownerTempSessionsTable)
+      .where(and(eq(ownerTempSessionsTable.token, req.cookies.owner_temp_session),
+        sql`${ownerTempSessionsTable.expiresAt} > now()`)).limit(1);
+    authenticated = !!session;
+  }
+  if (!authenticated) return res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
+  const parsed = z.object({
+    nameAr: z.string().trim().min(2),
+    location: z.string().trim().min(2),
+    district: z.string().trim().min(1),
+    whatsappNumber: z.string().transform(normalizeCustomerPhone).pipe(z.string().regex(/^05\d{8}$/)),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "تحقق من الاسم والمدينة والحي ورقم الواتساب" });
+  const flags = await checkPropertyIdentity(parsed.data);
+  const fieldErrors: Record<string, string[]> = {};
+  if (flags.nameConflict) fieldErrors.nameAr = ["هذا العقار مسجل مسبقاً بنفس الاسم والمدينة والحي."];
+  if (flags.whatsappConflict) fieldErrors.whatsappNumber = ["رقم الواتساب هذا مسجل مسبقاً. يرجى استخدام رقم آخر."];
+  return res.json({
+    available: Object.keys(fieldErrors).length === 0,
+    fieldErrors,
+    warning: flags.similarName && !flags.nameConflict
+      ? "يوجد عقار بالاسم نفسه في هذه المدينة ولكن في حي مختلف. يمكنك المتابعة، وننصح بإضافة ما يميز عقارك لتسهيل العثور عليه."
+      : null,
+  });
+});
 
 router.get("/", async (req, res) => {
   /* ── Resolve owner ID (token session or normal session) ── */
@@ -203,6 +235,7 @@ router.post("/", async (req, res) => {
   }
 
   const data = result.data;
+  data.whatsappNumber = normalizeCustomerPhone(data.whatsappNumber);
 
   /* Resolve ownerId: prefer temp-session cookie (owner portal), then authenticated session */
   let ownerId: string | null = req.isAuthenticated() ? req.user.id : null;
@@ -234,37 +267,13 @@ router.post("/", async (req, res) => {
   /* ── Full-scan duplicate check — collect ALL conflicts before returning ── */
   const dupFields: string[] = [];
   let mapsIsDup = false;
-  const hasCategory = !!(data.propertyType && data.propertyType !== "__other__");
-
-  // Build name+city(+category) where clauses
-  const subNameWhere: Parameters<typeof and>[0][] = [
-    sql`lower(${chaletSubmissionsTable.nameAr}) = lower(${data.nameAr})`,
-    sql`lower(${chaletSubmissionsTable.location}) = lower(${data.location})`,
-    ne(chaletSubmissionsTable.status, "rejected"),
-  ];
-  if (hasCategory) subNameWhere.push(sql`lower(coalesce(${chaletSubmissionsTable.propertyType}, '')) = lower(${data.propertyType})`);
-
-  const chaletNameWhere: Parameters<typeof and>[0][] = [
-    sql`lower(${chaletsTable.nameAr}) = lower(${data.nameAr})`,
-    sql`lower(${chaletsTable.location}) = lower(${data.location})`,
-  ];
-  if (hasCategory) chaletNameWhere.push(sql`lower(coalesce(${chaletsTable.category}, coalesce(${chaletsTable.propertyType}, ''))) = lower(${data.propertyType})`);
-
   // Run all checks in parallel
   const [
-    [dupSubName], [dupChaletName],
-    [dupSubWa],   [dupChaletWa],
+    identity,
     [dupSubSoc],  [dupChaletSoc],
     [dupSubMap],  [dupChaletMap],
   ] = await Promise.all([
-    db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable).where(and(...subNameWhere)).limit(1),
-    db.select({ id: chaletsTable.id }).from(chaletsTable).where(and(...chaletNameWhere)).limit(1),
-
-    db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
-      .where(and(eq(chaletSubmissionsTable.whatsappNumber, data.whatsappNumber), ne(chaletSubmissionsTable.status, "rejected"))).limit(1),
-    db.select({ id: chaletsTable.id }).from(chaletsTable)
-      .where(eq(chaletsTable.whatsappNumber, data.whatsappNumber)).limit(1),
-
+    checkPropertyIdentity(data),
     data.socialLink
       ? db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
           .where(and(sql`lower(${chaletSubmissionsTable.socialLink}) = lower(${data.socialLink})`, ne(chaletSubmissionsTable.status, "rejected"))).limit(1)
@@ -286,11 +295,9 @@ router.post("/", async (req, res) => {
 
   // Collect hits (maps first — highest priority)
   if (dupSubMap || dupChaletMap) { dupFields.push("موقع الشاليه على الخريطة"); mapsIsDup = true; }
-  if (dupSubWa  || dupChaletWa)  dupFields.push("رقم الواتساب");
+  if (identity.whatsappConflict) dupFields.push("رقم الواتساب");
   if (dupSubSoc || dupChaletSoc) dupFields.push("رابط الإنستقرام");
-  if (dupSubName || dupChaletName) {
-    dupFields.push(hasCategory ? "الاسم والمدينة والفئة" : "الاسم والمدينة");
-  }
+  if (identity.nameConflict) dupFields.push("الاسم والمدينة والحي");
 
   if (dupFields.length > 0) {
     let error: string;
@@ -304,7 +311,7 @@ router.post("/", async (req, res) => {
         "رقم الواتساب": "عفواً، رقم الواتساب هذا مسجل مسبقاً.",
         "رابط الإنستقرام": "عفواً، رابط الإنستقرام هذا مسجل مسبقاً.",
         "الاسم والمدينة والفئة": "عفواً، يوجد شاليه بنفس هذا الاسم في هذه المدينة والفئة.",
-        "الاسم والمدينة": "عذراً، هذا الاسم مستخدم مسبقاً في هذه المدينة. يرجى اختيار اسم مختلف أو إضافة تمييز للحي.",
+        "الاسم والمدينة والحي": "هذا العقار مسجل مسبقاً بنفس الاسم والمدينة والحي.",
       };
       error = labels[dupFields[0]] ?? `عفواً، ${dupFields[0]} مسجل مسبقاً.`;
     } else {

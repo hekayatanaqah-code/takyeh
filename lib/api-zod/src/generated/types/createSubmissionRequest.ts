@@ -17,8 +17,11 @@ export interface CreateSubmissionRequest {
   region: string;
   /** Owner-proposed city when it is not in the catalog */
   suggestedCityName?: string;
-  /** Optional district or neighborhood name */
-  district?: string;
+  /**
+     * Required district or neighborhood name
+     * @minLength 1
+     */
+  district: string;
   /** Property type (شالية، مزرعة، استراحة، مخيم) */
   propertyType?: string;
   /** Number of sections (قسم واحد، قسمين منفصلة) */
@@ -33,6 +36,12 @@ export interface CreateSubmissionRequest {
   pricePerNight: number;
   /** List of selected amenity keys */
   amenities?: string[];
-  /** List of object paths (up to 5) */
-  photos?: string[];
+  /**
+     * Uploaded photos; the first is the required main photo
+     * @minItems 1
+     * @maxItems 15
+     */
+  photos: string[];
+  /** @minLength 1 */
+  termsAndConditions: string;
 }

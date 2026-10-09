@@ -335,6 +335,30 @@ export const RequestUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary Check property identity before proceeding with registration
+ */
+export const checkPropertyIdentityBodyNameArMin = 2;
+
+export const checkPropertyIdentityBodyLocationMin = 2;
+
+
+
+
+export const CheckPropertyIdentityBody = zod.object({
+  "nameAr": zod.string().min(checkPropertyIdentityBodyNameArMin),
+  "location": zod.string().min(checkPropertyIdentityBodyLocationMin),
+  "district": zod.string().min(1),
+  "whatsappNumber": zod.string()
+})
+
+export const CheckPropertyIdentityResponse = zod.object({
+  "available": zod.boolean(),
+  "fieldErrors": zod.record(zod.string(), zod.array(zod.string())),
+  "warning": zod.string().nullable()
+})
+
+
+/**
  * @summary Get the authenticated owner's chalet submissions
  */
 export const GetMySubmissionsResponseItem = zod.object({
@@ -358,13 +382,19 @@ export const GetMySubmissionsResponse = zod.array(GetMySubmissionsResponseItem)
  * Allows property owners to submit their chalet for listing review
  * @summary Submit a chalet for review
  */
+
+export const createSubmissionBodyPhotosMax = 15;
+
+
+
+
 export const CreateSubmissionBody = zod.object({
   "nameAr": zod.string().describe('Chalet name in Arabic'),
   "whatsappNumber": zod.string().describe('Owner WhatsApp number'),
   "location": zod.string().describe('City name'),
   "region": zod.string().describe('Region name'),
   "suggestedCityName": zod.string().optional().describe('Owner-proposed city when it is not in the catalog'),
-  "district": zod.string().optional().describe('Optional district or neighborhood name'),
+  "district": zod.string().min(1).describe('Required district or neighborhood name'),
   "propertyType": zod.string().optional().describe('Property type (شالية، مزرعة، استراحة، مخيم)'),
   "sections": zod.string().optional().describe('Number of sections (قسم واحد، قسمين منفصلة)'),
   "mapsUrl": zod.string().optional().describe('Optional Google Maps or website link'),
@@ -372,7 +402,8 @@ export const CreateSubmissionBody = zod.object({
   "descriptionAr": zod.string().describe('Chalet description in Arabic'),
   "pricePerNight": zod.number().describe('Average price per night in SAR'),
   "amenities": zod.array(zod.string()).optional().describe('List of selected amenity keys'),
-  "photos": zod.array(zod.string()).optional().describe('List of object paths (up to 5)')
+  "photos": zod.array(zod.string()).min(1).max(createSubmissionBodyPhotosMax).describe('Uploaded photos; the first is the required main photo'),
+  "termsAndConditions": zod.string().min(1)
 })
 
 export const CreateSubmissionResponse = zod.object({

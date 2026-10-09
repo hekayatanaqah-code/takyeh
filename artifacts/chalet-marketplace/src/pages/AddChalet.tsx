@@ -3,7 +3,8 @@ import { fromAr, toAr } from "@/lib/utils";
 import { useSearch, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCreateSubmission } from "@workspace/api-client-react";
+import { checkPropertyIdentity, useCreateSubmission } from "@workspace/api-client-react";
+import PropertyTimeSelect from "@/components/PropertyTimeSelect";
 import { Navbar } from "@/components/layout/Navbar";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { Button } from "@/components/ui/button";
@@ -175,7 +176,7 @@ export default function AddChalet() {
     mapsUrl: "",
     socialLink: "",
     descriptionAr: "",
-    termsAndConditions: TERMS_PLACEHOLDER,
+    termsAndConditions: "",
   });
   const [propertyType, setPropertyType] = useState("");
   const [suggestedCategoryName, setSuggestedCategoryName] = useState("");
@@ -236,21 +237,83 @@ export default function AddChalet() {
   /* ── Multi-step wizard (new submission only; edit mode shows all) ── */
   const [step, setStep] = useState(1);
   const TOTAL_STEPS = 4;
+  const [checkingIdentity, setCheckingIdentity] = useState(false);
+  const [identityWarning, setIdentityWarning] = useState<string | null>(null);
+  const validationRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    setIdentityWarning(null);
+    return () => {
+      validationRequest.current?.abort();
+    };
+  }, [form.nameAr, form.whatsappNumber, form.location, citySelectVal, customCity, selectedDistrict, customDistrict, form.termsAndConditions]);
+
+  const validatePhotos = (): Record<string, string[]> => {
+    if (isUploading || isUploadingVideo || isUploadingLogo || photos.some(p => !p.url)) {
+      return { photos: ["انتظر اكتمال رفع الملفات قبل المتابعة."] };
+    }
+    if (!photos[0]?.url || photos[0].url === "error") {
+      return { photos: ["ارفع صورة رئيسية واحدة على الأقل بنجاح قبل المتابعة."] };
+    }
+    return {};
+  };
 
   const validateStep1 = (): Record<string, string[]> => {
     const errs: Record<string, string[]> = {};
-    if (!form.nameAr.trim()) errs.nameAr = ["اسم الشاليه مطلوب"];
+    if (form.nameAr.trim().length < 2) errs.nameAr = ["اسم العقار مطلوب (حرفان على الأقل)"];
     if (!selectedRegionId) errs.region = ["المنطقة مطلوبة"];
     if (!(citySelectVal === "__other__" ? customCity.trim() : form.location)) errs.location = ["المدينة مطلوبة"];
     if (!propertyType) errs.propertyType = ["نوع العقار مطلوب"];
     if (!sections) errs.sections = ["عدد الأقسام مطلوب"];
+    if (!(selectedDistrict === "__other__" ? customDistrict.trim() : selectedDistrict)) errs.district = ["الحي أو المنطقة مطلوب"];
+    if (!/^(?:05\d{8}|5\d{8}|(?:\+?966|00966)5\d{8})$/.test(fromAr(form.whatsappNumber).replace(/[\s()-]/g, ""))) errs.whatsappNumber = ["أدخل رقم واتساب سعودي صحيح، مثل ٠٥XXXXXXXX."];
+    if (!form.termsAndConditions.trim()) errs.termsAndConditions = ["الشروط والأحكام الخاصة مطلوبة"];
+    if (propertyType === "__other__" && !suggestedCategoryName.trim()) errs.propertyType = ["يرجى كتابة اسم الفئة المقترحة"];
     return errs;
   };
 
-  const goNext = () => {
+  const goNext = async () => {
+    if (checkingIdentity || validationRequest.current) return;
     if (step === 1) {
       const errs = validateStep1();
       if (Object.keys(errs).length > 0) {
+        setFieldErrors(errs);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      const controller = new AbortController();
+      validationRequest.current = controller;
+      setCheckingIdentity(true);
+      setFieldErrors({});
+      setIdentityWarning(null);
+      try {
+        const result = await checkPropertyIdentity({
+          nameAr: form.nameAr.trim(),
+          location: citySelectVal === "__other__" ? customCity.trim() : form.location,
+          district: selectedDistrict === "__other__" ? customDistrict.trim() : selectedDistrict,
+          whatsappNumber: form.whatsappNumber,
+        }, { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        if (!result.available) {
+          setFieldErrors(result.fieldErrors);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return;
+        }
+        setIdentityWarning(result.warning);
+      } catch {
+        if (!controller.signal.aborted) {
+          setFieldErrors({ general: ["تعذّر التحقق من تكرار البيانات. حاول مرة أخرى قبل المتابعة."] });
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        return;
+      } finally {
+        validationRequest.current = null;
+        setCheckingIdentity(false);
+      }
+    }
+    if (step === 3) {
+      const errs = validatePhotos();
+      if (Object.keys(errs).length) {
         setFieldErrors(errs);
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
@@ -565,14 +628,14 @@ export default function AddChalet() {
       region: regions.find((region) => region.id === selectedRegionId)?.name ?? "",
       location: locationOverride ?? form.location,
       suggestedCityName: citySelectVal === "__other__" ? customCity.trim() : undefined,
-      district: finalDistrict,
+      district: finalDistrict ?? "",
       propertyType: propertyType || undefined,
       suggestedCategoryName: propertyType === "__other__" ? (suggestedCategoryName.trim() || undefined) : undefined,
       sections: sections || undefined,
       mapsUrl: form.mapsUrl || undefined,
       socialLink: form.socialLink,
       descriptionAr: form.descriptionAr,
-      termsAndConditions: form.termsAndConditions || null,
+      termsAndConditions: form.termsAndConditions.trim(),
       pricePerNight: 0,
       maxGuests: maxGuestsInput ? Number(maxGuestsInput) : null,
       bedrooms: hasBedrooms && bedroomCount ? Number(bedroomCount) : null,
@@ -610,6 +673,13 @@ export default function AddChalet() {
     e.preventDefault();
     setFieldErrors({});
     mutation.reset();
+    const requiredErrors = { ...validateStep1(), ...validatePhotos() };
+    if (Object.keys(requiredErrors).length) {
+      setFieldErrors(requiredErrors);
+      if (!isEditMode) setStep(Object.keys(validateStep1()).length ? 1 : 3);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (!isEditMode && !planLimits) {
       setFieldErrors({ general: ["تعذّر التحقق من حالة الاشتراك. أعد تحميل الصفحة وحاول مجدداً."] });
       return;
@@ -722,7 +792,7 @@ export default function AddChalet() {
 
   const resetForm = () => {
     setSubmitted(false);
-    setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", socialLink: "", descriptionAr: "", termsAndConditions: TERMS_PLACEHOLDER });
+    setForm({ nameAr: "", whatsappNumber: "", location: "", mapsUrl: "", socialLink: "", descriptionAr: "", termsAndConditions: "" });
     setPropertyType("");
     setSections("");
     setPhotos([]);
@@ -924,6 +994,21 @@ export default function AddChalet() {
                   </div>
                 )}
 
+                {Object.keys(fieldErrors).length > 0 && (
+                  <div role="alert" className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">
+                    <ul className="list-inside list-disc space-y-1">
+                      {Object.entries(fieldErrors).flatMap(([field, errors]) => errors.map((message, index) =>
+                        <li key={`${field}-${index}`}>{message}</li>))}
+                    </ul>
+                  </div>
+                )}
+                {identityWarning && (
+                  <div role="status" className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm leading-relaxed text-foreground">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <p>{identityWarning}</p>
+                  </div>
+                )}
+
                 {/* Section: Basic Info — Step 1 */}
                 {(step === 1 || isEditMode) && <>
 
@@ -945,6 +1030,21 @@ export default function AddChalet() {
                         required
                         className="h-12 text-base"
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsappNumber" className="text-base font-medium">
+                        رقم الواتساب <span className="text-destructive">*</span>
+                      </Label>
+                      <div className="relative">
+                        <Phone className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        <Input id="whatsappNumber" type="tel" inputMode="tel" data-no-arabic
+                          placeholder="٠٥XXXXXXXX" value={toAr(form.whatsappNumber)}
+                          onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value))}
+                          required aria-invalid={!!fieldErrors.whatsappNumber}
+                          className={`h-12 text-base pr-10 ${fieldErrors.whatsappNumber ? "border-destructive" : ""}`} />
+                      </div>
+                      <p className="text-xs text-muted-foreground">يتم التحقق من الرقم وبيانات العقار عند الضغط على «التالي».</p>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -1189,12 +1289,15 @@ export default function AddChalet() {
                       <Label htmlFor="termsAndConditions" className="text-base font-medium flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4 text-primary" />
                         الشروط والأحكام الخاصة
-                        <span className="text-xs font-normal text-muted-foreground">(اختياري — تظهر للضيوف قبل الحجز)</span>
+                        <span className="text-destructive">*</span>
+                        <span className="text-xs font-normal text-muted-foreground">(تظهر للضيوف قبل الحجز)</span>
                       </Label>
                       <Textarea
                         id="termsAndConditions"
                         placeholder={TERMS_PLACEHOLDER}
                         value={form.termsAndConditions}
+                        required
+                        aria-invalid={!!fieldErrors.termsAndConditions}
                         onChange={(e) => handleChange("termsAndConditions", e.target.value)}
                         className="min-h-[140px] text-sm resize-none overflow-hidden leading-relaxed"
                         dir="rtl"
@@ -1301,26 +1404,6 @@ export default function AddChalet() {
                     التواصل والتسعير
                   </h2>
                   <div className="space-y-5">
-                    <div className="space-y-2">
-                      <Label htmlFor="whatsappNumber" className="text-base font-medium">
-                        رقم الواتساب <span className="text-destructive">*</span>
-                      </Label>
-                      <div className="relative">
-                        <Phone className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
-                        <Input
-                          id="whatsappNumber"
-                          type="text"
-                          inputMode="numeric"
-                          data-no-arabic
-                          placeholder="٠٥XXXXXXXX"
-                          value={toAr(form.whatsappNumber)}
-                          onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value))}
-                          required
-                          className="h-12 text-base pr-10"
-                        />
-                      </div>
-                    </div>
-
                     {/* 7-Day Pricing Grid */}
                     <div className="space-y-3">
                       <Label className="text-base font-medium">جدول الأسعار اليومية</Label>
@@ -1394,11 +1477,11 @@ export default function AddChalet() {
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                              <Input type="text" placeholder="مثال: ٢:٠٠ م" value={morningCheckIn} onChange={e => setMorningCheckIn(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                              <PropertyTimeSelect label="وقت دخول الفترة الصباحية" value={morningCheckIn} onChange={setMorningCheckIn} />
                             </div>
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                              <Input type="text" placeholder="مثال: ١٠:٠٠ ص" value={morningCheckOut} onChange={e => setMorningCheckOut(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                              <PropertyTimeSelect label="وقت خروج الفترة الصباحية" value={morningCheckOut} onChange={setMorningCheckOut} />
                             </div>
                           </div>
                         </div>
@@ -1409,11 +1492,11 @@ export default function AddChalet() {
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                              <Input type="text" placeholder="مثال: ٤:٠٠ م" value={eveningCheckIn} onChange={e => setEveningCheckIn(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                              <PropertyTimeSelect label="وقت دخول الفترة المسائية" value={eveningCheckIn} onChange={setEveningCheckIn} />
                             </div>
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                              <Input type="text" placeholder="مثال: ١٢:٠٠ ص" value={eveningCheckOut} onChange={e => setEveningCheckOut(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                              <PropertyTimeSelect label="وقت خروج الفترة المسائية" value={eveningCheckOut} onChange={setEveningCheckOut} />
                             </div>
                           </div>
                         </div>
@@ -1424,11 +1507,11 @@ export default function AddChalet() {
                           <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الدخول</p>
-                              <Input type="text" placeholder="مثال: ٢:٠٠ م" value={fullDayCheckIn} onChange={e => setFullDayCheckIn(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                              <PropertyTimeSelect label="وقت دخول اليوم الكامل" value={fullDayCheckIn} onChange={setFullDayCheckIn} />
                             </div>
                             <div className="space-y-1">
                               <p className="text-xs text-muted-foreground">وقت الخروج</p>
-                              <Input type="text" placeholder="مثال: ١٢:٠٠ ص" value={fullDayCheckOut} onChange={e => setFullDayCheckOut(e.target.value)} className="h-9 text-xs" dir="rtl" />
+                              <PropertyTimeSelect label="وقت خروج اليوم الكامل" value={fullDayCheckOut} onChange={setFullDayCheckOut} />
                             </div>
                           </div>
                         </div>
@@ -1514,12 +1597,12 @@ export default function AddChalet() {
                 <div>
                   <h2 className="text-lg font-bold text-foreground mb-2 pb-3 border-b border-border flex items-center gap-2">
                     <ImageIcon className="w-5 h-5 text-primary" />
-                    الصور والفيديو
+                    الصور والفيديو — الصورة الرئيسية <span className="text-destructive">*</span>
                   </h2>
                   <div className="flex flex-col gap-1 mb-5 bg-muted/40 rounded-xl p-3 text-sm text-muted-foreground">
                     <span>📷 <strong>الصور:</strong> بحد أقصى {MAX_PHOTOS} صورة (حتى 2MB للصورة) صيغة JPG/PNG — تُحفظ تلقائياً بصيغة WebP</span>
-                    <span>🎥 <strong>الفيديو:</strong> فيديو واحد (حتى {MAX_VIDEO_SIZE_MB}MB، مدة 30 ثانية) صيغة MP4 — يُضغط تلقائياً</span>
-                    <span className="text-primary font-medium">★ <strong>الصورة الرئيسية:</strong> أول صورة تُرفع ستكون الصورة الرئيسية — مرّر على أي صورة أخرى لتعيينها كرئيسية</span>
+                    <span>🎥 <strong>الفيديو (اختياري):</strong> فيديو واحد (حتى {MAX_VIDEO_SIZE_MB}MB، مدة 30 ثانية) صيغة MP4 — يُضغط تلقائياً</span>
+                    <span className="text-primary font-medium"><strong>الصورة الرئيسية مطلوبة:</strong> ارفع صورة واحدة على الأقل. أول صورة تُرفع ستكون الصورة الرئيسية — مرّر على أي صورة أخرى لتعيينها كرئيسية</span>
                   </div>
 
                   {/* Photo Thumbnails */}
@@ -1862,8 +1945,8 @@ export default function AddChalet() {
                       ) : <div />}
 
                       {step < TOTAL_STEPS ? (
-                        <Button type="button" onClick={goNext} className="flex items-center gap-2 h-11 px-8">
-                          التالي <ArrowLeft className="w-4 h-4" />
+                        <Button type="button" onClick={goNext} disabled={checkingIdentity} className="flex items-center gap-2 h-11 px-8">
+                          {checkingIdentity ? <><Loader2 className="w-4 h-4 animate-spin" /> جارٍ التحقق...</> : <>التالي <ArrowLeft className="w-4 h-4" /></>}
                         </Button>
                       ) : (
                         <Button
