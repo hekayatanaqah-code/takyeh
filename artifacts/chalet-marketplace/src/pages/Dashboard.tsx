@@ -1490,6 +1490,9 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
 
   const { data: planLimits } = useQuery<OwnerPlanLimits>({
     queryKey: ["owner", "plan-limits"],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 15000,
     queryFn: async () => {
       const r = await apiFetch("/owner/plan-limits");
       if (!r.ok) return { plan: "trial", active: true, scope: "full", chaletLimit: 1, chaletCount: 0, serviceLimit: 1, serviceCount: 0 };
@@ -1523,7 +1526,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
   }
 
   const atChaletLimit = planLimits
-    ? planLimits.active === false || (submissions?.length ?? 0) >= planLimits.chaletLimit
+    ? planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit
     : false;
 
   if (isLoading) {
@@ -1572,7 +1575,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
               <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
             )}
             <span className={atChaletLimit ? "text-amber-700 dark:text-amber-400 font-medium" : "text-muted-foreground"}>
-              {toAr(submissions.length)} / {planLimits.chaletLimit === 999 ? "∞" : toAr(planLimits.chaletLimit)} عقار
+              {toAr(planLimits.chaletCount)} / {planLimits.chaletLimit === 999 ? "∞" : toAr(planLimits.chaletLimit)} عقار
               {atChaletLimit ? " — وصلت الحد الأقصى" : ""}
             </span>
           </div>
@@ -1807,6 +1810,14 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
                       <RotateCcw className="w-3.5 h-3.5" />
                       تعديل وإعادة التقديم
                     </Button>
+                  )}
+                  {sub.status === "rejected" && (
+                    <Link href={`/add-chalet?editId=${sub.id}`}>
+                      <Button size="sm" variant="outline" className="gap-1.5 rounded-xl text-xs min-h-8 h-auto py-2">
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        تعديل وإعادة إرسال الطلب
+                      </Button>
+                    </Link>
                   )}
                   {isApproved && (
                     <>
@@ -25469,6 +25480,9 @@ export default function Dashboard() {
   /* ── Submissions: use apiFetch (credentials: include) + wait for auth ── */
   const { data: submissions, isLoading: submissionsLoading, isError: submissionsError, refetch: retrySubmissions } = useQuery<any[]>({
     queryKey: ["/api/submissions"],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 15000,
     queryFn: async () => {
       const r = await apiFetch("/submissions");
       if (!r.ok) throw new Error("تعذّر تحميل طلبات العقارات");
@@ -25490,6 +25504,9 @@ export default function Dashboard() {
 
   const { data: planLimits, isError: planLimitsError, refetch: retryPlanLimits } = useQuery<OwnerPlanLimits>({
     queryKey: ["owner", "plan-limits"],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 15000,
     queryFn: async () => {
       const r = await apiFetch("/owner/plan-limits");
       if (!r.ok) throw new Error("تعذّر التحقق من الاشتراك");
@@ -25557,7 +25574,7 @@ export default function Dashboard() {
   /* Cross-owner logic: user has BOTH chalets AND service providers */
   const isCrossOwner = (ownerChalets?.length ?? 0) > 0 && myApprovedProviders.length > 0;
   const headerAtChaletLimit = planLimits
-    ? planLimits.active === false || (submissions?.length ?? planLimits.chaletCount) >= planLimits.chaletLimit
+    ? planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit
     : false;
   const atServiceLimit = planLimits
     ? planLimits.active === false || (planLimits.serviceCount ?? myServiceSubmissions.length + myApprovedProviders.length) >= planLimits.serviceLimit

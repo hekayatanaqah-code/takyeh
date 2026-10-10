@@ -46,6 +46,7 @@ import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
+import { checkPropertyIdentity } from "../lib/property-identity";
 import { hasPropertySocialConflict, socialAccountIdentity } from "../lib/property-social-account";
 import { normalizeSaudiMobile } from "../lib/passwordRecovery";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
@@ -5207,7 +5208,8 @@ router.get("/submissions/:id", requireAuth, async (req, res) => {
     .from(chaletSubmissionsTable)
     .where(eq(chaletSubmissionsTable.id, submissionId));
 
-  if (!sub || sub.ownerId !== (req.user as any)?.id) {
+  const ownerIds = await getOwnerIds(req);
+  if (!sub || !ownerIds.includes(sub.ownerId ?? "")) {
     return res.status(403).json({ error: "غير مصرح" });
   }
 
@@ -5220,11 +5222,12 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   if (isNaN(submissionId)) return res.status(400).json({ error: "معرّف غير صالح" });
 
   const [sub] = await db
-    .select({ ownerId: chaletSubmissionsTable.ownerId })
+    .select()
     .from(chaletSubmissionsTable)
     .where(eq(chaletSubmissionsTable.id, submissionId));
 
-  if (!sub || sub.ownerId !== (req.user as any)?.id) {
+  const ownerIds = await getOwnerIds(req);
+  if (!sub || !ownerIds.includes(sub.ownerId ?? "")) {
     return res.status(403).json({ error: "غير مصرح" });
   }
 
@@ -5250,18 +5253,44 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "تحقق من الصورة الرئيسية والشروط الخاصة", details: requiredMediaAndTerms.error.flatten().fieldErrors });
   }
   const updateData: Record<string, any> = {};
+  const isResubmission = sub.status === "rejected";
+  if (isResubmission) {
+    const identity = await checkPropertyIdentity({
+      nameAr: String(body.nameAr ?? sub.nameAr),
+      location: String(body.location ?? sub.location),
+      district: String(body.district ?? sub.district ?? ""),
+      whatsappNumber: String(body.whatsappNumber ?? sub.whatsappNumber),
+    }, submissionId);
+    const fields = [
+      ...(identity?.nameConflict ? ["الاسم والمدينة والحي"] : []),
+      ...(identity?.whatsappConflict ? ["رقم الواتساب"] : []),
+    ];
+    if (fields.length) return res.status(409).json({
+      error: `البيانات التالية مرتبطة بعقار آخر: ${fields.join("، ")}`,
+      fields,
+    });
+  }
 
   const str = (v: any) => (v !== undefined && v !== null ? String(v).trim() : undefined);
   const num = (v: any) => (v !== undefined && v !== null && v !== "" ? String(Number(v)) : null);
 
   if (body.nameAr !== undefined) updateData.nameAr = String(body.nameAr).trim();
   if (body.descriptionAr !== undefined) updateData.descriptionAr = String(body.descriptionAr).trim();
-  if (body.whatsappNumber !== undefined) updateData.whatsappNumber = String(body.whatsappNumber).trim();
+  if (body.whatsappNumber !== undefined) updateData.whatsappNumber = normalizeCustomerPhone(String(body.whatsappNumber));
+  if (body.region !== undefined) updateData.region = String(body.region).trim();
+  if (body.pricePerNight !== undefined) updateData.pricePerNight = num(body.pricePerNight);
+  if (body.seasonalDisclaimer !== undefined) updateData.seasonalDisclaimer = !!body.seasonalDisclaimer;
+  if (body.suggestedCityName !== undefined) updateData.suggestedCityName = body.suggestedCityName || null;
   if (body.location !== undefined) updateData.location = String(body.location).trim();
   if (body.district !== undefined) updateData.district = body.district || null;
   if (body.mapsUrl !== undefined) { updateData.mapsUrl = body.mapsUrl || null; updateData.websiteUrl = body.mapsUrl || null; }
   if (body.socialLink !== undefined) updateData.socialLink = body.socialLink || null;
-  if (body.propertyType !== undefined) updateData.propertyType = body.propertyType || null;
+  if (body.propertyType !== undefined) {
+    const suggested = body.propertyType === "__other__";
+    updateData.propertyType = suggested ? null : body.propertyType || null;
+    updateData.suggestedCategoryName = suggested ? body.suggestedCategoryName || null : null;
+    updateData.pendingCategoryApproval = suggested && !!body.suggestedCategoryName;
+  }
   if (body.sections !== undefined) updateData.sections = body.sections || null;
   if (body.termsAndConditions !== undefined) updateData.termsAndConditions = body.termsAndConditions || null;
   if (body.logoUrl !== undefined) updateData.logoUrl = body.logoUrl || null;
@@ -5298,10 +5327,28 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
     body.fullDayCheckIn !== undefined || body.fullDayCheckOut !== undefined;
 
   if (Object.keys(updateData).length > 0) {
-    await db
-      .update(chaletSubmissionsTable)
-      .set(updateData)
-      .where(eq(chaletSubmissionsTable.id, submissionId));
+    if (isResubmission) {
+      const result = await db.transaction(async (tx) => {
+        const access = await ownerPlanAccess(req.user!.id);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${access.subscription.ownerId}))`);
+        const [current] = await tx.select({ status: chaletSubmissionsTable.status })
+          .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, submissionId)).for("update");
+        if (current?.status !== "rejected") return "changed";
+        const currentAccess = await ownerPlanAccess(req.user!.id);
+        if (!currentAccess.active || currentAccess.chaletCount >= currentAccess.chaletLimit) return "quota";
+        // Reuse the same request and keep the rejection note for administrative context.
+        await tx.update(chaletSubmissionsTable).set({ ...updateData, status: "pending" })
+          .where(eq(chaletSubmissionsTable.id, submissionId));
+        return "ok";
+      });
+      if (result === "quota") return res.status(403).json({
+        error: "لا توجد مساحة متاحة في الباقة لإعادة إرسال الطلب. يرجى تجديد الباقة أو زيادة حد العقارات.",
+      });
+      if (result === "changed") return res.status(409).json({ error: "تغيرت حالة الطلب. يرجى تحديث الصفحة." });
+    } else {
+      await db.update(chaletSubmissionsTable).set(updateData)
+        .where(eq(chaletSubmissionsTable.id, submissionId));
+    }
   }
 
   if (hasReminder) {

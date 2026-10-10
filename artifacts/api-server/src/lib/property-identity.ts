@@ -9,7 +9,7 @@ export async function checkPropertyIdentity(data: {
   location: string;
   district: string;
   whatsappNumber: string;
-}) {
+}, excludeSubmissionId?: number) {
   const name = data.nameAr.trim();
   const city = data.location.trim();
   const district = data.district.trim();
@@ -26,20 +26,24 @@ export async function checkPropertyIdentity(data: {
       FROM ${chaletSubmissionsTable}
       WHERE lower(trim(${chaletSubmissionsTable.nameAr})) = lower(${name})
         AND lower(trim(${chaletSubmissionsTable.location})) = lower(${city})
-        AND ${chaletSubmissionsTable.status} <> 'rejected'
+        AND ${chaletSubmissionsTable.status}::text NOT IN ('rejected', 'cancelled')
+        AND ${chaletSubmissionsTable.id} IS DISTINCT FROM ${excludeSubmissionId ?? null}
       UNION ALL
       SELECT ${chaletsTable.district} AS district FROM ${chaletsTable}
       WHERE lower(trim(${chaletsTable.nameAr})) = lower(${name})
         AND lower(trim(${chaletsTable.location})) = lower(${city})
+        AND (${excludeSubmissionId ?? null}::integer IS NULL OR ${chaletsTable.submissionId} IS DISTINCT FROM ${excludeSubmissionId ?? null})
     )
     SELECT
       EXISTS(SELECT 1 FROM matching_names WHERE lower(trim(coalesce(district, ''))) = lower(${district})) AS "nameConflict",
       EXISTS(SELECT 1 FROM matching_names WHERE lower(trim(coalesce(district, ''))) <> lower(${district})) AS "similarName",
       (EXISTS(SELECT 1 FROM ${chaletSubmissionsTable}
         WHERE ${phoneSql(chaletSubmissionsTable.whatsappNumber)} = ${phone}
-          AND ${chaletSubmissionsTable.status} <> 'rejected')
+          AND ${chaletSubmissionsTable.status}::text NOT IN ('rejected', 'cancelled')
+          AND ${chaletSubmissionsTable.id} IS DISTINCT FROM ${excludeSubmissionId ?? null})
        OR EXISTS(SELECT 1 FROM ${chaletsTable}
-        WHERE ${phoneSql(chaletsTable.whatsappNumber)} = ${phone})) AS "whatsappConflict"
+        WHERE ${phoneSql(chaletsTable.whatsappNumber)} = ${phone}
+          AND (${excludeSubmissionId ?? null}::integer IS NULL OR ${chaletsTable.submissionId} IS DISTINCT FROM ${excludeSubmissionId ?? null}))) AS "whatsappConflict"
   `);
   return result.rows[0];
 }

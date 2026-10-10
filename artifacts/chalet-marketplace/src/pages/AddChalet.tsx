@@ -91,7 +91,7 @@ function useCatalog(selectedRegionId: number | null, selectedCityId: number | nu
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: districts = [] } = useQuery<DistrictOption[]>({
+  const { data: districts = [], isSuccess: districtsLoaded } = useQuery<DistrictOption[]>({
     queryKey: ["catalog", "districts", selectedCityId],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/districts?cityId=${selectedCityId}`, { credentials: "include" });
@@ -122,7 +122,7 @@ function useCatalog(selectedRegionId: number | null, selectedCityId: number | nu
     staleTime: 1000 * 60 * 5,
   });
 
-  return { regions, cities, districts, amenities, propertyCategories };
+  return { regions, cities, districts, districtsLoaded, amenities, propertyCategories };
 }
 
 const MAX_PHOTOS = 15;
@@ -165,7 +165,8 @@ export default function AddChalet() {
   const promptedForAddon = useRef(false);
   const [selectedRegionId, setSelectedRegionId] = useState<number | null>(null);
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
-  const { regions, cities, districts, amenities, propertyCategories } = useCatalog(selectedRegionId, selectedCityId);
+  const { regions, cities, districts, districtsLoaded, amenities, propertyCategories } = useCatalog(selectedRegionId, selectedCityId);
+  const initializedDistrictFor = useRef<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [photos, setPhotos] = useState<UploadedPhoto[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -454,6 +455,7 @@ export default function AddChalet() {
     },
     enabled: !!editId,
   });
+  const isResubmission = editSub?.status === "rejected";
 
   /* ── Pre-fill form when edit data arrives ── */
   useEffect(() => {
@@ -468,8 +470,11 @@ export default function AddChalet() {
       termsAndConditions: editSub.termsAndConditions ?? "",
     });
     if (editSub.propertyType) setPropertyType(editSub.propertyType);
+    else if (editSub.suggestedCategoryName) {
+      setPropertyType("__other__");
+      setSuggestedCategoryName(editSub.suggestedCategoryName);
+    }
     if (editSub.sections) setSections(editSub.sections);
-    if (editSub.district) setSelectedDistrict(editSub.district);
     setHasBedrooms(editSub.bedrooms != null);
     setBedroomCount(editSub.bedrooms != null ? String(editSub.bedrooms) : "");
     setMaxGuestsInput(editSub.maxGuests != null ? String(editSub.maxGuests) : "");
@@ -480,6 +485,10 @@ export default function AddChalet() {
     setFullDayCheckIn(editSub.fullDayCheckIn ?? "");
     setFullDayCheckOut(editSub.fullDayCheckOut ?? "");
     setSeasonalDisclaimer(editSub.seasonalDisclaimer ?? true);
+    if (editSub.logoUrl) {
+      setLogoUrl(editSub.logoUrl);
+      setLogoPreview(editSub.logoUrl.startsWith("http") ? editSub.logoUrl : `${BASE}${editSub.logoUrl}`);
+    }
     setLegalAccepted(true);
     /* Photos */
     if (Array.isArray(editSub.photos) && editSub.photos.length > 0) {
@@ -518,6 +527,15 @@ export default function AddChalet() {
         });
       });
       setDailyPriceGrid(grid);
+    } else {
+      const grid = initGrid();
+      [0,1,2,3,4,5,6].forEach(d => {
+        grid[d].morning = editSub.slotMorning !== false && editSub.priceMorning != null ? String(editSub.priceMorning) : "";
+        grid[d].evening = editSub.slotEvening !== false && editSub.priceEvening != null ? String(editSub.priceEvening) : "";
+        grid[d].fullday = editSub.slotFullDay !== false && (editSub.priceFullDay ?? editSub.pricePerNight) != null
+          ? String(editSub.priceFullDay ?? editSub.pricePerNight) : "";
+      });
+      setDailyPriceGrid(grid);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editSub]);
@@ -529,6 +547,18 @@ export default function AddChalet() {
     setCitySelectVal(city.name);
     setSelectedCityId(city.id);
   }, [editSub, cities]);
+
+  useEffect(() => {
+    if (!editSub?.district || !editId || initializedDistrictFor.current === editId ||
+        !districtsLoaded || !selectedCityId ||
+        cities.find(city => city.id === selectedCityId)?.name !== editSub.location) return;
+    // Dependent options must exist before initializing Radix's native select.
+    // Seed only once so catalog refreshes never overwrite the owner's edits.
+    initializedDistrictFor.current = editId;
+    const knownDistrict = districts.some(district => district.name === editSub.district);
+    setSelectedDistrict(knownDistrict ? editSub.district : "__other__");
+    setCustomDistrict(knownDistrict ? "" : editSub.district);
+  }, [editSub, editId, districtsLoaded, selectedCityId, cities, districts]);
 
   useEffect(() => {
     if (!editSub?.region || regions.length === 0 || selectedRegionId) return;
@@ -840,8 +870,12 @@ export default function AddChalet() {
           reportErrors(serverFieldErrors(errBody, msg), true);
           return;
         }
+        qc.invalidateQueries({ queryKey: ["/api/submissions"] });
+        qc.invalidateQueries({ queryKey: ["submissions"] });
+        qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+        qc.invalidateQueries({ queryKey: ["owner", "submission", editId], refetchType: "none" });
         setEditSaved(true);
-        setTimeout(() => navigate(`/my-chalet/${editId}`), 1200);
+        setTimeout(() => navigate(isResubmission ? "/dashboard?mode=chalets" : `/my-chalet/${editId}`), 1200);
       } catch {
         reportErrors({ general: ["حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى"] });
       } finally {
@@ -977,11 +1011,11 @@ export default function AddChalet() {
             </div>
             {isEditMode ? (
               <>
-                <h1 className="text-3xl font-bold text-foreground mb-4">تم الحفظ بنجاح!</h1>
+                <h1 className="text-3xl font-bold text-foreground mb-4">{isResubmission ? "تم إعادة إرسال الطلب بنجاح!" : "تم الحفظ بنجاح!"}</h1>
                 <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
-                  تم تحديث بيانات الشاليه بنجاح
+                  {isResubmission ? "تم إرسال بيانات العقار المعدّلة إلى الإدارة للمراجعة" : "تم تحديث بيانات الشاليه بنجاح"}
                 </p>
-                <p className="text-sm text-muted-foreground mt-4">جاري العودة لصفحة الشاليه...</p>
+                <p className="text-sm text-muted-foreground mt-4">{isResubmission ? "جاري العودة إلى لوحة التحكم..." : "جاري العودة لصفحة الشاليه..."}</p>
               </>
             ) : (
               <>
@@ -1037,8 +1071,9 @@ export default function AddChalet() {
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <div>
-                  <p className="font-bold text-base text-foreground">العودة لتفاصيل الشاليه (إلغاء)</p>
-                  <p className="text-xs text-muted-foreground">التعديلات لن تُحفظ إلا بعد الضغط على زر الحفظ أسفل الصفحة</p>
+                  <p className="font-bold text-base text-foreground">{isResubmission ? "تعديل وإعادة إرسال الطلب" : "العودة لتفاصيل الشاليه (إلغاء)"}</p>
+                  <p className="text-xs text-muted-foreground">{isResubmission ? "عدّل البيانات حسب سبب الرفض، ثم أعد إرسال الطلب للمراجعة من الزر أسفل الصفحة" : "التعديلات لن تُحفظ إلا بعد الضغط على زر الحفظ أسفل الصفحة"}</p>
+                  {isResubmission && editSub.adminNote && <p className="text-sm text-destructive mt-2">سبب الرفض: {editSub.adminNote}</p>}
                 </div>
               </div>
             ) : (
@@ -2046,7 +2081,7 @@ export default function AddChalet() {
                     >
                       {editSaving ? (
                         <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> جاري الحفظ...</span>
-                      ) : "حفظ التعديلات"}
+                      ) : isResubmission ? "تعديل وإعادة إرسال الطلب" : "حفظ التعديلات"}
                     </Button>
                   ) : (
                     <>

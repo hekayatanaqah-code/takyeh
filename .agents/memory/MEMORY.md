@@ -48,3 +48,4 @@
 - [Footer partner portal](footer-partner-portal.md) — partner entry belongs only to the homepage footer; inner-page footers keep links, contact details, and copyright.
 - [Property registration identity](property-registration-identity.md) — duplicate property/contact identities block; map pins may be shared; compare social handles independently of URL formatting.
 - [Owner registration feedback](owner-registration-feedback.md) — errors need top scroll, bottom-center notification and inline reasons; AM/PM enables explicit time confirmation.
+- [Property quota and resubmission](property-quota-resubmission.md) — rejected/cancelled properties release capacity; rejected requests return to review in place and must reacquire quota.

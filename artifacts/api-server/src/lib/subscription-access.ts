@@ -205,7 +205,7 @@ export async function ownerPlanAccess(ownerId: string) {
   const keys = await subscriptionOwnerKeys(ownerId);
   const [chalets, services, addonPurchases] = await Promise.all([
     db.select({ id: chaletSubmissionsTable.id }).from(chaletSubmissionsTable)
-      .where(and(inArray(chaletSubmissionsTable.ownerId, keys), ne(chaletSubmissionsTable.status, "rejected"))),
+      .where(and(inArray(chaletSubmissionsTable.ownerId, keys), inArray(chaletSubmissionsTable.status, ["pending", "approved", "needs_revision"]))),
     db.select({ id: serviceProviderSubmissionsTable.id }).from(serviceProviderSubmissionsTable)
       .where(and(inArray(serviceProviderSubmissionsTable.ownerId, keys), ne(serviceProviderSubmissionsTable.status, "rejected"))),
     db.select().from(subscriptionAddonPurchasesTable)
