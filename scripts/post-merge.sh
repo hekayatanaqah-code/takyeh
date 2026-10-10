@@ -10,3 +10,6 @@ pnpm run typecheck:libs
 # represented in Drizzle, and push can prompt to truncate or drop real data.
 # Database changes must be applied as reviewed, narrowly scoped migrations
 # by the task that owns the schema change, not inferred during every merge.
+
+# Reviewed, additive and idempotent; never changes an existing feature toggle.
+pnpm --filter @workspace/scripts exec tsx src/migrate-photography.ts

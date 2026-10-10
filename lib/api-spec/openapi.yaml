@@ -21,6 +21,38 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /photography/status:
+    $ref: "./photography.yaml#/status"
+  /photography/catalog:
+    $ref: "./photography.yaml#/catalog"
+  /photography/slots:
+    $ref: "./photography.yaml#/slots"
+  /photography/bookings:
+    $ref: "./photography.yaml#/bookings"
+  /photography/bookings/{id}/checkout:
+    $ref: "./photography.yaml#/checkout"
+  /photography/bookings/{id}/confirm:
+    $ref: "./photography.yaml#/confirm"
+  /photography/invites/{token}:
+    $ref: "./photography.yaml#/invite"
+  /photography/portal:
+    $ref: "./photography.yaml#/portal"
+  /photography/portal/login:
+    $ref: "./photography.yaml#/login"
+  /photography/portal/logout:
+    $ref: "./photography.yaml#/logout"
+  /admin/photography:
+    $ref: "./photography.yaml#/admin"
+  /admin/photography/settings:
+    $ref: "./photography.yaml#/settings"
+  /admin/photography/packages:
+    $ref: "./photography.yaml#/packages"
+  /admin/photography/packages/{id}:
+    $ref: "./photography.yaml#/package"
+  /admin/photography/invites:
+    $ref: "./photography.yaml#/invites"
+  /admin/photography/photographers/{id}:
+    $ref: "./photography.yaml#/photographer"
   /providers/global-seasons:
     get:
       operationId: listServiceGlobalSeasons

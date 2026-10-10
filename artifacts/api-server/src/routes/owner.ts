@@ -161,7 +161,7 @@ async function _verifyOtp(email: string, code: string): Promise<boolean> {
   return true;
 }
 
-async function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   /* ── Path 1: owner_temp_session cookie (impersonation / self-session) ──
    *
    * SECURITY: We must verify that the session was created by the *current*
@@ -521,7 +521,7 @@ router.post("/exit-session", async (req, res) => {
    ──────────────────────────────────────────────────────────────────────── */
 type ResolvedOwnerApplication = { id: number; email: string };
 
-async function resolveOwnerApplication(req: Request): Promise<ResolvedOwnerApplication | null> {
+export async function resolveOwnerApplication(req: Request): Promise<ResolvedOwnerApplication | null> {
   const userId       = req.user?.id ?? null;
 
   /* Strategy 1 — durable account-to-profile mapping */
@@ -649,7 +649,7 @@ async function resolveOwnerEmail(req: Request): Promise<string | null> {
  * intentionally NOT bridged to any owner — they must use temp sessions
  * via the Admin panel to access owner-specific data.
  * ─────────────────────────────────────────────────────────────────────── */
-async function getOwnerIds(req: Request): Promise<string[]> {
+export async function getOwnerIds(req: Request): Promise<string[]> {
   const primary = req.user!.id;
   if (isPlatformAdmin(req) && !(req.user as any)?.isImpersonated) {
     return [primary];

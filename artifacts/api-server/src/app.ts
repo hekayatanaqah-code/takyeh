@@ -17,7 +17,7 @@ app.use(
         return {
           id: req.id,
           method: req.method,
-          url: req.url?.split("?")[0],
+          url: req.url?.split("?")[0].replace(/(\/photography\/invites\/)[^/]+/, "$1[redacted]"),
         };
       },
       res(res) {

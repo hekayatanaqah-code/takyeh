@@ -1,0 +1,126 @@
+result: &result
+  "200":
+    description: Photography operation result
+    content:
+      application/json:
+        schema:
+          type: object
+          additionalProperties: true
+body: &body
+  required: true
+  content:
+    application/json:
+      schema:
+        type: object
+        additionalProperties: true
+id: &id
+  name: id
+  in: path
+  required: true
+  schema: { type: integer }
+token: &token
+  name: token
+  in: path
+  required: true
+  schema: { type: string }
+status:
+  get:
+    operationId: getPhotographyStatus
+    summary: Feature state and provider readiness, disabled by default
+    responses: *result
+catalog:
+  get:
+    operationId: getPhotographyCatalog
+    summary: Owner-scoped approved properties, packages and approved photographers
+    responses: *result
+slots:
+  get:
+    operationId: getPhotographySlots
+    parameters:
+      - { name: propertyId, in: query, required: true, schema: { type: integer } }
+      - { name: photographerId, in: query, required: true, schema: { type: integer } }
+      - { name: date, in: query, required: true, schema: { type: string, format: date } }
+    responses: *result
+bookings:
+  get:
+    operationId: getPhotographyBookings
+    responses: *result
+  post:
+    operationId: createPhotographyBooking
+    summary: Atomic 15-minute slot hold with frozen package and commission quote
+    requestBody: *body
+    responses: *result
+checkout:
+  parameters: [*id]
+  post:
+    operationId: checkoutPhotographyBooking
+    summary: Create a hosted Moyasar invoice for a valid owned slot hold
+    requestBody: *body
+    responses: *result
+confirm:
+  parameters: [*id]
+  post:
+    operationId: confirmPhotographyBooking
+    summary: Verify invoice amount, currency and paid state server-side before confirmation
+    responses: *result
+invite:
+  parameters: [*token]
+  get:
+    operationId: getPhotographyInvite
+    responses: *result
+  post:
+    operationId: acceptPhotographyInvite
+    summary: Consume an expiring one-use invite and submit photographer application
+    requestBody: *body
+    responses: *result
+portal:
+  get:
+    operationId: getPhotographerPortal
+    responses: *result
+  patch:
+    operationId: updatePhotographerProfile
+    summary: Save profile, geographic coverage, session duration and weekly availability
+    requestBody: *body
+    responses: *result
+login:
+  post:
+    operationId: loginPhotographer
+    requestBody: *body
+    responses: *result
+logout:
+  post:
+    operationId: logoutPhotographer
+    responses: *result
+admin:
+  get:
+    operationId: getPhotographyAdministration
+    summary: Superadmin-only photographers, packages, bookings and notification delivery state
+    responses: *result
+settings:
+  patch:
+    operationId: updatePhotographySettings
+    requestBody: *body
+    responses: *result
+packages:
+  post:
+    operationId: createPhotographyPackage
+    requestBody: *body
+    responses: *result
+package:
+  parameters: [*id]
+  patch:
+    operationId: updatePhotographyPackage
+    requestBody: *body
+    responses: *result
+invites:
+  post:
+    operationId: invitePhotographer
+    summary: Expiring invite path and WhatsApp manual share; optional real automatic template send
+    requestBody: *body
+    responses: *result
+photographer:
+  parameters: [*id]
+  patch:
+    operationId: reviewPhotographer
+    requestBody: *body
+    responses: *result

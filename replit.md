@@ -167,3 +167,13 @@ Generated React Query hooks and fetch client from the OpenAPI spec.
 Utility scripts package.
 
 - `seed-chalets` — Seeds 8 chalet listings into the database
+
+### Property photography service
+
+- Activation is blocked until payment and WhatsApp configuration are present.
+- Reviewed additive schema: `lib/db/migrations/photography.sql`. Apply with `pnpm --filter @workspace/scripts exec tsx src/migrate-photography.ts`; do not substitute a forced Drizzle push. The post-merge script applies it idempotently and preserves any existing feature state.
+- Payment uses expiring hosted Moyasar invoices and server-side invoice/payment verification. Invoiced slot holds are not released while the provider state is uncertain.
+- Run the focused regression checks with `pnpm --filter @workspace/api-server run test:photography`. Tests create and clean their own fixtures without changing the actual feature flag.
+- The WhatsApp adapter requires `PHOTOGRAPHY_WHATSAPP_ACCESS_TOKEN`, `PHOTOGRAPHY_WHATSAPP_PHONE_ID`, `PHOTOGRAPHY_WHATSAPP_INVITE_TEMPLATE`, and `PHOTOGRAPHY_WHATSAPP_BOOKING_TEMPLATE` through workspace secrets/configuration after provider setup. Never commit values.
+- Template body parameters: invitation = photographer name, full invitation link; booking = property name, package name, Saudi local appointment time, booking reference. Optional `PHOTOGRAPHY_WHATSAPP_TEMPLATE_LANGUAGE` defaults to `ar`.
+- An `accepted` notification means provider acceptance, not confirmed recipient delivery. Unconfigured channels are recorded as `blocked`, never reported as successful sends.

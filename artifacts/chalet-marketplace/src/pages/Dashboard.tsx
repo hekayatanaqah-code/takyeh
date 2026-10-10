@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, createContext, useCo
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useSearch } from "wouter";
+import PhotographyOwner from "@/features/photography/PhotographyOwner";
 import QRCode from "qrcode";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
@@ -25340,7 +25341,7 @@ export default function Dashboard() {
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(requestedServiceId);
   const [serviceView, setServiceView] = useState<"manage" | "submissions">("manage");
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "photography" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">(routeParams.has("photographyBooking") ? "photography" : "chalets");
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [activityChoiceOpen, setActivityChoiceOpen] = useState(false);
   const [showHeaderAddon, setShowHeaderAddon] = useState<"chalet" | "service" | null>(null);
@@ -25838,6 +25839,7 @@ export default function Dashboard() {
 
   const allTabs = [
     { id: "chalets",   label: "عقاراتي",             icon: <Building2 className="w-4 h-4" /> },
+    { id: "photography", label: "طلب تصوير وتوثيق", icon: <Camera className="w-4 h-4" /> },
     { id: "seasons",   label: "المواسم والأعياد",    icon: <Sun className="w-4 h-4" /> },
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
@@ -25849,7 +25851,7 @@ export default function Dashboard() {
   ] as const;
 
   const tabs = useMemo(() => {
-    if (!actAsStaff) return canUseAdvancedPropertyTabs ? allTabs : allTabs.filter(tab => tab.id === "chalets");
+    if (!actAsStaff) return canUseAdvancedPropertyTabs ? allTabs : allTabs.filter(tab => tab.id === "chalets" || tab.id === "photography");
     return allTabs.filter((tab) => {
       const permKey = TAB_PERMISSION[tab.id];
       if (!permKey || permKey === "__owner__") return false;
@@ -26767,7 +26769,7 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        {canUseAdvancedPropertyTabs && !propertyRequestsOpen && <OwnerSubnav highContrast label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
+        {tabs.length > 1 && !propertyRequestsOpen && <OwnerSubnav highContrast label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -26802,6 +26804,7 @@ export default function Dashboard() {
         {visiblePropertyTab === "seasons" && (
           <SeasonsTab ownerChalets={ownerChalets} />
         )}
+        {visiblePropertyTab === "photography" && !actAsStaff && <PhotographyOwner />}
         {visiblePropertyTab === "reviews" && (
           <ReviewsTab />
         )}

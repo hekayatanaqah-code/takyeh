@@ -329,6 +329,70 @@ export interface Chalet {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type GetPhotographyStatus200 = { [key: string]: unknown };
+
+export type GetPhotographyCatalog200 = { [key: string]: unknown };
+
+export type GetPhotographySlotsParams = {
+propertyId: number;
+photographerId: number;
+date: string;
+};
+
+export type GetPhotographySlots200 = { [key: string]: unknown };
+
+export type GetPhotographyBookings200 = { [key: string]: unknown };
+
+export type CreatePhotographyBookingBody = { [key: string]: unknown };
+
+export type CreatePhotographyBooking200 = { [key: string]: unknown };
+
+export type CheckoutPhotographyBookingBody = { [key: string]: unknown };
+
+export type CheckoutPhotographyBooking200 = { [key: string]: unknown };
+
+export type ConfirmPhotographyBooking200 = { [key: string]: unknown };
+
+export type GetPhotographyInvite200 = { [key: string]: unknown };
+
+export type AcceptPhotographyInviteBody = { [key: string]: unknown };
+
+export type AcceptPhotographyInvite200 = { [key: string]: unknown };
+
+export type GetPhotographerPortal200 = { [key: string]: unknown };
+
+export type UpdatePhotographerProfileBody = { [key: string]: unknown };
+
+export type UpdatePhotographerProfile200 = { [key: string]: unknown };
+
+export type LoginPhotographerBody = { [key: string]: unknown };
+
+export type LoginPhotographer200 = { [key: string]: unknown };
+
+export type LogoutPhotographer200 = { [key: string]: unknown };
+
+export type GetPhotographyAdministration200 = { [key: string]: unknown };
+
+export type UpdatePhotographySettingsBody = { [key: string]: unknown };
+
+export type UpdatePhotographySettings200 = { [key: string]: unknown };
+
+export type CreatePhotographyPackageBody = { [key: string]: unknown };
+
+export type CreatePhotographyPackage200 = { [key: string]: unknown };
+
+export type UpdatePhotographyPackageBody = { [key: string]: unknown };
+
+export type UpdatePhotographyPackage200 = { [key: string]: unknown };
+
+export type InvitePhotographerBody = { [key: string]: unknown };
+
+export type InvitePhotographer200 = { [key: string]: unknown };
+
+export type ReviewPhotographerBody = { [key: string]: unknown };
+
+export type ReviewPhotographer200 = { [key: string]: unknown };
+
 export type DeleteServiceSeason200 = {
   ok: boolean;
 };

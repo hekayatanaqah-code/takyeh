@@ -39,6 +39,7 @@ import OnboardingWelcome from "./pages/OnboardingWelcome";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import DualCalendarPickerTestPage from "./pages/DualCalendarPickerTestPage";
+import PhotographerPortal, { PhotographerInvite } from "./features/photography/PhotographerPortal";
 
 function ProtectedRoute({ component: Component, returnTo }: { component: React.ComponentType; returnTo?: string }) {
   const { isAuthenticated, isLoading, login } = useAuth();
@@ -70,6 +71,8 @@ function Router() {
         {() => <ProtectedRoute component={OwnerChaletDetail} />}
       </Route>
       <Route path="/admin" component={Admin} />
+      <Route path="/photographer/invite/:token" component={PhotographerInvite} />
+      <Route path="/photographer" component={PhotographerPortal} />
       <Route path="/services" component={Services} />
       <Route path="/services/:id" component={ServiceDetail} />
       <Route path="/add-service-provider">

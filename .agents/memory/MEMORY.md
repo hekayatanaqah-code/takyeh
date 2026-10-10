@@ -49,3 +49,5 @@
 - [Property registration identity](property-registration-identity.md) — duplicate property/contact identities block; map pins may be shared; compare social handles independently of URL formatting.
 - [Owner registration feedback](owner-registration-feedback.md) — errors need top scroll, bottom-center notification and inline reasons; AM/PM enables explicit time confirmation.
 - [Property quota and decisions](property-quota-resubmission.md) — rejection is terminal and releases quota; only returned-for-revision requests can be resubmitted using their reserved slot.
+- [Photography staged launch](photography-staged-launch.md) — prepare all three photography surfaces but keep the real service off; preserve the existing Moyasar merchant.
+- [Browser test database evidence](browser-test-database-evidence.md) — reconcile contradictory SQL/UI observations using the mutation response and the app’s own database connection.

@@ -9,6 +9,140 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Feature state and provider readiness, disabled by default
+ */
+export const GetPhotographyStatusResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Owner-scoped approved properties, packages and approved photographers
+ */
+export const GetPhotographyCatalogResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const GetPhotographySlotsQueryParams = zod.object({
+  "propertyId": zod.coerce.number().int(),
+  "photographerId": zod.coerce.number().int(),
+  "date": zod.date()
+})
+
+export const GetPhotographySlotsResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const GetPhotographyBookingsResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Atomic 15-minute slot hold with frozen package and commission quote
+ */
+export const CreatePhotographyBookingBody = zod.record(zod.string(), zod.unknown())
+
+export const CreatePhotographyBookingResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Create a hosted Moyasar invoice for a valid owned slot hold
+ */
+export const CheckoutPhotographyBookingParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const CheckoutPhotographyBookingBody = zod.record(zod.string(), zod.unknown())
+
+export const CheckoutPhotographyBookingResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Verify invoice amount, currency and paid state server-side before confirmation
+ */
+export const ConfirmPhotographyBookingParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ConfirmPhotographyBookingResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const GetPhotographyInviteParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetPhotographyInviteResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Consume an expiring one-use invite and submit photographer application
+ */
+export const AcceptPhotographyInviteParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const AcceptPhotographyInviteBody = zod.record(zod.string(), zod.unknown())
+
+export const AcceptPhotographyInviteResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const GetPhotographerPortalResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Save profile, geographic coverage, session duration and weekly availability
+ */
+export const UpdatePhotographerProfileBody = zod.record(zod.string(), zod.unknown())
+
+export const UpdatePhotographerProfileResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const LoginPhotographerBody = zod.record(zod.string(), zod.unknown())
+
+export const LoginPhotographerResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const LogoutPhotographerResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Superadmin-only photographers, packages, bookings and notification delivery state
+ */
+export const GetPhotographyAdministrationResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const UpdatePhotographySettingsBody = zod.record(zod.string(), zod.unknown())
+
+export const UpdatePhotographySettingsResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const CreatePhotographyPackageBody = zod.record(zod.string(), zod.unknown())
+
+export const CreatePhotographyPackageResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const UpdatePhotographyPackageParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const UpdatePhotographyPackageBody = zod.record(zod.string(), zod.unknown())
+
+export const UpdatePhotographyPackageResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Expiring invite path and WhatsApp manual share; optional real automatic template send
+ */
+export const InvitePhotographerBody = zod.record(zod.string(), zod.unknown())
+
+export const InvitePhotographerResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const ReviewPhotographerParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ReviewPhotographerBody = zod.record(zod.string(), zod.unknown())
+
+export const ReviewPhotographerResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
  * @summary List active platform-managed seasons for service providers
  */
 export const ListServiceGlobalSeasonsResponseItem = zod.object({
