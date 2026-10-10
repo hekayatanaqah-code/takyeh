@@ -1,12 +1,29 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hasApprovedActiveProperty, hasOwnerActivities, initialOwnerDashboardMode, selectOwnerService } from "./owner-service-navigation";
+import { hasApprovedActiveProperty, hasOwnerActivities, initialOwnerDashboardMode, propertySubmissionsForView, selectOwnerService } from "./owner-service-navigation";
 
 const services = [
   { id: 1, isActive: false },
   { id: 2, isActive: true },
   { id: 3, isActive: true },
 ];
+
+test("property management and registration requests contain disjoint statuses", () => {
+  const submissions = ["approved", "pending", "rejected", "needs_revision", "cancelled", "draft"]
+    .map((status, id) => ({ id, status }));
+  assert.deepEqual(propertySubmissionsForView(submissions).map(item => item.status), ["approved"]);
+  assert.deepEqual(propertySubmissionsForView(submissions, "requests").map(item => item.status),
+    ["pending", "rejected", "needs_revision"]);
+  assert.deepEqual(propertySubmissionsForView(undefined, "requests"), []);
+});
+
+test("approval moves a request into management without duplication", () => {
+  const before = [{ id: 1, status: "pending" }, { id: 2, status: "rejected" }];
+  const after = before.map(item => item.id === 1 ? { ...item, status: "approved" } : item);
+  assert.deepEqual(propertySubmissionsForView(before), []);
+  assert.deepEqual(propertySubmissionsForView(after).map(item => item.id), [1]);
+  assert.deepEqual(propertySubmissionsForView(after, "requests").map(item => item.id), [2]);
+});
 
 test("advanced property management requires a matching approved, active property", () => {
   const property = { submissionId: 1, isActive: true };

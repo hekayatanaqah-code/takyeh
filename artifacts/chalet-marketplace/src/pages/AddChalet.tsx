@@ -876,7 +876,7 @@ export default function AddChalet() {
         qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
         qc.invalidateQueries({ queryKey: ["owner", "submission", editId], refetchType: "none" });
         setEditSaved(true);
-        setTimeout(() => navigate(isResubmission ? "/dashboard?mode=chalets" : `/my-chalet/${editId}`), 1200);
+        setTimeout(() => navigate(isResubmission ? "/dashboard?mode=chalets&view=requests" : `/my-chalet/${editId}`), 1200);
       } catch {
         reportErrors({ general: ["حدث خطأ أثناء الحفظ، يرجى المحاولة مرة أخرى"] });
       } finally {
@@ -1027,7 +1027,7 @@ export default function AddChalet() {
                 <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
                   {isResubmission ? "تم إرسال بيانات العقار المعدّلة إلى الإدارة للمراجعة" : "تم تحديث بيانات الشاليه بنجاح"}
                 </p>
-                <p className="text-sm text-muted-foreground mt-4">{isResubmission ? "جاري العودة إلى لوحة التحكم..." : "جاري العودة لصفحة الشاليه..."}</p>
+                <p className="text-sm text-muted-foreground mt-4">{isResubmission ? "جاري العودة إلى متابعة الطلبات..." : "جاري العودة لصفحة الشاليه..."}</p>
               </>
             ) : (
               <>
@@ -1051,7 +1051,7 @@ export default function AddChalet() {
                     )}
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                       <Button variant="outline" onClick={() => navigate("/subscription")}>عرض الباقات والتجديد</Button>
-                      <Button variant="outline" onClick={() => navigate("/dashboard?mode=chalets")}>الذهاب إلى لوحة التحكم</Button>
+                      <Button variant="outline" onClick={() => navigate("/dashboard?mode=chalets&view=requests")}>متابعة الطلبات</Button>
                     </div>
                   </div>
                 ) : (
@@ -1059,7 +1059,7 @@ export default function AddChalet() {
                     <Button onClick={resetForm}>
                       إضافة شاليه آخر
                     </Button>
-                    <Button variant="outline" onClick={() => navigate("/dashboard?mode=chalets")}>الذهاب إلى لوحة التحكم</Button>
+                    <Button variant="outline" onClick={() => navigate("/dashboard?mode=chalets&view=requests")}>متابعة الطلبات</Button>
                   </div>
                 )}
               </>

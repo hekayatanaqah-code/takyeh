@@ -3,6 +3,17 @@ export interface SelectableOwnerService {
   isActive: boolean;
 }
 
+export type PropertyListView = "approved" | "requests";
+
+export function propertySubmissionsForView<T extends { status: string }>(
+  submissions: readonly T[] = [],
+  view: PropertyListView = "approved",
+): T[] {
+  return submissions.filter(submission => view === "approved"
+    ? submission.status === "approved"
+    : ["pending", "rejected", "needs_revision"].includes(submission.status));
+}
+
 /** Publication alone is insufficient: the current request must still be approved. */
 export function hasApprovedActiveProperty(
   submissions: readonly { id: number; status: string }[] = [],

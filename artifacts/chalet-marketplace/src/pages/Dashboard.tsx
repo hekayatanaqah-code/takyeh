@@ -30,7 +30,7 @@ import OwnerDashboardNavigation, { type OwnerDashboardMode } from "@/components/
 import ServiceIdentityLogo from "@/components/owner/ServiceIdentityLogo";
 import OwnerSubnav from "@/components/owner/OwnerSubnav";
 import OwnerStatAmount from "@/components/owner/OwnerStatAmount";
-import { hasApprovedActiveProperty, hasOwnerActivities, initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
+import { hasApprovedActiveProperty, hasOwnerActivities, initialOwnerDashboardMode, propertySubmissionsForView, selectOwnerService, type PropertyListView } from "@/lib/owner-service-navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1428,7 +1428,7 @@ function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
 
 /* ════════════════════════════════════════════════════════════════ */
 
-function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[]; onRequestAddon: () => void }) {
+function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon, listView = "approved" }: { submissions: any[] | undefined; isLoading: boolean; ownerChalets: any[]; onRequestAddon: () => void; listView?: PropertyListView }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [showUpgrade, setShowUpgrade] = useState(false);
@@ -1544,15 +1544,17 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
         className="bg-card border border-dashed border-border rounded-2xl p-12 text-center"
       >
         <Home className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-foreground mb-2">لا توجد عقارات بعد</h3>
+        <h3 className="text-lg font-semibold text-foreground mb-2">{listView === "requests" ? "لا توجد طلبات للمتابعة" : "لا توجد عقارات معتمدة بعد"}</h3>
         <p className="text-muted-foreground mb-6">
-          {planLimits?.freeAccess?.active
+          {listView === "requests"
+            ? "لا توجد طلبات قيد المراجعة أو مرفوضة أو تتطلب تعديلاً. العقارات المقبولة تظهر في «إدارة عقاراتي»."
+            : planLimits?.freeAccess?.active
             ? "حسابك يتمتع بصلاحية مجانية كاملة."
             : planLimits?.active === false
             ? "جدّد اشتراكك قبل إضافة عقارك الأول."
-            : "ابدأ بإضافة عقارك الأول من زر «إضافة عقار أو خدمة» أعلى الصفحة للمراجعة والنشر."}
+            : "تظهر العقارات هنا بعد قبولها. لمراجعة الطلبات غير المقبولة، استخدم زر «متابعة الطلبات» أعلى الصفحة."}
         </p>
-        {planLimits?.active === false && !planLimits?.freeAccess?.active && (
+        {listView === "approved" && planLimits?.active === false && !planLimits?.freeAccess?.active && (
           <Link href="/subscription">
             <Button><Lock className="w-4 h-4 me-2" />جدّد الاشتراك لإضافة عقار</Button>
           </Link>
@@ -1562,7 +1564,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
   }
   return (
     <div className="space-y-4">
-      <SectionGuideButton sectionKey="chalets" />
+      {listView === "approved" && <SectionGuideButton sectionKey="chalets" />}
       {/* Plan limit banner */}
       {planLimits && (
         <div className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 border ${
@@ -25608,7 +25610,7 @@ export default function Dashboard() {
     if (ownerView === "manage" || ownerView === "requests") {
       setServiceView("submissions");
       setActiveTab("chalets");
-      if (ownerView === "requests" && canSeeServices) setDashMode("services");
+      if (ownerView === "requests" && canSeeServices && requestedMode !== "chalets") setDashMode("services");
     }
   }, [search, actAsStaff, isImpersonating, canSeeServices]);
 
@@ -25632,14 +25634,18 @@ export default function Dashboard() {
   }
 
   function openRegistrationRequests() {
-    if (canSeeServices) {
+    const requestsMode = activeDashMode === "chalets" && canSeeChalets
+      ? "chalets" : canSeeServices ? "services" : "chalets";
+    if (requestsMode === "services") {
       setDashMode("services");
       setServiceView("submissions");
     } else {
       setDashMode("chalets");
       setActiveTab("chalets");
     }
-    navigate(`/dashboard?${canSeeServices && selectedServiceId ? `serviceId=${selectedServiceId}&` : ""}view=requests`);
+    const params = new URLSearchParams({ mode: requestsMode, view: "requests" });
+    if (requestsMode === "services" && selectedServiceId) params.set("serviceId", String(selectedServiceId));
+    navigate(`/dashboard?${params.toString()}`);
   }
 
   function switchOwnerDashboard(mode: OwnerDashboardMode) {
@@ -25647,6 +25653,7 @@ export default function Dashboard() {
       setAdminFinanceTab("notifications");
     }
     setDashMode(mode);
+    if (mode === "chalets") setActiveTab("chalets");
     setServiceView("manage");
     setAccountSettingsOpen(false);
     if (!actAsStaff && !isImpersonating) {
@@ -25852,7 +25859,11 @@ export default function Dashboard() {
   }, [actAsStaff, permissions, canUseAdvancedPropertyTabs]);
 
   // Guard the render itself, not only the effect: stale selections cannot mount hidden sections.
-  const visiblePropertyTab = tabs.find(tab => tab.id === activeTab)?.id ?? tabs[0]?.id;
+  const propertyRequestsOpen = !actAsStaff && activeDashMode === "chalets" && ownerView === "requests";
+  const propertyListView: PropertyListView = propertyRequestsOpen ? "requests" : "approved";
+  const visiblePropertySubmissions = propertySubmissionsForView(submissions, propertyListView);
+  const visiblePropertyTab = propertyRequestsOpen
+    ? "chalets" : tabs.find(tab => tab.id === activeTab)?.id ?? tabs[0]?.id;
 
   useEffect(() => {
     if (tabs.length > 0 && !tabs.find((t) => t.id === activeTab)) {
@@ -26756,7 +26767,7 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        {canUseAdvancedPropertyTabs && <OwnerSubnav highContrast label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
+        {canUseAdvancedPropertyTabs && !propertyRequestsOpen && <OwnerSubnav highContrast label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -26776,8 +26787,13 @@ export default function Dashboard() {
 
         {/* Tab Content */}
         {visiblePropertyTab === "chalets" && (
+          <h2 className="mb-4 text-xl font-bold">{propertyRequestsOpen ? "متابعة الطلبات" : "إدارة عقاراتي"}</h2>
+        )}
+        {visiblePropertyTab === "chalets" && (
           <ChaletsTab
-            submissions={submissions as any[]}
+            key={propertyListView}
+            listView={propertyListView}
+            submissions={visiblePropertySubmissions}
             isLoading={submissionsLoading || authLoading || impersonationLoading}
             ownerChalets={ownerChalets}
             onRequestAddon={() => setShowHeaderAddon("chalet")}
