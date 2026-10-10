@@ -466,6 +466,16 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /owner-services:
+    $ref: './owner-services.yaml#/paths/~1owner-services'
+  /admin/owner-services:
+    $ref: './owner-services.yaml#/paths/~1admin~1owner-services'
+  /admin/owner-services/order:
+    $ref: './owner-services.yaml#/paths/~1admin~1owner-services~1order'
+  /admin/owner-services/{id}:
+    $ref: './owner-services.yaml#/paths/~1admin~1owner-services~1{id}'
+  /admin/photography/photographers/{id}/profile:
+    $ref: './owner-services.yaml#/paths/~1admin~1photography~1photographers~1{id}~1profile'
 components:
   parameters:
     AuthorizationSessionHeader:

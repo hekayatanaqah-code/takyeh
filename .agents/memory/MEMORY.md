@@ -45,6 +45,7 @@
 - [Administrative inventory display](admin-inventory-display.md) — no property pricing-method controls; show actual owner identity alongside property and service names.
 - [Service media identity](service-media-identity.md) — the service logo and gallery cover are separate roles; gallery operations must never replace or delete the logo.
 - [Owner navigation](owner-navigation.md) — no intermediate Hub; service owners enter the active-service dashboard directly, with account controls in an integrated top toolbar.
+- [Owner service catalog boundary](owner-service-catalog-boundary.md) — additional owner services use independent dynamic cards, not property operations or provider management.
 - [Footer partner portal](footer-partner-portal.md) — partner entry belongs only to the homepage footer; inner-page footers keep links, contact details, and copyright.
 - [Property registration identity](property-registration-identity.md) — duplicate property/contact identities block; map pins may be shared; compare social handles independently of URL formatting.
 - [Owner registration feedback](owner-registration-feedback.md) — errors need top scroll, bottom-center notification and inline reasons; AM/PM enables explicit time confirmation.

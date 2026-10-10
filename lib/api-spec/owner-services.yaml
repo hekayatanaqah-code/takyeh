@@ -1,0 +1,164 @@
+openapi: 3.1.0
+info:
+  title: Owner Services
+  version: 1.0.0
+paths:
+  /owner-services:
+    get:
+      operationId: getOwnerServiceCards
+      responses:
+        "200":
+          description: Visible owner service cards in saved order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerServiceCatalog" }
+  /admin/owner-services:
+    get:
+      operationId: getAdminOwnerServiceCards
+      responses:
+        "200":
+          description: Superadmin service cards and provider readiness
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerServiceAdministration" }
+    post:
+      operationId: createOwnerServiceCard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OwnerServiceInput" }
+      responses:
+        "201":
+          description: Created or explicitly restored card
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerService" }
+  /admin/owner-services/order:
+    put:
+      operationId: reorderOwnerServiceCards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OwnerServiceOrder" }
+      responses:
+        "200":
+          description: Every nondeleted card reordered atomically
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerServiceCatalog" }
+  /admin/owner-services/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    patch:
+      operationId: updateOwnerServiceCard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OwnerServiceUpdate" }
+      responses:
+        "200":
+          description: Updated metadata or launch state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerService" }
+    delete:
+      operationId: removeOwnerServiceCard
+      responses:
+        "200":
+          description: Card removed without deleting historical bookings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerServiceRemoval" }
+  /admin/photography/photographers/{id}/profile:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    patch:
+      operationId: updateAdminPhotographerProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminPhotographerProfileInput" }
+      responses:
+        "200":
+          description: Photographer profile and weekly calendar saved
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+components:
+  schemas:
+    OwnerService:
+      type: object
+      required: [id, key, title, description, icon, kind, state, actionUrl, sortOrder]
+      properties:
+        id: { type: integer }
+        key: { type: string }
+        title: { type: string }
+        description: { type: string }
+        icon: { type: string, enum: [camera, sparkles, wrench, shield, home, briefcase] }
+        kind: { type: string, enum: [photography, link] }
+        state: { type: string, enum: [available, coming_soon, hidden] }
+        actionUrl: { type: [string, "null"] }
+        sortOrder: { type: integer }
+    OwnerServiceInput:
+      type: object
+      required: [title, kind, state]
+      properties:
+        title: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        icon: { type: string, enum: [camera, sparkles, wrench, shield, home, briefcase] }
+        kind: { type: string, enum: [photography, link] }
+        state: { type: string, enum: [available, coming_soon, hidden] }
+        actionUrl: { type: [string, "null"], maxLength: 2000 }
+    OwnerServiceUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 2000 }
+        icon: { type: string, enum: [camera, sparkles, wrench, shield, home, briefcase] }
+        state: { type: string, enum: [available, coming_soon, hidden] }
+        actionUrl: { type: [string, "null"], maxLength: 2000 }
+    OwnerServiceOrder:
+      type: object
+      required: [ids]
+      properties:
+        ids: { type: array, items: { type: integer, minimum: 1 }, maxItems: 1000 }
+    OwnerServiceCatalog:
+      type: object
+      required: [services]
+      properties:
+        services: { type: array, items: { $ref: "#/components/schemas/OwnerService" } }
+    OwnerServiceAdministration:
+      allOf:
+        - { $ref: "#/components/schemas/OwnerServiceCatalog" }
+        - type: object
+          required: [readiness]
+          properties:
+            readiness:
+              type: object
+              required: [payment, whatsapp]
+              properties:
+                payment: { type: boolean }
+                whatsapp: { type: boolean }
+    OwnerServiceRemoval:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+    PhotographerAvailability:
+      type: object
+      required: [weekday, start, end]
+      properties:
+        weekday: { type: integer, minimum: 0, maximum: 6 }
+        start: { type: string }
+        end: { type: string }
+    AdminPhotographerProfileInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        bio: { type: string, maxLength: 2000 }
+        sessionMinutes: { type: integer, minimum: 30, maximum: 240 }
+        availability: { type: array, items: { $ref: "#/components/schemas/PhotographerAvailability" }, minItems: 1, maxItems: 28 }

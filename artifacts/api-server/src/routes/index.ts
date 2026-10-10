@@ -16,6 +16,7 @@ import passwordResetRouter from "./passwordReset";
 import registrationRouter from "./registration";
 import contactRouter from "./contact";
 import photographyRouter from "./photography";
+import ownerServicesRouter from "./owner-services";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use("/providers", providersRouter);
 router.use(reviewsRouter);
 router.use("/contact", contactRouter);
 router.use("/photography", photographyRouter);
+router.use("/owner-services", ownerServicesRouter);
 
 export default router;

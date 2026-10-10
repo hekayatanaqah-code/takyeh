@@ -1,7 +1,7 @@
 import { Building2, Briefcase, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export type OwnerDashboardMode = "chalets" | "services" | "admin-finance";
+export type OwnerDashboardMode = "chalets" | "services" | "admin-finance" | "owner-services";
 
 interface Props {
   mode: OwnerDashboardMode;
@@ -17,6 +17,7 @@ export default function OwnerDashboardNavigation(p: Props) {
   const items = [
     { mode: "chalets" as const, label: "إدارة عقاراتي", icon: Building2, visible: p.canSeeChalets },
     { mode: "services" as const, label: "إدارة خدماتي", icon: Star, visible: p.canSeeServices },
+    { mode: "owner-services" as const, label: "خدمات الملاك", icon: Briefcase, visible: true },
     { mode: "admin-finance" as const, label: "الشؤون الإدارية والمالية", icon: Briefcase, visible: p.canAccessFinance },
   ];
 

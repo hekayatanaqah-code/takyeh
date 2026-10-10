@@ -324,6 +324,188 @@ export interface Chalet {
   createdAt: string;
 }
 
+export type OwnerServiceIcon = typeof OwnerServiceIcon[keyof typeof OwnerServiceIcon];
+
+
+export const OwnerServiceIcon = {
+  camera: 'camera',
+  sparkles: 'sparkles',
+  wrench: 'wrench',
+  shield: 'shield',
+  home: 'home',
+  briefcase: 'briefcase',
+} as const;
+
+export type OwnerServiceKind = typeof OwnerServiceKind[keyof typeof OwnerServiceKind];
+
+
+export const OwnerServiceKind = {
+  photography: 'photography',
+  link: 'link',
+} as const;
+
+export type OwnerServiceState = typeof OwnerServiceState[keyof typeof OwnerServiceState];
+
+
+export const OwnerServiceState = {
+  available: 'available',
+  coming_soon: 'coming_soon',
+  hidden: 'hidden',
+} as const;
+
+export interface OwnerService {
+  id: number;
+  key: string;
+  title: string;
+  description: string;
+  icon: OwnerServiceIcon;
+  kind: OwnerServiceKind;
+  state: OwnerServiceState;
+  /** @nullable */
+  actionUrl: string | null;
+  sortOrder: number;
+}
+
+export type OwnerServiceInputIcon = typeof OwnerServiceInputIcon[keyof typeof OwnerServiceInputIcon];
+
+
+export const OwnerServiceInputIcon = {
+  camera: 'camera',
+  sparkles: 'sparkles',
+  wrench: 'wrench',
+  shield: 'shield',
+  home: 'home',
+  briefcase: 'briefcase',
+} as const;
+
+export type OwnerServiceInputKind = typeof OwnerServiceInputKind[keyof typeof OwnerServiceInputKind];
+
+
+export const OwnerServiceInputKind = {
+  photography: 'photography',
+  link: 'link',
+} as const;
+
+export type OwnerServiceInputState = typeof OwnerServiceInputState[keyof typeof OwnerServiceInputState];
+
+
+export const OwnerServiceInputState = {
+  available: 'available',
+  coming_soon: 'coming_soon',
+  hidden: 'hidden',
+} as const;
+
+export interface OwnerServiceInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  title: string;
+  /** @maxLength 2000 */
+  description?: string;
+  icon?: OwnerServiceInputIcon;
+  kind: OwnerServiceInputKind;
+  state: OwnerServiceInputState;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  actionUrl?: string | null;
+}
+
+export type OwnerServiceUpdateIcon = typeof OwnerServiceUpdateIcon[keyof typeof OwnerServiceUpdateIcon];
+
+
+export const OwnerServiceUpdateIcon = {
+  camera: 'camera',
+  sparkles: 'sparkles',
+  wrench: 'wrench',
+  shield: 'shield',
+  home: 'home',
+  briefcase: 'briefcase',
+} as const;
+
+export type OwnerServiceUpdateState = typeof OwnerServiceUpdateState[keyof typeof OwnerServiceUpdateState];
+
+
+export const OwnerServiceUpdateState = {
+  available: 'available',
+  coming_soon: 'coming_soon',
+  hidden: 'hidden',
+} as const;
+
+export interface OwnerServiceUpdate {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  title?: string;
+  /** @maxLength 2000 */
+  description?: string;
+  icon?: OwnerServiceUpdateIcon;
+  state?: OwnerServiceUpdateState;
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  actionUrl?: string | null;
+}
+
+export interface OwnerServiceOrder {
+  /**
+     * @maxItems 1000
+     * @items.minimum 1
+     */
+  ids: number[];
+}
+
+export interface OwnerServiceCatalog {
+  services: OwnerService[];
+}
+
+export type OwnerServiceAdministrationReadiness = {
+  payment: boolean;
+  whatsapp: boolean;
+};
+
+export type OwnerServiceAdministration = OwnerServiceCatalog & {
+  readiness: OwnerServiceAdministrationReadiness;
+};
+
+export interface OwnerServiceRemoval {
+  ok: boolean;
+}
+
+export interface PhotographerAvailability {
+  /**
+     * @minimum 0
+     * @maximum 6
+     */
+  weekday: number;
+  start: string;
+  end: string;
+}
+
+export interface AdminPhotographerProfileInput {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name?: string;
+  /** @maxLength 2000 */
+  bio?: string;
+  /**
+     * @minimum 30
+     * @maximum 240
+     */
+  sessionMinutes?: number;
+  /**
+     * @minItems 1
+     * @maxItems 28
+     */
+  availability?: PhotographerAvailability[];
+}
+
 /**
  * Opaque session token — `Bearer <sid>`.
  */
@@ -432,4 +614,6 @@ export const GetAdminBroadcastRecipientsAudience = {
 export type BeginBrowserLoginParams = {
 returnTo?: string;
 };
+
+export type UpdateAdminPhotographerProfile200 = { [key: string]: unknown };
 

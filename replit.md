@@ -177,3 +177,11 @@ Utility scripts package.
 - The WhatsApp adapter requires `PHOTOGRAPHY_WHATSAPP_ACCESS_TOKEN`, `PHOTOGRAPHY_WHATSAPP_PHONE_ID`, `PHOTOGRAPHY_WHATSAPP_INVITE_TEMPLATE`, and `PHOTOGRAPHY_WHATSAPP_BOOKING_TEMPLATE` through workspace secrets/configuration after provider setup. Never commit values.
 - Template body parameters: invitation = photographer name, full invitation link; booking = property name, package name, Saudi local appointment time, booking reference. Optional `PHOTOGRAPHY_WHATSAPP_TEMPLATE_LANGUAGE` defaults to `ar`.
 - An `accepted` notification means provider acceptance, not confirmed recipient delivery. Unconfigured channels are recorded as `blocked`, never reported as successful sends.
+
+### Owner service cards
+
+- Apply the reviewed additive `lib/db/migrations/owner-services.sql` via `pnpm --filter @workspace/scripts exec tsx src/migrate-owner-services.ts`. The post-merge script runs it after the photography migration; repeated application preserves configured cards and photography state.
+- Run `pnpm --filter @workspace/api-server run test:owner-services` for catalog CRUD, ordering, owner visibility, authorization, safe request links, and photographer calendar/profile editing checks.
+- Future link-based service cards require a valid HTTPS request destination or an artifact-relative `/path` before being made available. Adding a card does not implement a cleaning/maintenance booking engine.
+- Card deletion archives metadata rather than deleting existing photography bookings or provider records. The superadmin can explicitly restore the built-in photography card.
+- Photography payment return URLs now select the independent owner-services section. Existing `photographyBooking` links still select that section, and confirmation remains reachable for in-flight payments even when new requests are closed.

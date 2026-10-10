@@ -1,6 +1,6 @@
 import { Router } from "express";
 import photographyAdminRouter from "./photography-admin";
-import { photographyReadiness } from "../lib/photography-delivery";
+import ownerServicesAdminRouter from "./owner-services-admin";
 import { inventoryOwnerNames } from "../lib/inventory-owner-names";
 import multer from "multer";
 import sharp from "sharp";
@@ -709,6 +709,7 @@ router.delete("/global-seasons/:id", requirePlatformSettingsAdmin, async (req, r
 // to the authenticated superadmin before any recipient deliveries are queued.
 router.use("/broadcast", requireSuperAdmin, broadcastRouter);
 router.use("/photography", requireSuperAdmin, photographyAdminRouter);
+router.use("/owner-services", requireSuperAdmin, ownerServicesAdminRouter);
 
 router.get("/access-check", (req, res) => {
   if (req.isSuperAdmin) {
@@ -2152,12 +2153,7 @@ router.patch("/settings", requirePlatformSettingsAdmin, async (req, res) => {
   const body = z.record(z.string(), z.string()).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
   if ("photography_enabled" in body.data) {
-    if (!req.isSuperAdmin) return res.status(403).json({ error: "إدارة خدمة التصوير للمشرف العام فقط" });
-    if (!["true", "false"].includes(body.data.photography_enabled)) return res.status(400).json({ error: "حالة خدمة التصوير غير صحيحة" });
-    const ready = photographyReadiness();
-    if (body.data.photography_enabled === "true" && (!ready.payment || !ready.whatsapp)) return res.status(409).json({
-      error: "لا يمكن فتح خدمة التصوير قبل اكتمال إعداد الدفع والإرسال الفعلي عبر واتساب",
-    });
+    return res.status(400).json({ error: "غيّر حالة التصوير من قسم خدمات الملاك لضمان مزامنة البطاقة والحجز" });
   }
   for (const [key, value] of Object.entries(body.data)) {
     await db

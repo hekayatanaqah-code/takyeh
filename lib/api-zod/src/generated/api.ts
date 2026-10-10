@@ -563,3 +563,178 @@ export const CreateSubmissionResponse = zod.object({
 })
 
 
+export const GetOwnerServiceCardsResponse = zod.object({
+  "services": zod.array(zod.object({
+  "id": zod.number().int(),
+  "key": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']),
+  "kind": zod.enum(['photography', 'link']),
+  "state": zod.enum(['available', 'coming_soon', 'hidden']),
+  "actionUrl": zod.string().nullable(),
+  "sortOrder": zod.number().int()
+}))
+})
+
+
+export const GetAdminOwnerServiceCardsResponse = zod.object({
+  "services": zod.array(zod.object({
+  "id": zod.number().int(),
+  "key": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']),
+  "kind": zod.enum(['photography', 'link']),
+  "state": zod.enum(['available', 'coming_soon', 'hidden']),
+  "actionUrl": zod.string().nullable(),
+  "sortOrder": zod.number().int()
+}))
+}).and(zod.object({
+  "readiness": zod.object({
+  "payment": zod.boolean(),
+  "whatsapp": zod.boolean()
+})
+}))
+
+
+export const createOwnerServiceCardBodyTitleMin = 2;
+export const createOwnerServiceCardBodyTitleMax = 120;
+
+export const createOwnerServiceCardBodyDescriptionMax = 2000;
+
+export const createOwnerServiceCardBodyActionUrlMax = 2000;
+
+
+
+export const CreateOwnerServiceCardBody = zod.object({
+  "title": zod.string().min(createOwnerServiceCardBodyTitleMin).max(createOwnerServiceCardBodyTitleMax),
+  "description": zod.string().max(createOwnerServiceCardBodyDescriptionMax).optional(),
+  "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']).optional(),
+  "kind": zod.enum(['photography', 'link']),
+  "state": zod.enum(['available', 'coming_soon', 'hidden']),
+  "actionUrl": zod.string().max(createOwnerServiceCardBodyActionUrlMax).nullish()
+})
+
+export const CreateOwnerServiceCardResponse = zod.object({
+  "id": zod.number().int(),
+  "key": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']),
+  "kind": zod.enum(['photography', 'link']),
+  "state": zod.enum(['available', 'coming_soon', 'hidden']),
+  "actionUrl": zod.string().nullable(),
+  "sortOrder": zod.number().int()
+})
+
+
+
+export const reorderOwnerServiceCardsBodyIdsMax = 1000;
+
+
+
+export const ReorderOwnerServiceCardsBody = zod.object({
+  "ids": zod.array(zod.number().int().min(1)).max(reorderOwnerServiceCardsBodyIdsMax)
+})
+
+export const ReorderOwnerServiceCardsResponse = zod.object({
+  "services": zod.array(zod.object({
+  "id": zod.number().int(),
+  "key": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']),
+  "kind": zod.enum(['photography', 'link']),
+  "state": zod.enum(['available', 'coming_soon', 'hidden']),
+  "actionUrl": zod.string().nullable(),
+  "sortOrder": zod.number().int()
+}))
+})
+
+
+
+
+
+export const UpdateOwnerServiceCardParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const updateOwnerServiceCardBodyTitleMin = 2;
+export const updateOwnerServiceCardBodyTitleMax = 120;
+
+export const updateOwnerServiceCardBodyDescriptionMax = 2000;
+
+export const updateOwnerServiceCardBodyActionUrlMax = 2000;
+
+
+
+export const UpdateOwnerServiceCardBody = zod.object({
+  "title": zod.string().min(updateOwnerServiceCardBodyTitleMin).max(updateOwnerServiceCardBodyTitleMax).optional(),
+  "description": zod.string().max(updateOwnerServiceCardBodyDescriptionMax).optional(),
+  "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']).optional(),
+  "state": zod.enum(['available', 'coming_soon', 'hidden']).optional(),
+  "actionUrl": zod.string().max(updateOwnerServiceCardBodyActionUrlMax).nullish()
+})
+
+export const UpdateOwnerServiceCardResponse = zod.object({
+  "id": zod.number().int(),
+  "key": zod.string(),
+  "title": zod.string(),
+  "description": zod.string(),
+  "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']),
+  "kind": zod.enum(['photography', 'link']),
+  "state": zod.enum(['available', 'coming_soon', 'hidden']),
+  "actionUrl": zod.string().nullable(),
+  "sortOrder": zod.number().int()
+})
+
+
+
+
+
+export const RemoveOwnerServiceCardParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const RemoveOwnerServiceCardResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+
+
+
+export const UpdateAdminPhotographerProfileParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const updateAdminPhotographerProfileBodyNameMin = 2;
+export const updateAdminPhotographerProfileBodyNameMax = 120;
+
+export const updateAdminPhotographerProfileBodyBioMax = 2000;
+
+export const updateAdminPhotographerProfileBodySessionMinutesMin = 30;
+export const updateAdminPhotographerProfileBodySessionMinutesMax = 240;
+
+export const updateAdminPhotographerProfileBodyAvailabilityItemWeekdayMin = 0;
+export const updateAdminPhotographerProfileBodyAvailabilityItemWeekdayMax = 6;
+
+export const updateAdminPhotographerProfileBodyAvailabilityMax = 28;
+
+
+
+export const UpdateAdminPhotographerProfileBody = zod.object({
+  "name": zod.string().min(updateAdminPhotographerProfileBodyNameMin).max(updateAdminPhotographerProfileBodyNameMax).optional(),
+  "bio": zod.string().max(updateAdminPhotographerProfileBodyBioMax).optional(),
+  "sessionMinutes": zod.number().int().min(updateAdminPhotographerProfileBodySessionMinutesMin).max(updateAdminPhotographerProfileBodySessionMinutesMax).optional(),
+  "availability": zod.array(zod.object({
+  "weekday": zod.number().int().min(updateAdminPhotographerProfileBodyAvailabilityItemWeekdayMin).max(updateAdminPhotographerProfileBodyAvailabilityItemWeekdayMax),
+  "start": zod.string(),
+  "end": zod.string()
+})).min(1).max(updateAdminPhotographerProfileBodyAvailabilityMax).optional()
+})
+
+export const UpdateAdminPhotographerProfileResponse = zod.record(zod.string(), zod.unknown())
+
+

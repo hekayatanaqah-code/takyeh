@@ -11,6 +11,7 @@ import { requireAuth, getOwnerIds, resolveOwnerApplication } from "./owner";
 import { photoHash, publicPhotographer, validPhotographyCoverage, photoOrigin } from "./photography-admin";
 import { photographerProfileSchema, photoPhone, photographySlots, photographyQuote } from "../lib/photography-rules";
 import { photographyReadiness } from "../lib/photography-delivery";
+import { photographyCardEnabled } from "../lib/owner-services";
 import { photographyInvoice, reconcilePhotographyBooking, reconcileExpiredPhotographyInvoices } from "../lib/photography-payment";
 
 const router = Router();
@@ -22,7 +23,7 @@ router.param("id", (_req, res, next, value) => {
 const COOKIE = "photographer_session";
 async function enabled() {
   const [row] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
-  return row?.value === "true";
+  return row?.value === "true" && await photographyCardEnabled();
 }
 const authAttempts = new Map<string, { count: number; until: number }>();
 function loginLimit(req: Request, res: Response, next: NextFunction) {
@@ -212,7 +213,7 @@ router.post("/bookings", async (req, res) => {
   try {
     const booking = await db.transaction(async tx => {
       const [setting] = await tx.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled")).for("share");
-      if (setting?.value !== "true") throw new Error("closed");
+       if (setting?.value !== "true" || !await photographyCardEnabled(tx)) throw new Error("closed");
       await tx.execute(sql`SELECT pg_advisory_xact_lock(731220, ${parsed.data.photographerId})`);
       const [p] = await tx.select().from(photographersTable).where(eq(photographersTable.id, parsed.data.photographerId)).for("share");
       const [pack] = await tx.select().from(photographyPackagesTable).where(and(eq(photographyPackagesTable.id, parsed.data.packageId), eq(photographyPackagesTable.active, true))).for("share");
@@ -252,7 +253,7 @@ router.post("/bookings/:id/checkout", async (req, res) => {
   try {
     const paymentUrl = await db.transaction(async tx => {
       const [setting] = await tx.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled")).for("share");
-      if (setting?.value !== "true") throw new Error("closed");
+       if (setting?.value !== "true" || !await photographyCardEnabled(tx)) throw new Error("closed");
       const [current] = await tx.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, booking.id)).for("update");
       if (current.status !== "awaiting_payment" || +current.expiresAt <= Date.now()) throw new Error("expired");
       if (current.paymentUrl) return current.paymentUrl;
@@ -260,8 +261,8 @@ router.post("/bookings/:id/checkout", async (req, res) => {
         amount: current.priceHalalas, currency: "SAR",
         description: `تصوير وتوثيق ${current.propertyName} — ${current.packageName}`,
         expired_at: current.expiresAt.toISOString(),
-        success_url: `${origin}/dashboard?mode=chalets&photographyBooking=${current.id}`,
-        back_url: `${origin}/dashboard?mode=chalets&photographyBooking=${current.id}`,
+        success_url: `${origin}/dashboard?mode=owner-services&ownerService=photography&photographyBooking=${current.id}`,
+        back_url: `${origin}/dashboard?mode=owner-services&ownerService=photography&photographyBooking=${current.id}`,
         callback_url: `${origin}/api/photography/payment-callback/${current.id}`,
       });
       const url = new URL(invoice.url);

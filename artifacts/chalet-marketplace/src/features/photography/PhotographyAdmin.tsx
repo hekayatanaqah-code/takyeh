@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, useCopy, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
+import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
 
 interface AdminData {
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
@@ -76,6 +76,40 @@ function InviteBox({ ready }: { ready: boolean }) {
   );
 }
 
+function ProfileEditor({ p }: { p: Photographer }) {
+  const qc = useQueryClient();
+  const [edit, setEdit] = useState(false);
+  const [name, setName] = useState(p.name); const [bio, setBio] = useState(p.bio ?? "");
+  const [mins, setMins] = useState(String(p.sessionMinutes)); const [av, setAv] = useState<Interval[]>(p.availability ?? []);
+  const reset = () => { setName(p.name); setBio(p.bio ?? ""); setMins(String(p.sessionMinutes)); setAv(p.availability ?? []); };
+  const m = useMutation({
+    mutationFn: () => call(`/admin/photography/photographers/${p.id}/profile`, "PATCH", { name: name.trim(), bio: bio.trim(), sessionMinutes: Number(mins), availability: av }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEY }); setEdit(false); },
+  });
+  if (!edit) return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs text-muted-foreground">مدة الجلسة: {p.sessionMinutes} دقيقة - فترات التوفر: {p.availability?.length ?? 0}</p>
+      <button type="button" className={ghostCls} onClick={() => { reset(); setEdit(true); }} data-testid={`button-edit-profile-${p.id}`}>تعديل البيانات والتقويم</button>
+    </div>
+  );
+  const err = !name.trim() ? "الاسم مطلوب" : availabilityError(av, Number(mins));
+  return (
+    <div className="space-y-3 rounded-xl border border-border p-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="اسم المصور"><input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} data-testid="input-profile-name" /></Field>
+        <Field label="مدة الجلسة (دقيقة)"><input type="number" min="30" max="240" step="15" className={inputCls} value={mins} onChange={(e) => setMins(e.target.value)} data-testid="input-profile-minutes" /></Field>
+      </div>
+      <Field label="نبذة"><textarea className={inputCls} rows={2} value={bio} onChange={(e) => setBio(e.target.value)} data-testid="input-profile-bio" /></Field>
+      <AvailabilityEditor value={av} onChange={setAv} />
+      {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
+      <div className="flex gap-2">
+        <button type="button" className={btnCls} disabled={!!err || m.isPending} onClick={() => m.mutate()} data-testid="button-save-profile">{m.isPending ? "جار الحفظ" : "حفظ البيانات"}</button>
+        <button type="button" className={ghostCls} onClick={() => setEdit(false)}>إلغاء</button>
+      </div>
+    </div>
+  );
+}
+
 function ReviewCard({ p }: { p: Photographer }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -107,7 +141,7 @@ function ReviewCard({ p }: { p: Photographer }) {
       {open && (
         <div className="mt-4 space-y-3 border-t border-border pt-4">
           {p.bio && <p className="text-sm">{p.bio}</p>}
-          <p className="text-xs text-muted-foreground">مدة الجلسة: {p.sessionMinutes} دقيقة - فترات التوفر: {p.availability?.length ?? 0}</p>
+          <ProfileEditor p={p} />
           <GeoPicker value={geo} onChange={setGeo} />
           <Field label="ملاحظة الإدارة"><textarea className={inputCls} rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="input-admin-note" /></Field>
           {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
@@ -127,7 +161,12 @@ export default function PhotographyAdmin() {
   const q = useQuery({ queryKey: KEY, queryFn: () => call<AdminData>("/admin/photography"), refetchInterval: 30000 });
   const toggle = useMutation({
     mutationFn: (enabled: boolean) => call("/admin/photography/settings", "PATCH", { enabled }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY });
+      qc.invalidateQueries({ queryKey: ["admin-owner-services"] });
+      qc.invalidateQueries({ queryKey: ["owner-services"] });
+      qc.invalidateQueries({ queryKey: ["ph-owner-catalog"] });
+    },
   });
   const [editing, setEditing] = useState<Pkg | "new" | null>(null);
   if (q.isLoading) return <Skel />;
@@ -138,7 +177,7 @@ export default function PhotographyAdmin() {
       <section className={`${cardCls} flex flex-wrap items-center justify-between gap-3`}>
         <div>
           <h2 className="text-lg font-bold">التصوير الاحترافي</h2>
-          <p className="text-sm text-muted-foreground">الخدمة {d.enabled ? "مفعلة للملاك" : "متوقفة (يظهر للملاك قريبا)"}</p>
+          <p className="text-sm text-muted-foreground">الخدمة {d.enabled ? "متاحة للطلب" : "متوقفة عن استقبال طلبات جديدة"}</p>
           <p className="mt-1 text-xs">الدفع: {d.readiness.payment ? "جاهز" : "غير جاهز"} - واتساب: {d.readiness.whatsapp ? "جاهز" : "غير جاهز"}</p>
         </div>
         <button className={d.enabled ? ghostCls : btnCls} disabled={toggle.isPending} onClick={() => toggle.mutate(!d.enabled)} data-testid="button-toggle-photography">

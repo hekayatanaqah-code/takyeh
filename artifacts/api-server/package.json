@@ -8,6 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:photography": "NODE_ENV=production tsx --test src/lib/photography-rules.test.ts src/routes/photography.integration.test.ts",
+    "test:owner-services": "NODE_ENV=production tsx --test src/routes/owner-services.integration.test.ts",
     "test": "NODE_ENV=production tsx --test src/lib/subscription-billing-math.test.ts src/lib/subscription-discounts.test.ts src/lib/subscription-access.test.ts src/lib/broadcast-utils.test.ts src/lib/broadcast-smtp-config.test.ts src/lib/password-recovery.test.ts src/routes/password-reset.integration.test.ts src/routes/admin-staff.integration.test.ts src/routes/admin-service-approval.integration.test.ts src/routes/chalets-schema.integration.test.ts src/routes/owner-profile.integration.test.ts src/routes/providers.integration.test.ts src/routes/reviews.integration.test.ts src/routes/service-location-catalog.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:city-search": "tsx --test src/lib/city-name.test.ts",

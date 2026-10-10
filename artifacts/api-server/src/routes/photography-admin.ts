@@ -3,7 +3,8 @@ import { db, photographersTable, photographyPackagesTable, photographyBookingsTa
 import { and, eq, inArray, desc } from "drizzle-orm";
 import { z } from "zod";
 import { createHash, randomBytes } from "node:crypto";
-import { coverageSchema, photoPhone } from "../lib/photography-rules";
+import { availabilitySchema, coverageSchema, photoPhone } from "../lib/photography-rules";
+import { setPhotographyServiceEnabled } from "../lib/owner-services";
 import { photographyReadiness, deliverPhotographyMessage } from "../lib/photography-delivery";
 
 export const photoHash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -57,8 +58,8 @@ router.patch("/settings", async (req, res) => {
   if (parsed.data.enabled && (!ready.payment || !ready.whatsapp)) return res.status(409).json({
     error: "لا يمكن فتح الخدمة قبل اكتمال إعداد الدفع والإرسال الفعلي عبر واتساب",
   });
-  await db.insert(siteSettingsTable).values({ key: "photography_enabled", value: String(parsed.data.enabled) })
-    .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value: String(parsed.data.enabled), updatedAt: new Date() } });
+  try { await setPhotographyServiceEnabled(parsed.data.enabled); }
+  catch (error) { return res.status(409).json({ error: (error as Error).message }); }
   return res.json({ enabled: parsed.data.enabled, readiness: photographyReadiness() });
 });
 router.post("/packages", async (req, res) => {
@@ -117,5 +118,16 @@ router.patch("/photographers/:id", async (req, res) => {
   if (parsed.data.status !== "approved" && !parsed.data.adminNote) return res.status(400).json({ error: "سبب القرار مطلوب" });
   const [row] = await db.update(photographersTable).set(parsed.data).where(eq(photographersTable.id, current.id)).returning();
   return res.json(publicPhotographer(row));
+});
+router.patch("/photographers/:id/profile", async (req, res) => {
+  const parsed = z.object({
+    name: z.string().trim().min(2).max(120).optional(),
+    bio: z.string().trim().max(2000).optional(),
+    sessionMinutes: z.number().int().min(30).max(240).optional(),
+    availability: availabilitySchema.optional(),
+  }).strict().safeParse(req.body);
+  if (!parsed.success || !Object.keys(parsed.data).length) return res.status(400).json({ error: "راجع بيانات المصور ومدد الجلسة وأوقات التفرغ دون تداخل" });
+  const [row] = await db.update(photographersTable).set(parsed.data).where(eq(photographersTable.id, Number(req.params.id))).returning();
+  return row ? res.json(publicPhotographer(row)) : res.status(404).json({ error: "المصور غير موجود" });
 });
 export default router;

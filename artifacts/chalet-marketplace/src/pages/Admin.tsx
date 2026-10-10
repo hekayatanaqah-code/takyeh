@@ -6,7 +6,7 @@ import { useInventoryCatalogs } from "@/hooks/useInventoryCatalogs";
 import { emptyInventoryFilters, filterAndSortInventory, servicePricingOptions, type InventoryDescriptor } from "@/lib/inventory-filters";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import PhotographyAdmin from "@/features/photography/PhotographyAdmin";
+import OwnerServicesAdmin from "@/features/owner-services/OwnerServicesAdmin";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, LineChart, Line, Legend,
@@ -8827,7 +8827,7 @@ const ALL_TABS = [
   { id: "overview",                label: "الإحصائيات",            icon: BarChart3 },
   { id: "chalets",                 label: "قائمة العقارات",        icon: Home },
   { id: "submissions",             label: "طلبات العقارات الجديدة", icon: ClipboardList },
-  { id: "photography",             label: "توثيق وتصوير العقارات", icon: ClipboardList },
+  { id: "ownerServices",           label: "خدمات الملاك", icon: ClipboardList },
   { id: "platformRevenue",         label: "ميزانية المنصة",        icon: TrendingUp },
   { id: "services",                label: "قائمة الخدمات",          icon: Wrench },
   { id: "serviceSubmissions",      label: "طلبات الخدمات الجديدة", icon: ClipboardList },
@@ -8861,7 +8861,8 @@ const ADMIN_NAV_GROUPS: Array<{
   tabs: TabId[];
 }> = [
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
-  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "submissions", "photography", "categories", "amenities", "locations"] },
+  { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "submissions", "categories", "amenities", "locations"] },
+  { id: "ownerServices", label: "خدمات الملاك", icon: ClipboardList, tabs: ["ownerServices"] },
   { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories", "serviceLocations"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "ownerInbox"] },
   { id: "staff", label: "طاقم العمل", icon: Shield, tabs: ["adminStaff"] },
@@ -10138,7 +10139,7 @@ export default function Admin() {
         />}
         {activeTab === "chalets"              && <ChaletsVerifyTab />}
         {activeTab === "submissions"          && <SubmissionsTab />}
-        {activeTab === "photography" && isSuperAdmin && <PhotographyAdmin />}
+        {activeTab === "ownerServices" && isSuperAdmin && <OwnerServicesAdmin />}
         {activeTab === "platformRevenue" && isSuperAdmin && <PlatformRevenueTab />}
         {activeTab === "services"             && <ServicesTab />}
         {activeTab === "serviceSubmissions"   && <ProviderSubmissionsTab />}

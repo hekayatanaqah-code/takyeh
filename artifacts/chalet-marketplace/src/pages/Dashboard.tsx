@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, createContext, useCo
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation, useSearch } from "wouter";
-import PhotographyOwner from "@/features/photography/PhotographyOwner";
+import OwnerServicesOwner from "@/features/owner-services/OwnerServicesOwner";
 import QRCode from "qrcode";
 import { motion } from "framer-motion";
 import jsPDF from "jspdf";
@@ -25335,13 +25335,13 @@ export default function Dashboard() {
   const requestedServiceId = requestedServiceRaw && /^\d+$/.test(requestedServiceRaw)
     && Number.isSafeInteger(Number(requestedServiceRaw)) && Number(requestedServiceRaw) > 0
       ? Number(requestedServiceRaw) : null;
-  const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance" | null>(null);
+  const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance" | "owner-services" | null>(routeParams.has("photographyBooking") || routeParams.get("mode") === "owner-services" ? "owner-services" : null);
   const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(requestedServiceId);
   const [serviceView, setServiceView] = useState<"manage" | "submissions">("manage");
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "photography" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">(routeParams.has("photographyBooking") ? "photography" : "chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [activityChoiceOpen, setActivityChoiceOpen] = useState(false);
   const [showHeaderAddon, setShowHeaderAddon] = useState<"chalet" | "service" | null>(null);
@@ -25566,8 +25566,10 @@ export default function Dashboard() {
     || (canSeeServices && !providersLoading && !providersError && myApprovedProviders.length > 0);
   const canAccessFinancialAdmin = actAsStaff
     || (planLimits?.scope !== "property" && hasOperationalActivity);
-  const activeDashMode: "chalets" | "services" | "admin-finance" =
-    effectiveDashMode === "admin-finance" && canAccessFinancialAdmin
+  const activeDashMode: "chalets" | "services" | "admin-finance" | "owner-services" =
+    effectiveDashMode === "owner-services" && !actAsStaff
+      ? "owner-services"
+      : effectiveDashMode === "admin-finance" && canAccessFinancialAdmin
       ? "admin-finance"
       : effectiveDashMode === "admin-finance" && !canAccessFinancialAdmin
         ? businessType === "service" ? "services" : "chalets"
@@ -25597,14 +25599,16 @@ export default function Dashboard() {
     if (actAsStaff || isImpersonating) return;
     const requestedMode = new URLSearchParams(search).get("mode");
     if (requestedServiceId) {
-      setDashMode(requestedMode === "admin-finance" || requestedMode === "chalets" ? requestedMode : "services");
+      setDashMode(requestedMode === "admin-finance" || requestedMode === "chalets" || requestedMode === "owner-services" ? requestedMode : "services");
       if (selectedServiceId !== requestedServiceId) {
         setSelectedServiceId(requestedServiceId);
         setSelectedServiceTab("details");
       }
       if (ownerView !== "account") setServiceView(ownerView === "requests" || ownerView === "manage" ? "submissions" : "manage");
     }
-    if (requestedMode === "admin-finance" || requestedMode === "chalets" || requestedMode === "services") {
+    if (new URLSearchParams(search).has("photographyBooking")) {
+      setDashMode("owner-services");
+    } else if (requestedMode === "admin-finance" || requestedMode === "chalets" || requestedMode === "services" || requestedMode === "owner-services") {
       setDashMode(requestedMode);
     }
     setAccountSettingsOpen(ownerView === "account");
@@ -25839,7 +25843,6 @@ export default function Dashboard() {
 
   const allTabs = [
     { id: "chalets",   label: "عقاراتي",             icon: <Building2 className="w-4 h-4" /> },
-    { id: "photography", label: "طلب تصوير وتوثيق", icon: <Camera className="w-4 h-4" /> },
     { id: "seasons",   label: "المواسم والأعياد",    icon: <Sun className="w-4 h-4" /> },
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
@@ -25851,7 +25854,7 @@ export default function Dashboard() {
   ] as const;
 
   const tabs = useMemo(() => {
-    if (!actAsStaff) return canUseAdvancedPropertyTabs ? allTabs : allTabs.filter(tab => tab.id === "chalets" || tab.id === "photography");
+    if (!actAsStaff) return canUseAdvancedPropertyTabs ? allTabs : allTabs.filter(tab => tab.id === "chalets");
     return allTabs.filter((tab) => {
       const permKey = TAB_PERMISSION[tab.id];
       if (!permKey || permKey === "__owner__") return false;
@@ -26053,12 +26056,12 @@ export default function Dashboard() {
             onLogout={logout}
             requestsOpen={showOwnerEmptyState ? ownerView === "requests" : activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
           />
-          {!showOwnerEmptyState && <OwnerDashboardNavigation
+          {<OwnerDashboardNavigation
               mode={activeDashMode}
               requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
-              canSeeChalets={canSeeChalets}
-              canSeeServices={canSeeServices}
-              canAccessFinance={canAccessFinancialAdmin}
+              canSeeChalets={!showOwnerEmptyState && canSeeChalets}
+              canSeeServices={!showOwnerEmptyState && canSeeServices}
+              canAccessFinance={!showOwnerEmptyState && canAccessFinancialAdmin}
               unreadCount={unreadNotifCount + unreadSupportCount}
               onSelect={switchOwnerDashboard}
           />}
@@ -26286,7 +26289,7 @@ export default function Dashboard() {
           </DialogContent>
         </Dialog>
 
-        {showOwnerEmptyState && <OwnerEmptyState
+        {showOwnerEmptyState && activeDashMode !== "owner-services" && <OwnerEmptyState
           requestsOpen={ownerView === "requests"}
           onAdd={() => {
             if (canSeeChalets && canSeeServices) setActivityChoiceOpen(true);
@@ -26294,7 +26297,8 @@ export default function Dashboard() {
           }}
         />}
 
-        {!showOwnerEmptyState && <>
+        {(!showOwnerEmptyState || activeDashMode === "owner-services") && <>
+        {activeDashMode === "owner-services" && !actAsStaff && <OwnerServicesOwner />}
         {/* Legacy impersonation navigation; ordinary owners navigate inside the greeting. */}
         {!actAsStaff && isImpersonating && (
           <motion.div
@@ -26804,7 +26808,6 @@ export default function Dashboard() {
         {visiblePropertyTab === "seasons" && (
           <SeasonsTab ownerChalets={ownerChalets} />
         )}
-        {visiblePropertyTab === "photography" && !actAsStaff && <PhotographyOwner />}
         {visiblePropertyTab === "reviews" && (
           <ReviewsTab />
         )}
