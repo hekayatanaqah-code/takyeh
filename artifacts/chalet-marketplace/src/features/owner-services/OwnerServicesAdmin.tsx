@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowUp, ArrowDown, Pencil, Trash2, Plus, RotateCcw } from "lucide-react";
+import { ArrowUp, ArrowDown, Pencil, Trash2, Plus, RotateCcw, ToggleRight, ToggleLeft, Clock } from "lucide-react";
 import { call, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice } from "../photography/shared";
 import PhotographyAdmin from "../photography/PhotographyAdmin";
 import { ICONS, ICON_AR, STATE_AR, isSafeUrl, type OwnerService, type ServiceIcon, type ServiceState } from "./types";
+import { cn } from "@/lib/utils";
 
 interface AdminList { services: OwnerService[]; readiness: { payment: boolean; whatsapp: boolean } }
 const KEY = ["admin-owner-services"];
 const STATES: ServiceState[] = ["available", "coming_soon", "hidden"];
+const STATE_ICONS = { available: ToggleRight, coming_soon: Clock, hidden: ToggleLeft };
+const serviceInputCls = cn(inputCls, "bg-white text-slate-900 placeholder:text-slate-500");
+const iconButtonCls = "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 function refreshServices(qc: ReturnType<typeof useQueryClient>) {
   for (const key of [KEY, ["owner-services"], ["ph-admin"], ["ph-owner-catalog"]]) {
     qc.invalidateQueries({ queryKey: key });
@@ -38,21 +42,21 @@ function ServiceForm({ svc, onDone }: { svc?: OwnerService; onDone: () => void }
     <form className={`${cardCls} space-y-3`} onSubmit={(e) => { e.preventDefault(); if (!bad) m.mutate(); }} data-testid="form-service">
       <h3 className="font-bold">{svc ? "تعديل البطاقة" : "بطاقة خدمة جديدة"}</h3>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="العنوان"><input className={inputCls} value={title} onChange={(e) => setTitle(e.target.value)} data-testid="input-service-title" /></Field>
+        <Field label="العنوان"><input className={serviceInputCls} value={title} onChange={(e) => setTitle(e.target.value)} data-testid="input-service-title" /></Field>
         <Field label="الأيقونة">
-          <select className={inputCls} value={icon} onChange={(e) => setIcon(e.target.value as ServiceIcon)} data-testid="select-service-icon">
+          <select className={serviceInputCls} value={icon} onChange={(e) => setIcon(e.target.value as ServiceIcon)} data-testid="select-service-icon">
             {(Object.keys(ICONS) as ServiceIcon[]).map((k) => <option key={k} value={k}>{ICON_AR[k]}</option>)}
           </select>
         </Field>
       </div>
-      <Field label="الوصف"><textarea className={inputCls} rows={2} value={description} onChange={(e) => setDesc(e.target.value)} data-testid="input-service-description" /></Field>
+      <Field label="الوصف"><textarea className={serviceInputCls} rows={2} value={description} onChange={(e) => setDesc(e.target.value)} data-testid="input-service-description" /></Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="الحالة">
-          <select className={inputCls} value={state} onChange={(e) => setState(e.target.value as ServiceState)} data-testid="select-service-state">
+          <select className={serviceInputCls} value={state} onChange={(e) => setState(e.target.value as ServiceState)} data-testid="select-service-state">
             {STATES.map((s) => <option key={s} value={s}>{STATE_AR[s]}</option>)}
           </select>
         </Field>
-        {isLink && <Field label="رابط الطلب" hint="https://... أو /مسار داخل المنصة"><input dir="ltr" className={inputCls} value={url} onChange={(e) => setUrl(e.target.value)} data-testid="input-service-url" /></Field>}
+        {isLink && <Field label="رابط الطلب" hint="https://... أو /مسار داخل المنصة"><input dir="ltr" className={serviceInputCls} value={url} onChange={(e) => setUrl(e.target.value)} data-testid="input-service-url" /></Field>}
       </div>
       {urlErr && <p className="text-sm font-semibold text-destructive" role="alert">{urlErr}</p>}
       {m.isError && <ErrorBox error={m.error} />}
@@ -89,15 +93,18 @@ function Row({ s, i, n, onMove, moving, onEdit }: { s: OwnerService; i: number; 
           {s.description && <p className="truncate text-sm text-muted-foreground">{s.description}</p>}
         </div>
         <div role="radiogroup" aria-label={`حالة ${s.title}`} className="inline-flex overflow-hidden rounded-xl border border-border">
-          {STATES.map((x) => (
+          {STATES.map((x) => {
+            const StateIcon = STATE_ICONS[x];
+            return (
             <button key={x} role="radio" aria-checked={s.state === x} disabled={st.isPending}
               onClick={() => s.state !== x && st.mutate(x)}
-              className={`px-3 py-1.5 text-xs font-bold ${s.state === x ? "bg-primary text-primary-foreground" : "bg-card hover:bg-muted"}`}
-              data-testid={`button-state-${x}-${s.id}`}>{STATE_AR[x]}</button>
-          ))}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold ${s.state === x ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-muted"}`}
+              data-testid={`button-state-${x}-${s.id}`}><StateIcon className="h-5 w-5 shrink-0" aria-hidden="true" />{STATE_AR[x]}</button>
+            );
+          })}
         </div>
-        <button className={ghostCls} onClick={onEdit} aria-label={`تعديل ${s.title}`} data-testid={`button-edit-${s.id}`}><Pencil className="h-4 w-4" /></button>
-        <button className={ghostCls} onClick={() => setConfirm(true)} aria-label={`حذف ${s.title}`} data-testid={`button-delete-${s.id}`}><Trash2 className="h-4 w-4" /></button>
+        <button type="button" className={`${iconButtonCls} text-foreground`} onClick={onEdit} title="تعديل البطاقة" aria-label={`تعديل ${s.title}`} data-testid={`button-edit-${s.id}`}><Pencil className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden="true" /></button>
+        <button type="button" className={`${iconButtonCls} text-red-600`} onClick={() => setConfirm(true)} title="حذف البطاقة" aria-label={`حذف ${s.title}`} data-testid={`button-delete-${s.id}`}><Trash2 className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden="true" /></button>
       </div>
       {st.isError && <div className="mt-3"><ErrorBox error={st.error} /></div>}
       {confirm && (
@@ -139,7 +146,7 @@ export default function OwnerServicesAdmin() {
   );
 
   return (
-    <div className="space-y-5" dir="rtl" data-testid="owner-services-admin">
+    <div className="space-y-5 text-foreground" dir="rtl" data-testid="owner-services-admin">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-lg font-bold">خدمات الملاك</h2><p className="text-sm text-muted-foreground">خدمات إضافية لملاك العقارات والخدمات والأنشطة، منفصلة عن التشغيل اليومي.</p></div>
         {tabs}
