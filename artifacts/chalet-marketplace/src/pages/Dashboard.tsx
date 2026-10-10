@@ -26053,6 +26053,8 @@ export default function Dashboard() {
             onAccountSettings={() => setAccountSettingsOpen(true)}
             onSubscription={() => navigate("/subscription")}
             onManageRequests={openRegistrationRequests}
+            onOwnerServices={() => switchOwnerDashboard("owner-services")}
+            ownerServicesOpen={activeDashMode === "owner-services" && !accountSettingsOpen}
             onLogout={logout}
             requestsOpen={showOwnerEmptyState ? ownerView === "requests" : activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
           />

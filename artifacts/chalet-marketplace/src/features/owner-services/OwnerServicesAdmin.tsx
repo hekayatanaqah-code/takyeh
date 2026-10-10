@@ -125,7 +125,7 @@ export default function OwnerServicesAdmin() {
     onSettled: () => qc.invalidateQueries({ queryKey: KEY }),
   });
   const restore = useMutation({
-    mutationFn: () => call<OwnerService>("/admin/owner-services", "POST", { title: "التصوير والتوثيق الاحترافي", description: "جلسات تصوير احترافية لعقارك مع مصورين معتمدين.", icon: "camera", kind: "photography", state: "coming_soon", actionUrl: null }),
+    mutationFn: () => call<OwnerService>("/admin/owner-services", "POST", { title: "التصوير والتوثيق الاحترافي", description: "جلسات تصوير احترافية لعقارك أو خدمتك ونشاطك مع مصورين معتمدين.", icon: "camera", kind: "photography", state: "coming_soon", actionUrl: null }),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 
@@ -141,7 +141,7 @@ export default function OwnerServicesAdmin() {
   return (
     <div className="space-y-5" dir="rtl" data-testid="owner-services-admin">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-lg font-bold">خدمات الملاك</h2><p className="text-sm text-muted-foreground">خدمات إضافية منفصلة عن التشغيل اليومي للعقارات.</p></div>
+        <div><h2 className="text-lg font-bold">خدمات الملاك</h2><p className="text-sm text-muted-foreground">خدمات إضافية لملاك العقارات والخدمات والأنشطة، منفصلة عن التشغيل اليومي.</p></div>
         {tabs}
       </header>
       {section === "photography" ? <PhotographyAdmin /> : q.isLoading ? <Skel /> : q.isError || !q.data ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : (() => {

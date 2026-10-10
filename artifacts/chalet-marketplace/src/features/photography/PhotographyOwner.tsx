@@ -5,6 +5,7 @@ import { call, ORIGIN, sar, fmtDT, fmtT, Field, inputCls, btnCls, cardCls, Skel,
 interface Catalog {
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
   properties: { id: number; nameAr: string; location?: string; district?: string; whatsappNumber?: string }[];
+  services: { id: number; nameAr: string; location?: string }[];
   packages: Pkg[];
   photographers: { id: number; name: string; bio?: string }[];
 }
@@ -24,7 +25,7 @@ function ConfirmResult() {
     if (!Number.isInteger(id) || id <= 0) { setState({ kind: "err", text: "رقم الحجز في الرابط غير صالح" }); return; }
     setState({ kind: "loading" });
     call<{ booking: Booking; notifications?: unknown }>(`/photography/bookings/${id}/confirm`, "POST")
-      .then((r) => setState({ kind: "ok", text: `تم تأكيد حجز ${r.booking.packageName} لعقار ${r.booking.propertyName} بتاريخ ${fmtDT(r.booking.startAt)}` }))
+      .then((r) => setState({ kind: "ok", text: `تم تأكيد حجز ${r.booking.packageName} لنشاط ${r.booking.propertyName} بتاريخ ${fmtDT(r.booking.startAt)}` }))
       .catch((e: Error) => setState({ kind: "err", text: e.message }))
       .finally(() => qc.invalidateQueries({ queryKey: BK }));
     const u = new URL(window.location.href); u.searchParams.delete("photographyBooking");
@@ -37,16 +38,23 @@ function ConfirmResult() {
 
 function Booker({ cat }: { cat: Catalog }) {
   const qc = useQueryClient();
-  const [propertyId, setP] = useState(""); const [photographerId, setPh] = useState("");
+  const [activityKey, setP] = useState(""); const [photographerId, setPh] = useState("");
+  const activities = [
+    ...cat.properties.map(p => ({ ...p, kind: "property" as const })),
+    ...cat.services.map(s => ({ ...s, kind: "service" as const })),
+  ];
+  const activity = activities.find(a => `${a.kind}:${a.id}` === activityKey);
+  const target = activity ? activity.kind === "property" ? { propertyId: activity.id } : { serviceSubmissionId: activity.id } : null;
   const [packageId, setPk] = useState(""); const [date, setDate] = useState(""); const [slot, setSlot] = useState<Slot | null>(null);
-  const ready = propertyId && photographerId && date;
+  const ready = !!target && photographerId && date;
   const slots = useQuery({
-    queryKey: ["ph-slots", propertyId, photographerId, date], enabled: !!ready,
-    queryFn: () => call<{ slots: Slot[]; timezone: string }>(`/photography/slots?propertyId=${propertyId}&photographerId=${photographerId}&date=${date}`),
+    queryKey: ["ph-slots", activityKey, photographerId, date], enabled: !!ready,
+    queryFn: () => call<{ slots: Slot[]; timezone: string }>(`/photography/slots?${activity!.kind === "property" ? "propertyId" : "serviceSubmissionId"}=${activity!.id}&photographerId=${photographerId}&date=${date}`),
   });
   const pay = useMutation({
     mutationFn: async () => {
-      const b = await call<{ booking: Booking }>("/photography/bookings", "POST", { propertyId: Number(propertyId), photographerId: Number(photographerId), packageId: Number(packageId), startAt: slot!.startAt });
+      if (!target || !slot) throw new Error("اختر النشاط والموعد أولاً");
+      const b = await call<{ booking: Booking }>("/photography/bookings", "POST", { ...target, photographerId: Number(photographerId), packageId: Number(packageId), startAt: slot.startAt });
       return call<{ paymentUrl: string }>(`/photography/bookings/${b.booking.id}/checkout`, "POST", { origin: ORIGIN() });
     },
     onSuccess: (r) => { window.location.assign(r.paymentUrl); },
@@ -59,8 +67,8 @@ function Booker({ cat }: { cat: Catalog }) {
       <h3 className="font-bold">طلب جلسة تصوير</h3>
       {!pickable && <Notice tone="warn">الدفع غير جاهز حاليا، لا يمكن إتمام الحجز.</Notice>}
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="العقار"><select className={inputCls} value={propertyId} onChange={(e) => { setP(e.target.value); setSlot(null); }} data-testid="select-property">
-          <option value="">اختر العقار</option>{cat.properties.map((p) => <option key={p.id} value={p.id}>{p.nameAr}{p.district ? ` - ${p.district}` : ""}</option>)}</select></Field>
+        <Field label="العقار أو الخدمة"><select className={inputCls} value={activityKey} onChange={(e) => { setP(e.target.value); setSlot(null); }} data-testid="select-property">
+          <option value="">اختر العقار أو الخدمة</option>{activities.map(a => <option key={`${a.kind}:${a.id}`} value={`${a.kind}:${a.id}`}>{a.kind === "property" ? "عقار" : "خدمة"} — {a.nameAr}</option>)}</select></Field>
         <Field label="المصور"><select className={inputCls} value={photographerId} onChange={(e) => { setPh(e.target.value); setSlot(null); }} data-testid="select-photographer">
           <option value="">اختر المصور</option>{cat.photographers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
         <Field label="الباقة"><select className={inputCls} value={packageId} onChange={(e) => setPk(e.target.value)} data-testid="select-package">
@@ -79,7 +87,7 @@ function Booker({ cat }: { cat: Catalog }) {
           </div>
         ))}
       {pay.isError && <ErrorBox error={pay.error} />}
-      <button className={btnCls} disabled={!pickable || !slot || !packageId || pay.isPending} onClick={() => pay.mutate()} data-testid="button-checkout">
+      <button className={btnCls} disabled={!pickable || !target || !slot || !packageId || pay.isPending} onClick={() => pay.mutate()} data-testid="button-checkout">
         {pay.isPending ? "جار التحويل إلى الدفع" : `الدفع عبر بوابة الدفع${pkg ? ` (${sar(pkg.priceHalalas)})` : ""}`}
       </button>
       <p className="text-xs text-muted-foreground">يتم حجز الموعد لمدة ١٥ دقيقة حتى إتمام الدفع في صفحة الدفع الآمنة.</p>
@@ -100,7 +108,7 @@ export default function PhotographyOwner() {
             <p className="text-2xl font-bold">قريباً</p>
             <p className="mt-1 text-sm text-muted-foreground">خدمة التصوير الاحترافي غير متاحة حاليا.</p>
           </div>
-        ) : cat.data.properties.length === 0 ? <Empty title="لا توجد عقارات معتمدة" text="يلزم اعتماد عقار واحد على الأقل لطلب التصوير." /> :
+        ) : cat.data.properties.length + cat.data.services.length === 0 ? <Empty title="لا توجد أنشطة مؤهلة للتصوير" text="تأكد من وجود عقار أو خدمة معتمدة ونشطة ومن اكتمال بيانات موقعها." /> :
           cat.data.packages.length === 0 || cat.data.photographers.length === 0 ? <Empty title="لا تتوفر باقات أو مصورون معتمدون حاليا" /> : <Booker cat={cat.data} />}
       {(cat.data?.enabled || (bk.data?.bookings.length ?? 0) > 0) && (
         <section className="space-y-3">

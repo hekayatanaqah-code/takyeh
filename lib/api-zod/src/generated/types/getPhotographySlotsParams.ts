@@ -7,7 +7,16 @@
  */
 
 export type GetPhotographySlotsParams = {
-propertyId: number;
+/**
+ * Approved property submission ID; provide exactly one target
+ * @minimum 1
+ */
+propertyId?: number;
+/**
+ * Approved service submission ID; provide exactly one target
+ * @minimum 1
+ */
+serviceSubmissionId?: number;
 photographerId: number;
 date: Date;
 };

@@ -31,13 +31,14 @@ status:
 catalog:
   get:
     operationId: getPhotographyCatalog
-    summary: Owner-scoped approved properties, packages and approved photographers
+    summary: Owner-scoped approved properties and service activities, packages and approved photographers
     responses: *result
 slots:
   get:
     operationId: getPhotographySlots
     parameters:
-      - { name: propertyId, in: query, required: true, schema: { type: integer } }
+      - { name: propertyId, in: query, required: false, schema: { type: integer, minimum: 1 }, description: Approved property submission ID; provide exactly one target }
+      - { name: serviceSubmissionId, in: query, required: false, schema: { type: integer, minimum: 1 }, description: Approved service submission ID; provide exactly one target }
       - { name: photographerId, in: query, required: true, schema: { type: integer } }
       - { name: date, in: query, required: true, schema: { type: string, format: date } }
     responses: *result
@@ -48,7 +49,12 @@ bookings:
   post:
     operationId: createPhotographyBooking
     summary: Atomic 15-minute slot hold with frozen package and commission quote
-    requestBody: *body
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: "./openapi.yaml#/components/schemas/PhotographyReservationInput"
     responses: *result
 checkout:
   parameters: [*id]

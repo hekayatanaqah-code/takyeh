@@ -214,7 +214,7 @@ export default function PhotographyAdmin() {
         <h3 className="font-bold">الحجوزات</h3>
         {d.bookings.length === 0 ? <Empty title="لا توجد حجوزات" /> : (
           <div className="overflow-x-auto rounded-2xl border border-border">
-            <table className="w-full text-sm"><thead className="bg-muted text-start"><tr>{["العقار", "المصور", "الباقة", "الموعد", "المبلغ", "العمولة", "الحالة"].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
+            <table className="w-full text-sm"><thead className="bg-muted text-start"><tr>{["العقار / الخدمة", "المصور", "الباقة", "الموعد", "المبلغ", "العمولة", "الحالة"].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
               <tbody>{d.bookings.map((b) => (
                 <tr key={b.id} className="border-t border-border"><td className="p-3">{b.propertyName}</td><td className="p-3">{b.photographerName}</td><td className="p-3">{b.packageName}</td>
                   <td className="p-3">{fmtDT(b.startAt)}</td><td className="p-3">{sar(b.priceHalalas)}</td><td className="p-3">{sar(b.commissionHalalas)}</td><td className="p-3"><StatusPill s={b.status} /></td></tr>

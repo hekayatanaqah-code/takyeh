@@ -25,6 +25,7 @@ export interface Photographer {
 }
 export interface Pkg { id: number; name: string; priceHalalas: number; platformPercent: number; active: boolean }
 export interface Booking {
+  propertyId?: number | null; serviceSubmissionId?: number | null;
   id: number; status: string; packageName: string; propertyName: string; photographerName: string;
   startAt: string; endAt: string; priceHalalas: number; commissionHalalas: number;
   photographerEarningsHalalas: number; expiresAt?: string | null;

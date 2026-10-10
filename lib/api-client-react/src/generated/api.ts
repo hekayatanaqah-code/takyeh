@@ -37,7 +37,6 @@ import type {
   CheckoutPhotographyBookingBody,
   ConfirmPhotographyBooking200,
   CreatePhotographyBooking200,
-  CreatePhotographyBookingBody,
   CreatePhotographyPackage200,
   CreatePhotographyPackageBody,
   CreateServiceSeasonInput,
@@ -69,6 +68,7 @@ import type {
   OwnerServiceOrder,
   OwnerServiceRemoval,
   OwnerServiceUpdate,
+  PhotographyReservationInput,
   PropertyIdentityInput,
   PropertyIdentityResult,
   PropertySocialAccountInput,
@@ -227,7 +227,7 @@ export const getGetPhotographyCatalogUrl = () => {
 }
 
 /**
- * @summary Owner-scoped approved properties, packages and approved photographers
+ * @summary Owner-scoped approved properties and service activities, packages and approved photographers
  */
 export const getPhotographyCatalog = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetPhotographyCatalog200> => {
 
@@ -298,7 +298,7 @@ export function useGetPhotographyCatalog<TData = Awaited<ReturnType<typeof getPh
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Owner-scoped approved properties, packages and approved photographers
+ * @summary Owner-scoped approved properties and service activities, packages and approved photographers
  */
 
 export function useGetPhotographyCatalog<TData = Awaited<ReturnType<typeof getPhotographyCatalog>>, TError = ErrorType<unknown>>(
@@ -527,7 +527,7 @@ export const getCreatePhotographyBookingUrl = () => {
 /**
  * @summary Atomic 15-minute slot hold with frozen package and commission quote
  */
-export const createPhotographyBooking = async (createPhotographyBookingBody: CreatePhotographyBookingBody, options?: Parameters<typeof customFetch>[1]): Promise<CreatePhotographyBooking200> => {
+export const createPhotographyBooking = async (photographyReservationInput: PhotographyReservationInput, options?: Parameters<typeof customFetch>[1]): Promise<CreatePhotographyBooking200> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -548,7 +548,7 @@ return customFetch<CreatePhotographyBooking200>(getCreatePhotographyBookingUrl()
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(createPhotographyBookingBody)
+    body: JSON.stringify(photographyReservationInput)
   }
 );}
 
@@ -586,9 +586,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type CreatePhotographyBookingMutationResult = NonNullable<Awaited<ReturnType<typeof createPhotographyBooking>>>
-    export type CreatePhotographyBookingMutationBody = BodyType<CreatePhotographyBookingBody>
+    export type CreatePhotographyBookingMutationBody = BodyType<PhotographyReservationInput>
     export type CreatePhotographyBookingMutationError = ErrorType<unknown>
-    export type CreatePhotographyBookingMutationVariables = {data: BodyType<CreatePhotographyBookingBody>}
+    export type CreatePhotographyBookingMutationVariables = {data: BodyType<PhotographyReservationInput>}
 
     /**
  * @summary Atomic 15-minute slot hold with frozen package and commission quote

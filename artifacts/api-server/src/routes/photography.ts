@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import {
   db, photographersTable, photographyPackagesTable, photographerSessionsTable, photographyBookingsTable,
-  siteSettingsTable, chaletSubmissionsTable, chaletsTable, citiesCatalogTable, districtsCatalogTable, regionsCatalogTable,
+  siteSettingsTable,
 } from "@workspace/db";
 import { and, eq, inArray, sql, desc, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -12,6 +12,7 @@ import { photoHash, publicPhotographer, validPhotographyCoverage, photoOrigin } 
 import { photographerProfileSchema, photoPhone, photographySlots, photographyQuote } from "../lib/photography-rules";
 import { photographyReadiness } from "../lib/photography-delivery";
 import { photographyCardEnabled } from "../lib/owner-services";
+import { photographyActivities, ownedPhotographyTarget, coveredPhotographyTarget, photographyReservationSchema, exactlyOnePhotographyTarget } from "../lib/photography-targets";
 import { photographyInvoice, reconcilePhotographyBooking, reconcileExpiredPhotographyInvoices } from "../lib/photography-payment";
 
 const router = Router();
@@ -135,38 +136,13 @@ router.post("/payment-callback/:id", loginLimit, async (req, res) => {
 
 router.use(requireAuth);
 router.use((req, res, next) => req.method === "GET" ? next() : sameOrigin(req, res, next));
-async function ownedProperty(req: Request, propertyId: number) {
-  const ids = await getOwnerIds(req);
-  const [row] = await db.select().from(chaletSubmissionsTable).where(and(
-    eq(chaletSubmissionsTable.id, propertyId), inArray(chaletSubmissionsTable.ownerId, ids),
-    eq(chaletSubmissionsTable.status, "approved"),
-  ));
-  if (!row) return null;
-  const [mirror] = await db.select({ id: chaletsTable.id }).from(chaletsTable)
-    .where(and(eq(chaletsTable.submissionId, row.id), eq(chaletsTable.isActive, true)));
-  return mirror ? row : null;
-}
-async function coveredProperty(row: NonNullable<Awaited<ReturnType<typeof ownedProperty>>>, p: typeof photographersTable.$inferSelect) {
-  if (p.status !== "approved" || !p.cityId || !p.regionId) return false;
-  const [city] = await db.select().from(citiesCatalogTable).where(eq(citiesCatalogTable.id, p.cityId));
-  const [region] = await db.select().from(regionsCatalogTable).where(eq(regionsCatalogTable.id, p.regionId));
-  if (!city?.isActive || !region?.isActive || city.name !== row.location || region.name !== row.region) return false;
-  if (p.allDistricts) return true;
-  const districts = p.districtIds.length ? await db.select().from(districtsCatalogTable)
-    .where(and(eq(districtsCatalogTable.cityId, city.id), inArray(districtsCatalogTable.id, p.districtIds))) : [];
-  return districts.some(d => d.isActive && d.name === row.district);
-}
 router.get("/catalog", async (req, res) => {
-  if (!await enabled()) return res.json({ enabled: false, readiness: photographyReadiness(), properties: [], packages: [], photographers: [] });
+  if (!await enabled()) return res.json({ enabled: false, readiness: photographyReadiness(), properties: [], services: [], packages: [], photographers: [] });
   const ids = await getOwnerIds(req);
-  const properties = await db.select({
-    id: chaletSubmissionsTable.id, nameAr: chaletSubmissionsTable.nameAr, location: chaletSubmissionsTable.location,
-    district: chaletSubmissionsTable.district, whatsappNumber: chaletSubmissionsTable.whatsappNumber,
-  }).from(chaletSubmissionsTable).innerJoin(chaletsTable, eq(chaletsTable.submissionId, chaletSubmissionsTable.id))
-    .where(and(inArray(chaletSubmissionsTable.ownerId, ids), eq(chaletSubmissionsTable.status, "approved"), eq(chaletsTable.isActive, true)));
+  const { properties, services } = await photographyActivities(ids);
   const packages = await db.select().from(photographyPackagesTable).where(eq(photographyPackagesTable.active, true));
   const photographers = await db.select().from(photographersTable).where(eq(photographersTable.status, "approved"));
-  return res.json({ enabled: true, readiness: photographyReadiness(), properties, packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })),
+  return res.json({ enabled: true, readiness: photographyReadiness(), properties, services, packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })),
     photographers: photographers.map(p => {
       const { whatsapp, adminNote, ...safe } = publicPhotographer(p);
       return safe;
@@ -182,13 +158,15 @@ async function blockedBookings(id: number, tx: Pick<typeof db, "select"> = db) {
 router.get("/slots", async (req, res) => {
   if (!await enabled()) return res.status(423).json({ error: "خدمة التصوير والتوثيق مغلقة حالياً" });
   const data = z.object({
-    propertyId: z.coerce.number().int().positive(), photographerId: z.coerce.number().int().positive(),
+    propertyId: z.coerce.number().int().positive().optional(),
+    serviceSubmissionId: z.coerce.number().int().positive().optional(),
+    photographerId: z.coerce.number().int().positive(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  }).safeParse(req.query);
+  }).refine(exactlyOnePhotographyTarget).safeParse(req.query);
   if (!data.success) return res.status(400).json({ error: "بيانات الموعد غير صحيحة" });
-  const row = await ownedProperty(req, data.data.propertyId);
+  const row = await ownedPhotographyTarget(await getOwnerIds(req), data.data);
   const [p] = await db.select().from(photographersTable).where(eq(photographersTable.id, data.data.photographerId));
-  if (!row || !p || !await coveredProperty(row, p)) return res.json({ slots: [], timezone: "Asia/Riyadh" });
+  if (!row || !p || !await coveredPhotographyTarget(row, p)) return res.json({ slots: [], timezone: "Asia/Riyadh" });
   await reconcileExpiredPhotographyInvoices(p.id);
   return res.json({ slots: photographySlots(data.data.date, p.sessionMinutes, p.availability, await blockedBookings(p.id)), timezone: "Asia/Riyadh" });
 });
@@ -199,33 +177,34 @@ router.get("/bookings", async (req, res) => {
 });
 router.post("/bookings", async (req, res) => {
   if (!await enabled()) return res.status(423).json({ error: "خدمة التصوير والتوثيق مغلقة حالياً" });
-  const parsed = z.object({
-    propertyId: z.number().int().positive(), photographerId: z.number().int().positive(),
-    packageId: z.number().int().positive(), startAt: z.string().datetime({ offset: true }),
-  }).safeParse(req.body);
+  const parsed = photographyReservationSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "بيانات الحجز غير صحيحة" });
-  const property = await ownedProperty(req, parsed.data.propertyId);
-  if (!property) return res.status(403).json({ error: "العقار ليس مقبولاً ونشطاً ضمن حسابك" });
+  const ids = await getOwnerIds(req);
+  const property = await ownedPhotographyTarget(ids, parsed.data);
+  if (!property) return res.status(403).json({ error: "العقار أو الخدمة ليست معتمدة ونشطة ضمن حسابك" });
   const account = await resolveOwnerApplication(req);
   const ownerContact = account ? await db.execute<{ phone: string | null }>(sql`SELECT phone FROM owner_applications WHERE id = ${account.id}`) : null;
   const phone = photoPhone(ownerContact?.rows[0]?.phone || property.whatsappNumber);
-  if (!phone) return res.status(400).json({ error: "حدّث رقم واتساب العقار قبل الحجز" });
+  if (!phone) return res.status(400).json({ error: "حدّث رقم واتساب حسابك أو نشاطك قبل الحجز" });
   try {
     const booking = await db.transaction(async tx => {
       const [setting] = await tx.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled")).for("share");
        if (setting?.value !== "true" || !await photographyCardEnabled(tx)) throw new Error("closed");
+      const target = await ownedPhotographyTarget(ids, parsed.data, tx, true);
+      if (!target) throw new Error("coverage");
       await tx.execute(sql`SELECT pg_advisory_xact_lock(731220, ${parsed.data.photographerId})`);
       const [p] = await tx.select().from(photographersTable).where(eq(photographersTable.id, parsed.data.photographerId)).for("share");
       const [pack] = await tx.select().from(photographyPackagesTable).where(and(eq(photographyPackagesTable.id, parsed.data.packageId), eq(photographyPackagesTable.active, true))).for("share");
-      if (!p || !pack || !await coveredProperty(property, p)) throw new Error("coverage");
+      if (!p || !pack || !await coveredPhotographyTarget(target, p)) throw new Error("coverage");
       const startAt = new Date(parsed.data.startAt);
       const date = new Date(+startAt + 3 * 3600000).toISOString().slice(0, 10);
       const slots = photographySlots(date, p.sessionMinutes, p.availability, await blockedBookings(p.id, tx));
       const slot = slots.find(s => s.startAt === startAt.toISOString());
       if (!slot) throw new Error("slot");
       const [row] = await tx.insert(photographyBookingsTable).values({
-        ownerId: property.ownerId!, propertyId: property.id, photographerId: p.id, packageId: pack.id,
-        propertyName: property.nameAr, photographerName: p.name, packageName: pack.name,
+        ownerId: target.ownerId, propertyId: target.kind === "property" ? target.id : null,
+        serviceSubmissionId: target.kind === "service" ? target.id : null, photographerId: p.id, packageId: pack.id,
+        propertyName: target.nameAr, photographerName: p.name, packageName: pack.name,
         ownerPhone: phone, photographerPhone: p.whatsapp, startAt, endAt: new Date(slot.endAt),
         expiresAt: new Date(Date.now() + 15 * 60000), ...photographyQuote(pack.priceHalalas, Number(pack.platformPercent)),
       }).returning();
@@ -235,7 +214,7 @@ router.post("/bookings", async (req, res) => {
   } catch (error) {
     const message = (error as Error).message;
     return res.status(message === "closed" ? 423 : 409).json({ error: message === "closed"
-      ? "خدمة التصوير والتوثيق مغلقة حالياً" : "الموعد غير متاح أو المصور خارج نطاق العقار؛ أعد اختيار الموعد" });
+      ? "خدمة التصوير والتوثيق مغلقة حالياً" : "الموعد غير متاح أو المصور خارج نطاق نشاطك؛ أعد اختيار الموعد" });
   }
 });
 async function ownedBooking(req: Request, id: number) {

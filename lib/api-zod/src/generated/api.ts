@@ -15,13 +15,18 @@ export const GetPhotographyStatusResponse = zod.record(zod.string(), zod.unknown
 
 
 /**
- * @summary Owner-scoped approved properties, packages and approved photographers
+ * @summary Owner-scoped approved properties and service activities, packages and approved photographers
  */
 export const GetPhotographyCatalogResponse = zod.record(zod.string(), zod.unknown())
 
 
+
+
+
+
 export const GetPhotographySlotsQueryParams = zod.object({
-  "propertyId": zod.coerce.number().int(),
+  "propertyId": zod.coerce.number().int().min(1).optional().describe('Approved property submission ID; provide exactly one target'),
+  "serviceSubmissionId": zod.coerce.number().int().min(1).optional().describe('Approved service submission ID; provide exactly one target'),
   "photographerId": zod.coerce.number().int(),
   "date": zod.date()
 })
@@ -35,7 +40,37 @@ export const GetPhotographyBookingsResponse = zod.record(zod.string(), zod.unkno
 /**
  * @summary Atomic 15-minute slot hold with frozen package and commission quote
  */
-export const CreatePhotographyBookingBody = zod.record(zod.string(), zod.unknown())
+
+
+
+
+
+
+
+
+
+
+
+
+export const CreatePhotographyBookingBody = zod.union([zod.object({
+  "propertyId": zod.number().int().min(1),
+  "serviceSubmissionId": zod.never().optional(),
+  "photographerId": zod.number().int().min(1).optional(),
+  "packageId": zod.number().int().min(1).optional(),
+  "startAt": zod.date().optional()
+}),zod.object({
+  "propertyId": zod.never().optional(),
+  "serviceSubmissionId": zod.number().int().min(1),
+  "photographerId": zod.number().int().min(1).optional(),
+  "packageId": zod.number().int().min(1).optional(),
+  "startAt": zod.date().optional()
+})]).and(zod.object({
+  "propertyId": zod.number().int().min(1).optional(),
+  "serviceSubmissionId": zod.number().int().min(1).optional(),
+  "photographerId": zod.number().int().min(1),
+  "packageId": zod.number().int().min(1),
+  "startAt": zod.date()
+}))
 
 export const CreatePhotographyBookingResponse = zod.record(zod.string(), zod.unknown())
 

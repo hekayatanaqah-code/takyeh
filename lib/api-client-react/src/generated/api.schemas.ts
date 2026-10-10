@@ -5,6 +5,18 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type PhotographyReservationInput = (unknown & {
+  /** @minimum 1 */
+  propertyId?: number;
+  /** @minimum 1 */
+  serviceSubmissionId?: number;
+  /** @minimum 1 */
+  photographerId: number;
+  /** @minimum 1 */
+  packageId: number;
+  startAt: string;
+});
+
 export interface ServiceGlobalSeason {
   id: number;
   nameAr: string;
@@ -516,7 +528,16 @@ export type GetPhotographyStatus200 = { [key: string]: unknown };
 export type GetPhotographyCatalog200 = { [key: string]: unknown };
 
 export type GetPhotographySlotsParams = {
-propertyId: number;
+/**
+ * Approved property submission ID; provide exactly one target
+ * @minimum 1
+ */
+propertyId?: number;
+/**
+ * Approved service submission ID; provide exactly one target
+ * @minimum 1
+ */
+serviceSubmissionId?: number;
 photographerId: number;
 date: string;
 };
@@ -524,8 +545,6 @@ date: string;
 export type GetPhotographySlots200 = { [key: string]: unknown };
 
 export type GetPhotographyBookings200 = { [key: string]: unknown };
-
-export type CreatePhotographyBookingBody = { [key: string]: unknown };
 
 export type CreatePhotographyBooking200 = { [key: string]: unknown };
 

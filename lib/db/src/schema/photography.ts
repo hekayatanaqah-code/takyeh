@@ -1,4 +1,5 @@
-import { pgTable, serial, text, integer, boolean, jsonb, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, jsonb, timestamp, numeric, check } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
 export type PhotographyAvailability = { weekday: number; start: string; end: string }[];
@@ -27,7 +28,8 @@ export const photographerSessionsTable = pgTable("photographer_sessions", {
 });
 export const photographyBookingsTable = pgTable("photography_bookings", {
   id: serial("id").primaryKey(), ownerId: text("owner_id").notNull(),
-  propertyId: integer("property_id").notNull(),
+  propertyId: integer("property_id"),
+  serviceSubmissionId: integer("service_submission_id"),
   photographerId: integer("photographer_id").notNull().references(() => photographersTable.id),
   packageId: integer("package_id").notNull().references(() => photographyPackagesTable.id),
   propertyName: text("property_name").notNull(), photographerName: text("photographer_name").notNull(),
@@ -40,7 +42,9 @@ export const photographyBookingsTable = pgTable("photography_bookings", {
   photographerEarningsHalalas: integer("photographer_earnings_halalas").notNull(),
   invoiceId: text("invoice_id").unique(), paymentId: text("payment_id").unique(), paymentUrl: text("payment_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  check("photography_booking_one_target", sql`num_nonnulls(${table.propertyId}, ${table.serviceSubmissionId}) = 1`),
+]);
 export const photographyDeliveriesTable = pgTable("photography_deliveries", {
   id: serial("id").primaryKey(), dedupeKey: text("dedupe_key").notNull().unique(),
   bookingId: integer("booking_id").references(() => photographyBookingsTable.id, { onDelete: "cascade" }),

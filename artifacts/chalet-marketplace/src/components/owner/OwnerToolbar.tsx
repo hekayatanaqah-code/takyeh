@@ -25,6 +25,8 @@ export interface OwnerToolbarProps {
   onAccountSettings: () => void;
   onSubscription: () => void;
   onManageRequests: () => void;
+  onOwnerServices: () => void;
+  ownerServicesOpen?: boolean;
   onLogout: () => void;
   requestsOpen?: boolean;
   activityChoiceOpen?: boolean;
@@ -65,7 +67,7 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
           </Button>
         </div>
         <div
-          className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
+          className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5"
           data-testid="owner-toolbar-actions"
         >
           <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} />
@@ -146,6 +148,15 @@ function Actions({
         data-testid="button-manage-requests"
       >
         <ClipboardList /> متابعة الطلبات
+      </Button>
+      <Button
+        variant={p.ownerServicesOpen ? "default" : "outline"}
+        aria-pressed={!!p.ownerServicesOpen}
+        className={actionClassName}
+        onClick={p.onOwnerServices}
+        data-testid="owner-nav-owner-services"
+      >
+        <Briefcase /> خدمات الملاك
       </Button>
     </>
   );

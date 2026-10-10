@@ -17,13 +17,13 @@ export default function OwnerDashboardNavigation(p: Props) {
   const items = [
     { mode: "chalets" as const, label: "إدارة عقاراتي", icon: Building2, visible: p.canSeeChalets },
     { mode: "services" as const, label: "إدارة خدماتي", icon: Star, visible: p.canSeeServices },
-    { mode: "owner-services" as const, label: "خدمات الملاك", icon: Briefcase, visible: true },
     { mode: "admin-finance" as const, label: "الشؤون الإدارية والمالية", icon: Briefcase, visible: p.canAccessFinance },
   ];
 
+  if (!items.some(item => item.visible)) return null;
   return (
     <nav
-      aria-label="أقسام لوحة تحكم المالك"
+      aria-label="الأقسام التشغيلية للمالك"
       className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-flow-col lg:auto-cols-fr lg:grid-cols-none"
       data-testid="owner-primary-navigation"
     >

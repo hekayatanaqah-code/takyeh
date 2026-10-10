@@ -493,6 +493,21 @@ components:
       schema:
         type: string
   schemas:
+    PhotographyReservationInput:
+      type: object
+      additionalProperties: false
+      required: [photographerId, packageId, startAt]
+      properties:
+        propertyId: { type: integer, minimum: 1 }
+        serviceSubmissionId: { type: integer, minimum: 1 }
+        photographerId: { type: integer, minimum: 1 }
+        packageId: { type: integer, minimum: 1 }
+        startAt: { type: string, format: date-time }
+      oneOf:
+        - required: [propertyId]
+          not: { required: [serviceSubmissionId] }
+        - required: [serviceSubmissionId]
+          not: { required: [propertyId] }
     ServiceGlobalSeason:
       type: object
       required: [id, nameAr, startDate, endDate]

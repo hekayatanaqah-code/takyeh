@@ -46,7 +46,7 @@ export default function OwnerServicesOwner() {
     <div className="space-y-5" dir="rtl" data-testid="owner-services">
       <header>
         <h2 className="text-xl font-bold">خدمات الملاك</h2>
-        <p className="text-sm text-muted-foreground">خدمات إضافية لعقارك، منفصلة عن التشغيل اليومي.</p>
+        <p className="text-sm text-muted-foreground">خدمات إضافية لعقاراتك وخدماتك وأنشطتك، منفصلة عن التشغيل اليومي.</p>
       </header>
       {notice && <Notice tone="warn">{notice}</Notice>}
       {q.isLoading ? <Skel /> : q.isError || !q.data ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> :
