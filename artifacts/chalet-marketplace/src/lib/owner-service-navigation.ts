@@ -3,6 +3,17 @@ export interface SelectableOwnerService {
   isActive: boolean;
 }
 
+/** Publication alone is insufficient: the current request must still be approved. */
+export function hasApprovedActiveProperty(
+  submissions: readonly { id: number; status: string }[] = [],
+  properties: readonly { submissionId: number | null; isActive: boolean }[] = [],
+): boolean {
+  const approvedIds = new Set(submissions.filter(item => item.status === "approved").map(item => item.id));
+  return properties.some(property =>
+    property.isActive === true && property.submissionId !== null && approvedIds.has(property.submissionId),
+  );
+}
+
 /** Pending/draft submissions also count as activities: keep their management accessible. */
 export function hasOwnerActivities(
   propertyCount: number,

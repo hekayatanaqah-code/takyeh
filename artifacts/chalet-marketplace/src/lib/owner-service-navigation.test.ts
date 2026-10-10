@@ -1,12 +1,32 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { hasOwnerActivities, initialOwnerDashboardMode, selectOwnerService } from "./owner-service-navigation";
+import { hasApprovedActiveProperty, hasOwnerActivities, initialOwnerDashboardMode, selectOwnerService } from "./owner-service-navigation";
 
 const services = [
   { id: 1, isActive: false },
   { id: 2, isActive: true },
   { id: 3, isActive: true },
 ];
+
+test("advanced property management requires a matching approved, active property", () => {
+  const property = { submissionId: 1, isActive: true };
+  assert.equal(hasApprovedActiveProperty(), false);
+  for (const status of ["pending", "rejected", "needs_revision", "cancelled"]) {
+    assert.equal(hasApprovedActiveProperty([{ id: 1, status }], [property]), false, status);
+  }
+  assert.equal(hasApprovedActiveProperty([{ id: 1, status: "approved" }], []), false);
+  assert.equal(hasApprovedActiveProperty([{ id: 1, status: "approved" }], [{ ...property, isActive: false }]), false);
+  assert.equal(hasApprovedActiveProperty([{ id: 2, status: "approved" }], [property]), false);
+  assert.equal(hasApprovedActiveProperty([{ id: 1, status: "approved" }], [property]), true);
+});
+
+test("one eligible property enables management in a mixed list; losing eligibility hides it again", () => {
+  const submissions = [{ id: 1, status: "rejected" }, { id: 2, status: "approved" }];
+  const properties = [{ submissionId: 1, isActive: true }, { submissionId: 2, isActive: true }];
+  assert.equal(hasApprovedActiveProperty(submissions, properties), true);
+  assert.equal(hasApprovedActiveProperty(submissions, properties.map(item => ({ ...item, isActive: false }))), false);
+  assert.equal(hasApprovedActiveProperty(submissions.map(item => ({ ...item, status: "needs_revision" })), properties), false);
+});
 
 test("the onboarding empty state requires no properties, services or submissions", () => {
   assert.equal(hasOwnerActivities(0, 0, 0, 0), false);

@@ -30,7 +30,7 @@ import OwnerDashboardNavigation, { type OwnerDashboardMode } from "@/components/
 import ServiceIdentityLogo from "@/components/owner/ServiceIdentityLogo";
 import OwnerSubnav from "@/components/owner/OwnerSubnav";
 import OwnerStatAmount from "@/components/owner/OwnerStatAmount";
-import { hasOwnerActivities, initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
+import { hasApprovedActiveProperty, hasOwnerActivities, initialOwnerDashboardMode, selectOwnerService } from "@/lib/owner-service-navigation";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25487,6 +25487,9 @@ export default function Dashboard() {
 
   const { data: ownerChalets = [], isLoading: ownerChaletsLoading, isError: ownerChaletsError, refetch: retryOwnerChalets } = useQuery<any[]>({
     queryKey: ["owner", "chalets", isImpersonating ? impersonation.ownerId : user?.id],
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 15000,
     queryFn: async () => {
       const r = await apiFetch("/owner/chalets");
       if (!r.ok) throw new Error("تعذّر تحميل العقارات");
@@ -25552,7 +25555,14 @@ export default function Dashboard() {
   const effectiveDashMode = dashMode ?? (actAsStaff || isImpersonating ? "chalets" : initialOwnerDashboardMode(
     businessType, myApprovedProviders.length, myServiceSubmissions.length, providersError,
   ));
-  const canAccessFinancialAdmin = isStaff || actAsStaff || planLimits?.scope !== "property";
+  const hasOperationalProperty = canSeeChalets && !submissionsLoading && !ownerChaletsLoading
+    && !submissionsError && !ownerChaletsError && hasApprovedActiveProperty(submissions, ownerChalets);
+  const canUseAdvancedPropertyTabs = actAsStaff || hasOperationalProperty;
+  // Independent service dashboards retain their existing financial management.
+  const hasOperationalActivity = hasOperationalProperty
+    || (canSeeServices && !providersLoading && !providersError && myApprovedProviders.length > 0);
+  const canAccessFinancialAdmin = actAsStaff
+    || (planLimits?.scope !== "property" && hasOperationalActivity);
   const activeDashMode: "chalets" | "services" | "admin-finance" =
     effectiveDashMode === "admin-finance" && canAccessFinancialAdmin
       ? "admin-finance"
@@ -25832,14 +25842,17 @@ export default function Dashboard() {
   ] as const;
 
   const tabs = useMemo(() => {
-    if (!actAsStaff) return allTabs;
+    if (!actAsStaff) return canUseAdvancedPropertyTabs ? allTabs : allTabs.filter(tab => tab.id === "chalets");
     return allTabs.filter((tab) => {
       const permKey = TAB_PERMISSION[tab.id];
       if (!permKey || permKey === "__owner__") return false;
       return permissions[permKey as PermKey] === true;
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actAsStaff, permissions]);
+  }, [actAsStaff, permissions, canUseAdvancedPropertyTabs]);
+
+  // Guard the render itself, not only the effect: stale selections cannot mount hidden sections.
+  const visiblePropertyTab = tabs.find(tab => tab.id === activeTab)?.id ?? tabs[0]?.id;
 
   useEffect(() => {
     if (tabs.length > 0 && !tabs.find((t) => t.id === activeTab)) {
@@ -25850,11 +25863,12 @@ export default function Dashboard() {
   useEffect(() => {
     function handleSwitchTab(e: Event) {
       const tab = (e as CustomEvent).detail as string;
-      setActiveTab(tab as any);
+      const allowedTab = tabs.find(item => item.id === tab);
+      if (allowedTab) setActiveTab(allowedTab.id);
     }
     window.addEventListener("switch-dashboard-tab", handleSwitchTab);
     return () => window.removeEventListener("switch-dashboard-tab", handleSwitchTab);
-  }, []);
+  }, [tabs]);
 
   const isLoadingAuth = authLoading || staffLoading;
   const ownerInventoryLoading =
@@ -26742,14 +26756,14 @@ export default function Dashboard() {
         )}
 
         {/* Tabs */}
-        <OwnerSubnav highContrast label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
+        {canUseAdvancedPropertyTabs && <OwnerSubnav highContrast label="تبويبات إدارة العقارات" className="gap-x-1 gap-y-1 mb-6 pb-2 px-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              aria-pressed={activeTab === tab.id}
+              aria-pressed={visiblePropertyTab === tab.id}
               className={`relative flex items-center gap-2 px-4 py-3 text-base font-semibold border-b-2 transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset ${
-                activeTab === tab.id
+                visiblePropertyTab === tab.id
                   ? "border-primary bg-primary/10 text-gray-900 dark:bg-primary/20 dark:text-gray-50"
                   : "border-transparent text-gray-700 hover:bg-gray-200/70 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-slate-800 dark:hover:text-white"
               }`}
@@ -26758,10 +26772,10 @@ export default function Dashboard() {
               {tab.label}
             </button>
           ))}
-        </OwnerSubnav>
+        </OwnerSubnav>}
 
         {/* Tab Content */}
-        {activeTab === "chalets" && (
+        {visiblePropertyTab === "chalets" && (
           <ChaletsTab
             submissions={submissions as any[]}
             isLoading={submissionsLoading || authLoading || impersonationLoading}
@@ -26769,16 +26783,16 @@ export default function Dashboard() {
             onRequestAddon={() => setShowHeaderAddon("chalet")}
           />
         )}
-        {activeTab === "seasons" && (
+        {visiblePropertyTab === "seasons" && (
           <SeasonsTab ownerChalets={ownerChalets} />
         )}
-        {activeTab === "reviews" && (
+        {visiblePropertyTab === "reviews" && (
           <ReviewsTab />
         )}
-        {activeTab === "services" && (
+        {visiblePropertyTab === "services" && (
           <ChaletServicesTab />
         )}
-        {activeTab === "calendar" && (
+        {visiblePropertyTab === "calendar" && (
           <BookingCalendarTab
             submissions={submissions as any[] ?? []}
             submissionsLoading={submissionsLoading}
@@ -26786,21 +26800,21 @@ export default function Dashboard() {
             chaletsLoading={ownerChaletsLoading}
           />
         )}
-        {activeTab === "deposits" && (
+        {visiblePropertyTab === "deposits" && (
           <DepositsTab />
         )}
-        {activeTab === "messageSettings" && (
+        {visiblePropertyTab === "messageSettings" && (
           <OwnerMessageSettingsTab
             establishmentName={ownerChalets[0]?.nameAr}
             chaletNamesBySubmissionId={Object.fromEntries(ownerChalets.map((chalet: any) => [Number(chalet.submissionId), chalet.nameAr]))}
           />
         )}
-        {activeTab === "customers" && (
+        {visiblePropertyTab === "customers" && (
           <AdminFinanceCtx.Provider value={{ unit: { type: "all" } }}>
             <CustomersTab />
           </AdminFinanceCtx.Provider>
         )}
-        {activeTab === "digitalContracts" && (
+        {visiblePropertyTab === "digitalContracts" && (
           <ContractsArchiveTab />
         )}
           </>
