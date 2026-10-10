@@ -2241,10 +2241,15 @@ router.patch("/chalets/:id/toggle-active", async (req, res) => {
     .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, chalet.submissionId!)).limit(1);
   if (!sub || sub.ownerId !== ownerId) return res.status(403).json({ error: "غير مصرح" });
 
-  const [updated] = await db.update(chaletsTable)
-    .set({ isActive: !chalet.isActive })
-    .where(eq(chaletsTable.id, chaletId))
-    .returning({ isActive: chaletsTable.isActive });
+  const updated = await db.transaction(async tx => {
+    const [current] = await tx.select({ status: chaletSubmissionsTable.status })
+      .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, chalet.submissionId!)).for("update");
+    if (current?.status !== "approved") return null;
+    const [saved] = await tx.update(chaletsTable).set({ isActive: !chalet.isActive })
+      .where(eq(chaletsTable.id, chaletId)).returning({ isActive: chaletsTable.isActive });
+    return saved;
+  });
+  if (!updated) return res.status(409).json({ error: "لا يمكن تفعيل عقار لم تتم الموافقة على طلبه أو رُفض نهائياً." });
 
   return res.json({ isActive: updated.isActive });
 });
@@ -5232,6 +5237,9 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   }
 
   const body = req.body as Record<string, any>;
+  if (sub.status === "rejected") {
+    return res.status(409).json({ error: "هذا الطلب مرفوض ومغلق نهائياً. يمكنك إضافة عقار جديد من لوحة التحكم." });
+  }
   if (body.whatsappNumber !== undefined && !/^[0-9٠-٩۰-۹]+$/.test(String(body.whatsappNumber))) {
     return res.status(400).json({ error: "رقم الواتساب يقبل الأرقام فقط" });
   }
@@ -5253,7 +5261,7 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "تحقق من الصورة الرئيسية والشروط الخاصة", details: requiredMediaAndTerms.error.flatten().fieldErrors });
   }
   const updateData: Record<string, any> = {};
-  const isResubmission = sub.status === "rejected";
+  const isResubmission = sub.status === "needs_revision";
   if (isResubmission) {
     const identity = await checkPropertyIdentity({
       nameAr: String(body.nameAr ?? sub.nameAr),
@@ -5333,21 +5341,18 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${access.subscription.ownerId}))`);
         const [current] = await tx.select({ status: chaletSubmissionsTable.status })
           .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, submissionId)).for("update");
-        if (current?.status !== "rejected") return "changed";
-        const currentAccess = await ownerPlanAccess(req.user!.id);
-        if (!currentAccess.active || currentAccess.chaletCount >= currentAccess.chaletLimit) return "quota";
-        // Reuse the same request and keep the rejection note for administrative context.
+        if (current?.status !== "needs_revision") return "changed";
+        // Revision requests already reserve quota. Return the same record to review.
         await tx.update(chaletSubmissionsTable).set({ ...updateData, status: "pending" })
           .where(eq(chaletSubmissionsTable.id, submissionId));
         return "ok";
       });
-      if (result === "quota") return res.status(403).json({
-        error: "لا توجد مساحة متاحة في الباقة لإعادة إرسال الطلب. يرجى تجديد الباقة أو زيادة حد العقارات.",
-      });
       if (result === "changed") return res.status(409).json({ error: "تغيرت حالة الطلب. يرجى تحديث الصفحة." });
     } else {
-      await db.update(chaletSubmissionsTable).set(updateData)
-        .where(eq(chaletSubmissionsTable.id, submissionId));
+      const saved = await db.update(chaletSubmissionsTable).set(updateData)
+        .where(and(eq(chaletSubmissionsTable.id, submissionId), eq(chaletSubmissionsTable.status, sub.status)))
+        .returning({ id: chaletSubmissionsTable.id });
+      if (!saved.length) return res.status(409).json({ error: "تغيرت حالة الطلب. يرجى تحديث الصفحة." });
     }
   }
 

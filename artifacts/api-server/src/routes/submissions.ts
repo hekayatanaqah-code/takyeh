@@ -569,10 +569,12 @@ router.patch("/:id", async (req, res) => {
     (updateSet as any).suggestedCategoryName = d.suggestedCategoryName ?? null;
   }
 
-  await db
+  const saved = await db
     .update(chaletSubmissionsTable)
     .set(updateSet as any)
-    .where(eq(chaletSubmissionsTable.id, id));
+    .where(and(eq(chaletSubmissionsTable.id, id), eq(chaletSubmissionsTable.status, "needs_revision")))
+    .returning({ id: chaletSubmissionsTable.id });
+  if (!saved.length) return res.status(409).json({ error: "تغيرت حالة الطلب. لا يمكن إعادة إرسال طلب مرفوض نهائياً." });
 
   return res.json({ ok: true, message: "تم إعادة تقديم الطلب للمراجعة" });
 });

@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import {
   CheckCircle,
+  AlertTriangle,
   Home,
   Phone,
   MapPin,
@@ -455,7 +456,7 @@ export default function AddChalet() {
     },
     enabled: !!editId,
   });
-  const isResubmission = editSub?.status === "rejected";
+  const isResubmission = editSub?.status === "needs_revision";
 
   /* ── Pre-fill form when edit data arrives ── */
   useEffect(() => {
@@ -942,6 +943,17 @@ export default function AddChalet() {
 
   const planBlocksNewChalet = !isEditMode && !!planLimits
     && (planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit);
+  if (isEditMode && editSub?.status === "rejected") {
+    return (
+      <div dir="rtl" className="max-w-lg mx-auto py-16 px-5 text-center space-y-5">
+        <AlertTriangle className="h-12 w-12 text-destructive mx-auto" />
+        <h1 className="text-2xl font-bold">الطلب مغلق نهائياً</h1>
+        <p className="text-muted-foreground">هذا العقار مرفوض ولا يمكن تعديله أو إعادة إرساله. لا يُحتسب ضمن حد الباقة ويمكنك إضافة عقار جديد.</p>
+        {editSub.adminNote && <p className="text-destructive">سبب الرفض: {editSub.adminNote}</p>}
+        <Button onClick={() => navigate("/dashboard?mode=chalets")}>الذهاب إلى لوحة التحكم</Button>
+      </div>
+    );
+  }
   if (planBlocksNewChalet && !submitted) {
     const subscriptionExpired = planLimits?.active === false;
     return (
@@ -1071,9 +1083,9 @@ export default function AddChalet() {
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <div>
-                  <p className="font-bold text-base text-foreground">{isResubmission ? "تعديل وإعادة إرسال الطلب" : "العودة لتفاصيل الشاليه (إلغاء)"}</p>
-                  <p className="text-xs text-muted-foreground">{isResubmission ? "عدّل البيانات حسب سبب الرفض، ثم أعد إرسال الطلب للمراجعة من الزر أسفل الصفحة" : "التعديلات لن تُحفظ إلا بعد الضغط على زر الحفظ أسفل الصفحة"}</p>
-                  {isResubmission && editSub.adminNote && <p className="text-sm text-destructive mt-2">سبب الرفض: {editSub.adminNote}</p>}
+                  <p className="font-bold text-base text-foreground">{isResubmission ? "تعديل وإعادة الإرسال" : "العودة لتفاصيل الشاليه (إلغاء)"}</p>
+                  <p className="text-xs text-muted-foreground">{isResubmission ? "عدّل البيانات حسب ملاحظات الإدارة، ثم أعد إرسال الطلب للمراجعة من الزر أسفل الصفحة" : "التعديلات لن تُحفظ إلا بعد الضغط على زر الحفظ أسفل الصفحة"}</p>
+                  {isResubmission && editSub.adminNote && <p className="text-sm text-destructive mt-2">سبب الإرجاع للتعديل: {editSub.adminNote}</p>}
                 </div>
               </div>
             ) : (
@@ -2081,7 +2093,7 @@ export default function AddChalet() {
                     >
                       {editSaving ? (
                         <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> جاري الحفظ...</span>
-                      ) : isResubmission ? "تعديل وإعادة إرسال الطلب" : "حفظ التعديلات"}
+                      ) : isResubmission ? "تعديل وإعادة الإرسال" : "حفظ التعديلات"}
                     </Button>
                   ) : (
                     <>

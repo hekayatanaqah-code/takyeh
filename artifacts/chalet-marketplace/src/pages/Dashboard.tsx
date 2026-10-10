@@ -141,7 +141,7 @@ const statusConfig = {
   pending:        { label: "قيد المراجعة",  icon: <Clock className="w-3.5 h-3.5" />,       className: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
   approved:       { label: "تمت الموافقة",  icon: <CheckCircle className="w-3.5 h-3.5" />,  className: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
   rejected:       { label: "مرفوض",         icon: <XCircle className="w-3.5 h-3.5" />,      className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-  needs_revision: { label: "يحتاج تعديل",  icon: <RotateCcw className="w-3.5 h-3.5" />,    className: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  needs_revision: { label: "يتطلب تعديل",  icon: <RotateCcw className="w-3.5 h-3.5" />,    className: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
 };
 
 interface OwnerBooking {
@@ -1802,22 +1802,15 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon }: { 
                     </Button>
                   </Link>
                   {sub.status === "needs_revision" && (
-                    <Button
-                      size="sm"
-                      className="gap-1.5 rounded-xl text-xs h-8 bg-orange-600 hover:bg-orange-700 text-white border-0"
-                      onClick={() => setResubmitTarget(sub)}
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      تعديل وإعادة التقديم
-                    </Button>
-                  )}
-                  {sub.status === "rejected" && (
                     <Link href={`/add-chalet?editId=${sub.id}`}>
                       <Button size="sm" variant="outline" className="gap-1.5 rounded-xl text-xs min-h-8 h-auto py-2">
                         <RotateCcw className="w-3.5 h-3.5" />
-                        تعديل وإعادة إرسال الطلب
+                        تعديل وإعادة الإرسال
                       </Button>
                     </Link>
+                  )}
+                  {sub.status === "rejected" && (
+                    <p className="text-xs text-destructive py-2">الطلب مغلق نهائياً ولا يُحتسب ضمن حد الباقة. يمكنك إضافة عقار جديد.</p>
                   )}
                   {isApproved && (
                     <>

@@ -872,37 +872,49 @@ router.get("/submissions", async (req, res) => {
   return res.json(rows.reverse());
 });
 
-router.patch("/submissions/:id/status", async (req, res) => {
+router.patch("/submissions/:id/status", requireChaletApprovalsAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({
     status: z.enum(["pending", "approved", "rejected", "needs_revision"]),
-    adminNote: z.string().optional(),
+    adminNote: z.string().trim().max(2000).optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (["rejected", "needs_revision"].includes(body.data.status) && !body.data.adminNote) {
+    return res.status(400).json({ error: "يجب كتابة سبب الرفض أو الإرجاع للتعديل" });
+  }
+  const [initial] = await db.select().from(chaletSubmissionsTable)
+    .where(eq(chaletSubmissionsTable.id, id)).limit(1);
+  if (!initial) return res.status(404).json({ error: "الطلب غير موجود" });
+  const subscription = initial.ownerId ? await getOrStartOwnerSubscription(initial.ownerId) : null;
 
   const updateData: Record<string, unknown> = {
     status: body.data.status,
     adminNote: body.data.adminNote ?? null,
   };
-  if (body.data.status === "approved") {
-    const [submission] = await db
+  const result = await db.transaction(async (tx) => {
+    if (subscription) {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${subscription.ownerId}))`);
+    }
+    const [submission] = await tx
       .select()
       .from(chaletSubmissionsTable)
       .where(eq(chaletSubmissionsTable.id, id))
+      .for("update")
       .limit(1);
-
-    if (submission?.ownerId) {
-      const subscription = await getOrStartOwnerSubscription(submission.ownerId);
-      updateData.trialEndsAt = subscription.plan === "trial" ? subscription.expiresAt : null;
+    if (!submission) return "missing";
+    if (submission.status === "rejected") {
+      return body.data.status === "rejected" ? "ok" : "closed";
     }
+    if (body.data.status === "approved") {
 
-    if (submission) {
+      updateData.trialEndsAt = subscription?.plan === "trial" ? subscription.expiresAt : null;
+
       /* Extract real GPS coordinates from the owner's Google Maps link */
       const coords = submission.mapsUrl
         ? await extractCoordsFromMapsUrl(submission.mapsUrl)
         : null;
 
-      await db.insert(chaletsTable).values({
+      const publishedValues = {
         submissionId: submission.id,
         ownerId: submission.ownerId,
         nameAr: submission.nameAr,
@@ -940,17 +952,33 @@ router.patch("/submissions/:id/status", async (req, res) => {
         mapsUrl: submission.mapsUrl ?? undefined,
         socialLink: submission.socialLink ?? null,
         termsAndConditions: submission.termsAndConditions ?? null,
+        photoCaptions: submission.photoCaptions ?? [],
+        isActive: true,
         isVerified: false,
         latitude: coords?.[0] ?? null,
         longitude: coords?.[1] ?? null,
-      }).onConflictDoNothing();
+      };
+      const [existing] = await tx.select({ id: chaletsTable.id }).from(chaletsTable)
+        .where(eq(chaletsTable.submissionId, submission.id)).limit(1);
+      if (existing) {
+        await tx.update(chaletsTable).set(publishedValues).where(eq(chaletsTable.id, existing.id));
+      } else {
+        await tx.insert(chaletsTable).values(publishedValues);
+      }
+    } else {
+      // Any non-approved decision must also remove its mirror from public search.
+      await tx.update(chaletsTable).set({ isActive: false })
+        .where(eq(chaletsTable.submissionId, id));
     }
-  }
 
-  await db
+    await tx
     .update(chaletSubmissionsTable)
     .set(updateData)
     .where(eq(chaletSubmissionsTable.id, id));
+    return "ok";
+  });
+  if (result === "missing") return res.status(404).json({ error: "الطلب غير موجود" });
+  if (result === "closed") return res.status(409).json({ error: "الطلب مرفوض ومغلق نهائياً. يجب تقديم طلب جديد." });
 
   return res.json({ ok: true });
 });

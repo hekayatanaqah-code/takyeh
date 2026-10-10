@@ -716,6 +716,9 @@ function SubmissionReviewModal({
               )}
               {pendingAction && needsReason && (
                 <div className="bg-slate-800/80 border border-slate-600 rounded-xl p-4 space-y-2">
+                  {pendingAction === "rejected" && (
+                    <p className="text-sm text-red-300">الرفض يغلق الطلب نهائياً ولا يمكن إعادة إرساله أو قبوله لاحقاً. ستُحرّر مساحة الباقة ليتمكن المالك من تقديم عقار جديد.</p>
+                  )}
                   <label className="text-slate-300 text-sm font-semibold flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
                     {pendingAction === "needs_revision"
@@ -745,7 +748,7 @@ function SubmissionReviewModal({
                 <Button
                   className="flex-1 bg-green-700 hover:bg-green-600 text-white font-bold text-sm py-2.5 disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={() => setPendingAction("approved")}
-                  disabled={isPending || s.status === "approved"}
+                  disabled={isPending || s.status === "approved" || s.status === "rejected"}
                   title={s.status === "approved" ? "الطلب مقبول بالفعل" : undefined}
                 >
                   <CheckCircle className="w-4 h-4 ml-2" />
@@ -755,7 +758,7 @@ function SubmissionReviewModal({
                 <Button
                   className="flex-1 bg-orange-700 hover:bg-orange-600 text-white font-bold text-sm py-2.5"
                   onClick={() => setPendingAction("needs_revision")}
-                  disabled={isPending}
+                  disabled={isPending || s.status === "rejected"}
                 >
                   <RotateCcw className="w-4 h-4 ml-2" />
                   إرجاع للتعديل
