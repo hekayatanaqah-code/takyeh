@@ -203,7 +203,7 @@ router.get("/slots", async (req, res) => {
   const [p] = await db.select().from(photographersTable).where(eq(photographersTable.id, data.data.photographerId));
   if (!row || !p || !await coveredPhotographyTarget(row, p)) return res.json({ slots: [], timezone: "Asia/Riyadh" });
   await reconcileExpiredPhotographyInvoices(p.id);
-  return res.json({ slots: photographySlots(data.data.date, p.sessionMinutes, p.availability, await blockedBookings(p.id)), timezone: "Asia/Riyadh" });
+  return res.json({ slots: photographySlots(data.data.date, p.sessionMinutes, p.availability, await blockedBookings(p.id), new Date(), p.blockedDates), timezone: "Asia/Riyadh" });
 });
 router.get("/bookings", async (req, res) => {
   const ids = await getOwnerIds(req);
@@ -233,7 +233,7 @@ router.post("/bookings", async (req, res) => {
       if (!p || !pack || !await coveredPhotographyTarget(target, p)) throw new Error("coverage");
       const startAt = new Date(parsed.data.startAt);
       const date = new Date(+startAt + 3 * 3600000).toISOString().slice(0, 10);
-      const slots = photographySlots(date, p.sessionMinutes, p.availability, await blockedBookings(p.id, tx));
+      const slots = photographySlots(date, p.sessionMinutes, p.availability, await blockedBookings(p.id, tx), new Date(), p.blockedDates);
       const slot = slots.find(s => s.startAt === startAt.toISOString());
       if (!slot) throw new Error("slot");
       const [row] = await tx.insert(photographyBookingsTable).values({

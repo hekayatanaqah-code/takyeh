@@ -14,6 +14,7 @@ export const photographersTable = pgTable("photographers", {
   allDistricts: boolean("all_districts").notNull().default(false),
   sessionMinutes: integer("session_minutes").notNull().default(60),
   availability: jsonb("availability").$type<PhotographyAvailability>().notNull().default([]),
+  blockedDates: jsonb("blocked_dates").$type<string[]>().notNull().default([]),
   adminNote: text("admin_note"), passwordHash: text("password_hash"),
   inviteHash: text("invite_hash").unique(), inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -24,6 +24,7 @@ export interface Photographer {
   regionId: number | null; cityId: number | null; districtIds: number[]; allDistricts: boolean;
   sessionMinutes: number; availability: Interval[]; adminNote: string;
   experienceYears?: ExperienceYears | ""; portfolioUrl?: string; profileImagePath?: string;
+  blockedDates?: string[];
 }
 export type ExperienceYears = "under_1" | "1_3" | "3_5" | "over_5";
 export const EXPERIENCE_AR: Record<ExperienceYears, string> = { under_1: "أقل من سنة", "1_3": "١-٣ سنوات", "3_5": "٣-٥ سنوات", over_5: "أكثر من ٥ سنوات" };
@@ -184,7 +185,6 @@ export function AvailabilityEditor({ value, onChange, customTimePicker = false }
 }
 export function availabilityError(v: Interval[], mins: number): string | null {
   if (!Number.isInteger(mins) || mins < 30 || mins > 240) return "مدة الجلسة بين ٣٠ و٢٤٠ دقيقة";
-  if (v.length === 0) return "أضف فترة توفر واحدة على الأقل";
   for (const x of v) {
     if (!x.start || !x.end || x.start >= x.end) return "وقت نهاية كل فترة يجب أن يكون بعد بدايتها";
   }

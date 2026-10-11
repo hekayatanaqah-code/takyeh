@@ -550,6 +550,8 @@ export const acceptPhotographyInviteBodyOneAvailabilityItemStartRegExp = new Reg
 export const acceptPhotographyInviteBodyOneAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
 export const acceptPhotographyInviteBodyOneAvailabilityMax = 28;
 
+export const acceptPhotographyInviteBodyOneBlockedDatesMax = 3660;
+
 export const acceptPhotographyInviteBodyTwoPasswordMin = 10;
 export const acceptPhotographyInviteBodyTwoPasswordMax = 128;
 
@@ -569,7 +571,8 @@ export const AcceptPhotographyInviteBody = zod.object({
   "weekday": zod.number().int().min(acceptPhotographyInviteBodyOneAvailabilityItemWeekdayMin).max(acceptPhotographyInviteBodyOneAvailabilityItemWeekdayMax),
   "start": zod.string().regex(acceptPhotographyInviteBodyOneAvailabilityItemStartRegExp),
   "end": zod.string().regex(acceptPhotographyInviteBodyOneAvailabilityItemEndRegExp)
-})).min(1).max(acceptPhotographyInviteBodyOneAvailabilityMax)
+})).max(acceptPhotographyInviteBodyOneAvailabilityMax),
+  "blockedDates": zod.array(zod.date()).max(acceptPhotographyInviteBodyOneBlockedDatesMax).optional()
 }).and(zod.object({
   "password": zod.string().min(acceptPhotographyInviteBodyTwoPasswordMin).max(acceptPhotographyInviteBodyTwoPasswordMax)
 }))
@@ -593,6 +596,8 @@ export const acceptPhotographyInviteResponsePhotographerOneAvailabilityItemStart
 export const acceptPhotographyInviteResponsePhotographerOneAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
 export const acceptPhotographyInviteResponsePhotographerOneAvailabilityMax = 28;
 
+export const acceptPhotographyInviteResponsePhotographerOneBlockedDatesMax = 3660;
+
 
 
 export const AcceptPhotographyInviteResponse = zod.object({
@@ -610,7 +615,8 @@ export const AcceptPhotographyInviteResponse = zod.object({
   "weekday": zod.number().int().min(acceptPhotographyInviteResponsePhotographerOneAvailabilityItemWeekdayMin).max(acceptPhotographyInviteResponsePhotographerOneAvailabilityItemWeekdayMax),
   "start": zod.string().regex(acceptPhotographyInviteResponsePhotographerOneAvailabilityItemStartRegExp),
   "end": zod.string().regex(acceptPhotographyInviteResponsePhotographerOneAvailabilityItemEndRegExp)
-})).min(1).max(acceptPhotographyInviteResponsePhotographerOneAvailabilityMax)
+})).max(acceptPhotographyInviteResponsePhotographerOneAvailabilityMax),
+  "blockedDates": zod.array(zod.date()).max(acceptPhotographyInviteResponsePhotographerOneBlockedDatesMax).optional()
 }).and(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),
@@ -643,6 +649,8 @@ export const updatePhotographerProfileBodyAvailabilityItemStartRegExp = new RegE
 export const updatePhotographerProfileBodyAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
 export const updatePhotographerProfileBodyAvailabilityMax = 28;
 
+export const updatePhotographerProfileBodyBlockedDatesMax = 3660;
+
 
 
 export const UpdatePhotographerProfileBody = zod.object({
@@ -659,7 +667,8 @@ export const UpdatePhotographerProfileBody = zod.object({
   "weekday": zod.number().int().min(updatePhotographerProfileBodyAvailabilityItemWeekdayMin).max(updatePhotographerProfileBodyAvailabilityItemWeekdayMax),
   "start": zod.string().regex(updatePhotographerProfileBodyAvailabilityItemStartRegExp),
   "end": zod.string().regex(updatePhotographerProfileBodyAvailabilityItemEndRegExp)
-})).min(1).max(updatePhotographerProfileBodyAvailabilityMax)
+})).max(updatePhotographerProfileBodyAvailabilityMax),
+  "blockedDates": zod.array(zod.date()).max(updatePhotographerProfileBodyBlockedDatesMax).optional()
 })
 
 export const updatePhotographerProfileResponsePhotographerOneBioMax = 2000;
@@ -681,6 +690,8 @@ export const updatePhotographerProfileResponsePhotographerOneAvailabilityItemSta
 export const updatePhotographerProfileResponsePhotographerOneAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
 export const updatePhotographerProfileResponsePhotographerOneAvailabilityMax = 28;
 
+export const updatePhotographerProfileResponsePhotographerOneBlockedDatesMax = 3660;
+
 
 
 export const UpdatePhotographerProfileResponse = zod.object({
@@ -698,7 +709,8 @@ export const UpdatePhotographerProfileResponse = zod.object({
   "weekday": zod.number().int().min(updatePhotographerProfileResponsePhotographerOneAvailabilityItemWeekdayMin).max(updatePhotographerProfileResponsePhotographerOneAvailabilityItemWeekdayMax),
   "start": zod.string().regex(updatePhotographerProfileResponsePhotographerOneAvailabilityItemStartRegExp),
   "end": zod.string().regex(updatePhotographerProfileResponsePhotographerOneAvailabilityItemEndRegExp)
-})).min(1).max(updatePhotographerProfileResponsePhotographerOneAvailabilityMax)
+})).max(updatePhotographerProfileResponsePhotographerOneAvailabilityMax),
+  "blockedDates": zod.array(zod.date()).max(updatePhotographerProfileResponsePhotographerOneBlockedDatesMax).optional()
 }).and(zod.object({
   "id": zod.number().int(),
   "name": zod.string(),

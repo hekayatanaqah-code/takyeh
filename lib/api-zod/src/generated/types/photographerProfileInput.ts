@@ -30,9 +30,8 @@ export interface PhotographerProfileInput {
      * @maximum 240
      */
   sessionMinutes: number;
-  /**
-     * @minItems 1
-     * @maxItems 28
-     */
+  /** @maxItems 28 */
   availability: PhotographerAvailability[];
+  /** @maxItems 3660 */
+  blockedDates?: Date[];
 }

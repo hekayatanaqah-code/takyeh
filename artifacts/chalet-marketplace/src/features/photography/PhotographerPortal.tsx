@@ -2,10 +2,11 @@ import { useRef, useState } from "react";
 import { toAr, whatsappDigits } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
-import { call, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, AvailabilityEditor, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
+import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./availabilityControls";
+import { call, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
-interface Profile { bio: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string }
-const emptyProfile: Profile = { bio: "", sessionMinutes: 90, availability: [], experienceYears: "", portfolioUrl: "", profileImagePath: "" };
+interface Profile { bio: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string; blockedDates: string[] }
+const emptyProfile: Profile = { bio: "", sessionMinutes: 90, availability: [], experienceYears: "", portfolioUrl: "", profileImagePath: "", blockedDates: [] };
 
 /** 9665XXXXXXXX -> 05XXXXXXXX, then Eastern digits. */
 export function waDisplay(w: string): string {
@@ -69,20 +70,15 @@ function ProfileFields({ geo, setGeo, prof, setProf, inviteToken, onBusy }: { ge
         <Field label="رابط معرض الأعمال / Portfolio (اختياري)" hint="رابط Behance أو Instagram أو موقعك الشخصي"><input dir="ltr" type="url" inputMode="url" placeholder="https://www.behance.net/..." className={inputCls} value={prof.portfolioUrl} onChange={(e) => setProf({ ...prof, portfolioUrl: e.target.value })} data-testid="input-portfolio" /></Field>
       </div>
       <GeoPicker value={geo} onChange={setGeo} />
-      <Field label="مدة الجلسة" hint="من ٣٠ إلى ٢٤٠ دقيقة">
-        <div className="relative w-40">
-          <input inputMode="numeric" className={`${inputCls} pe-16 text-center font-bold tabular-nums`} value={prof.sessionMinutes ? toAr(prof.sessionMinutes) : ""}
-            onChange={(e) => { const d = whatsappDigits(e.target.value).slice(0, 3); setProf({ ...prof, sessionMinutes: d ? Number(d) : 0 }); }} data-testid="input-session" />
-          <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-sm text-muted-foreground">دقيقة</span>
-        </div>
-      </Field>
-      <div><p className="mb-2 text-sm font-semibold">أوقات التوفر الأسبوعية</p><AvailabilityEditor customTimePicker value={prof.availability} onChange={(availability) => setProf({ ...prof, availability })} /></div>
+      <DurationSelect value={prof.sessionMinutes} onChange={(sessionMinutes) => setProf((c) => ({ ...c, sessionMinutes }))} />
+      <div><p className="mb-2 text-sm font-semibold">أوقات التوفر الأسبوعية</p><WeeklyAvailability value={prof.availability} onChange={(availability) => setProf((c) => ({ ...c, availability }))} /></div>
+      <BlockedDatesCalendar value={prof.blockedDates} onChange={(blockedDates) => setProf((c) => ({ ...c, blockedDates }))} />
     </div>
   );
 }
 const urlError = (u: string) => { if (!u.trim()) return null; try { const x = new URL(u.trim()); return (x.protocol === "http:" || x.protocol === "https:") && !x.username && !x.password ? null : "أدخل رابطاً عاماً يبدأ بـ http أو https دون بيانات دخول"; } catch { return "رابط الأعمال غير صالح"; } };
 const validate = (g: Geo, p: Profile) => geoError(g) ?? availabilityError(p.availability, p.sessionMinutes) ?? (p.bio.trim() ? null : "اكتب نبذة قصيرة") ?? urlError(p.portfolioUrl);
-const payload = (p: Profile) => ({ ...p, portfolioUrl: p.portfolioUrl.trim() });
+const payload = (p: Profile) => ({ ...p, portfolioUrl: p.portfolioUrl.trim(), blockedDates: [...new Set(p.blockedDates)].sort() });
 const Shell = ({ children }: { children: React.ReactNode }) => (
   <div dir="rtl" className="mx-auto min-h-[100dvh] max-w-3xl space-y-5 bg-background px-4 py-8 text-foreground">
     <h1 className="text-2xl font-bold">بوابة مصوري تكية</h1>{children}
@@ -144,7 +140,7 @@ function Login() {
 function ProfileEditor({ p }: { p: Photographer }) {
   const qc = useQueryClient();
   const [geo, setGeo] = useState<Geo>({ regionId: p.regionId, cityId: p.cityId, districtIds: p.districtIds ?? [], allDistricts: p.allDistricts });
-  const [prof, setProf] = useState<Profile>({ bio: p.bio ?? "", sessionMinutes: p.sessionMinutes || 90, availability: p.availability ?? [], experienceYears: p.experienceYears ?? "", portfolioUrl: p.portfolioUrl ?? "", profileImagePath: p.profileImagePath ?? "" });
+  const [prof, setProf] = useState<Profile>({ bio: p.bio ?? "", sessionMinutes: p.sessionMinutes || 90, availability: p.availability ?? [], experienceYears: p.experienceYears ?? "", portfolioUrl: p.portfolioUrl ?? "", profileImagePath: p.profileImagePath ?? "", blockedDates: p.blockedDates ?? [] });
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const geoChanged = geo.regionId !== p.regionId || geo.cityId !== p.cityId || geo.allDistricts !== p.allDistricts || [...geo.districtIds].sort().join() !== [...(p.districtIds ?? [])].sort().join();
@@ -193,7 +189,7 @@ export default function PhotographerPortal() {
         {history.length === 0 ? <Empty title="لا يوجد سجل بعد" /> : history.map((b) => (
           <div key={b.id} className={`${cardCls} flex items-center justify-between gap-2`}><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}</p></div><StatusPill s={b.status} /></div>
         ))}</section>
-      <ProfileEditor key={JSON.stringify([p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath])} p={p} />
+      <ProfileEditor key={JSON.stringify([p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />
     </Shell>
   );
 }

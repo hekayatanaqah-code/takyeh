@@ -3,7 +3,7 @@ export const availabilitySchema = z.array(z.object({
   weekday: z.number().int().min(0).max(6),
   start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
   end: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
-})).min(1).max(28).superRefine((rows, ctx) => {
+})).max(28).superRefine((rows, ctx) => {
   rows.forEach((row, i) => {
     if (row.end <= row.start) ctx.addIssue({ code: "custom", message: "وقت النهاية يجب أن يلي البداية", path: [i] });
     if (rows.some((other, j) => j < i && other.weekday === row.weekday && row.start < other.end && row.end > other.start)) {
@@ -11,6 +11,10 @@ export const availabilitySchema = z.array(z.object({
     }
   });
 });
+export const blockedDatesSchema = z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(+date) && date.toISOString().slice(0, 10) === value;
+}, "تاريخ الإغلاق غير صحيح")).max(3660).transform(dates => [...new Set(dates)].sort());
 export const coverageSchema = z.object({
   regionId: z.number().int().positive(), cityId: z.number().int().positive(),
   districtIds: z.array(z.number().int().positive()).max(200),
@@ -31,6 +35,7 @@ export const photographerProfileSchema = z.object({
   districtIds: z.array(z.number().int().positive()).max(200), allDistricts: z.boolean(),
   sessionMinutes: z.number().int().min(30).max(240),
   availability: availabilitySchema,
+  blockedDates: blockedDatesSchema.optional(),
 }).refine(v => v.allDistricts || v.districtIds.length > 0, "حدد الأحياء أو اختر كل الأحياء");
 export function photoPhone(value: string): string | null {
   const digits = value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[\s()+-]/g, "");
@@ -44,8 +49,9 @@ export function photographyQuote(priceHalalas: number, platformPercent: number) 
 export function photographySlots(
   date: string, sessionMinutes: number,
   availability: { weekday: number; start: string; end: string }[],
-  blocked: { startAt: Date; endAt: Date }[], now = new Date(),
+  blocked: { startAt: Date; endAt: Date }[], now = new Date(), blockedDates: string[] = [],
 ) {
+  if (blockedDates.includes(date)) return [];
   const midnight = new Date(`${date}T00:00:00+03:00`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(+midnight)
     || new Date(+midnight + 3 * 3600000).toISOString().slice(0, 10) !== date) return [];

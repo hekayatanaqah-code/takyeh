@@ -112,6 +112,28 @@ test("portal logout invalidates server session; login requires the genuine passw
   sessionCookie = login.cookie!.split(";")[0];
   assert.equal((await request("/photography/portal")).status, 200);
 });
+test("portal persists, clears and validates blocked dates and supports a fully closed week", async () => {
+  const profile = {
+    bio: "مصور عقارات", regionId, cityId, districtIds: [], allDistricts: true,
+    sessionMinutes: 180, availability: [], blockedDates: ["2026-12-01", "2026-12-01"],
+  };
+  const patch = async (body: object) => fetch(`${base}/photography/portal`, {
+    method: "PATCH", headers: { Origin: base, "Content-Type": "application/json", Cookie: sessionCookie },
+    body: JSON.stringify(body),
+  });
+  let response = await patch(profile);
+  assert.equal(response.status, 200);
+  let portal = await request<{ photographer: { blockedDates: string[]; sessionMinutes: number; availability: unknown[] } }>("/photography/portal");
+  assert.deepEqual(portal.data.photographer.blockedDates, ["2026-12-01"]);
+  assert.equal(portal.data.photographer.sessionMinutes, 180);
+  assert.deepEqual(portal.data.photographer.availability, []);
+  response = await patch({ ...profile, blockedDates: ["2026-02-30"] });
+  assert.equal(response.status, 400);
+  response = await patch({ ...profile, blockedDates: [], availability: [{ weekday: 0, start: "09:00", end: "12:00" }] });
+  assert.equal(response.status, 200);
+  portal = await request("/photography/portal");
+  assert.deepEqual(portal.data.photographer.blockedDates, []);
+});
 test("admin approval persists in the same database and is visible in the photographer session", async () => {
   const response = await fetch(`${base}/admin/photography/photographers/${photographerId}`, {
     method: "PATCH",

@@ -1,4 +1,5 @@
 import { toAr } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface Parts12 { hour: number; minute: number; pm: boolean }
 
@@ -18,7 +19,11 @@ export function join24({ hour, minute, pm }: Parts12): string {
   return `${String(h).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-const selCls = "h-10 appearance-none rounded-lg border border-border bg-background px-2 text-center text-sm font-semibold tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+/** Arabic display, e.g. "٩:٠٥ م". */
+export const fmt12 = (v: string) => { const p = split24(v); return `${toAr(p.hour)}:${toAr(String(p.minute).padStart(2, "0"))} ${p.pm ? "م" : "ص"}`; };
+
+const trigCls = "h-10 w-[4.25rem] justify-center gap-1 rounded-lg border-border bg-background px-2 text-sm font-semibold tabular-nums";
+const listCls = "max-h-60";
 
 export function TimePicker({ value, onChange, label, testId }: { value: string; onChange: (v: string) => void; label: string; testId?: string }) {
   const p = split24(value);
@@ -27,16 +32,22 @@ export function TimePicker({ value, onChange, label, testId }: { value: string; 
     <fieldset className="min-w-0 rounded-xl border border-border bg-card p-2" data-testid={testId}>
       <legend className="px-1 text-xs font-semibold text-muted-foreground">{label}</legend>
       <div dir="rtl" className="flex items-center gap-1.5">
-        <select aria-label={`${label} - الساعة`} className={`${selCls} w-14`} value={p.hour} onChange={(e) => up({ hour: Number(e.target.value) })}>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => <option key={h} value={h}>{toAr(h)}</option>)}
-        </select>
+        <Select value={String(p.hour)} onValueChange={(v) => up({ hour: Number(v) })}>
+          <SelectTrigger aria-label={`${label} - الساعة`} className={trigCls} data-testid={testId && `${testId}-hour`}><SelectValue /></SelectTrigger>
+          <SelectContent className={listCls} dir="rtl">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => <SelectItem key={h} value={String(h)}>{toAr(h)}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <span aria-hidden className="font-bold text-muted-foreground">:</span>
-        <select aria-label={`${label} - الدقيقة`} className={`${selCls} w-14`} value={p.minute} onChange={(e) => up({ minute: Number(e.target.value) })}>
-          {Array.from({ length: 60 }, (_, i) => i).map((m) => <option key={m} value={m}>{toAr(String(m).padStart(2, "0"))}</option>)}
-        </select>
+        <Select value={String(p.minute)} onValueChange={(v) => up({ minute: Number(v) })}>
+          <SelectTrigger aria-label={`${label} - الدقيقة`} className={trigCls} data-testid={testId && `${testId}-minute`}><SelectValue /></SelectTrigger>
+          <SelectContent className={listCls} dir="rtl">
+            {Array.from({ length: 60 }, (_, i) => i).map((m) => <SelectItem key={m} value={String(m)}>{toAr(String(m).padStart(2, "0"))}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div role="radiogroup" aria-label={`${label} - الفترة`} className="ms-auto flex overflow-hidden rounded-lg border border-border">
           {([false, true] as const).map((pm) => (
-            <button key={String(pm)} type="button" role="radio" aria-checked={p.pm === pm} onClick={() => up({ pm })}
+            <button key={String(pm)} type="button" role="radio" aria-checked={p.pm === pm} onClick={() => up({ pm })} data-testid={testId && `${testId}-${pm ? "pm" : "am"}`}
               className={`h-10 w-9 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${p.pm === pm ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
               {pm ? "م" : "ص"}
             </button>

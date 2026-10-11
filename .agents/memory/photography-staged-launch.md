@@ -13,3 +13,15 @@ Keep photography payments on the existing Moyasar gateway rather than introducin
 **Why:** The marketplace already collects platform payments through Moyasar; a separate provider would create unrelated merchant setup and reconciliation work.
 
 **How to apply:** Provider activation and payment testing should extend the existing merchant arrangement. Report WhatsApp provider readiness honestly and distinguish a provider accepting a message from confirmed delivery.
+
+Photographer availability edits close future booking opportunities; they must not cancel existing confirmed sessions.
+
+**Why:** Calendar closure is availability management, not authorization to cancel a customer's purchased booking.
+
+**How to apply:** Apply weekly closures and date exceptions to slot discovery and new reservations, leaving existing bookings unchanged.
+
+Preserve previously saved session lengths when introducing a narrower duration menu.
+
+**Why:** Existing profiles accepted durations outside the new five choices; opening or saving unrelated profile fields must not silently change those terms.
+
+**How to apply:** Display an unsupported saved duration as a legacy selection until the photographer explicitly chooses another duration.

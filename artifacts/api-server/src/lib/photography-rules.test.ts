@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { availabilitySchema, coverageSchema, photoPhone, photographyQuote, photographySlots, photographerProfileSchema } from "./photography-rules";
+import { availabilitySchema, blockedDatesSchema, coverageSchema, photoPhone, photographyQuote, photographySlots, photographerProfileSchema } from "./photography-rules";
 
 test("profile details validate experience, safe portfolio links, and managed portrait paths", () => {
   const profile = {
@@ -31,8 +31,8 @@ test("Saudi phones accept both digit sets and reject invalid destinations", () =
   assert.equal(photoPhone("00966501234567"), "966501234567");
   assert.equal(photoPhone("not-a-phone"), null);
 });
-test("weekly availability rejects reversed times, empty schedules and overlaps", () => {
-  assert.equal(availabilitySchema.safeParse([]).success, false);
+test("weekly availability allows a closed week and rejects reversed times and overlaps", () => {
+  assert.equal(availabilitySchema.safeParse([]).success, true);
   assert.equal(availabilitySchema.safeParse([{ weekday: 0, start: "12:00", end: "11:00" }]).success, false);
   assert.equal(availabilitySchema.safeParse([
     { weekday: 0, start: "10:00", end: "12:00" }, { weekday: 0, start: "11:00", end: "13:00" },
@@ -40,6 +40,18 @@ test("weekly availability rejects reversed times, empty schedules and overlaps",
   assert.equal(availabilitySchema.safeParse([
     { weekday: 0, start: "10:00", end: "12:00" }, { weekday: 0, start: "12:00", end: "13:00" },
   ]).success, true);
+});
+test("closed calendar dates validate, deduplicate and block all daily slots", () => {
+  assert.deepEqual(blockedDatesSchema.parse(["2026-10-12", "2026-10-11", "2026-10-11"]), ["2026-10-11", "2026-10-12"]);
+  for (const date of ["2026-02-30", "2026-13-01", "2026-1-01", "not-a-date"]) {
+    assert.equal(blockedDatesSchema.safeParse([date]).success, false);
+  }
+  assert.deepEqual(blockedDatesSchema.parse([]), []);
+  const now = new Date("2026-10-10T00:00:00Z");
+  const availability = [{ weekday: 0, start: "09:00", end: "12:00" }];
+  assert.equal(photographySlots("2026-10-11", 60, availability, [], now, ["2026-10-11"]).length, 0);
+  assert.equal(photographySlots("2026-10-11", 60, availability, [], now, []).length, 3);
+  assert.equal(photographySlots("2026-10-11", 60, [], [], now, []).length, 0);
 });
 test("coverage requires explicit districts or all-district coverage", () => {
   const base = { regionId: 1, cityId: 2, districtIds: [] };
