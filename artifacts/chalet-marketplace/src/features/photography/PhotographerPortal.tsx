@@ -3,6 +3,7 @@ import { toAr, whatsappDigits } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./availabilityControls";
+import { profileImageError } from "./imageRules";
 import { call, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
 interface Profile { bio: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string; blockedDates: string[] }
@@ -14,9 +15,6 @@ export function waDisplay(w: string): string {
   return toAr(d.startsWith("966") ? `0${d.slice(3)}` : d || w);
 }
 
-const IMG_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const IMG_MAX = 5 * 1024 * 1024;
-
 function ImageUpload({ value, onChange, inviteToken, onBusy }: { value: string; onChange: (v: string) => void; inviteToken?: string; onBusy: (b: boolean) => void }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
@@ -24,8 +22,8 @@ function ImageUpload({ value, onChange, inviteToken, onBusy }: { value: string; 
   const pick = async (file: File | undefined) => {
     if (ref.current) ref.current.value = "";
     if (!file) return;
-    if (!IMG_TYPES.includes(file.type)) return setErr("الصيغ المسموحة: JPEG أو PNG أو WebP");
-    if (file.size > IMG_MAX) return setErr("الحد الأقصى لحجم الصورة ٥ ميجابايت");
+    const validationError = profileImageError(file);
+    if (validationError) return setErr(validationError);
     setErr(null); setB(true);
     try {
       const u = await call<{ uploadURL: string; objectPath: string; uploadProof: string }>("/photography/profile-image/upload-url", "POST", { name: file.name, size: file.size, contentType: file.type, inviteToken });
@@ -50,7 +48,7 @@ function ImageUpload({ value, onChange, inviteToken, onBusy }: { value: string; 
         </div>
       </div>
       <p className="text-xs text-muted-foreground">JPEG أو PNG أو WebP، حتى ٥ ميجابايت.</p>
-      {err && <p role="alert" className="text-xs font-semibold text-destructive" data-testid="text-image-error">{err}</p>}
+      {err && <p role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm font-semibold text-destructive" data-testid="text-image-error">{err}</p>}
     </div>
   );
 }
@@ -116,7 +114,9 @@ export function PhotographerInvite() {
         <Field label="تأكيد كلمة المرور"><input type="password" autoComplete="new-password" className={inputCls} value={pw2} onChange={(e) => setPw2(e.target.value)} data-testid="input-password-confirm" /></Field>
       </div>
       {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
-      <button className={btnCls} disabled={m.isPending || uploading} onClick={submit} data-testid="button-submit-application">{m.isPending ? "جار الإرسال" : "إرسال الطلب"}</button>
+      <div className="flex justify-center pt-2">
+        <button className={`${btnCls} min-h-14 w-full text-base font-bold`} disabled={m.isPending || uploading} onClick={submit} data-testid="button-submit-application">{m.isPending ? "جار الإرسال" : "إرسال الطلب"}</button>
+      </div>
     </Shell>
   );
 }

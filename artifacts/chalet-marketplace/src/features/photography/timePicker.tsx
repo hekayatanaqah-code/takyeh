@@ -1,4 +1,5 @@
 import { toAr } from "@/lib/utils";
+import { QUARTER_MINUTES } from "./availability";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export interface Parts12 { hour: number; minute: number; pm: boolean }
@@ -34,15 +35,15 @@ export function TimePicker({ value, onChange, label, testId }: { value: string; 
       <div dir="rtl" className="flex items-center gap-1.5">
         <Select value={String(p.hour)} onValueChange={(v) => up({ hour: Number(v) })}>
           <SelectTrigger aria-label={`${label} - الساعة`} className={trigCls} data-testid={testId && `${testId}-hour`}><SelectValue /></SelectTrigger>
-          <SelectContent className={listCls} dir="rtl">
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => <SelectItem key={h} value={String(h)}>{toAr(h)}</SelectItem>)}
+          <SelectContent className={`${listCls} bg-white text-slate-950`} dir="rtl">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => <SelectItem className="text-slate-950 font-semibold focus:bg-slate-100 focus:text-slate-950 data-[state=checked]:bg-slate-100 data-[state=checked]:text-slate-950" key={h} value={String(h)}>{toAr(h)}</SelectItem>)}
           </SelectContent>
         </Select>
         <span aria-hidden className="font-bold text-muted-foreground">:</span>
         <Select value={String(p.minute)} onValueChange={(v) => up({ minute: Number(v) })}>
-          <SelectTrigger aria-label={`${label} - الدقيقة`} className={trigCls} data-testid={testId && `${testId}-minute`}><SelectValue /></SelectTrigger>
-          <SelectContent className={listCls} dir="rtl">
-            {Array.from({ length: 60 }, (_, i) => i).map((m) => <SelectItem key={m} value={String(m)}>{toAr(String(m).padStart(2, "0"))}</SelectItem>)}
+          <SelectTrigger aria-label={`${label} - الدقيقة`} className={trigCls} data-testid={testId && `${testId}-minute`}><SelectValue>{toAr(String(p.minute).padStart(2, "0"))}</SelectValue></SelectTrigger>
+          <SelectContent className={`${listCls} bg-white text-slate-950`} dir="rtl">
+            {QUARTER_MINUTES.map((m) => <SelectItem className="text-slate-950 font-semibold focus:bg-slate-100 focus:text-slate-950 data-[state=checked]:bg-slate-100 data-[state=checked]:text-slate-950" key={m} value={String(m)}>{toAr(String(m).padStart(2, "0"))}</SelectItem>)}
           </SelectContent>
         </Select>
         <div role="radiogroup" aria-label={`${label} - الفترة`} className="ms-auto flex overflow-hidden rounded-lg border border-border">

@@ -74,6 +74,8 @@ interface DualCalendarPickerProps {
   seasons?: GlobalSeason[];
   /** Alias for seasons for callers that refer to these as calendar highlights. */
   highlights?: GlobalSeason[];
+  /** Multi-date closure mode. Opening/navigation never selects a date. */
+  selectedDates?: string[];
 }
 
 type PickerView = "days" | "months" | "years";
@@ -92,6 +94,7 @@ export function DualCalendarPicker({
   mode = "hijri",
   seasons,
   highlights,
+  selectedDates,
 }: DualCalendarPickerProps) {
   const [open, setOpen] = React.useState(false);
   const [pickerView, setPickerView] = React.useState<PickerView>("days");
@@ -226,11 +229,11 @@ export function DualCalendarPicker({
         setPickerHM(h.month);
         setPickerGY(initial.getFullYear());
         setPickerGM(initial.getMonth());
-        onChange(initialValue);
+        if (!selectedDates) onChange(initialValue);
       }
     }
     setOpen(nextOpen);
-  }, [maxDateStr, minDateStr, mode, onChange, todayStr, value]);
+  }, [maxDateStr, minDateStr, mode, onChange, todayStr, value, selectedDates]);
 
   /* ── Year/month ranges for picker ── */
   const nowH = React.useMemo(() => toHijriComponents(new Date()), []);
@@ -353,7 +356,11 @@ export function DualCalendarPicker({
           {label && !compact && (
             <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
           )}
-          {value ? (
+          {selectedDates ? (
+            <span className="block rounded-xl border border-border bg-card px-4 py-3 text-center text-sm font-bold text-foreground">
+              فتح تقويم أيام الإغلاق (هجري / ميلادي)
+            </span>
+          ) : value ? (
             compact ? (
               <p className="text-sm font-semibold text-foreground truncate leading-none">{primaryLabel}</p>
             ) : (
@@ -592,7 +599,7 @@ export function DualCalendarPicker({
                 {Array.from({ length: hijriFirstDOW }).map((_, i) => <div key={`pad-${i}`} />)}
                 {hijriMonthDays.map(({ date, hijriDay }) => {
                   const gregStr = toGregorianStr(date);
-                  const isSelected = value === gregStr;
+                   const isSelected = selectedDates ? selectedDates.includes(gregStr) : value === gregStr;
                   const isToday = todayStr === gregStr;
                   const isDisabled = (!!minDateStr && gregStr < minDateStr) || (!!maxDateStr && gregStr > maxDateStr);
                    const highlights = getSeasonHighlights(gregStr);
@@ -602,10 +609,11 @@ export function DualCalendarPicker({
                       key={gregStr}
                       type="button"
                        data-calendar-day={gregStr}
-                       aria-label={dayAriaLabel(gregStr, highlights)}
+                        aria-label={`${dayAriaLabel(gregStr, highlights)}${selectedDates && isSelected ? " — مغلق" : ""}`}
+                        aria-pressed={selectedDates ? isSelected : undefined}
                        title={seasonLabel || undefined}
                       disabled={isDisabled}
-                      onClick={() => { onChange(gregStr); setOpen(false); }}
+                       onClick={() => { onChange(gregStr); if (!selectedDates) setOpen(false); }}
                       style={{
                         pointerEvents: isDisabled ? "none" : "auto",
                         touchAction: "manipulation",
@@ -617,14 +625,14 @@ export function DualCalendarPicker({
                       className={cn(
                         "pointer-events-auto relative flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
                         isDisabled && "opacity-30 pointer-events-none",
-                        isSelected ? "bg-primary text-primary-foreground"
+                        isSelected ? (selectedDates ? "bg-destructive/15 text-destructive ring-1 ring-inset ring-destructive/50" : "bg-primary text-primary-foreground")
                           : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
                           : "hover:bg-accent",
                       )}
                     >
                       <span className="text-[1.1rem] font-bold leading-none">{hijriDay.toLocaleString("ar-SA")}</span>
-                      <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
-                        {date.getDate()}
+                      <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected && !selectedDates ? "rgba(255,255,255,0.6)" : selectedDates ? "#475569" : "#a1a1aa" }}>
+                        {selectedDates ? date.getDate().toLocaleString("ar-SA") : date.getDate()}
                       </span>
                       {highlights.length > 0 && (
                         <span className="absolute inset-x-1 bottom-0.5 flex h-1 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
@@ -642,7 +650,7 @@ export function DualCalendarPicker({
                 {Array.from({ length: gregFirst }).map((_, i) => <div key={`pad-${i}`} />)}
                 {Array.from({ length: gregDayCount }, (_, i) => i + 1).map((day) => {
                   const gregStr = gregDateStr(pickerGY, pickerGM, day);
-                  const isSelected = value === gregStr;
+                   const isSelected = selectedDates ? selectedDates.includes(gregStr) : value === gregStr;
                   const isToday = todayStr === gregStr;
                   const isDisabled = (!!minDateStr && gregStr < minDateStr) || (!!maxDateStr && gregStr > maxDateStr);
                    const highlights = getSeasonHighlights(gregStr);
@@ -654,10 +662,11 @@ export function DualCalendarPicker({
                       key={gregStr}
                       type="button"
                        data-calendar-day={gregStr}
-                       aria-label={dayAriaLabel(gregStr, highlights)}
+                        aria-label={`${dayAriaLabel(gregStr, highlights)}${selectedDates && isSelected ? " — مغلق" : ""}`}
+                        aria-pressed={selectedDates ? isSelected : undefined}
                        title={seasonLabel || undefined}
                       disabled={isDisabled}
-                      onClick={() => { onChange(gregStr); setOpen(false); }}
+                       onClick={() => { onChange(gregStr); if (!selectedDates) setOpen(false); }}
                       style={{
                         pointerEvents: isDisabled ? "none" : "auto",
                         touchAction: "manipulation",
@@ -669,7 +678,7 @@ export function DualCalendarPicker({
                       className={cn(
                         "pointer-events-auto relative flex flex-col items-center justify-center gap-[2px] w-full aspect-square rounded-lg transition-colors touch-manipulation",
                         isDisabled && "opacity-30 pointer-events-none",
-                        isSelected ? "bg-primary text-primary-foreground"
+                        isSelected ? (selectedDates ? "bg-destructive/15 text-destructive ring-1 ring-inset ring-destructive/50" : "bg-primary text-primary-foreground")
                           : isToday ? "ring-2 ring-primary/40 bg-primary/5 hover:bg-primary/10"
                           : "hover:bg-accent",
                       )}
@@ -677,7 +686,7 @@ export function DualCalendarPicker({
                       {/* Gregorian day — large, bold */}
                       <span className="text-[1.1rem] font-bold leading-none">{day.toLocaleString("ar-SA")}</span>
                       {/* Hijri day — small, muted */}
-                      <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected ? "rgba(255,255,255,0.6)" : "#a1a1aa" }}>
+                      <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected && !selectedDates ? "rgba(255,255,255,0.6)" : selectedDates ? "#475569" : "#a1a1aa" }}>
                         {hijriDay > 0 ? hijriDay.toLocaleString("ar-SA") : ""}
                       </span>
                       {highlights.length > 0 && (
@@ -713,8 +722,7 @@ export function DualCalendarPicker({
                   const h = toHijriComponents(today);
                   setPickerHY(h.year); setPickerHM(h.month);
                   setPickerGY(today.getFullYear()); setPickerGM(today.getMonth());
-                  onChange(todayStr);
-                   setOpen(false);
+                  if (!selectedDates) { onChange(todayStr); setOpen(false); }
                 }}
                 className="text-[0.7rem] text-primary hover:text-primary/80 font-medium transition-colors"
               >اليوم</button>
@@ -727,6 +735,11 @@ export function DualCalendarPicker({
               )}
             </div>
           </>
+        )}
+        {selectedDates && (
+          <button type="button" onClick={() => setOpen(false)} className="mt-3 min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground" data-testid="button-close-blocked-calendar">
+            تم اختيار الأيام
+          </button>
         )}
       </DialogContent>
     </Dialog>

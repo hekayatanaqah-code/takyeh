@@ -1,5 +1,7 @@
 import type { Interval } from "./shared";
 
+export const QUARTER_MINUTES = [0, 15, 30, 45] as const;
+
 export const DURATION_OPTIONS: { value: number; label: string }[] = [
   { value: 60, label: "ساعة" },
   { value: 90, label: "ساعة ونصف" },

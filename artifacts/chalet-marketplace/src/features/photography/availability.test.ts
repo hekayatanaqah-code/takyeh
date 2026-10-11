@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { byWeekday, flattenWeek, monthCells, riyadhToday, toggleDate, isSupportedDuration } from "./availability";
+import { byWeekday, flattenWeek, monthCells, riyadhToday, toggleDate, isSupportedDuration, QUARTER_MINUTES } from "./availability";
+import { profileImageError, MAX_PROFILE_IMAGE_BYTES } from "./imageRules";
+
+test("minute menu contains exactly the four quarter-hour choices", () => {
+  assert.deepEqual(QUARTER_MINUTES, [0, 15, 30, 45]);
+});
+
+test("portrait validation accepts 5 MiB and rejects larger files with an Arabic alert", () => {
+  assert.equal(profileImageError({ size: MAX_PROFILE_IMAGE_BYTES, type: "image/png" }), null);
+  assert.match(profileImageError({ size: MAX_PROFILE_IMAGE_BYTES + 1, type: "image/png" })!, /٥ ميجابايت/);
+  assert.equal(profileImageError({ size: 1024, type: "image/webp" }), null);
+  assert.match(profileImageError({ size: 1024, type: "image/svg+xml" })!, /الصيغ المسموحة/);
+});
 
 test("weekday grouping keeps multiple intervals and round trips", () => {
   const v = [{ weekday: 0, start: "09:00", end: "12:00" }, { weekday: 0, start: "14:00", end: "18:00" }, { weekday: 5, start: "10:00", end: "11:00" }];
