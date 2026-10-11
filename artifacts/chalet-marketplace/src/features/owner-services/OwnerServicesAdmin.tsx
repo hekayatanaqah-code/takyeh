@@ -5,12 +5,13 @@ import { call, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty
 import PhotographyAdmin from "../photography/PhotographyAdmin";
 import { ICONS, ICON_AR, STATE_AR, isSafeUrl, type OwnerService, type ServiceIcon, type ServiceState } from "./types";
 import { cn } from "@/lib/utils";
+import "./owner-services-admin.css";
 
 interface AdminList { services: OwnerService[]; readiness: { payment: boolean; whatsapp: boolean } }
 const KEY = ["admin-owner-services"];
 const STATES: ServiceState[] = ["available", "coming_soon", "hidden"];
 const STATE_ICONS = { available: ToggleRight, coming_soon: Clock, hidden: ToggleLeft };
-const serviceInputCls = cn(inputCls, "bg-white text-slate-900 placeholder:text-slate-500");
+const serviceInputCls = cn(inputCls, "border-slate-600 bg-slate-900 text-white placeholder:text-slate-500 focus-visible:ring-amber-500/50");
 const iconButtonCls = "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 function refreshServices(qc: ReturnType<typeof useQueryClient>) {
   for (const key of [KEY, ["owner-services"], ["ph-admin"], ["ph-owner-catalog"]]) {
@@ -104,7 +105,7 @@ function Row({ s, i, n, onMove, moving, onEdit }: { s: OwnerService; i: number; 
           })}
         </div>
         <button type="button" className={`${iconButtonCls} text-foreground`} onClick={onEdit} title="تعديل البطاقة" aria-label={`تعديل ${s.title}`} data-testid={`button-edit-${s.id}`}><Pencil className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden="true" /></button>
-        <button type="button" className={`${iconButtonCls} text-red-600`} onClick={() => setConfirm(true)} title="حذف البطاقة" aria-label={`حذف ${s.title}`} data-testid={`button-delete-${s.id}`}><Trash2 className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden="true" /></button>
+        <button type="button" className={`${iconButtonCls} text-red-400`} onClick={() => setConfirm(true)} title="حذف البطاقة" aria-label={`حذف ${s.title}`} data-testid={`button-delete-${s.id}`}><Trash2 className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden="true" /></button>
       </div>
       {st.isError && <div className="mt-3"><ErrorBox error={st.error} /></div>}
       {confirm && (
@@ -146,7 +147,7 @@ export default function OwnerServicesAdmin() {
   );
 
   return (
-    <div className="space-y-5 text-foreground" dir="rtl" data-testid="owner-services-admin">
+    <div className="owner-services-admin-theme space-y-5 text-foreground" dir="rtl" data-testid="owner-services-admin">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-lg font-bold">خدمات الملاك</h2><p className="text-sm text-muted-foreground">خدمات إضافية لملاك العقارات والخدمات والأنشطة، منفصلة عن التشغيل اليومي.</p></div>
         {tabs}

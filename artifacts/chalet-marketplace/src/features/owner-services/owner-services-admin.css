@@ -1,0 +1,43 @@
+/* Match the slate/amber admin palette, without changing the owner-facing theme.
+   Shared photography components inherit these tokens inside this section only. */
+.owner-services-admin-theme {
+  color-scheme: dark;
+  --background: 222.2 47.4% 11.2%; /* slate-900: fields */
+  --foreground: 210 40% 98%; /* slate-50 */
+  --card: 217.2 32.6% 17.5%; /* slate-800: cards */
+  --card-foreground: 210 40% 98%;
+  --card-border: 215.3 25% 26.7%;
+  --popover: 217.2 32.6% 17.5%;
+  --popover-foreground: 210 40% 98%;
+  --popover-border: 215.3 25% 26.7%;
+  --border: 215.3 25% 26.7%; /* slate-700 */
+  --input: 215.4 16.3% 46.9%;
+  --muted: 215.3 25% 26.7%;
+  --muted-foreground: 215 20.2% 65.1%; /* slate-400 */
+  --secondary: 215.3 25% 26.7%;
+  --secondary-foreground: 210 40% 98%;
+  --accent: 215.3 25% 26.7%;
+  --accent-foreground: 210 40% 98%;
+  --primary: 37.7 92.1% 50.2%; /* amber-500: admin actions */
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --ring: 37.7 92.1% 50.2%;
+  --destructive: 0 90.6% 70.8%; /* red-400 */
+  --destructive-foreground: 210 40% 98%;
+}
+
+.owner-services-admin-theme :is(form, li).bg-card {
+  border-radius: 0.75rem;
+}
+
+.owner-services-admin-theme button.bg-primary:hover:not(:disabled) {
+  background-color: #d97706; /* amber-600, as in the other admin sections */
+  opacity: 1;
+}
+
+.owner-services-admin-theme .text-amber-700 {
+  color: #fcd34d;
+}
+
+.owner-services-admin-theme .text-emerald-700 {
+  color: #6ee7b7;
+}

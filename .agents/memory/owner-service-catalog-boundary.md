@@ -19,3 +19,9 @@ Future service cards may point to configured request pages; creating a card is n
 **Why:** The request includes administration of future service cards, not implementation of cleaning and maintenance fulfillment systems. Photography retains its complete integrated booking/payment flow.
 
 **How to apply:** Require a working request destination before offering a link-based card for ordering. Preserve historical photography bookings when hiding/removing its card, and keep payment reconciliation reachable after the request UI is closed.
+
+قسم «خدمات الملاك» في الأدمن يتبع النمط الكحلي الداكن واللون الكهرماني لصفحة «إدارة الخدمات»، بما يشمل البطاقات والنماذج والنصوص والأزرار، ولا يستخدم بطاقات أو حقولاً بيضاء.
+
+**Why:** المستخدم طلب مطابقة القسم لبقية لوحة الأدمن بعد ظهور مكونات فاتحة فيه.
+
+**How to apply:** احصر تنسيق الأدمن داخل القسم، ولا تغيّر النمط الخاص بواجهة المالك أو المكونات المشتركة خارج لوحة الأدمن.
