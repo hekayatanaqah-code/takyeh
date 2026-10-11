@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { whatsappDigits } from "@/lib/utils";
+import { toAr, whatsappDigits } from "@/lib/utils";
 import { sanitizeInvitePhone, validInvitePhone } from "@/lib/photography-invite-phone";
 import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
 
@@ -63,10 +63,10 @@ function InviteBox({ ready }: { ready: boolean }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="الاسم"><input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} data-testid="input-invite-name" /></Field>
         <Field label="رقم الواتساب" hint="رقم جوال سعودي يبدأ بـ ٠٥، مكوّن من ١٠ أرقام">
-          <input dir="ltr" type="tel" inputMode="numeric" placeholder="0512345678"
-            minLength={10} maxLength={10} pattern="05[0-9]{8}" required
+          <input lang="ar" dir="ltr" type="tel" inputMode="numeric" placeholder="٠٥١٢٣٤٥٦٧٨"
+            minLength={10} maxLength={10} pattern="٠٥[٠-٩]{8}" required
             className={`${inputCls} placeholder:text-slate-300 placeholder:opacity-100`}
-            value={wa} onChange={(e) => setWa(sanitizeInvitePhone(e.target.value))}
+            value={toAr(wa)} onChange={(e) => setWa(sanitizeInvitePhone(e.target.value))}
             onBlur={() => setWaTouched(true)}
             onPaste={(e) => {
               e.preventDefault();
