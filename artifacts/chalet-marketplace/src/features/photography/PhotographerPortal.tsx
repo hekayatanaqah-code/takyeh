@@ -5,7 +5,7 @@ import { useParams } from "wouter";
 import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./availabilityControls";
 import { profileImageError } from "./imageRules";
 import { BankFields, bankError, ibanError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
-import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
+import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
 interface Profile { bio: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string; blockedDates: string[] }
 const emptyProfile: Profile = { bio: "", sessionMinutes: 90, availability: [], experienceYears: "", portfolioUrl: "", profileImagePath: "", blockedDates: [] };
@@ -125,7 +125,7 @@ export function PhotographerInvite() {
       <div className={cardCls}><ContractConsent contract={contract.data} loading={contract.isLoading} error={contract.isError ? contract.error : null} accepted={accepted} setAccepted={setAccepted} onRetry={() => contract.refetch()} /></div>
       {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
       <div className="flex justify-center pt-2">
-        <button className={`${btnCls} min-h-14 w-full text-base font-bold`} disabled={m.isPending || uploading || !contractOk || !accepted} onClick={submit} data-testid="button-submit-application">{m.isPending ? "جار الإرسال" : "إرسال الطلب"}</button>
+        <button className={`${brownBtnCls} min-h-14 w-full text-base font-bold`} disabled={m.isPending || uploading || !contractOk || !accepted} onClick={submit} data-testid="button-submit-application">{m.isPending ? "جار الإرسال" : "إرسال الطلب"}</button>
       </div>
     </Shell>
   );
@@ -137,7 +137,7 @@ function Login() {
       <div className={`${cardCls} space-y-3 text-center`}>
         <p className="font-bold">سجّل الدخول للوصول إلى بوابتك</p>
         <p className="text-sm text-muted-foreground">يستخدم المصورون صفحة الدخول الموحدة لشركاء تكية برقم الواتساب وكلمة المرور.</p>
-        <a href={`${BASE}/login`} className={btnCls} data-testid="link-login">الذهاب لتسجيل الدخول</a>
+        <a href={`${BASE}/login`} className={brownBtnCls} data-testid="link-login">الذهاب لتسجيل الدخول</a>
       </div>
     </Shell>
   );

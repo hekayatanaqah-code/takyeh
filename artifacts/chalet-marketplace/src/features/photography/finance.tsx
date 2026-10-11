@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { call, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice } from "./shared";
+import { call, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice } from "./shared";
 
 /* ---- Saudi IBAN ---- */
 export const canonicalIban = (s: string) =>
@@ -214,13 +214,13 @@ export function SupportCenter({ photographerId }: { photographerId: number }) {
   const unread = (q.data ?? []).filter((r) => r.admin_reply && !r.is_read_by_owner).length;
   return (
     <section className="space-y-3" data-testid="section-support">
-      <h3 className="font-bold">الدعم {unread > 0 && <span className="ms-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground" data-testid="badge-support-unread">{unread.toLocaleString("ar-SA")} رد جديد</span>}</h3>
+      <h3 className="font-bold">مركز الدعم والطلبات {unread > 0 && <span className="ms-2 rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground" data-testid="badge-support-unread">{unread.toLocaleString("ar-SA")} رد جديد</span>}</h3>
       <form className={`${cardCls} space-y-3`} onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
         <Field label="الموضوع"><input className={inputCls} maxLength={200} value={subject} onChange={(e) => setSubject(e.target.value)} data-testid="input-support-subject" /></Field>
         <Field label="الرسالة"><textarea rows={4} className={inputCls} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="استفسار مالي أو قانوني أو فني" data-testid="input-support-message" /></Field>
         {create.isError && <ErrorBox error={create.error} />}
         {create.isSuccess && <Notice tone="ok">تم إرسال طلبك إلى فريق تكية</Notice>}
-        <button className={btnCls} disabled={!subject.trim() || !message.trim() || create.isPending} data-testid="button-send-support">{create.isPending ? "جار الإرسال" : "إرسال الطلب"}</button>
+        <button className={brownBtnCls} disabled={!subject.trim() || !message.trim() || create.isPending} data-testid="button-send-support">{create.isPending ? "جار الإرسال" : "إرسال الطلب"}</button>
       </form>
       {q.isLoading ? <Skel n={2} /> : q.isError ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> : (q.data ?? []).length === 0 ? <Empty title="لا توجد طلبات دعم" text="أرسل أول طلب وسيصلك رد الفريق هنا." /> : (q.data ?? []).map((r) => {
         const isNew = !!r.admin_reply && !r.is_read_by_owner;
