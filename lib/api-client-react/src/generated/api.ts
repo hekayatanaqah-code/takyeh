@@ -73,7 +73,13 @@ import type {
   PhotographerImageUploadRequest,
   PhotographerProfileInput,
   PhotographerProfileResult,
+  PhotographerSupportInput,
+  PhotographerSupportRequest,
+  PhotographyContract,
+  PhotographyContractInput,
   PhotographyReservationInput,
+  PhotographyTransferBalance,
+  PhotographyTransferInput,
   PropertyIdentityInput,
   PropertyIdentityResult,
   PropertySocialAccountInput,
@@ -3259,6 +3265,701 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getAcceptPhotographyInviteMutationOptions(options), queryClient);
+    }
+
+export const getGetPhotographyContractUrl = () => {
+
+
+
+
+  return `/api/photography/contract`
+}
+
+export const getPhotographyContract = async ( options?: Parameters<typeof customFetch>[1]): Promise<PhotographyContract> => {
+
+  return customFetch<PhotographyContract>(getGetPhotographyContractUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPhotographyContractQueryKey = () => {
+    return [
+    `/api/photography/contract`
+    ] as const;
+    }
+
+
+export const getGetPhotographyContractQueryOptions = <TData = Awaited<ReturnType<typeof getPhotographyContract>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyContract>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPhotographyContractQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPhotographyContract>>> = ({ signal }) => getPhotographyContract({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPhotographyContract>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPhotographyContractQueryResult = NonNullable<Awaited<ReturnType<typeof getPhotographyContract>>>
+export type GetPhotographyContractQueryError = ErrorType<unknown>
+
+
+export function useGetPhotographyContract<TData = Awaited<ReturnType<typeof getPhotographyContract>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyContract>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographyContract>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographyContract>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographyContract<TData = Awaited<ReturnType<typeof getPhotographyContract>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyContract>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographyContract>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographyContract>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographyContract<TData = Awaited<ReturnType<typeof getPhotographyContract>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyContract>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPhotographyContract<TData = Awaited<ReturnType<typeof getPhotographyContract>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyContract>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPhotographyContractQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetAdminPhotographyContractUrl = () => {
+
+
+
+
+  return `/api/admin/photography/contract`
+}
+
+export const getAdminPhotographyContract = async ( options?: Parameters<typeof customFetch>[1]): Promise<PhotographyContract> => {
+
+  return customFetch<PhotographyContract>(getGetAdminPhotographyContractUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminPhotographyContractQueryKey = () => {
+    return [
+    `/api/admin/photography/contract`
+    ] as const;
+    }
+
+
+export const getGetAdminPhotographyContractQueryOptions = <TData = Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminPhotographyContractQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminPhotographyContract>>> = ({ signal }) => getAdminPhotographyContract({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAdminPhotographyContractQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminPhotographyContract>>>
+export type GetAdminPhotographyContractQueryError = ErrorType<unknown>
+
+
+export function useGetAdminPhotographyContract<TData = Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminPhotographyContract>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminPhotographyContract>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminPhotographyContract<TData = Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAdminPhotographyContract>>,
+          TError,
+          Awaited<ReturnType<typeof getAdminPhotographyContract>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAdminPhotographyContract<TData = Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetAdminPhotographyContract<TData = Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAdminPhotographyContract>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAdminPhotographyContractQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPublishPhotographyContractUrl = () => {
+
+
+
+
+  return `/api/admin/photography/contract`
+}
+
+export const publishPhotographyContract = async (photographyContractInput: PhotographyContractInput, options?: Parameters<typeof customFetch>[1]): Promise<PhotographyContract> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PhotographyContract>(getPublishPhotographyContractUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(photographyContractInput)
+  }
+);}
+
+
+
+
+
+export const getPublishPhotographyContractMutationKey = () => ['publishPhotographyContract'] as const;
+
+export const getPublishPhotographyContractMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishPhotographyContract>>, TError,PublishPhotographyContractMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof publishPhotographyContract>>, TError,PublishPhotographyContractMutationVariables, TContext> => {
+
+const mutationKey = getPublishPhotographyContractMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishPhotographyContract>>, PublishPhotographyContractMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  publishPhotographyContract(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PublishPhotographyContractMutationResult = NonNullable<Awaited<ReturnType<typeof publishPhotographyContract>>>
+    export type PublishPhotographyContractMutationBody = BodyType<PhotographyContractInput>
+    export type PublishPhotographyContractMutationError = ErrorType<void>
+    export type PublishPhotographyContractMutationVariables = {data: BodyType<PhotographyContractInput>}
+
+    export const usePublishPhotographyContract = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishPhotographyContract>>, TError,PublishPhotographyContractMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof publishPhotographyContract>>,
+        TError,
+        PublishPhotographyContractMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPublishPhotographyContractMutationOptions(options), queryClient);
+    }
+
+export const getGetPhotographerSupportUrl = () => {
+
+
+
+
+  return `/api/photography/support-requests`
+}
+
+export const getPhotographerSupport = async ( options?: Parameters<typeof customFetch>[1]): Promise<PhotographerSupportRequest[]> => {
+
+  return customFetch<PhotographerSupportRequest[]>(getGetPhotographerSupportUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPhotographerSupportQueryKey = () => {
+    return [
+    `/api/photography/support-requests`
+    ] as const;
+    }
+
+
+export const getGetPhotographerSupportQueryOptions = <TData = Awaited<ReturnType<typeof getPhotographerSupport>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerSupport>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPhotographerSupportQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPhotographerSupport>>> = ({ signal }) => getPhotographerSupport({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPhotographerSupport>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPhotographerSupportQueryResult = NonNullable<Awaited<ReturnType<typeof getPhotographerSupport>>>
+export type GetPhotographerSupportQueryError = ErrorType<unknown>
+
+
+export function useGetPhotographerSupport<TData = Awaited<ReturnType<typeof getPhotographerSupport>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerSupport>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographerSupport>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographerSupport>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographerSupport<TData = Awaited<ReturnType<typeof getPhotographerSupport>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerSupport>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographerSupport>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographerSupport>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographerSupport<TData = Awaited<ReturnType<typeof getPhotographerSupport>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerSupport>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPhotographerSupport<TData = Awaited<ReturnType<typeof getPhotographerSupport>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerSupport>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPhotographerSupportQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreatePhotographerSupportUrl = () => {
+
+
+
+
+  return `/api/photography/support-requests`
+}
+
+export const createPhotographerSupport = async (photographerSupportInput: PhotographerSupportInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getCreatePhotographerSupportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(photographerSupportInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePhotographerSupportMutationKey = () => ['createPhotographerSupport'] as const;
+
+export const getCreatePhotographerSupportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPhotographerSupport>>, TError,CreatePhotographerSupportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPhotographerSupport>>, TError,CreatePhotographerSupportMutationVariables, TContext> => {
+
+const mutationKey = getCreatePhotographerSupportMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPhotographerSupport>>, CreatePhotographerSupportMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPhotographerSupport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePhotographerSupportMutationResult = NonNullable<Awaited<ReturnType<typeof createPhotographerSupport>>>
+    export type CreatePhotographerSupportMutationBody = BodyType<PhotographerSupportInput>
+    export type CreatePhotographerSupportMutationError = ErrorType<unknown>
+    export type CreatePhotographerSupportMutationVariables = {data: BodyType<PhotographerSupportInput>}
+
+    export const useCreatePhotographerSupport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPhotographerSupport>>, TError,CreatePhotographerSupportMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createPhotographerSupport>>,
+        TError,
+        CreatePhotographerSupportMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreatePhotographerSupportMutationOptions(options), queryClient);
+    }
+
+export const getMarkPhotographerSupportReadUrl = (id: number,) => {
+
+
+
+
+  return `/api/photography/support-requests/${id}/mark-read`
+}
+
+export const markPhotographerSupportRead = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getMarkPhotographerSupportReadUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkPhotographerSupportReadMutationKey = () => ['markPhotographerSupportRead'] as const;
+
+export const getMarkPhotographerSupportReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markPhotographerSupportRead>>, TError,MarkPhotographerSupportReadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markPhotographerSupportRead>>, TError,MarkPhotographerSupportReadMutationVariables, TContext> => {
+
+const mutationKey = getMarkPhotographerSupportReadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markPhotographerSupportRead>>, MarkPhotographerSupportReadMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  markPhotographerSupportRead(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkPhotographerSupportReadMutationResult = NonNullable<Awaited<ReturnType<typeof markPhotographerSupportRead>>>
+
+    export type MarkPhotographerSupportReadMutationError = ErrorType<void>
+    export type MarkPhotographerSupportReadMutationVariables = {id: number}
+
+    export const useMarkPhotographerSupportRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markPhotographerSupportRead>>, TError,MarkPhotographerSupportReadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof markPhotographerSupportRead>>,
+        TError,
+        MarkPhotographerSupportReadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMarkPhotographerSupportReadMutationOptions(options), queryClient);
+    }
+
+export const getGetPhotographerTransfersUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/photography/photographers/${id}/transfers`
+}
+
+export const getPhotographerTransfers = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<PhotographyTransferBalance> => {
+
+  return customFetch<PhotographyTransferBalance>(getGetPhotographerTransfersUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPhotographerTransfersQueryKey = (id: number,) => {
+    return [
+    `/api/admin/photography/photographers/${id}/transfers`
+    ] as const;
+    }
+
+
+export const getGetPhotographerTransfersQueryOptions = <TData = Awaited<ReturnType<typeof getPhotographerTransfers>>, TError = ErrorType<unknown>>(id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerTransfers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPhotographerTransfersQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPhotographerTransfers>>> = ({ signal }) => getPhotographerTransfers(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPhotographerTransfers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPhotographerTransfersQueryResult = NonNullable<Awaited<ReturnType<typeof getPhotographerTransfers>>>
+export type GetPhotographerTransfersQueryError = ErrorType<unknown>
+
+
+export function useGetPhotographerTransfers<TData = Awaited<ReturnType<typeof getPhotographerTransfers>>, TError = ErrorType<unknown>>(
+ id: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerTransfers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographerTransfers>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographerTransfers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographerTransfers<TData = Awaited<ReturnType<typeof getPhotographerTransfers>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerTransfers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographerTransfers>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographerTransfers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographerTransfers<TData = Awaited<ReturnType<typeof getPhotographerTransfers>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerTransfers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPhotographerTransfers<TData = Awaited<ReturnType<typeof getPhotographerTransfers>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographerTransfers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPhotographerTransfersQueryOptions(id,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRecordPhotographerTransferUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/photography/photographers/${id}/transfers`
+}
+
+export const recordPhotographerTransfer = async (id: number,
+    photographyTransferInput: PhotographyTransferInput, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getRecordPhotographerTransferUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(photographyTransferInput)
+  }
+);}
+
+
+
+
+
+export const getRecordPhotographerTransferMutationKey = () => ['recordPhotographerTransfer'] as const;
+
+export const getRecordPhotographerTransferMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordPhotographerTransfer>>, TError,RecordPhotographerTransferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordPhotographerTransfer>>, TError,RecordPhotographerTransferMutationVariables, TContext> => {
+
+const mutationKey = getRecordPhotographerTransferMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordPhotographerTransfer>>, RecordPhotographerTransferMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  recordPhotographerTransfer(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordPhotographerTransferMutationResult = NonNullable<Awaited<ReturnType<typeof recordPhotographerTransfer>>>
+    export type RecordPhotographerTransferMutationBody = BodyType<PhotographyTransferInput>
+    export type RecordPhotographerTransferMutationError = ErrorType<void>
+    export type RecordPhotographerTransferMutationVariables = {id: number;data: BodyType<PhotographyTransferInput>}
+
+    export const useRecordPhotographerTransfer = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordPhotographerTransfer>>, TError,RecordPhotographerTransferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof recordPhotographerTransfer>>,
+        TError,
+        RecordPhotographerTransferMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRecordPhotographerTransferMutationOptions(options), queryClient);
     }
 
 export const getGetPhotographerPortalUrl = () => {

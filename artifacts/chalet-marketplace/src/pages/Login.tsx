@@ -55,6 +55,7 @@ export default function Login() {
 
       qc.invalidateQueries({ queryKey: ["auth", "user"] });
       qc.invalidateQueries({ queryKey: ["staff", "me"] });
+      qc.invalidateQueries({ queryKey: ["ph-portal"] });
       navigate(data.redirect ?? "/dashboard");
     } catch {
       setError("تعذّر الاتصال بالخادم. يرجى المحاولة مرة أخرى");

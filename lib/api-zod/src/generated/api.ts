@@ -535,6 +535,7 @@ export const acceptPhotographyInviteBodyOneBioMax = 2000;
 
 export const acceptPhotographyInviteBodyOnePortfolioUrlMax = 2000;
 
+export const acceptPhotographyInviteBodyOneIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
 
 
 
@@ -555,6 +556,8 @@ export const acceptPhotographyInviteBodyOneBlockedDatesMax = 3660;
 export const acceptPhotographyInviteBodyTwoPasswordMin = 10;
 export const acceptPhotographyInviteBodyTwoPasswordMax = 128;
 
+export const acceptPhotographyInviteBodyTwoIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
+
 
 
 export const AcceptPhotographyInviteBody = zod.object({
@@ -562,6 +565,8 @@ export const AcceptPhotographyInviteBody = zod.object({
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(acceptPhotographyInviteBodyOnePortfolioUrlMax).optional(),
   "profileImagePath": zod.string().optional(),
+  "iban": zod.string().regex(acceptPhotographyInviteBodyOneIbanRegExp),
+  "bankName": zod.string(),
   "regionId": zod.number().int().min(1),
   "cityId": zod.number().int().min(1),
   "districtIds": zod.array(zod.number().int().min(1)).max(acceptPhotographyInviteBodyOneDistrictIdsMax),
@@ -574,13 +579,18 @@ export const AcceptPhotographyInviteBody = zod.object({
 })).max(acceptPhotographyInviteBodyOneAvailabilityMax),
   "blockedDates": zod.array(zod.date()).max(acceptPhotographyInviteBodyOneBlockedDatesMax).optional()
 }).and(zod.object({
-  "password": zod.string().min(acceptPhotographyInviteBodyTwoPasswordMin).max(acceptPhotographyInviteBodyTwoPasswordMax)
+  "password": zod.string().min(acceptPhotographyInviteBodyTwoPasswordMin).max(acceptPhotographyInviteBodyTwoPasswordMax),
+  "iban": zod.string().regex(acceptPhotographyInviteBodyTwoIbanRegExp),
+  "bankName": zod.string(),
+  "contractAccepted": zod.literal(true),
+  "contractVersion": zod.number().int().min(1)
 }))
 
 export const acceptPhotographyInviteResponsePhotographerOneBioMax = 2000;
 
 export const acceptPhotographyInviteResponsePhotographerOnePortfolioUrlMax = 2000;
 
+export const acceptPhotographyInviteResponsePhotographerOneIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
 
 
 
@@ -606,6 +616,8 @@ export const AcceptPhotographyInviteResponse = zod.object({
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(acceptPhotographyInviteResponsePhotographerOnePortfolioUrlMax).optional(),
   "profileImagePath": zod.string().optional(),
+  "iban": zod.string().regex(acceptPhotographyInviteResponsePhotographerOneIbanRegExp).optional(),
+  "bankName": zod.string().optional(),
   "regionId": zod.number().int().min(1),
   "cityId": zod.number().int().min(1),
   "districtIds": zod.array(zod.number().int().min(1)).max(acceptPhotographyInviteResponsePhotographerOneDistrictIdsMax),
@@ -627,6 +639,121 @@ export const AcceptPhotographyInviteResponse = zod.object({
 })
 
 
+export const GetPhotographyContractResponse = zod.object({
+  "id": zod.number().int().nullable(),
+  "html": zod.string(),
+  "createdAt": zod.date().nullable()
+})
+
+
+export const GetAdminPhotographyContractResponse = zod.object({
+  "id": zod.number().int().nullable(),
+  "html": zod.string(),
+  "createdAt": zod.date().nullable()
+})
+
+
+export const publishPhotographyContractBodyHtmlMax = 100000;
+
+
+
+export const PublishPhotographyContractBody = zod.object({
+  "html": zod.string().min(1).max(publishPhotographyContractBodyHtmlMax)
+})
+
+export const PublishPhotographyContractResponse = zod.object({
+  "id": zod.number().int().nullable(),
+  "html": zod.string(),
+  "createdAt": zod.date().nullable()
+})
+
+
+export const GetPhotographerSupportResponseItem = zod.object({
+  "id": zod.number().int(),
+  "subject": zod.string(),
+  "message": zod.string(),
+  "status": zod.string(),
+  "admin_reply": zod.string().nullish(),
+  "admin_reply_at": zod.date().nullish(),
+  "admin_attachment_urls": zod.array(zod.string()).optional(),
+  "is_read_by_owner": zod.boolean().optional(),
+  "created_at": zod.date()
+})
+export const GetPhotographerSupportResponse = zod.array(GetPhotographerSupportResponseItem)
+
+
+export const createPhotographerSupportBodySubjectMax = 200;
+
+export const createPhotographerSupportBodyMessageMax = 10000;
+
+
+
+export const CreatePhotographerSupportBody = zod.object({
+  "subject": zod.string().min(1).max(createPhotographerSupportBodySubjectMax),
+  "message": zod.string().min(1).max(createPhotographerSupportBodyMessageMax)
+})
+
+export const CreatePhotographerSupportResponse = zod.void()
+
+
+
+
+
+export const MarkPhotographerSupportReadParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const MarkPhotographerSupportReadResponse = zod.unknown()
+
+
+
+
+
+export const GetPhotographerTransfersParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const getPhotographerTransfersResponseTransfersItemOneAmountHalalasMax = 2147483647;
+
+export const getPhotographerTransfersResponseTransfersItemOneReferenceMax = 200;
+
+
+
+export const GetPhotographerTransfersResponse = zod.object({
+  "transfers": zod.array(zod.object({
+  "amountHalalas": zod.number().int().min(1).max(getPhotographerTransfersResponseTransfersItemOneAmountHalalasMax),
+  "reference": zod.string().min(1).max(getPhotographerTransfersResponseTransfersItemOneReferenceMax),
+  "transferredAt": zod.date()
+}).and(zod.object({
+  "id": zod.number().int()
+}))),
+  "netDueHalalas": zod.number().int(),
+  "transferredHalalas": zod.number().int()
+})
+
+
+
+
+
+export const RecordPhotographerTransferParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const recordPhotographerTransferBodyAmountHalalasMax = 2147483647;
+
+export const recordPhotographerTransferBodyReferenceMax = 200;
+
+
+
+export const RecordPhotographerTransferBody = zod.object({
+  "amountHalalas": zod.number().int().min(1).max(recordPhotographerTransferBodyAmountHalalasMax),
+  "reference": zod.string().min(1).max(recordPhotographerTransferBodyReferenceMax),
+  "transferredAt": zod.date()
+})
+
+export const RecordPhotographerTransferResponse = zod.void()
+
+
 export const GetPhotographerPortalResponse = zod.record(zod.string(), zod.unknown())
 
 
@@ -634,6 +761,7 @@ export const updatePhotographerProfileBodyBioMax = 2000;
 
 export const updatePhotographerProfileBodyPortfolioUrlMax = 2000;
 
+export const updatePhotographerProfileBodyIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
 
 
 
@@ -658,6 +786,8 @@ export const UpdatePhotographerProfileBody = zod.object({
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(updatePhotographerProfileBodyPortfolioUrlMax).optional(),
   "profileImagePath": zod.string().optional(),
+  "iban": zod.string().regex(updatePhotographerProfileBodyIbanRegExp).optional(),
+  "bankName": zod.string().optional(),
   "regionId": zod.number().int().min(1),
   "cityId": zod.number().int().min(1),
   "districtIds": zod.array(zod.number().int().min(1)).max(updatePhotographerProfileBodyDistrictIdsMax),
@@ -675,6 +805,7 @@ export const updatePhotographerProfileResponsePhotographerOneBioMax = 2000;
 
 export const updatePhotographerProfileResponsePhotographerOnePortfolioUrlMax = 2000;
 
+export const updatePhotographerProfileResponsePhotographerOneIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
 
 
 
@@ -700,6 +831,8 @@ export const UpdatePhotographerProfileResponse = zod.object({
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(updatePhotographerProfileResponsePhotographerOnePortfolioUrlMax).optional(),
   "profileImagePath": zod.string().optional(),
+  "iban": zod.string().regex(updatePhotographerProfileResponsePhotographerOneIbanRegExp).optional(),
+  "bankName": zod.string().optional(),
   "regionId": zod.number().int().min(1),
   "cityId": zod.number().int().min(1),
   "districtIds": zod.array(zod.number().int().min(1)).max(updatePhotographerProfileResponsePhotographerOneDistrictIdsMax),

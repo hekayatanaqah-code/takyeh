@@ -466,6 +466,88 @@ paths:
           description: Invalid profile, coverage, image ownership or password
         '410':
           description: Invitation expired or consumed
+  /photography/contract:
+    get:
+      operationId: getPhotographyContract
+      responses:
+        '200':
+          description: Current published contract or an empty unpublished state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotographyContract" }
+  /admin/photography/contract:
+    get:
+      operationId: getAdminPhotographyContract
+      responses:
+        '200':
+          description: Current contract
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotographyContract" }
+    post:
+      operationId: publishPhotographyContract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhotographyContractInput" }
+      responses:
+        '201':
+          description: Sanitized immutable new contract version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotographyContract" }
+        '403': { description: Superadmin required }
+  /photography/support-requests:
+    get:
+      operationId: getPhotographerSupport
+      responses:
+        '200':
+          description: Own support requests with administration replies
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PhotographerSupportRequest" }
+    post:
+      operationId: createPhotographerSupport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhotographerSupportInput" }
+      responses:
+        '201': { description: Request created in shared support inbox }
+  /photography/support-requests/{id}/mark-read:
+    post:
+      operationId: markPhotographerSupportRead
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Own reply marked read }
+        '404': { description: Request not owned by session }
+  /admin/photography/photographers/{id}/transfers:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: getPhotographerTransfers
+      responses:
+        '200':
+          description: Transfers and remaining net balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotographyTransferBalance" }
+    post:
+      operationId: recordPhotographerTransfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PhotographyTransferInput" }
+      responses:
+        '201': { description: "External bank transfer recorded, no payment execution" }
+        '400': { description: Invalid data or amount exceeds remaining balance }
+        '409': { description: Transfer reference already recorded }
   /photography/portal:
     get:
       tags: [Photography]
@@ -904,6 +986,8 @@ components:
         experienceYears: { type: string, enum: ['', under_1, '1_3', '3_5', over_5] }
         portfolioUrl: { type: string, maxLength: 2000 }
         profileImagePath: { type: string }
+        iban: { type: string, pattern: '^SA[0-9]{4}[A-Z0-9]{18}$' }
+        bankName: { type: string }
         regionId: { type: integer, minimum: 1 }
         cityId: { type: integer, minimum: 1 }
         districtIds:
@@ -924,9 +1008,69 @@ components:
       allOf:
         - $ref: "#/components/schemas/PhotographerProfileInput"
         - type: object
-          required: [password]
+          required: [password, iban, bankName, contractAccepted, contractVersion]
           properties:
             password: { type: string, minLength: 10, maxLength: 128 }
+            iban: { type: string, pattern: '^SA[0-9]{4}[A-Z0-9]{18}$' }
+            bankName: { type: string }
+            contractAccepted: { type: boolean, enum: [true] }
+            contractVersion: { type: integer, minimum: 1 }
+    PhotographyContract:
+      type: object
+      required: [id, html, createdAt]
+      properties:
+        id: { type: [integer, "null"] }
+        html: { type: string }
+        createdAt: { type: [string, "null"], format: date-time }
+    PhotographyContractInput:
+      type: object
+      required: [html]
+      properties:
+        html: { type: string, minLength: 1, maxLength: 100000 }
+    PhotographerSupportInput:
+      type: object
+      required: [subject, message]
+      properties:
+        subject: { type: string, minLength: 1, maxLength: 200 }
+        message: { type: string, minLength: 1, maxLength: 10000 }
+    PhotographerSupportRequest:
+      type: object
+      required: [id, subject, message, status, created_at]
+      properties:
+        id: { type: integer }
+        subject: { type: string }
+        message: { type: string }
+        status: { type: string }
+        admin_reply: { type: [string, "null"] }
+        admin_reply_at: { type: [string, "null"], format: date-time }
+        admin_attachment_urls:
+          type: array
+          items: { type: string }
+        is_read_by_owner: { type: boolean }
+        created_at: { type: string, format: date-time }
+    PhotographyTransferInput:
+      type: object
+      required: [amountHalalas, reference, transferredAt]
+      properties:
+        amountHalalas: { type: integer, minimum: 1, maximum: 2147483647 }
+        reference: { type: string, minLength: 1, maxLength: 200 }
+        transferredAt: { type: string, format: date-time }
+    PhotographyTransfer:
+      allOf:
+        - $ref: "#/components/schemas/PhotographyTransferInput"
+        - type: object
+          required: [id]
+          properties:
+            id: { type: integer }
+    PhotographyTransferBalance:
+      type: object
+      required: [transfers, netDueHalalas, transferredHalalas]
+      properties:
+        transfers:
+          type: array
+          items: { $ref: "#/components/schemas/PhotographyTransfer" }
+        netDueHalalas: { type: integer }
+        transferredHalalas: { type: integer }
     PhotographerProfileResult:
       type: object
       required: [photographer]

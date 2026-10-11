@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ibanSchema, bankSchema } from "./photography-finance";
 export const availabilitySchema = z.array(z.object({
   weekday: z.number().int().min(0).max(6),
   start: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
@@ -36,6 +37,8 @@ export const photographerProfileSchema = z.object({
   sessionMinutes: z.number().int().min(30).max(240),
   availability: availabilitySchema,
   blockedDates: blockedDatesSchema.optional(),
+  iban: ibanSchema.optional(),
+  bankName: bankSchema.optional(),
 }).refine(v => v.allDistricts || v.districtIds.length > 0, "حدد الأحياء أو اختر كل الأحياء");
 export function photoPhone(value: string): string | null {
   const digits = value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/[\s()+-]/g, "");

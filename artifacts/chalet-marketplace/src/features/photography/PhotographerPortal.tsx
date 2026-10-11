@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
-import { toAr, whatsappDigits } from "@/lib/utils";
+import { toAr } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./availabilityControls";
 import { profileImageError } from "./imageRules";
-import { call, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
+import { BankFields, bankError, ibanError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
+import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
 interface Profile { bio: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string; blockedDates: string[] }
 const emptyProfile: Profile = { bio: "", sessionMinutes: 90, availability: [], experienceYears: "", portfolioUrl: "", profileImagePath: "", blockedDates: [] };
@@ -91,14 +92,21 @@ export function PhotographerInvite() {
   const [prof, setProf] = useState<Profile>(emptyProfile);
   const [uploading, setUploading] = useState(false);
   const [pw, setPw] = useState(""); const [pw2, setPw2] = useState(""); const [err, setErr] = useState<string | null>(null);
+  const [bank, setBank] = useState<Bank>({ iban: "", bankName: "" });
+  const [acceptedVersion, setAcceptedVersion] = useState<number | null>(null);
+  const contract = useQuery({ queryKey: ["ph-contract"], retry: false, queryFn: () => call<Contract>("/photography/contract") });
+  const accepted = acceptedVersion !== null && acceptedVersion === contract.data?.id;
+  const setAccepted = (value: boolean) => setAcceptedVersion(value ? contract.data?.id ?? null : null);
+  const contractOk = !!contract.data?.id && !!contract.data.html.trim();
   const m = useMutation({
-    mutationFn: () => call(`/photography/invites/${encodeURIComponent(token)}`, "POST", { ...payload(prof), ...geo, password: pw }),
+    mutationFn: () => call(`/photography/invites/${encodeURIComponent(token)}`, "POST", { ...payload(prof), ...geo, password: pw, iban: bank.iban, bankName: bank.bankName, contractAccepted: true, contractVersion: contract.data!.id }),
+    onError: () => { setAccepted(false); contract.refetch(); },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["ph-portal"] }); window.location.assign(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/photographer`); },
   });
   if (inv.isLoading) return <Shell><Skel /></Shell>;
   if (inv.isError || !inv.data) return <Shell><ErrorBox error={inv.error ?? new Error("رابط الدعوة غير صالح أو منتهي")} /></Shell>;
   const submit = () => {
-    const e = validate(geo, prof) ?? (pw.length < 10 ? "كلمة المرور ١٠ أحرف على الأقل" : pw !== pw2 ? "كلمتا المرور غير متطابقتين" : null);
+    const e = validate(geo, prof) ?? bankError(bank) ?? (!contractOk ? "العقد غير متاح حاليا" : !accepted ? "يجب الموافقة على عقد المصورين" : null) ?? (pw.length < 10 ? "كلمة المرور ١٠ أحرف على الأقل" : pw !== pw2 ? "كلمتا المرور غير متطابقتين" : null);
     setErr(e); if (!e) m.mutate();
   };
   return (
@@ -113,26 +121,24 @@ export function PhotographerInvite() {
         <Field label="كلمة المرور"><input type="password" autoComplete="new-password" className={inputCls} value={pw} onChange={(e) => setPw(e.target.value)} data-testid="input-password" /></Field>
         <Field label="تأكيد كلمة المرور"><input type="password" autoComplete="new-password" className={inputCls} value={pw2} onChange={(e) => setPw2(e.target.value)} data-testid="input-password-confirm" /></Field>
       </div>
+      <div className={cardCls}><BankFields value={bank} onChange={setBank} /></div>
+      <div className={cardCls}><ContractConsent contract={contract.data} loading={contract.isLoading} error={contract.isError ? contract.error : null} accepted={accepted} setAccepted={setAccepted} onRetry={() => contract.refetch()} /></div>
       {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
       <div className="flex justify-center pt-2">
-        <button className={`${btnCls} min-h-14 w-full text-base font-bold`} disabled={m.isPending || uploading} onClick={submit} data-testid="button-submit-application">{m.isPending ? "جار الإرسال" : "إرسال الطلب"}</button>
+        <button className={`${btnCls} min-h-14 w-full text-base font-bold`} disabled={m.isPending || uploading || !contractOk || !accepted} onClick={submit} data-testid="button-submit-application">{m.isPending ? "جار الإرسال" : "إرسال الطلب"}</button>
       </div>
     </Shell>
   );
 }
 
 function Login() {
-  const qc = useQueryClient();
-  const [wa, setWa] = useState(""); const [pw, setPw] = useState("");
-  const m = useMutation({ mutationFn: () => call("/photography/portal/login", "POST", { whatsapp: wa.trim(), password: pw }), onSuccess: () => qc.invalidateQueries({ queryKey: ["ph-portal"] }) });
   return (
     <Shell>
-      <form className={`${cardCls} space-y-3`} onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
-        <Field label="رقم الواتساب"><input dir="ltr" type="tel" inputMode="numeric" maxLength={15} placeholder="٠٥١٢٣٤٥٦٧٨" className={inputCls} value={toAr(wa)} onChange={(e) => setWa(whatsappDigits(e.target.value).slice(0, 15))} data-testid="input-login-whatsapp" /></Field>
-        <Field label="كلمة المرور"><input type="password" autoComplete="current-password" className={inputCls} value={pw} onChange={(e) => setPw(e.target.value)} data-testid="input-login-password" /></Field>
-        {m.isError && <ErrorBox error={m.error} />}
-        <button className={btnCls} disabled={!wa.trim() || !pw || m.isPending} data-testid="button-login">{m.isPending ? "جار الدخول" : "تسجيل الدخول"}</button>
-      </form>
+      <div className={`${cardCls} space-y-3 text-center`}>
+        <p className="font-bold">سجّل الدخول للوصول إلى بوابتك</p>
+        <p className="text-sm text-muted-foreground">يستخدم المصورون صفحة الدخول الموحدة لشركاء تكية برقم الواتساب وكلمة المرور.</p>
+        <a href={`${BASE}/login`} className={btnCls} data-testid="link-login">الذهاب لتسجيل الدخول</a>
+      </div>
     </Shell>
   );
 }
@@ -142,24 +148,26 @@ function ProfileEditor({ p }: { p: Photographer }) {
   const [geo, setGeo] = useState<Geo>({ regionId: p.regionId, cityId: p.cityId, districtIds: p.districtIds ?? [], allDistricts: p.allDistricts });
   const [prof, setProf] = useState<Profile>({ bio: p.bio ?? "", sessionMinutes: p.sessionMinutes || 90, availability: p.availability ?? [], experienceYears: p.experienceYears ?? "", portfolioUrl: p.portfolioUrl ?? "", profileImagePath: p.profileImagePath ?? "", blockedDates: p.blockedDates ?? [] });
   const [uploading, setUploading] = useState(false);
+  const [bank, setBank] = useState<Bank>({ iban: p.iban ?? "", bankName: p.bankName ?? "" });
   const [err, setErr] = useState<string | null>(null);
   const geoChanged = geo.regionId !== p.regionId || geo.cityId !== p.cityId || geo.allDistricts !== p.allDistricts || [...geo.districtIds].sort().join() !== [...(p.districtIds ?? [])].sort().join();
-  const m = useMutation({ mutationFn: () => call("/photography/portal", "PATCH", { ...payload(prof), ...geo }), onSuccess: () => qc.invalidateQueries({ queryKey: ["ph-portal"] }) });
+  const m = useMutation({ mutationFn: () => call("/photography/portal", "PATCH", { ...payload(prof), ...geo, ...(bank.iban || bank.bankName ? { iban: bank.iban, bankName: bank.bankName } : {}) }), onSuccess: () => qc.invalidateQueries({ queryKey: ["ph-portal"] }) });
   return (
     <section className={`${cardCls} space-y-4`}>
       <h3 className="font-bold">ملفي</h3>
       <ProfileFields geo={geo} setGeo={setGeo} prof={prof} setProf={setProf} onBusy={setUploading} />
+      <BankFields value={bank} onChange={setBank} optional />
       {geoChanged && p.status === "approved" && <Notice tone="warn">تغيير منطقة التغطية يعيد ملفك إلى المراجعة قبل استقبال حجوزات جديدة.</Notice>}
       {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
       {m.isSuccess && <Notice tone="ok">تم حفظ التعديلات</Notice>}
-      <button className={btnCls} disabled={m.isPending || uploading} data-testid="button-save-profile" onClick={() => { const e = validate(geo, prof); setErr(e); if (!e) m.mutate(); }}>{m.isPending ? "جار الحفظ" : "حفظ التعديلات"}</button>
+      <button className={btnCls} disabled={m.isPending || uploading} data-testid="button-save-profile" onClick={() => { const e = validate(geo, prof) ?? (bank.iban || bank.bankName ? (bank.iban ? ibanError(bank.iban) : "أدخل رقم الآيبان") ?? (bank.bankName ? null : "اختر البنك") : null); setErr(e); if (!e) m.mutate(); }}>{m.isPending ? "جار الحفظ" : "حفظ التعديلات"}</button>
     </section>
   );
 }
 
 export default function PhotographerPortal() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { totalHalalas: number; commissionHalalas: number; netHalalas: number } }>("/photography/portal") });
+  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number } }>("/photography/portal") });
   const out = useMutation({ mutationFn: () => call("/photography/portal/logout", "POST"), onSuccess: () => { qc.removeQueries({ queryKey: ["ph-portal"] }); q.refetch(); } });
   if (q.isLoading) return <Shell><Skel /></Shell>;
   if (q.isError || !q.data) return <Login />;
@@ -176,9 +184,9 @@ export default function PhotographerPortal() {
       {p.status === "pending" && <Notice tone="warn">طلبك قيد المراجعة من الإدارة. لن تظهر للملاك حتى الاعتماد.</Notice>}
       {(p.status === "rejected" || p.status === "suspended") && <Notice tone="err">{p.status === "rejected" ? "تم رفض الطلب" : "تم إيقاف حسابك"}{p.adminNote ? `: ${p.adminNote}` : "."}</Notice>}
       {p.status === "approved" && p.adminNote && <Notice tone="ok">ملاحظة الإدارة: {p.adminNote}</Notice>}
-      <div className="grid gap-3 sm:grid-cols-3">
-        {[["إجمالي المبيعات", earnings.totalHalalas], ["عمولة المنصة", earnings.commissionHalalas], ["صافي أرباحك", earnings.netHalalas]].map(([l, v]) => (
-          <div key={l as string} className={cardCls}><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold">{sar(v as number)}</p></div>
+      <div className="mx-auto grid w-full max-w-xl grid-cols-2 gap-3 text-center">
+        {([["صافي المستحقات", earnings.netDueHalalas, "due"], ["المبالغ المحولة", earnings.transferredHalalas, "transferred"]] as const).map(([l, v, k]) => (
+          <div key={k} className={cardCls}><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold" data-testid={`text-earnings-${k}`}>{sar(v)}</p></div>
         ))}
       </div>
       <section className="space-y-3"><h3 className="font-bold">المواعيد القادمة</h3>
@@ -189,7 +197,8 @@ export default function PhotographerPortal() {
         {history.length === 0 ? <Empty title="لا يوجد سجل بعد" /> : history.map((b) => (
           <div key={b.id} className={`${cardCls} flex items-center justify-between gap-2`}><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}</p></div><StatusPill s={b.status} /></div>
         ))}</section>
-      <ProfileEditor key={JSON.stringify([p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />
+      <SupportCenter photographerId={p.id} />
+      <ProfileEditor key={JSON.stringify([p.iban, p.bankName, p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />
     </Shell>
   );
 }

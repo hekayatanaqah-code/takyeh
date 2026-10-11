@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toAr, whatsappDigits } from "@/lib/utils";
 import { sanitizeInvitePhone, validInvitePhone } from "@/lib/photography-invite-phone";
 import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
+import { ContractAdmin, TransfersPanel, formatIban } from "./finance";
 
 interface AdminData {
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
@@ -165,6 +166,12 @@ function ReviewCard({ p }: { p: Photographer }) {
       {open && (
         <div className="mt-4 space-y-3 border-t border-border pt-4">
           {p.bio && <p className="text-sm">{p.bio}</p>}
+          <div className="grid gap-2 rounded-xl border border-border p-3 text-sm sm:grid-cols-2" data-testid={`info-bank-${p.id}`}>
+            <p>البنك: <span className="font-semibold">{p.bankName || "غير مسجل"}</span></p>
+            <p>الآيبان: <span dir="ltr" className="font-mono">{p.iban ? formatIban(p.iban) : "غير مسجل"}</span></p>
+            <p className="sm:col-span-2">العقد: {p.contractVersion ? `وافق على الإصدار ${p.contractVersion.toLocaleString("ar-SA")}${p.contractAcceptedAt ? ` في ${fmtDT(p.contractAcceptedAt)}` : ""}` : "لا توجد موافقة مسجلة"}</p>
+          </div>
+          <TransfersPanel id={p.id} />
           <ProfileEditor p={p} />
           <GeoPicker value={geo} onChange={setGeo} />
           <Field label="ملاحظة الإدارة"><textarea className={inputCls} rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="input-admin-note" /></Field>
@@ -193,6 +200,7 @@ export default function PhotographyAdmin() {
     },
   });
   const [editing, setEditing] = useState<Pkg | "new" | null>(null);
+  const [tab, setTab] = useState<"main" | "contract">("main");
   if (q.isLoading) return <Skel />;
   if (q.isError || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
@@ -210,6 +218,10 @@ export default function PhotographyAdmin() {
         {toggle.isError && <div className="w-full"><ErrorBox error={toggle.error} /></div>}
       </section>
 
+      <div role="tablist" className="flex flex-wrap gap-2">
+        {([["main", "إدارة الخدمة"], ["contract", "إدارة عقد المصورين"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? btnCls : ghostCls} onClick={() => setTab(k)} data-testid={`tab-photography-${k}`}>{l}</button>)}
+      </div>
+      {tab === "contract" ? <ContractAdmin /> : <>
       <section className="space-y-3">
         <div className="flex items-center justify-between"><h3 className="font-bold">الباقات</h3>
           <button className={btnCls} onClick={() => setEditing("new")} data-testid="button-new-package">باقة جديدة</button></div>
@@ -246,6 +258,7 @@ export default function PhotographyAdmin() {
           </div>
         )}
       </section>
+      </>}
     </div>
   );
 }

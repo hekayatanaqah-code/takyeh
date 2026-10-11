@@ -5,7 +5,6 @@ import {
 } from "@workspace/db";
 import { and, eq, inArray, sql, desc, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { requireAuth, getOwnerIds, resolveOwnerApplication } from "./owner";
 import { photoHash, publicPhotographer, validPhotographyCoverage, photoOrigin } from "./photography-admin";
@@ -15,6 +14,9 @@ import { photographyCardEnabled } from "../lib/owner-services";
 import { photographyActivities, ownedPhotographyTarget, coveredPhotographyTarget, photographyReservationSchema, exactlyOnePhotographyTarget } from "../lib/photography-targets";
 import { photographyInvoice, reconcilePhotographyBooking, reconcileExpiredPhotographyInvoices } from "../lib/photography-payment";
 import { requestProfileImage, completeProfileImage, ownsProfileImage, profileImageUploadSchema, profileImageCompleteSchema } from "../lib/photography-images";
+import { getPhotographer as photographer, setPhotographerSession as setSession } from "../lib/photographer-auth";
+import { currentPhotographyContract, ibanSchema, bankSchema, photographyBalances } from "../lib/photography-finance";
+import photographySupportRouter from "./photography-support";
 
 const router = Router();
 router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
@@ -43,23 +45,11 @@ function sameOrigin(req: Request, res: Response, next: NextFunction) {
   try { if (origin && new URL(origin).host === host) return next(); } catch { /* invalid */ }
   return res.status(403).json({ error: "طلب غير مسموح من خارج المنصة" });
 }
-async function photographer(req: Request) {
-  const token = req.cookies?.[COOKIE];
-  if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token)) return null;
-  const [session] = await db.select().from(photographerSessionsTable).where(and(
-    eq(photographerSessionsTable.hash, photoHash(token)), gt(photographerSessionsTable.expiresAt, new Date()),
-  ));
-  if (!session) return null;
-  const [row] = await db.select().from(photographersTable).where(eq(photographersTable.id, session.photographerId));
-  return row ?? null;
-}
-async function setSession(req: Request, res: Response, id: number) {
-  const token = randomBytes(32).toString("hex");
-  await db.insert(photographerSessionsTable).values({
-    hash: photoHash(token), photographerId: id, expiresAt: new Date(Date.now() + 14 * 86400000),
-  });
-  res.cookie(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: req.secure, maxAge: 14 * 86400000, path: "/" });
-}
+router.get("/contract", async (_req, res) => {
+  const contract = await currentPhotographyContract();
+  return res.json(contract ?? { id: null, html: "", createdAt: null });
+});
+router.use("/support-requests", (req, res, next) => req.method === "GET" ? next() : sameOrigin(req, res, next), photographySupportRouter);
 router.get("/status", async (_req, res) => res.json({ enabled: await enabled(), readiness: photographyReadiness() }));
 async function imageIdentity(req: Request, inviteToken?: string) {
   if (!inviteToken) return photographer(req);
@@ -106,11 +96,22 @@ router.post("/invites/:token", sameOrigin, loginLimit, async (req, res) => {
   const identity = await imageIdentity(req, String(req.params.token));
   if (!identity) return res.status(410).json({ error: "الدعوة مستخدمة أو منتهية" });
   if (!await ownsProfileImage(identity.id, profile.data.profileImagePath)) return res.status(400).json({ error: "أعد رفع الصورة الشخصية من هذا الحساب" });
+  const agreement = z.object({ iban: ibanSchema, bankName: bankSchema, contractAccepted: z.literal(true), contractVersion: z.number().int().positive() }).safeParse(req.body);
+  if (!agreement.success) return res.status(400).json({ error: "أدخل بيانات البنك والآيبان السعودي الصحيح ووافق على العقد" });
   const passwordHash = await bcrypt.hash(password.data, 12);
-  const [row] = await db.update(photographersTable).set({
-    ...profile.data, passwordHash, status: "pending", inviteHash: null, inviteExpiresAt: null,
-  }).where(and(eq(photographersTable.inviteHash, photoHash(String(req.params.token))), eq(photographersTable.status, "invited"),
-    gt(photographersTable.inviteExpiresAt, new Date()))).returning();
+  const row = await db.transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(731222, 1)`);
+    const current = await currentPhotographyContract(tx);
+    if (!current || current.id !== agreement.data.contractVersion) return "contract_changed" as const;
+    const [saved] = await tx.update(photographersTable).set({
+      ...profile.data, iban: agreement.data.iban, bankName: agreement.data.bankName,
+      contractVersion: current.id, contractAcceptedAt: new Date(),
+      passwordHash, status: "pending", inviteHash: null, inviteExpiresAt: null,
+    }).where(and(eq(photographersTable.inviteHash, photoHash(String(req.params.token))), eq(photographersTable.status, "invited"),
+      gt(photographersTable.inviteExpiresAt, new Date()))).returning();
+    return saved;
+  });
+  if (row === "contract_changed") return res.status(409).json({ error: "تم تحديث العقد أو لم يُنشر بعد. اقرأ النسخة الحالية ووافق عليها مجدداً" });
   if (!row) return res.status(410).json({ error: "الدعوة مستخدمة أو منتهية" });
   await setSession(req, res, row.id);
   return res.json({ photographer: publicPhotographer(row) });
@@ -140,13 +141,18 @@ router.get("/portal", async (req, res) => {
     commissionHalalas: sum.commissionHalalas + b.commissionHalalas,
     netHalalas: sum.netHalalas + b.photographerEarningsHalalas,
   }), { totalHalalas: 0, commissionHalalas: 0, netHalalas: 0 });
-  return res.json({ photographer: publicPhotographer(row), bookings, earnings });
+  const balances = await photographyBalances(row.id);
+  return res.json({ photographer: publicPhotographer(row), bookings, earnings: { ...earnings, netDueHalalas: balances.netDueHalalas, transferredHalalas: balances.transferredHalalas } });
 });
 router.patch("/portal", sameOrigin, async (req, res) => {
   const row = await photographer(req);
   if (!row) return res.status(401).json({ error: "سجل الدخول أولاً" });
   const parsed = photographerProfileSchema.safeParse(req.body);
   if (!parsed.success || !await validPhotographyCoverage(parsed.data)) return res.status(400).json({ error: "بيانات النطاق والتفرغ غير صحيحة" });
+  if ((parsed.data.iban !== undefined || parsed.data.bankName !== undefined) &&
+    (!(parsed.data.iban ?? row.iban) || !(parsed.data.bankName ?? row.bankName))) {
+    return res.status(400).json({ error: "أكمل رقم الآيبان واسم البنك معاً" });
+  }
   if (parsed.data.profileImagePath !== row.profileImagePath && !await ownsProfileImage(row.id, parsed.data.profileImagePath)) return res.status(400).json({ error: "أعد رفع الصورة الشخصية من هذا الحساب" });
   const coverageChanged = parsed.data.regionId !== row.regionId || parsed.data.cityId !== row.cityId
     || parsed.data.allDistricts !== row.allDistricts || JSON.stringify([...parsed.data.districtIds].sort()) !== JSON.stringify([...row.districtIds].sort());
@@ -179,7 +185,7 @@ router.get("/catalog", async (req, res) => {
   const photographers = await db.select().from(photographersTable).where(eq(photographersTable.status, "approved"));
   return res.json({ enabled: true, readiness: photographyReadiness(), properties, services, packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })),
     photographers: photographers.map(p => {
-      const { whatsapp, adminNote, ...safe } = publicPhotographer(p);
+      const { whatsapp, adminNote, iban, bankName, contractVersion, contractAcceptedAt, ...safe } = publicPhotographer(p);
       return safe;
     }) });
 });

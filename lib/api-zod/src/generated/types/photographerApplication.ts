@@ -13,4 +13,10 @@ export type PhotographerApplication = PhotographerProfileInput & {
      * @maxLength 128
      */
   password: string;
+  /** @pattern ^SA[0-9]{4}[A-Z0-9]{18}$ */
+  iban: string;
+  bankName: string;
+  contractAccepted: true;
+  /** @minimum 1 */
+  contractVersion: number;
 };

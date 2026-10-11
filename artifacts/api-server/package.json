@@ -34,6 +34,7 @@
     "openid-client": "^6.8.2",
     "pino": "^9",
     "pino-http": "^10",
+    "sanitize-html": "^2.18.0",
     "sharp": "^0.35.5",
     "zod": "catalog:"
   },
@@ -44,6 +45,7 @@
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/multer": "^2.1.0",
     "@types/node": "catalog:",
+    "@types/sanitize-html": "^2.16.2",
     "@types/sharp": "^0.32.0",
     "esbuild": "^0.27.3",
     "esbuild-plugin-pino": "^2.3.3",

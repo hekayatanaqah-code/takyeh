@@ -3,6 +3,11 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
 export type PhotographyAvailability = { weekday: number; start: string; end: string }[];
+export const photographyContractsTable = pgTable("photography_contracts", {
+  id: serial("id").primaryKey(),
+  html: text("html").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 export const photographersTable = pgTable("photographers", {
   id: serial("id").primaryKey(), name: text("name").notNull(), whatsapp: text("whatsapp").notNull().unique(),
   status: text("status").notNull().default("invited"), bio: text("bio").notNull().default(""),
@@ -15,10 +20,22 @@ export const photographersTable = pgTable("photographers", {
   sessionMinutes: integer("session_minutes").notNull().default(60),
   availability: jsonb("availability").$type<PhotographyAvailability>().notNull().default([]),
   blockedDates: jsonb("blocked_dates").$type<string[]>().notNull().default([]),
+  iban: text("iban").notNull().default(""),
+  bankName: text("bank_name").notNull().default(""),
+  contractVersion: integer("contract_version").references(() => photographyContractsTable.id),
+  contractAcceptedAt: timestamp("contract_accepted_at", { withTimezone: true }),
   adminNote: text("admin_note"), passwordHash: text("password_hash"),
   inviteHash: text("invite_hash").unique(), inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+export const photographyTransfersTable = pgTable("photography_transfers", {
+  id: serial("id").primaryKey(),
+  photographerId: integer("photographer_id").notNull().references(() => photographersTable.id),
+  amountHalalas: integer("amount_halalas").notNull(),
+  reference: text("reference").notNull().unique(),
+  transferredAt: timestamp("transferred_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [check("photography_transfer_positive", sql`${table.amountHalalas} > 0`)]);
 export const photographyPackagesTable = pgTable("photography_packages", {
   id: serial("id").primaryKey(), name: text("name").notNull(),
   priceHalalas: integer("price_halalas").notNull(),

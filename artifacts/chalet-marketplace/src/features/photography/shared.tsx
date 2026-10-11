@@ -25,6 +25,7 @@ export interface Photographer {
   sessionMinutes: number; availability: Interval[]; adminNote: string;
   experienceYears?: ExperienceYears | ""; portfolioUrl?: string; profileImagePath?: string;
   blockedDates?: string[];
+  iban?: string | null; bankName?: string | null; contractVersion?: number | null; contractAcceptedAt?: string | null;
 }
 export type ExperienceYears = "under_1" | "1_3" | "3_5" | "over_5";
 export const EXPERIENCE_AR: Record<ExperienceYears, string> = { under_1: "أقل من سنة", "1_3": "١-٣ سنوات", "3_5": "٣-٥ سنوات", over_5: "أكثر من ٥ سنوات" };
@@ -89,7 +90,7 @@ export function Empty({ title, text }: { title: string; text?: string }) {
 }
 
 export function Notice({ tone, children }: { tone: "ok" | "warn" | "err"; children: ReactNode }) {
-  const c = tone === "ok" ? "border-emerald-500/40 bg-emerald-500/10" : tone === "warn" ? "border-amber-500/40 bg-amber-500/10" : "border-destructive/40 bg-destructive/10";
+  const c = tone === "ok" ? "border-emerald-500/40 bg-emerald-500/10" : tone === "warn" ? "border-amber-300 bg-amber-50 font-semibold text-amber-900" : "border-destructive/40 bg-destructive/10";
   return <div role={tone === "err" ? "alert" : "status"} className={`rounded-xl border p-3 text-sm ${c}`}>{children}</div>;
 }
 

@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable } from "@workspace/db";
-import { and, eq, inArray, desc } from "drizzle-orm";
+import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable } from "@workspace/db";
+import { and, eq, inArray, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { createHash, randomBytes } from "node:crypto";
 import { availabilitySchema, coverageSchema, photoPhone } from "../lib/photography-rules";
 import { setPhotographyServiceEnabled } from "../lib/owner-services";
 import { photographyReadiness, deliverPhotographyMessage } from "../lib/photography-delivery";
+import { cleanContractHtml, currentPhotographyContract, photographyBalances } from "../lib/photography-finance";
 
 export const photoHash = (value: string) => createHash("sha256").update(value).digest("hex");
 export function publicPhotographer(row: typeof photographersTable.$inferSelect) {
@@ -32,6 +33,52 @@ export function photoOrigin(input: string, req: { get(name: string): string | un
 }
 const router = Router();
 router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+router.get("/contract", async (_req, res) => res.json(await currentPhotographyContract() ?? { id: null, html: "", createdAt: null }));
+router.post("/contract", async (req, res) => {
+  const parsed = z.object({ html: z.string().min(1).max(100000) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "اكتب بنود العقد (بحد أقصى ١٠٠ ألف حرف)" });
+  const html = cleanContractHtml(parsed.data.html);
+  if (!html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()) return res.status(400).json({ error: "لا يمكن نشر عقد فارغ" });
+  const version = await db.transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(731222, 1)`);
+    const [contract] = await tx.insert(photographyContractsTable).values({ html }).returning();
+    return contract;
+  });
+  return res.status(201).json(version);
+});
+router.get("/photographers/:id/transfers", async (req, res) => {
+  const [photographer] = await db.select().from(photographersTable).where(eq(photographersTable.id, Number(req.params.id)));
+  if (!photographer) return res.status(404).json({ error: "المصور غير موجود" });
+  return res.json(await photographyBalances(photographer.id));
+});
+router.post("/photographers/:id/transfers", async (req, res) => {
+  const parsed = z.object({
+    amountHalalas: z.number().int().positive().max(2147483647),
+    reference: z.string().trim().min(1).max(200),
+    transferredAt: z.string().datetime().refine(value => +new Date(value) <= Date.now(), "لا يمكن تسجيل تحويل مستقبلي"),
+  }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "راجع مبلغ التحويل ومرجعه وتاريخه (لا يقبل تاريخاً مستقبلياً)" });
+  try {
+    const result = await db.transaction(async tx => {
+      const [photographer] = await tx.select().from(photographersTable).where(eq(photographersTable.id, Number(req.params.id))).for("update");
+      if (!photographer) return { error: "المصور غير موجود", status: 404 };
+      if (!photographer.iban || !photographer.bankName) return { error: "أكمل بيانات حساب المصور البنكي أولاً", status: 400 };
+      const balance = await photographyBalances(photographer.id, tx);
+      if (parsed.data.amountHalalas > balance.netDueHalalas) return { error: "مبلغ التحويل يتجاوز صافي المستحقات", status: 400 };
+      const [transfer] = await tx.insert(photographyTransfersTable).values({
+        photographerId: photographer.id, ...parsed.data, transferredAt: new Date(parsed.data.transferredAt),
+      }).returning();
+      return { transfer };
+    });
+    if ("error" in result) return res.status(result.status!).json({ error: result.error });
+    return res.status(201).json(result.transfer);
+  } catch (error) {
+    if ((error as { cause?: { code?: string }; code?: string }).code === "23505" || (error as { cause?: { code?: string } }).cause?.code === "23505") {
+      return res.status(409).json({ error: "مرجع التحويل مسجل سابقاً؛ لم يُحتسب المبلغ مرة أخرى" });
+    }
+    throw error;
+  }
+});
 router.param("id", (_req, res, next, value) => {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) return res.status(400).json({ error: "معرّف غير صحيح" });
   return next();

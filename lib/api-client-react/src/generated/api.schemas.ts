@@ -263,6 +263,9 @@ export interface PhotographerProfileInput {
   /** @maxLength 2000 */
   portfolioUrl?: string;
   profileImagePath?: string;
+  /** @pattern ^SA[0-9]{4}[A-Z0-9]{18}$ */
+  iban?: string;
+  bankName?: string;
   /** @minimum 1 */
   regionId: number;
   /** @minimum 1 */
@@ -290,7 +293,80 @@ export type PhotographerApplication = PhotographerProfileInput & {
      * @maxLength 128
      */
   password: string;
+  /** @pattern ^SA[0-9]{4}[A-Z0-9]{18}$ */
+  iban: string;
+  bankName: string;
+  contractAccepted: true;
+  /** @minimum 1 */
+  contractVersion: number;
 };
+
+export interface PhotographyContract {
+  /** @nullable */
+  id: number | null;
+  html: string;
+  /** @nullable */
+  createdAt: string | null;
+}
+
+export interface PhotographyContractInput {
+  /**
+     * @minLength 1
+     * @maxLength 100000
+     */
+  html: string;
+}
+
+export interface PhotographerSupportInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  subject: string;
+  /**
+     * @minLength 1
+     * @maxLength 10000
+     */
+  message: string;
+}
+
+export interface PhotographerSupportRequest {
+  id: number;
+  subject: string;
+  message: string;
+  status: string;
+  /** @nullable */
+  admin_reply?: string | null;
+  /** @nullable */
+  admin_reply_at?: string | null;
+  admin_attachment_urls?: string[];
+  is_read_by_owner?: boolean;
+  created_at: string;
+}
+
+export interface PhotographyTransferInput {
+  /**
+     * @minimum 1
+     * @maximum 2147483647
+     */
+  amountHalalas: number;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  reference: string;
+  transferredAt: string;
+}
+
+export type PhotographyTransfer = PhotographyTransferInput & {
+  id: number;
+};
+
+export interface PhotographyTransferBalance {
+  transfers: PhotographyTransfer[];
+  netDueHalalas: number;
+  transferredHalalas: number;
+}
 
 export type PhotographerProfileResultPhotographerStatus = typeof PhotographerProfileResultPhotographerStatus[keyof typeof PhotographerProfileResultPhotographerStatus];
 

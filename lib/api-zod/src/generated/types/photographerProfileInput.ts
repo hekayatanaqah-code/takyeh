@@ -15,6 +15,9 @@ export interface PhotographerProfileInput {
   /** @maxLength 2000 */
   portfolioUrl?: string;
   profileImagePath?: string;
+  /** @pattern ^SA[0-9]{4}[A-Z0-9]{18}$ */
+  iban?: string;
+  bankName?: string;
   /** @minimum 1 */
   regionId: number;
   /** @minimum 1 */

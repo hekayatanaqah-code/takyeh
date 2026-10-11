@@ -7,12 +7,15 @@ import type { Server } from "node:http";
 import {
   db, pool, photographersTable, photographyPackagesTable, photographyBookingsTable,
   photographyDeliveriesTable, siteSettingsTable, regionsCatalogTable, citiesCatalogTable,
+  photographyContractsTable, photographyTransfersTable,
 } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import photographyRouter from "./photography";
 import photographyAdminRouter, { photoHash } from "./photography-admin";
 import { requireSuperAdmin } from "./admin";
 import { reconcilePhotographyBooking } from "../lib/photography-payment";
+import registrationRouter from "./registration";
+import { currentPhotographyContract } from "../lib/photography-finance";
 
 let server: Server, base: string;
 let photographerId = 0, packageId = 0, bookingId = 0;
@@ -21,6 +24,8 @@ const ownerId = `photo-test-${randomUUID()}`, invite = randomBytes(32).toString(
 const phone = `96650${String(Math.floor(Math.random() * 10000000)).padStart(7, "0")}`;
 const invoiceId = randomUUID(), paymentId = randomUUID();
 let initialEnabled: string | undefined;
+let contractId = 0;
+const temporaryContracts: number[] = [];
 
 async function request<T = Record<string, unknown>>(path: string, body?: object, cookie = sessionCookie, role = "owner") {
   const response = await fetch(`${base}${path}`, {
@@ -34,6 +39,12 @@ before(async () => {
   const [setting] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
   initialEnabled = setting?.value;
   assert.equal(initialEnabled, "false", "Tests must not activate or alter the real feature flag");
+  const current = await currentPhotographyContract();
+  if (current) contractId = current.id;
+  else {
+    const [contract] = await db.insert(photographyContractsTable).values({ html: "<p>عقد اختبار مؤقت، ليس للاستخدام الفعلي</p>" }).returning();
+    contractId = contract.id; temporaryContracts.push(contract.id);
+  }
   const [region] = await db.select().from(regionsCatalogTable).where(eq(regionsCatalogTable.isActive, true)).limit(1);
   const [city] = await db.select().from(citiesCatalogTable).where(and(eq(citiesCatalogTable.regionId, region.id), eq(citiesCatalogTable.isActive, true))).limit(1);
   regionId = region.id; cityId = city.id;
@@ -52,15 +63,20 @@ before(async () => {
     next();
   });
   app.use("/photography", photographyRouter);
+  app.use("/accounts", registrationRouter);
   app.use("/admin/photography", requireSuperAdmin, photographyAdminRouter);
   server = app.listen(0);
   await new Promise<void>(resolve => server.once("listening", resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
 });
 after(async () => {
+  await db.execute(sql`DELETE FROM owner_support_requests WHERE owner_id = ${`photographer_${photographerId}`}`);
+  await db.delete(photographyTransfersTable).where(eq(photographyTransfersTable.photographerId, photographerId));
   await db.delete(photographyBookingsTable).where(eq(photographyBookingsTable.ownerId, ownerId));
   await db.delete(photographersTable).where(eq(photographersTable.id, photographerId));
   await db.delete(photographyPackagesTable).where(eq(photographyPackagesTable.id, packageId));
+  for (const id of temporaryContracts) await db.execute(sql`DELETE FROM photography_contracts WHERE id = ${id}
+    AND NOT EXISTS (SELECT 1 FROM photographers WHERE contract_version = ${id})`);
   const [setting] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
   assert.equal(setting?.value, initialEnabled);
   if (server) await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve()));
@@ -85,7 +101,11 @@ test("invite acceptance consumes token exactly once and issues a private persist
     sessionMinutes: 60, availability: [{ weekday: 0, start: "09:00", end: "12:00" }], password: "TestPassword123!",
     experienceYears: "3_5", portfolioUrl: "https://www.behance.net/photo-test", profileImagePath: "",
     whatsapp: "966599999999",
+    iban: "SA0380000000608010167519", bankName: "الراجحي", contractAccepted: true, contractVersion: contractId,
   };
+  assert.equal((await request(`/photography/invites/${invite}`, { ...body, contractAccepted: false }, "")).status, 400);
+  assert.equal((await request(`/photography/invites/${invite}`, { ...body, iban: "SA0380000000608010167518" }, "")).status, 400);
+  assert.equal((await request(`/photography/invites/${invite}`, { ...body, contractVersion: 2147483647 }, "")).status, 409);
   const accepted = await request<{ photographer: { status: string } }>(`/photography/invites/${invite}`, body, "");
   assert.equal(accepted.status, 200);
   assert.equal(accepted.data.photographer.status, "pending");
@@ -93,6 +113,9 @@ test("invite acceptance consumes token exactly once and issues a private persist
   assert.equal(profile.experienceYears, "3_5");
   assert.equal(profile.portfolioUrl, body.portfolioUrl);
   assert.equal(profile.whatsapp, phone, "invitation phone stays server-owned even with a tampered payload");
+  assert.equal(profile.iban, body.iban);
+  assert.equal(profile.contractVersion, contractId);
+  assert.ok(profile.contractAcceptedAt);
   assert.equal("passwordHash" in accepted.data.photographer, false);
   assert.equal("inviteHash" in accepted.data.photographer, false);
   assert.match(accepted.cookie!, /HttpOnly/);
@@ -192,4 +215,51 @@ test("paid invoice confirms once with frozen commission and deduplicated owner/p
   const portal = await request<{ bookings: unknown[]; earnings: { netHalalas: number } }>("/photography/portal");
   assert.equal(portal.data.bookings.length, 1);
   assert.equal(portal.data.earnings.netHalalas, 8000);
+});
+test("unified platform login authenticates photographer without granting owner access", async () => {
+  const response = await request<{ redirect: string }>("/accounts/owner-login", { identifier: phone, password: "TestPassword123!" }, "");
+  assert.equal(response.status, 200);
+  assert.equal(response.data.redirect, "/photographer");
+  assert.match(response.cookie!, /photographer_session=/);
+  sessionCookie = response.cookie!.split(";")[0];
+  assert.equal((await request("/photography/portal")).status, 200);
+  assert.equal((await request("/accounts/owner-login", { identifier: phone, password: "IncorrectPassword" }, "")).status, 401);
+});
+test("contract publication is privileged, sanitized and preserves past acceptance", async () => {
+  assert.equal((await request("/admin/photography/contract", { html: "<p>test</p>" }, "", "owner")).status, 403);
+  const published = await request<{ id: number; html: string }>("/admin/photography/contract", {
+    html: '<h2>عقد اختبار مؤقت</h2><p onclick="bad()">تعديل بنود</p><script>bad()</script>',
+  }, "", "superadmin");
+  assert.equal(published.status, 201);
+  temporaryContracts.push(published.data.id);
+  assert.doesNotMatch(published.data.html, /onclick|script/);
+  const current = await request<{ id: number }>("/photography/contract");
+  assert.equal(current.data.id, published.data.id);
+  const portal = await request<{ photographer: { contractVersion: number } }>("/photography/portal");
+  assert.equal(portal.data.photographer.contractVersion, contractId);
+});
+test("photographer support reaches the shared admin inbox and reads are owner-scoped", async () => {
+  assert.equal((await request("/photography/support-requests", { subject: "test", message: "test" }, "")).status, 401);
+  const created = await request<{ id: number }>("/photography/support-requests", { subject: "طلب اختبار مؤقت", message: "استفسار عن مستحقاتي" });
+  assert.equal(created.status, 201);
+  const stored = await db.execute<{ owner_id: string; owner_name: string }>(sql`SELECT owner_id, owner_name FROM owner_support_requests WHERE id = ${created.data.id}`);
+  assert.equal(stored.rows[0].owner_id, `photographer_${photographerId}`);
+  assert.match(stored.rows[0].owner_name, /مصور:/);
+  await db.execute(sql`UPDATE owner_support_requests SET admin_reply = 'رد اختبار الإدارة', admin_reply_at = now(), is_read_by_owner = false WHERE id = ${created.data.id}`);
+  const history = await request<{ id: number; admin_reply: string; is_read_by_owner: boolean }[]>("/photography/support-requests");
+  assert.equal(history.data.find(r => r.id === created.data.id)?.admin_reply, "رد اختبار الإدارة");
+  assert.equal((await request(`/photography/support-requests/${created.data.id}/mark-read`, {})).status, 200);
+  assert.equal((await request("/photography/support-requests/2147483647/mark-read", {})).status, 404);
+});
+test("recorded external transfers reduce net due without executing payments or double counting", async () => {
+  const route = `/admin/photography/photographers/${photographerId}/transfers`;
+  const record = { amountHalalas: 2000, reference: `photo-test-transfer-${randomUUID()}`, transferredAt: new Date(Date.now() - 60000).toISOString() };
+  assert.equal((await request(route, record, "", "owner")).status, 403);
+  assert.equal((await request(route, { ...record, amountHalalas: 8001 }, "", "superadmin")).status, 400);
+  assert.equal((await request(route, record, "", "superadmin")).status, 201);
+  assert.equal((await request(route, record, "", "superadmin")).status, 409);
+  const portal = await request<{ earnings: { netDueHalalas: number; transferredHalalas: number } }>("/photography/portal");
+  assert.equal(portal.data.earnings.netDueHalalas, 6000);
+  assert.equal(portal.data.earnings.transferredHalalas, 2000);
+  assert.equal((await request(route, { ...record, reference: `${record.reference}-future`, transferredAt: new Date(Date.now() + 86400000).toISOString() }, "", "superadmin")).status, 400);
 });

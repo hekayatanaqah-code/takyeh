@@ -6,6 +6,7 @@ import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { sendOtpEmail, sendWelcomeEmail } from "../lib/email";
 import { createSession, SESSION_COOKIE, SESSION_TTL } from "../lib/auth";
+import { tryPhotographerLogin } from "../lib/photographer-auth";
 
 const router = Router();
 
@@ -365,17 +366,21 @@ router.post("/owner-login", async (req, res) => {
     }>)[0];
 
     if (!app) {
+      if (await tryPhotographerLogin(req, res, identifier, password, !!rememberMe)) return;
       return res.status(401).json({ error: "لا يوجد حساب مرتبط بهذا البريد الإلكتروني أو رقم الجوال" });
     }
     if (!app.email_verified) {
+      if (await tryPhotographerLogin(req, res, identifier, password, !!rememberMe)) return;
       return res.status(403).json({ error: "يرجى التحقق من بريدك الإلكتروني أولاً قبل تسجيل الدخول" });
     }
     if (!app.password_hash) {
+      if (await tryPhotographerLogin(req, res, identifier, password, !!rememberMe)) return;
       return res.status(401).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع الدعم" });
     }
 
     const valid = await bcrypt.compare(String(password), app.password_hash);
     if (!valid) {
+      if (await tryPhotographerLogin(req, res, identifier, password, !!rememberMe)) return;
       return res.status(401).json({ error: "كلمة المرور غير صحيحة" });
     }
 
@@ -413,6 +418,7 @@ router.post("/owner-login", async (req, res) => {
       maxAge: rememberMe ? ttl : undefined,
     });
 
+    res.clearCookie("photographer_session", { path: "/" });
     return res.json({ ok: true, redirect: "/dashboard" });
   } catch (err) {
     console.error("[owner-login] Error:", err);
