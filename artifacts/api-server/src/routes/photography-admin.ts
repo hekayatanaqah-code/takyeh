@@ -90,13 +90,15 @@ const packageSchema = z.object({
 });
 router.get("/", async (_req, res) => {
   const [setting] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
-  const [packages, photographers, bookings, deliveries] = await Promise.all([
+  const [packages, photographers, bookings, deliveries, cities] = await Promise.all([
     db.select().from(photographyPackagesTable).orderBy(photographyPackagesTable.id),
     db.select().from(photographersTable).orderBy(desc(photographersTable.id)),
     db.select().from(photographyBookingsTable).orderBy(desc(photographyBookingsTable.id)).limit(500),
     db.select().from(photographyDeliveriesTable).orderBy(desc(photographyDeliveriesTable.id)).limit(200),
+    db.select({ id: citiesCatalogTable.id, name: citiesCatalogTable.name }).from(citiesCatalogTable),
   ]);
-  res.json({ enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(publicPhotographer), bookings, deliveries });
+  const cityNames = new Map(cities.map(city => [city.id, city.name]));
+  res.json({ enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings, deliveries });
 });
 router.patch("/settings", async (req, res) => {
   const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);

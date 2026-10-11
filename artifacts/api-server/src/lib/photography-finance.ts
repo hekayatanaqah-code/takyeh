@@ -16,7 +16,8 @@ export function validSaudiIban(iban: string) {
 }
 export const ibanSchema = z.string().transform(value => value.replace(/[\s-]/g, "").toUpperCase()
   .replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))).refine(validSaudiIban, "رقم الآيبان السعودي غير صحيح");
-export const bankSchema = z.string().refine(value => SAUDI_BANKS.includes(value), "اختر بنكاً سعودياً من القائمة");
+export const bankSchema = z.string().trim().min(2, "أدخل اسم البنك").max(120, "اسم البنك طويل جداً")
+  .refine(value => value !== "بنك آخر" && value !== "__other__", "اكتب اسم البنك الآخر");
 export function cleanContractHtml(html: string) {
   return sanitizeHtml(html, {
     allowedTags: ["p", "br", "strong", "b", "em", "i", "u", "h2", "h3", "ul", "ol", "li", "blockquote", "a"],

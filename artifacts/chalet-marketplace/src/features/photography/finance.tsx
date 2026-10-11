@@ -24,19 +24,40 @@ export const formatIban = (v: string) => v.replace(/(.{4})/g, "$1 ").trim();
 export const SAUDI_BANKS = ["الإنماء", "الراجحي", "الأهلي السعودي", "الرياض", "البلاد", "الجزيرة", "السعودي الأول", "العربي الوطني", "السعودي الفرنسي", "السعودي للاستثمار", "الخليج الدولي", "إس تي سي بنك", "دال ثلاثمائة وستون"];
 
 export interface Bank { iban: string; bankName: string }
+export const OTHER_BANK = "__other__";
+export const BANK_NAME_MAX = 120;
 export function BankFields({ value, onChange, optional }: { value: Bank; onChange: (b: Bank) => void; optional?: boolean }) {
   const [touched, setTouched] = useState(false);
+  const [custom, setCustom] = useState(() => !!value.bankName && !SAUDI_BANKS.includes(value.bankName));
+  const [nameTouched, setNameTouched] = useState(false);
   const err = value.iban ? ibanError(value.iban) : null;
+  const nameErr = custom ? bankNameError(value.bankName) : null;
   return (
     <div className="space-y-3">
       <p className="text-sm font-semibold">البيانات البنكية {optional && <span className="font-normal text-muted-foreground">(لتحويل مستحقاتك)</span>}</p>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="اسم البنك">
-          <select className={inputCls} value={value.bankName} onChange={(e) => onChange({ ...value, bankName: e.target.value })} data-testid="select-bank">
-            <option value="">اختر البنك</option>
-            {(value.bankName && !SAUDI_BANKS.includes(value.bankName) ? [value.bankName, ...SAUDI_BANKS] : SAUDI_BANKS).map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-        </Field>
+        <div className="space-y-3">
+          <Field label="البنك">
+            <select className={inputCls} value={custom ? OTHER_BANK : value.bankName} data-testid="select-bank"
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === OTHER_BANK) { setCustom(true); onChange({ ...value, bankName: "" }); }
+                else { setCustom(false); setNameTouched(false); onChange({ ...value, bankName: v }); }
+              }}>
+              <option value="">اختر البنك</option>
+              {SAUDI_BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
+              <option value={OTHER_BANK}>بنك آخر</option>
+            </select>
+          </Field>
+          {custom && (
+            <Field label="اسم البنك" hint={`حتى ${BANK_NAME_MAX.toLocaleString("ar-SA")} حرفا`}>
+              <input required maxLength={BANK_NAME_MAX} className={inputCls} placeholder="اكتب اسم البنك" value={value.bankName}
+                onChange={(e) => onChange({ ...value, bankName: e.target.value })} onBlur={() => { setNameTouched(true); onChange({ ...value, bankName: value.bankName.trim() }); }}
+                aria-invalid={nameTouched && !!nameErr} data-testid="input-bank-name-custom" />
+            </Field>
+          )}
+          {custom && nameTouched && nameErr && <p role="alert" className="text-xs font-semibold text-destructive" data-testid="text-bank-name-error">{nameErr}</p>}
+        </div>
         <Field label="رقم الآيبان (IBAN)" hint="٢٤ خانة تبدأ بـ SA">
           <input dir="ltr" className={`${inputCls} font-mono tracking-wide`} placeholder="SA00 0000 0000 0000 0000 0000" value={formatIban(value.iban)}
             onChange={(e) => onChange({ ...value, iban: canonicalIban(e.target.value) })} onBlur={() => setTouched(true)}
@@ -47,7 +68,15 @@ export function BankFields({ value, onChange, optional }: { value: Bank; onChang
     </div>
   );
 }
-export const bankError = (b: Bank) => ibanError(b.iban) ?? (b.bankName ? null : "اختر البنك");
+export function bankNameError(name: string): string | null {
+  const t = (name ?? "").trim();
+  if (!t) return "اكتب اسم البنك";
+  if (t.length < 2) return "اسم البنك يجب أن يتكون من حرفين على الأقل";
+  if (t === OTHER_BANK || t === "بنك آخر") return "اكتب اسم البنك الفعلي";
+  if (t.length > BANK_NAME_MAX) return `اسم البنك لا يتجاوز ${BANK_NAME_MAX.toLocaleString("ar-SA")} حرفا`;
+  return null;
+}
+export const bankError = (b: Bank) => ibanError(b.iban) ?? bankNameError(b.bankName);
 
 /* ---- Safe HTML ---- */
 const ALLOWED = new Set(["P", "BR", "B", "STRONG", "I", "EM", "U", "H2", "H3", "UL", "OL", "LI", "DIV"]);

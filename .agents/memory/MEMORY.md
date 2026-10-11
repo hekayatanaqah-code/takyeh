@@ -52,4 +52,5 @@
 - [Property quota and decisions](property-quota-resubmission.md) — rejection is terminal and releases quota; only returned-for-revision requests can be resubmitted using their reserved slot.
 - [Photography staged launch](photography-staged-launch.md) — prepare all three photography surfaces but keep the real service off; preserve the existing Moyasar merchant.
 - [Photographer contract boundaries](photography-contract-boundaries.md) — administrators supply legal terms; preserve historical consent and distinguish transfer records from moving money.
+- [Photography booking notices](photography-booking-notifications.md) — confirmed paid sessions drive notices and interval occupancy; keep internal reads separate from WhatsApp delivery.
 - [Browser test database evidence](browser-test-database-evidence.md) — reconcile contradictory SQL/UI observations using the mutation response and the app’s own database connection.

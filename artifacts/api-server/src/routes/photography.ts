@@ -17,6 +17,7 @@ import { requestProfileImage, completeProfileImage, ownsProfileImage, profileIma
 import { getPhotographer as photographer, setPhotographerSession as setSession } from "../lib/photographer-auth";
 import { currentPhotographyContract, ibanSchema, bankSchema, photographyBalances } from "../lib/photography-finance";
 import photographySupportRouter from "./photography-support";
+import photographyNotificationsRouter, { photographerNotifications } from "./photography-notifications";
 
 const router = Router();
 router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
@@ -50,6 +51,7 @@ router.get("/contract", async (_req, res) => {
   return res.json(contract ?? { id: null, html: "", createdAt: null });
 });
 router.use("/support-requests", (req, res, next) => req.method === "GET" ? next() : sameOrigin(req, res, next), photographySupportRouter);
+router.use("/", (req, res, next) => req.path.startsWith("/notifications/") && req.method !== "GET" ? sameOrigin(req, res, next) : next(), photographyNotificationsRouter);
 router.get("/status", async (_req, res) => res.json({ enabled: await enabled(), readiness: photographyReadiness() }));
 async function imageIdentity(req: Request, inviteToken?: string) {
   if (!inviteToken) return photographer(req);
@@ -142,7 +144,8 @@ router.get("/portal", async (req, res) => {
     netHalalas: sum.netHalalas + b.photographerEarningsHalalas,
   }), { totalHalalas: 0, commissionHalalas: 0, netHalalas: 0 });
   const balances = await photographyBalances(row.id);
-  return res.json({ photographer: publicPhotographer(row), bookings, earnings: { ...earnings, netDueHalalas: balances.netDueHalalas, transferredHalalas: balances.transferredHalalas } });
+  const notifications = await photographerNotifications(row.id);
+  return res.json({ photographer: publicPhotographer(row), bookings, notifications, earnings: { ...earnings, netDueHalalas: balances.netDueHalalas, transferredHalalas: balances.transferredHalalas } });
 });
 router.patch("/portal", sameOrigin, async (req, res) => {
   const row = await photographer(req);

@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toAr, whatsappDigits } from "@/lib/utils";
 import { sanitizeInvitePhone, validInvitePhone } from "@/lib/photography-invite-phone";
 import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
 import { ContractAdmin, TransfersPanel, formatIban } from "./finance";
+import { PhotographersTable } from "./PhotographersTable";
 
 interface AdminData {
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
@@ -135,21 +136,14 @@ function ProfileEditor({ p }: { p: Photographer }) {
   );
 }
 
-function ReviewCard({ p }: { p: Photographer }) {
+function ReviewPanel({ p, onClose }: { p: Photographer; onClose: () => void }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [note, setNote] = useState(p.adminNote ?? "");
   const [geo, setGeo] = useState<Geo>({ regionId: p.regionId, cityId: p.cityId, districtIds: p.districtIds ?? [], allDistricts: p.allDistricts });
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    if (!open) {
-      setGeo({ regionId: p.regionId, cityId: p.cityId, districtIds: p.districtIds ?? [], allDistricts: p.allDistricts });
-      setNote(p.adminNote ?? "");
-    }
-  }, [open, p.regionId, p.cityId, p.districtIds, p.allDistricts, p.adminNote]);
   const m = useMutation({
     mutationFn: (status: string) => call(`/admin/photography/photographers/${p.id}`, "PATCH", { status, adminNote: note, ...geo }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: KEY }); setOpen(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEY }); onClose(); },
   });
   const act = (s: string) => {
     setErr(null);
@@ -158,32 +152,24 @@ function ReviewCard({ p }: { p: Photographer }) {
     m.mutate(s);
   };
   return (
-    <article className={cardCls} data-testid={`card-photographer-${p.id}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div><p className="font-bold">{p.name}</p><p dir="ltr" className="text-start text-xs text-muted-foreground">{p.whatsapp}</p></div>
-        <div className="flex items-center gap-2"><StatusPill s={p.status} /><button className={ghostCls} disabled={p.status === "invited"} onClick={() => setOpen(!open)} data-testid={`button-review-${p.id}`}>{p.status === "invited" ? "بانتظار اكتمال التسجيل" : open ? "إغلاق" : "مراجعة"}</button></div>
+    <div className="space-y-3" data-testid={`card-photographer-${p.id}`}>
+      {p.bio && <p className="text-sm">{p.bio}</p>}
+      <div className="grid gap-2 rounded-xl border border-border p-3 text-sm sm:grid-cols-2" data-testid={`info-bank-${p.id}`}>
+        <p>البنك: <span className="font-semibold">{p.bankName || "غير مسجل"}</span></p>
+        <p>الآيبان: <span dir="ltr" className="font-mono">{p.iban ? formatIban(p.iban) : "غير مسجل"}</span></p>
+        <p className="sm:col-span-2">العقد: {p.contractVersion ? `وافق على الإصدار ${p.contractVersion.toLocaleString("ar-SA")}${p.contractAcceptedAt ? ` في ${fmtDT(p.contractAcceptedAt)}` : ""}` : "لا توجد موافقة مسجلة"}</p>
       </div>
-      {open && (
-        <div className="mt-4 space-y-3 border-t border-border pt-4">
-          {p.bio && <p className="text-sm">{p.bio}</p>}
-          <div className="grid gap-2 rounded-xl border border-border p-3 text-sm sm:grid-cols-2" data-testid={`info-bank-${p.id}`}>
-            <p>البنك: <span className="font-semibold">{p.bankName || "غير مسجل"}</span></p>
-            <p>الآيبان: <span dir="ltr" className="font-mono">{p.iban ? formatIban(p.iban) : "غير مسجل"}</span></p>
-            <p className="sm:col-span-2">العقد: {p.contractVersion ? `وافق على الإصدار ${p.contractVersion.toLocaleString("ar-SA")}${p.contractAcceptedAt ? ` في ${fmtDT(p.contractAcceptedAt)}` : ""}` : "لا توجد موافقة مسجلة"}</p>
-          </div>
-          <TransfersPanel id={p.id} />
-          <ProfileEditor p={p} />
-          <GeoPicker value={geo} onChange={setGeo} />
-          <Field label="ملاحظة الإدارة"><textarea className={inputCls} rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="input-admin-note" /></Field>
-          {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
-          <div className="flex flex-wrap gap-2">
-            <button className={btnCls} disabled={m.isPending} onClick={() => act("approved")} data-testid="button-approve">اعتماد</button>
-            <button className={ghostCls} disabled={m.isPending} onClick={() => act("rejected")} data-testid="button-reject">رفض</button>
-            <button className={ghostCls} disabled={m.isPending} onClick={() => act("suspended")} data-testid="button-suspend">إيقاف</button>
-          </div>
-        </div>
-      )}
-    </article>
+      <TransfersPanel id={p.id} />
+      <ProfileEditor p={p} />
+      <GeoPicker value={geo} onChange={setGeo} />
+      <Field label="ملاحظة الإدارة"><textarea className={inputCls} rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="input-admin-note" /></Field>
+      {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
+      <div className="flex flex-wrap gap-2">
+        <button className={btnCls} disabled={m.isPending} onClick={() => act("approved")} data-testid="button-approve">اعتماد</button>
+        <button className={ghostCls} disabled={m.isPending} onClick={() => act("rejected")} data-testid="button-reject">رفض</button>
+        <button className={ghostCls} disabled={m.isPending} onClick={() => act("suspended")} data-testid="button-suspend">إيقاف</button>
+      </div>
+    </div>
   );
 }
 
@@ -243,7 +229,7 @@ export default function PhotographyAdmin() {
 
       <section className="space-y-3">
         <h3 className="font-bold">المصورون وطلبات الانضمام</h3>
-        {d.photographers.length === 0 ? <Empty title="لا يوجد مصورون بعد" /> : d.photographers.map((p) => <ReviewCard key={p.id} p={p} />)}
+        <PhotographersTable rows={d.photographers} renderPanel={(p, close) => <ReviewPanel p={p} onClose={close} />} />
       </section>
 
       <section className="space-y-3">

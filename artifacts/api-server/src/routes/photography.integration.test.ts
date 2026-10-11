@@ -193,6 +193,16 @@ test("payment reconciliation rejects wrong amounts and pending payments without 
   assert.equal((await db.select().from(photographyDeliveriesTable).where(eq(photographyDeliveriesTable.bookingId, bookingId))).length, 0);
 });
 test("paid invoice confirms once with frozen commission and deduplicated owner/photographer notices", async () => {
+  assert.equal((await request("/photography/events", undefined, "")).status, 401);
+  const controller = new AbortController();
+  const streamTimeout = setTimeout(() => controller.abort(), 10000);
+  streamTimeout.unref();
+  const stream = await fetch(`${base}/photography/events`, { headers: { Cookie: sessionCookie }, signal: controller.signal });
+  assert.equal(stream.status, 200);
+  assert.match(stream.headers.get("content-type")!, /text\/event-stream/);
+  const reader = stream.body!.getReader();
+  await reader.read();
+  const bookingEvent = reader.read();
   const provider = async () => ({
     id: invoiceId, status: "paid", amount: 10000, currency: "SAR", url: "",
     payments: [{ id: paymentId, invoice_id: invoiceId, status: "paid", amount: 10000, currency: "SAR", refunded: 0 }],
@@ -206,6 +216,12 @@ test("paid invoice confirms once with frozen commission and deduplicated owner/p
     reconcilePhotographyBooking(bookingId, { fetchInvoice: provider, deliverMessage: deliver }),
     reconcilePhotographyBooking(bookingId, { fetchInvoice: provider, deliverMessage: deliver }),
   ]);
+  const { value } = await bookingEvent;
+  assert.match(new TextDecoder().decode(value), /event: booking-confirmed/);
+  assert.match(new TextDecoder().decode(value), new RegExp(`"bookingId":${bookingId}`));
+  controller.abort();
+  clearTimeout(streamTimeout);
+  await reader.cancel().catch(() => {});
   assert.equal(first.booking.status, "confirmed"); assert.equal(second.booking.status, "confirmed");
   assert.equal(first.booking.priceHalalas, 10000); assert.equal(first.booking.commissionHalalas, 2000);
   assert.equal(first.booking.photographerEarningsHalalas, 8000);
@@ -215,6 +231,16 @@ test("paid invoice confirms once with frozen commission and deduplicated owner/p
   const portal = await request<{ bookings: unknown[]; earnings: { netHalalas: number } }>("/photography/portal");
   assert.equal(portal.data.bookings.length, 1);
   assert.equal(portal.data.earnings.netHalalas, 8000);
+  const internal = await request<{ notifications: { id: number; bookingId: number; readAt: string | null }[] }>("/photography/portal");
+  assert.equal(internal.data.notifications.length, 1, "Only the photographer-side notice is visible internally");
+  assert.equal(internal.data.notifications[0].bookingId, bookingId);
+  assert.equal(internal.data.notifications[0].readAt, null);
+  const ownerMessage = notices.find(m => m.dedupeKey.endsWith(":owner"))!;
+  assert.equal((await request(`/photography/notifications/${ownerMessage.id}/read`, {})).status, 404);
+  assert.equal((await request(`/photography/notifications/${internal.data.notifications[0].id}/read`, {})).status, 200);
+  const refreshed = await request<{ notifications: { readAt: string | null }[] }>("/photography/portal");
+  assert.ok(refreshed.data.notifications[0].readAt);
+  assert.equal((await request("/photography/notifications/invalid/read", {})).status, 400);
 });
 test("unified platform login authenticates photographer without granting owner access", async () => {
   const response = await request<{ redirect: string }>("/accounts/owner-login", { identifier: phone, password: "TestPassword123!" }, "");
@@ -262,4 +288,17 @@ test("recorded external transfers reduce net due without executing payments or d
   assert.equal(portal.data.earnings.netDueHalalas, 6000);
   assert.equal(portal.data.earnings.transferredHalalas, 2000);
   assert.equal((await request(route, { ...record, reference: `${record.reference}-future`, transferredAt: new Date(Date.now() + 86400000).toISOString() }, "", "superadmin")).status, 400);
+});
+test("other-bank names persist and administration returns searchable city names", async () => {
+  const portal = await request<{ photographer: Record<string, unknown> }>("/photography/portal");
+  const custom = { ...portal.data.photographer, bankName: "  بنك مخصص للاختبار  " };
+  const update = await fetch(`${base}/photography/portal`, {
+    method: "PATCH", headers: { Cookie: sessionCookie, Origin: base, "Content-Type": "application/json" }, body: JSON.stringify(custom),
+  });
+  assert.equal(update.status, 200);
+  const stored = await request<{ photographer: { bankName: string } }>("/photography/portal");
+  assert.equal(stored.data.photographer.bankName, "بنك مخصص للاختبار");
+  const admin = await request<{ photographers: { id: number; cityName: string | null }[] }>("/admin/photography", undefined, "", "superadmin");
+  assert.equal(admin.status, 200);
+  assert.ok(admin.data.photographers.find(p => p.id === photographerId)?.cityName);
 });

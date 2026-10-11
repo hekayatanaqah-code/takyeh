@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toAr } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./availabilityControls";
 import { profileImageError } from "./imageRules";
-import { BankFields, bankError, ibanError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
+import { BookingNotices, SessionCalendar, type PortalNotification } from "./portalWidgets";
+import { BankFields, bankError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
 import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
 interface Profile { bio: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string; blockedDates: string[] }
@@ -99,7 +100,7 @@ export function PhotographerInvite() {
   const setAccepted = (value: boolean) => setAcceptedVersion(value ? contract.data?.id ?? null : null);
   const contractOk = !!contract.data?.id && !!contract.data.html.trim();
   const m = useMutation({
-    mutationFn: () => call(`/photography/invites/${encodeURIComponent(token)}`, "POST", { ...payload(prof), ...geo, password: pw, iban: bank.iban, bankName: bank.bankName, contractAccepted: true, contractVersion: contract.data!.id }),
+    mutationFn: () => call(`/photography/invites/${encodeURIComponent(token)}`, "POST", { ...payload(prof), ...geo, password: pw, iban: bank.iban, bankName: bank.bankName.trim(), contractAccepted: true, contractVersion: contract.data!.id }),
     onError: () => { setAccepted(false); contract.refetch(); },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["ph-portal"] }); window.location.assign(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/photographer`); },
   });
@@ -151,7 +152,7 @@ function ProfileEditor({ p }: { p: Photographer }) {
   const [bank, setBank] = useState<Bank>({ iban: p.iban ?? "", bankName: p.bankName ?? "" });
   const [err, setErr] = useState<string | null>(null);
   const geoChanged = geo.regionId !== p.regionId || geo.cityId !== p.cityId || geo.allDistricts !== p.allDistricts || [...geo.districtIds].sort().join() !== [...(p.districtIds ?? [])].sort().join();
-  const m = useMutation({ mutationFn: () => call("/photography/portal", "PATCH", { ...payload(prof), ...geo, ...(bank.iban || bank.bankName ? { iban: bank.iban, bankName: bank.bankName } : {}) }), onSuccess: () => qc.invalidateQueries({ queryKey: ["ph-portal"] }) });
+  const m = useMutation({ mutationFn: () => call("/photography/portal", "PATCH", { ...payload(prof), ...geo, ...(bank.iban || bank.bankName ? { iban: bank.iban, bankName: bank.bankName.trim() } : {}) }), onSuccess: () => qc.invalidateQueries({ queryKey: ["ph-portal"] }) });
   return (
     <section className={`${cardCls} space-y-4`}>
       <h3 className="font-bold">ملفي</h3>
@@ -160,18 +161,26 @@ function ProfileEditor({ p }: { p: Photographer }) {
       {geoChanged && p.status === "approved" && <Notice tone="warn">تغيير منطقة التغطية يعيد ملفك إلى المراجعة قبل استقبال حجوزات جديدة.</Notice>}
       {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
       {m.isSuccess && <Notice tone="ok">تم حفظ التعديلات</Notice>}
-      <button className={btnCls} disabled={m.isPending || uploading} data-testid="button-save-profile" onClick={() => { const e = validate(geo, prof) ?? (bank.iban || bank.bankName ? (bank.iban ? ibanError(bank.iban) : "أدخل رقم الآيبان") ?? (bank.bankName ? null : "اختر البنك") : null); setErr(e); if (!e) m.mutate(); }}>{m.isPending ? "جار الحفظ" : "حفظ التعديلات"}</button>
+      <button className={btnCls} disabled={m.isPending || uploading} data-testid="button-save-profile" onClick={() => { const e = validate(geo, prof) ?? (bank.iban || bank.bankName ? bankError(bank) : null); setErr(e); if (!e) m.mutate(); }}>{m.isPending ? "جار الحفظ" : "حفظ التعديلات"}</button>
     </section>
   );
 }
 
 export default function PhotographerPortal() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number } }>("/photography/portal") });
+  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number }; notifications?: PortalNotification[] }>("/photography/portal") });
+  const authed = !!q.data;
+  useEffect(() => {
+    if (!authed || typeof EventSource === "undefined") return undefined;
+    const es = new EventSource(`${API}/photography/events`, { withCredentials: true });
+    const onConfirmed = () => { qc.invalidateQueries({ queryKey: ["ph-portal"] }); };
+    es.addEventListener("booking-confirmed", onConfirmed);
+    return () => { es.removeEventListener("booking-confirmed", onConfirmed); es.close(); };
+  }, [authed, qc]);
   const out = useMutation({ mutationFn: () => call("/photography/portal/logout", "POST"), onSuccess: () => { qc.removeQueries({ queryKey: ["ph-portal"] }); q.refetch(); } });
   if (q.isLoading) return <Shell><Skel /></Shell>;
   if (q.isError || !q.data) return <Login />;
-  const { photographer: p, bookings, earnings } = q.data;
+  const { photographer: p, bookings, earnings, notifications = [] } = q.data;
   const now = Date.now();
   const upcoming = bookings.filter((b) => b.status === "confirmed" && new Date(b.endAt).getTime() >= now);
   const history = bookings.filter((b) => !upcoming.includes(b));
@@ -189,10 +198,12 @@ export default function PhotographerPortal() {
           <div key={k} className={cardCls}><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold" data-testid={`text-earnings-${k}`}>{sar(v)}</p></div>
         ))}
       </div>
+      <BookingNotices items={notifications} />
       <section className="space-y-3"><h3 className="font-bold">المواعيد القادمة</h3>
         {upcoming.length === 0 ? <Empty title="لا توجد مواعيد مؤكدة قادمة" /> : upcoming.map((b) => (
           <div key={b.id} className={cardCls} data-testid={`card-upcoming-${b.id}`}><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - صافيك {sar(b.photographerEarningsHalalas)}</p></div>
         ))}</section>
+      <SessionCalendar bookings={upcoming} />
       <section className="space-y-3"><h3 className="font-bold">السجل</h3>
         {history.length === 0 ? <Empty title="لا يوجد سجل بعد" /> : history.map((b) => (
           <div key={b.id} className={`${cardCls} flex items-center justify-between gap-2`}><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}</p></div><StatusPill s={b.status} /></div>

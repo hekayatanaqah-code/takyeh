@@ -548,6 +548,24 @@ paths:
         '201': { description: "External bank transfer recorded, no payment execution" }
         '400': { description: Invalid data or amount exceeds remaining balance }
         '409': { description: Transfer reference already recorded }
+  /photography/events:
+    get:
+      operationId: getPhotographerEvents
+      responses:
+        '200':
+          description: Private booking-confirmed server-sent events after committed payment confirmation
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '401': { description: Photographer session required }
+  /photography/notifications/{id}/read:
+    post:
+      operationId: markPhotographerNotificationRead
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200': { description: Owned internal booking notice marked read }
+        '404': { description: Notice not owned by this photographer }
   /photography/portal:
     get:
       tags: [Photography]
@@ -558,8 +576,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: "#/components/schemas/PhotographerPortalResult"
         '401':
           description: Photographer session required
     patch:
@@ -987,7 +1004,7 @@ components:
         portfolioUrl: { type: string, maxLength: 2000 }
         profileImagePath: { type: string }
         iban: { type: string, pattern: '^SA[0-9]{4}[A-Z0-9]{18}$' }
-        bankName: { type: string }
+        bankName: { type: string, minLength: 2, maxLength: 120, description: "Selected bank name or the actual manually entered other-bank name" }
         regionId: { type: integer, minimum: 1 }
         cityId: { type: integer, minimum: 1 }
         districtIds:
@@ -1012,9 +1029,41 @@ components:
           properties:
             password: { type: string, minLength: 10, maxLength: 128 }
             iban: { type: string, pattern: '^SA[0-9]{4}[A-Z0-9]{18}$' }
-            bankName: { type: string }
+            bankName: { type: string, minLength: 2, maxLength: 120 }
             contractAccepted: { type: boolean, enum: [true] }
             contractVersion: { type: integer, minimum: 1 }
+    PhotographerPortalResult:
+      allOf:
+        - $ref: "#/components/schemas/PhotographerProfileResult"
+        - type: object
+          required: [bookings, earnings, notifications]
+          properties:
+            bookings:
+              type: array
+              items: { type: object, additionalProperties: true }
+            earnings:
+              type: object
+              required: [netDueHalalas, transferredHalalas]
+              properties:
+                netDueHalalas: { type: integer }
+                transferredHalalas: { type: integer }
+              additionalProperties: true
+            notifications:
+              type: array
+              items: { $ref: "#/components/schemas/PhotographerBookingNotice" }
+    PhotographerBookingNotice:
+      type: object
+      required: [id, bookingId, propertyName, packageName, startAt, endAt, createdAt, readAt, whatsappStatus]
+      properties:
+        id: { type: integer }
+        bookingId: { type: integer }
+        propertyName: { type: string }
+        packageName: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        readAt: { type: ["string", "null"], format: date-time }
+        whatsappStatus: { type: string }
     PhotographyContract:
       type: object
       required: [id, html, createdAt]

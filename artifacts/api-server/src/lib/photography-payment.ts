@@ -2,6 +2,7 @@ import { db, photographyBookingsTable, photographyDeliveriesTable } from "@works
 import { and, eq, sql } from "drizzle-orm";
 import { deliverPhotographyMessage } from "./photography-delivery";
 import { logger } from "./logger";
+import { publishPhotographyBooking } from "./photography-events";
 
 type Invoice = {
   id: string; status: string; amount: number; currency: string; url: string;
@@ -28,6 +29,7 @@ export async function reconcilePhotographyBooking(id: number, options: {
   if (invoice.id !== initial.invoiceId || invoice.currency !== "SAR" || invoice.amount !== initial.priceHalalas) throw new Error("payment_mismatch");
   const paid = invoice.payments?.find(p => p.status === "paid" && p.invoice_id === invoice.id
     && p.currency === "SAR" && p.amount === initial.priceHalalas && !p.refunded);
+  let newlyConfirmed = false;
   const result = await db.transaction(async tx => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(731220, ${initial.photographerId})`);
     const [booking] = await tx.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, id)).for("update");
@@ -39,10 +41,12 @@ export async function reconcilePhotographyBooking(id: number, options: {
       // so payment made before invoice expiry remains safe even when reconciliation is delayed.
       const [confirmed] = await tx.update(photographyBookingsTable).set({ status: "confirmed", paymentId: paid.id })
         .where(eq(photographyBookingsTable.id, id)).returning();
+      newlyConfirmed = true;
       const localTime = booking.startAt.toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" });
       for (const [role, recipient] of [["owner", booking.ownerPhone], ["photographer", booking.photographerPhone]]) {
         await tx.insert(photographyDeliveriesTable).values({
           dedupeKey: `booking:${id}:${role}`, bookingId: id, recipient, kind: "booking",
+          ...(role === "photographer" ? { photographerId: booking.photographerId } : {}),
           parameters: [booking.propertyName, booking.packageName, localTime, String(booking.id)],
         }).onConflictDoNothing({ target: photographyDeliveriesTable.dedupeKey });
       }
@@ -55,6 +59,7 @@ export async function reconcilePhotographyBooking(id: number, options: {
     }
     return booking;
   });
+  if (newlyConfirmed) publishPhotographyBooking(result.photographerId, result.id);
   const messages = await db.select({ id: photographyDeliveriesTable.id }).from(photographyDeliveriesTable)
     .where(and(eq(photographyDeliveriesTable.bookingId, id), eq(photographyDeliveriesTable.status, "pending")));
   const notifications = await Promise.all(messages.map(m => (options.deliverMessage ?? deliverPhotographyMessage)(m.id)));

@@ -26,6 +26,7 @@ export interface Photographer {
   experienceYears?: ExperienceYears | ""; portfolioUrl?: string; profileImagePath?: string;
   blockedDates?: string[];
   iban?: string | null; bankName?: string | null; contractVersion?: number | null; contractAcceptedAt?: string | null;
+  cityName?: string | null;
 }
 export type ExperienceYears = "under_1" | "1_3" | "3_5" | "over_5";
 export const EXPERIENCE_AR: Record<ExperienceYears, string> = { under_1: "أقل من سنة", "1_3": "١-٣ سنوات", "3_5": "٣-٥ سنوات", over_5: "أكثر من ٥ سنوات" };

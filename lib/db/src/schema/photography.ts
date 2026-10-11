@@ -73,6 +73,7 @@ export const photographyDeliveriesTable = pgTable("photography_deliveries", {
   recipient: text("recipient").notNull(), kind: text("kind").notNull(),
   parameters: jsonb("parameters").$type<string[]>().notNull(), status: text("status").notNull().default("pending"),
   error: text("error"), providerMessageId: text("provider_message_id"),
+  internalReadAt: timestamp("internal_read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const insertPhotographerSchema = createInsertSchema(photographersTable);

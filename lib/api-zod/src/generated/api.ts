@@ -536,6 +536,9 @@ export const acceptPhotographyInviteBodyOneBioMax = 2000;
 export const acceptPhotographyInviteBodyOnePortfolioUrlMax = 2000;
 
 export const acceptPhotographyInviteBodyOneIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
+export const acceptPhotographyInviteBodyOneBankNameMin = 2;
+export const acceptPhotographyInviteBodyOneBankNameMax = 120;
+
 
 
 
@@ -557,6 +560,9 @@ export const acceptPhotographyInviteBodyTwoPasswordMin = 10;
 export const acceptPhotographyInviteBodyTwoPasswordMax = 128;
 
 export const acceptPhotographyInviteBodyTwoIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
+export const acceptPhotographyInviteBodyTwoBankNameMin = 2;
+export const acceptPhotographyInviteBodyTwoBankNameMax = 120;
+
 
 
 
@@ -566,7 +572,7 @@ export const AcceptPhotographyInviteBody = zod.object({
   "portfolioUrl": zod.string().max(acceptPhotographyInviteBodyOnePortfolioUrlMax).optional(),
   "profileImagePath": zod.string().optional(),
   "iban": zod.string().regex(acceptPhotographyInviteBodyOneIbanRegExp),
-  "bankName": zod.string(),
+  "bankName": zod.string().min(acceptPhotographyInviteBodyOneBankNameMin).max(acceptPhotographyInviteBodyOneBankNameMax).describe('Selected bank name or the actual manually entered other-bank name'),
   "regionId": zod.number().int().min(1),
   "cityId": zod.number().int().min(1),
   "districtIds": zod.array(zod.number().int().min(1)).max(acceptPhotographyInviteBodyOneDistrictIdsMax),
@@ -581,7 +587,7 @@ export const AcceptPhotographyInviteBody = zod.object({
 }).and(zod.object({
   "password": zod.string().min(acceptPhotographyInviteBodyTwoPasswordMin).max(acceptPhotographyInviteBodyTwoPasswordMax),
   "iban": zod.string().regex(acceptPhotographyInviteBodyTwoIbanRegExp),
-  "bankName": zod.string(),
+  "bankName": zod.string().min(acceptPhotographyInviteBodyTwoBankNameMin).max(acceptPhotographyInviteBodyTwoBankNameMax),
   "contractAccepted": zod.literal(true),
   "contractVersion": zod.number().int().min(1)
 }))
@@ -591,6 +597,9 @@ export const acceptPhotographyInviteResponsePhotographerOneBioMax = 2000;
 export const acceptPhotographyInviteResponsePhotographerOnePortfolioUrlMax = 2000;
 
 export const acceptPhotographyInviteResponsePhotographerOneIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
+export const acceptPhotographyInviteResponsePhotographerOneBankNameMin = 2;
+export const acceptPhotographyInviteResponsePhotographerOneBankNameMax = 120;
+
 
 
 
@@ -617,7 +626,7 @@ export const AcceptPhotographyInviteResponse = zod.object({
   "portfolioUrl": zod.string().max(acceptPhotographyInviteResponsePhotographerOnePortfolioUrlMax).optional(),
   "profileImagePath": zod.string().optional(),
   "iban": zod.string().regex(acceptPhotographyInviteResponsePhotographerOneIbanRegExp).optional(),
-  "bankName": zod.string().optional(),
+  "bankName": zod.string().min(acceptPhotographyInviteResponsePhotographerOneBankNameMin).max(acceptPhotographyInviteResponsePhotographerOneBankNameMax).optional().describe('Selected bank name or the actual manually entered other-bank name'),
   "regionId": zod.number().int().min(1),
   "cityId": zod.number().int().min(1),
   "districtIds": zod.array(zod.number().int().min(1)).max(acceptPhotographyInviteResponsePhotographerOneDistrictIdsMax),
@@ -754,7 +763,90 @@ export const RecordPhotographerTransferBody = zod.object({
 export const RecordPhotographerTransferResponse = zod.void()
 
 
-export const GetPhotographerPortalResponse = zod.record(zod.string(), zod.unknown())
+export const GetPhotographerEventsResponse = zod.unknown()
+
+
+
+
+
+export const MarkPhotographerNotificationReadParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const MarkPhotographerNotificationReadResponse = zod.unknown()
+
+
+export const getPhotographerPortalResponseOnePhotographerOneBioMax = 2000;
+
+export const getPhotographerPortalResponseOnePhotographerOnePortfolioUrlMax = 2000;
+
+export const getPhotographerPortalResponseOnePhotographerOneIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
+export const getPhotographerPortalResponseOnePhotographerOneBankNameMin = 2;
+export const getPhotographerPortalResponseOnePhotographerOneBankNameMax = 120;
+
+
+
+
+export const getPhotographerPortalResponseOnePhotographerOneDistrictIdsMax = 200;
+
+export const getPhotographerPortalResponseOnePhotographerOneSessionMinutesMin = 30;
+export const getPhotographerPortalResponseOnePhotographerOneSessionMinutesMax = 240;
+
+export const getPhotographerPortalResponseOnePhotographerOneAvailabilityItemWeekdayMin = 0;
+export const getPhotographerPortalResponseOnePhotographerOneAvailabilityItemWeekdayMax = 6;
+
+export const getPhotographerPortalResponseOnePhotographerOneAvailabilityItemStartRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const getPhotographerPortalResponseOnePhotographerOneAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const getPhotographerPortalResponseOnePhotographerOneAvailabilityMax = 28;
+
+export const getPhotographerPortalResponseOnePhotographerOneBlockedDatesMax = 3660;
+
+
+
+export const GetPhotographerPortalResponse = zod.object({
+  "photographer": zod.object({
+  "bio": zod.string().max(getPhotographerPortalResponseOnePhotographerOneBioMax),
+  "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
+  "portfolioUrl": zod.string().max(getPhotographerPortalResponseOnePhotographerOnePortfolioUrlMax).optional(),
+  "profileImagePath": zod.string().optional(),
+  "iban": zod.string().regex(getPhotographerPortalResponseOnePhotographerOneIbanRegExp).optional(),
+  "bankName": zod.string().min(getPhotographerPortalResponseOnePhotographerOneBankNameMin).max(getPhotographerPortalResponseOnePhotographerOneBankNameMax).optional().describe('Selected bank name or the actual manually entered other-bank name'),
+  "regionId": zod.number().int().min(1),
+  "cityId": zod.number().int().min(1),
+  "districtIds": zod.array(zod.number().int().min(1)).max(getPhotographerPortalResponseOnePhotographerOneDistrictIdsMax),
+  "allDistricts": zod.boolean(),
+  "sessionMinutes": zod.number().int().min(getPhotographerPortalResponseOnePhotographerOneSessionMinutesMin).max(getPhotographerPortalResponseOnePhotographerOneSessionMinutesMax),
+  "availability": zod.array(zod.object({
+  "weekday": zod.number().int().min(getPhotographerPortalResponseOnePhotographerOneAvailabilityItemWeekdayMin).max(getPhotographerPortalResponseOnePhotographerOneAvailabilityItemWeekdayMax),
+  "start": zod.string().regex(getPhotographerPortalResponseOnePhotographerOneAvailabilityItemStartRegExp),
+  "end": zod.string().regex(getPhotographerPortalResponseOnePhotographerOneAvailabilityItemEndRegExp)
+})).max(getPhotographerPortalResponseOnePhotographerOneAvailabilityMax),
+  "blockedDates": zod.array(zod.date()).max(getPhotographerPortalResponseOnePhotographerOneBlockedDatesMax).optional()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "whatsapp": zod.string(),
+  "status": zod.enum(['invited', 'pending', 'approved', 'rejected', 'suspended']),
+  "adminNote": zod.string().nullish()
+}))
+}).and(zod.object({
+  "bookings": zod.array(zod.record(zod.string(), zod.unknown())),
+  "earnings": zod.object({
+  "netDueHalalas": zod.number().int(),
+  "transferredHalalas": zod.number().int()
+}),
+  "notifications": zod.array(zod.object({
+  "id": zod.number().int(),
+  "bookingId": zod.number().int(),
+  "propertyName": zod.string(),
+  "packageName": zod.string(),
+  "startAt": zod.date(),
+  "endAt": zod.date(),
+  "createdAt": zod.date(),
+  "readAt": zod.date().nullable(),
+  "whatsappStatus": zod.string()
+}))
+}))
 
 
 export const updatePhotographerProfileBodyBioMax = 2000;
@@ -762,6 +854,9 @@ export const updatePhotographerProfileBodyBioMax = 2000;
 export const updatePhotographerProfileBodyPortfolioUrlMax = 2000;
 
 export const updatePhotographerProfileBodyIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
+export const updatePhotographerProfileBodyBankNameMin = 2;
+export const updatePhotographerProfileBodyBankNameMax = 120;
+
 
 
 
@@ -787,7 +882,7 @@ export const UpdatePhotographerProfileBody = zod.object({
   "portfolioUrl": zod.string().max(updatePhotographerProfileBodyPortfolioUrlMax).optional(),
   "profileImagePath": zod.string().optional(),
   "iban": zod.string().regex(updatePhotographerProfileBodyIbanRegExp).optional(),
-  "bankName": zod.string().optional(),
+  "bankName": zod.string().min(updatePhotographerProfileBodyBankNameMin).max(updatePhotographerProfileBodyBankNameMax).optional().describe('Selected bank name or the actual manually entered other-bank name'),
   "regionId": zod.number().int().min(1),
   "cityId": zod.number().int().min(1),
   "districtIds": zod.array(zod.number().int().min(1)).max(updatePhotographerProfileBodyDistrictIdsMax),
@@ -806,6 +901,9 @@ export const updatePhotographerProfileResponsePhotographerOneBioMax = 2000;
 export const updatePhotographerProfileResponsePhotographerOnePortfolioUrlMax = 2000;
 
 export const updatePhotographerProfileResponsePhotographerOneIbanRegExp = new RegExp('^SA[0-9]{4}[A-Z0-9]{18}$');
+export const updatePhotographerProfileResponsePhotographerOneBankNameMin = 2;
+export const updatePhotographerProfileResponsePhotographerOneBankNameMax = 120;
+
 
 
 
@@ -832,7 +930,7 @@ export const UpdatePhotographerProfileResponse = zod.object({
   "portfolioUrl": zod.string().max(updatePhotographerProfileResponsePhotographerOnePortfolioUrlMax).optional(),
   "profileImagePath": zod.string().optional(),
   "iban": zod.string().regex(updatePhotographerProfileResponsePhotographerOneIbanRegExp).optional(),
-  "bankName": zod.string().optional(),
+  "bankName": zod.string().min(updatePhotographerProfileResponsePhotographerOneBankNameMin).max(updatePhotographerProfileResponsePhotographerOneBankNameMax).optional().describe('Selected bank name or the actual manually entered other-bank name'),
   "regionId": zod.number().int().min(1),
   "cityId": zod.number().int().min(1),
   "districtIds": zod.array(zod.number().int().min(1)).max(updatePhotographerProfileResponsePhotographerOneDistrictIdsMax),

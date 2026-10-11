@@ -17,6 +17,11 @@ export interface PhotographerProfileInput {
   profileImagePath?: string;
   /** @pattern ^SA[0-9]{4}[A-Z0-9]{18}$ */
   iban?: string;
+  /**
+     * Selected bank name or the actual manually entered other-bank name
+     * @minLength 2
+     * @maxLength 120
+     */
   bankName?: string;
   /** @minimum 1 */
   regionId: number;

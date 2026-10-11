@@ -265,6 +265,11 @@ export interface PhotographerProfileInput {
   profileImagePath?: string;
   /** @pattern ^SA[0-9]{4}[A-Z0-9]{18}$ */
   iban?: string;
+  /**
+     * Selected bank name or the actual manually entered other-bank name
+     * @minLength 2
+     * @maxLength 120
+     */
   bankName?: string;
   /** @minimum 1 */
   regionId: number;
@@ -295,10 +300,65 @@ export type PhotographerApplication = PhotographerProfileInput & {
   password: string;
   /** @pattern ^SA[0-9]{4}[A-Z0-9]{18}$ */
   iban: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
   bankName: string;
   contractAccepted: true;
   /** @minimum 1 */
   contractVersion: number;
+};
+
+export type PhotographerPortalResultBookingsItem = { [key: string]: unknown };
+
+export type PhotographerPortalResultEarnings = {
+  netDueHalalas: number;
+  transferredHalalas: number;
+  [key: string]: unknown;
+ };
+
+export type PhotographerProfileResultPhotographerStatus = typeof PhotographerProfileResultPhotographerStatus[keyof typeof PhotographerProfileResultPhotographerStatus];
+
+
+export const PhotographerProfileResultPhotographerStatus = {
+  invited: 'invited',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  suspended: 'suspended',
+} as const;
+
+export type PhotographerProfileResultPhotographer = PhotographerProfileInput & ({
+  id: number;
+  name: string;
+  whatsapp: string;
+  status: PhotographerProfileResultPhotographerStatus;
+  /** @nullable */
+  adminNote?: string | null;
+});
+
+export interface PhotographerProfileResult {
+  photographer: PhotographerProfileResultPhotographer;
+}
+
+export interface PhotographerBookingNotice {
+  id: number;
+  bookingId: number;
+  propertyName: string;
+  packageName: string;
+  startAt: string;
+  endAt: string;
+  createdAt: string;
+  /** @nullable */
+  readAt: string | null;
+  whatsappStatus: string;
+}
+
+export type PhotographerPortalResult = PhotographerProfileResult & {
+  bookings: PhotographerPortalResultBookingsItem[];
+  earnings: PhotographerPortalResultEarnings;
+  notifications: PhotographerBookingNotice[];
 };
 
 export interface PhotographyContract {
@@ -366,30 +426,6 @@ export interface PhotographyTransferBalance {
   transfers: PhotographyTransfer[];
   netDueHalalas: number;
   transferredHalalas: number;
-}
-
-export type PhotographerProfileResultPhotographerStatus = typeof PhotographerProfileResultPhotographerStatus[keyof typeof PhotographerProfileResultPhotographerStatus];
-
-
-export const PhotographerProfileResultPhotographerStatus = {
-  invited: 'invited',
-  pending: 'pending',
-  approved: 'approved',
-  rejected: 'rejected',
-  suspended: 'suspended',
-} as const;
-
-export type PhotographerProfileResultPhotographer = PhotographerProfileInput & ({
-  id: number;
-  name: string;
-  whatsapp: string;
-  status: PhotographerProfileResultPhotographerStatus;
-  /** @nullable */
-  adminNote?: string | null;
-});
-
-export interface PhotographerProfileResult {
-  photographer: PhotographerProfileResultPhotographer;
 }
 
 export interface RequestUploadUrlBody {
@@ -834,8 +870,6 @@ export type GetPhotographyInvite200 = {
   whatsapp: string;
   expiresAt: string;
 };
-
-export type GetPhotographerPortal200 = { [key: string]: unknown };
 
 export type UpdateAdminPhotographerProfile200 = { [key: string]: unknown };
 
