@@ -70,6 +70,8 @@ interface DualCalendarPickerProps {
   className?: string;
   compact?: boolean;
   mode?: "hijri" | "gregorian";
+  /** Notify surrounding date displays when the user switches calendar systems. */
+  onModeChange?: (mode: "hijri" | "gregorian") => void;
   /** Active global seasons used to highlight dates in the customer calendar. */
   seasons?: GlobalSeason[];
   /** Alias for seasons for callers that refer to these as calendar highlights. */
@@ -96,6 +98,7 @@ export function DualCalendarPicker({
   className,
   compact = false,
   mode = "hijri",
+  onModeChange,
   seasons,
   highlights,
   selectedDates,
@@ -355,6 +358,7 @@ export function DualCalendarPicker({
             aria-pressed={calendarMode === "hijri"}
             onClick={() => {
               setCalendarMode("hijri");
+              onModeChange?.("hijri");
               setPickerView("days");
             }}
             className={cn(
@@ -371,6 +375,7 @@ export function DualCalendarPicker({
             aria-pressed={calendarMode === "gregorian"}
             onClick={() => {
               setCalendarMode("gregorian");
+              onModeChange?.("gregorian");
               setPickerView("days");
             }}
             className={cn(

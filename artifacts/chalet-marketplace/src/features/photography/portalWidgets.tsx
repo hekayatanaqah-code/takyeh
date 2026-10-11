@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
-import { call, fmtDT, fmtT, ghostCls, cardCls, Empty, ErrorBox, type Booking } from "./shared";
+import { call, fmtDT, fmtT, ghostCls, cardCls, brownActionColors, Empty, ErrorBox, type Booking } from "./shared";
+import { formatSessionCalendarDate, type SessionCalendarMode } from "./sessionCalendarDate";
 
 /** Platform-consistent RTL upper tabs with always-mounted hidden panels (drafts persist). */
 export function UpperTabs<K extends string>({ id, tabs, active, onChange }: { id: string; tabs: readonly (readonly [NoInfer<K>, string])[]; active: K; onChange: (k: K) => void }) {
@@ -15,7 +16,7 @@ export function UpperTabs<K extends string>({ id, tabs, active, onChange }: { id
       {tabs.map(([k, l], i) => {
         const on = k === active;
         return <button key={k} id={`${id}-tab-${k}`} type="button" role="tab" aria-selected={on} aria-controls={`${id}-panel-${k}`} tabIndex={on ? 0 : -1} onClick={() => onChange(k)} onKeyDown={(e) => onKey(e, i)}
-          className={`min-h-11 flex-1 shrink-0 snap-start whitespace-nowrap rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${on ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`} data-testid={`tab-${id}-${k}`}>{l}</button>;
+          className={`min-h-11 flex-1 shrink-0 snap-start whitespace-nowrap rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8C6246]/50 ${on ? `${brownActionColors} shadow-sm` : "text-muted-foreground hover:bg-muted hover:text-foreground"}`} data-testid={`tab-${id}-${k}`}>{l}</button>;
       })}
     </div>
   );
@@ -58,9 +59,6 @@ export function BookingNotices({ items }: { items: PortalNotification[] }) {
 
 const keyFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" });
 const riyadhKey = (d: Date) => keyFmt.format(d);
-const dayFmt = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-const hijriDayFmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-const utcDate = (k: string) => new Date(`${k}T12:00:00Z`);
 /** Riyadh is fixed UTC+3; split a booking into per-day intervals. */
 function daysOf(bk: Booking): string[] {
   const s = riyadhKey(new Date(bk.startAt));
@@ -81,16 +79,18 @@ export function SessionCalendar({ bookings }: { bookings: Booking[] }) {
   }, [bookings]);
   const occupied = useMemo(() => [...byDay.keys()].sort(), [byDay]);
   const [sel, setSel] = useState<string>(() => occupied[0] ?? today);
+  const [calendarMode, setCalendarMode] = useState<SessionCalendarMode>("hijri");
   const selList = byDay.get(sel) ?? [];
+  const dateDisplay = formatSessionCalendarDate(sel, calendarMode);
   return (
     <section className={`${cardCls} space-y-3`} data-testid="section-session-calendar">
       <div>
         <h3 className="font-bold">تقويم الجلسات المحجوزة</h3>
         <p className="text-xs text-muted-foreground">النقطة تعني وجود جلسة محجوزة، والأوقات بتوقيت السعودية. لا يغلق اليوم كاملا ولا يغير أيام الإغلاق أو أوقات التوفر.</p>
       </div>
-      <DualCalendarPicker inline value={sel} onChange={(v) => setSel(v || today)} occupiedDates={occupied} label="تقويم الجلسات المحجوزة" className="mx-auto max-w-[22rem]" />
+      <DualCalendarPicker inline mode={calendarMode} onModeChange={setCalendarMode} value={sel} onChange={(v) => setSel(v || today)} occupiedDates={occupied} label="تقويم الجلسات المحجوزة" className="mx-auto max-w-[22rem]" />
       <div className="space-y-2 border-t border-border pt-3" data-testid="panel-cal-day" aria-live="polite">
-        <p className="text-sm font-semibold">{dayFmt.format(utcDate(sel))} <span className="font-normal text-muted-foreground">- {hijriDayFmt.format(utcDate(sel))}</span></p>
+        <p className="text-sm font-semibold" data-testid="text-session-calendar-date" data-calendar-mode={calendarMode}>{dateDisplay.weekday}، {dateDisplay.primary} <span className="font-normal text-muted-foreground">- {dateDisplay.secondary}</span></p>
         {selList.length === 0 ? <p className="text-xs text-muted-foreground">لا توجد جلسات محجوزة في هذا اليوم.</p> : (
           <ul className="space-y-1.5">
             {selList.map((b) => (

@@ -50,8 +50,9 @@ export const fmtT = (s: string) =>
   new Intl.DateTimeFormat("ar-SA", { timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(s));
 
 export const inputCls = "w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60";
-export const btnCls = "inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground transition hover:opacity-90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2";
-export const brownBtnCls = "inline-flex items-center justify-center gap-2 rounded-xl bg-[#8C6246] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#734f36] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8C6246] focus-visible:ring-offset-2";
+export const brownActionColors = "bg-[#8C6246] text-white hover:bg-[#734f36]";
+export const brownBtnCls = `inline-flex items-center justify-center gap-2 rounded-xl ${brownActionColors} px-4 py-2.5 text-sm font-bold transition disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8C6246] focus-visible:ring-offset-2`;
+export const btnCls = brownBtnCls;
 export const ghostCls = "inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold transition hover:bg-muted disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 export const cardCls = "rounded-2xl border border-border bg-card p-4 sm:p-5";
 
