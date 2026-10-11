@@ -97,36 +97,6 @@ export const ConfirmPhotographyBookingParams = zod.object({
 export const ConfirmPhotographyBookingResponse = zod.record(zod.string(), zod.unknown())
 
 
-export const GetPhotographyInviteParams = zod.object({
-  "token": zod.coerce.string()
-})
-
-export const GetPhotographyInviteResponse = zod.record(zod.string(), zod.unknown())
-
-
-/**
- * @summary Consume an expiring one-use invite and submit photographer application
- */
-export const AcceptPhotographyInviteParams = zod.object({
-  "token": zod.coerce.string()
-})
-
-export const AcceptPhotographyInviteBody = zod.record(zod.string(), zod.unknown())
-
-export const AcceptPhotographyInviteResponse = zod.record(zod.string(), zod.unknown())
-
-
-export const GetPhotographerPortalResponse = zod.record(zod.string(), zod.unknown())
-
-
-/**
- * @summary Save profile, geographic coverage, session duration and weekly availability
- */
-export const UpdatePhotographerProfileBody = zod.record(zod.string(), zod.unknown())
-
-export const UpdatePhotographerProfileResponse = zod.record(zod.string(), zod.unknown())
-
-
 export const LoginPhotographerBody = zod.record(zod.string(), zod.unknown())
 
 export const LoginPhotographerResponse = zod.record(zod.string(), zod.unknown())
@@ -500,6 +470,242 @@ export const RequestUploadUrlBody = zod.object({
 export const RequestUploadUrlResponse = zod.object({
   "uploadURL": zod.string(),
   "objectPath": zod.string()
+})
+
+
+/**
+ * @summary Request a direct image upload using a photographer session or valid invitation
+ */
+export const requestPhotographerImageUploadBodyNameMax = 255;
+
+export const requestPhotographerImageUploadBodySizeMax = 5242880;
+
+export const requestPhotographerImageUploadBodyInviteTokenMax = 256;
+
+
+
+export const RequestPhotographerImageUploadBody = zod.object({
+  "name": zod.string().min(1).max(requestPhotographerImageUploadBodyNameMax),
+  "size": zod.number().int().min(1).max(requestPhotographerImageUploadBodySizeMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp']),
+  "inviteToken": zod.string().min(1).max(requestPhotographerImageUploadBodyInviteTokenMax).optional()
+})
+
+export const RequestPhotographerImageUploadResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string(),
+  "uploadProof": zod.string()
+})
+
+
+/**
+ * @summary Validate, sanitize, and persist an uploaded photographer portrait
+ */
+export const completePhotographerImageBodyInviteTokenMax = 256;
+
+
+
+export const CompletePhotographerImageBody = zod.object({
+  "objectPath": zod.string(),
+  "uploadProof": zod.string(),
+  "inviteToken": zod.string().min(1).max(completePhotographerImageBodyInviteTokenMax).optional()
+})
+
+export const CompletePhotographerImageResponse = zod.object({
+  "objectPath": zod.string()
+})
+
+
+export const GetPhotographyInviteParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const GetPhotographyInviteResponse = zod.object({
+  "name": zod.string(),
+  "whatsapp": zod.string(),
+  "expiresAt": zod.date()
+})
+
+
+export const AcceptPhotographyInviteParams = zod.object({
+  "token": zod.coerce.string()
+})
+
+export const acceptPhotographyInviteBodyOneBioMax = 2000;
+
+export const acceptPhotographyInviteBodyOnePortfolioUrlMax = 2000;
+
+
+
+
+export const acceptPhotographyInviteBodyOneDistrictIdsMax = 200;
+
+export const acceptPhotographyInviteBodyOneSessionMinutesMin = 30;
+export const acceptPhotographyInviteBodyOneSessionMinutesMax = 240;
+
+export const acceptPhotographyInviteBodyOneAvailabilityItemWeekdayMin = 0;
+export const acceptPhotographyInviteBodyOneAvailabilityItemWeekdayMax = 6;
+
+export const acceptPhotographyInviteBodyOneAvailabilityItemStartRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const acceptPhotographyInviteBodyOneAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const acceptPhotographyInviteBodyOneAvailabilityMax = 28;
+
+export const acceptPhotographyInviteBodyTwoPasswordMin = 10;
+export const acceptPhotographyInviteBodyTwoPasswordMax = 128;
+
+
+
+export const AcceptPhotographyInviteBody = zod.object({
+  "bio": zod.string().max(acceptPhotographyInviteBodyOneBioMax),
+  "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
+  "portfolioUrl": zod.string().max(acceptPhotographyInviteBodyOnePortfolioUrlMax).optional(),
+  "profileImagePath": zod.string().optional(),
+  "regionId": zod.number().int().min(1),
+  "cityId": zod.number().int().min(1),
+  "districtIds": zod.array(zod.number().int().min(1)).max(acceptPhotographyInviteBodyOneDistrictIdsMax),
+  "allDistricts": zod.boolean(),
+  "sessionMinutes": zod.number().int().min(acceptPhotographyInviteBodyOneSessionMinutesMin).max(acceptPhotographyInviteBodyOneSessionMinutesMax),
+  "availability": zod.array(zod.object({
+  "weekday": zod.number().int().min(acceptPhotographyInviteBodyOneAvailabilityItemWeekdayMin).max(acceptPhotographyInviteBodyOneAvailabilityItemWeekdayMax),
+  "start": zod.string().regex(acceptPhotographyInviteBodyOneAvailabilityItemStartRegExp),
+  "end": zod.string().regex(acceptPhotographyInviteBodyOneAvailabilityItemEndRegExp)
+})).min(1).max(acceptPhotographyInviteBodyOneAvailabilityMax)
+}).and(zod.object({
+  "password": zod.string().min(acceptPhotographyInviteBodyTwoPasswordMin).max(acceptPhotographyInviteBodyTwoPasswordMax)
+}))
+
+export const acceptPhotographyInviteResponsePhotographerOneBioMax = 2000;
+
+export const acceptPhotographyInviteResponsePhotographerOnePortfolioUrlMax = 2000;
+
+
+
+
+export const acceptPhotographyInviteResponsePhotographerOneDistrictIdsMax = 200;
+
+export const acceptPhotographyInviteResponsePhotographerOneSessionMinutesMin = 30;
+export const acceptPhotographyInviteResponsePhotographerOneSessionMinutesMax = 240;
+
+export const acceptPhotographyInviteResponsePhotographerOneAvailabilityItemWeekdayMin = 0;
+export const acceptPhotographyInviteResponsePhotographerOneAvailabilityItemWeekdayMax = 6;
+
+export const acceptPhotographyInviteResponsePhotographerOneAvailabilityItemStartRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const acceptPhotographyInviteResponsePhotographerOneAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const acceptPhotographyInviteResponsePhotographerOneAvailabilityMax = 28;
+
+
+
+export const AcceptPhotographyInviteResponse = zod.object({
+  "photographer": zod.object({
+  "bio": zod.string().max(acceptPhotographyInviteResponsePhotographerOneBioMax),
+  "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
+  "portfolioUrl": zod.string().max(acceptPhotographyInviteResponsePhotographerOnePortfolioUrlMax).optional(),
+  "profileImagePath": zod.string().optional(),
+  "regionId": zod.number().int().min(1),
+  "cityId": zod.number().int().min(1),
+  "districtIds": zod.array(zod.number().int().min(1)).max(acceptPhotographyInviteResponsePhotographerOneDistrictIdsMax),
+  "allDistricts": zod.boolean(),
+  "sessionMinutes": zod.number().int().min(acceptPhotographyInviteResponsePhotographerOneSessionMinutesMin).max(acceptPhotographyInviteResponsePhotographerOneSessionMinutesMax),
+  "availability": zod.array(zod.object({
+  "weekday": zod.number().int().min(acceptPhotographyInviteResponsePhotographerOneAvailabilityItemWeekdayMin).max(acceptPhotographyInviteResponsePhotographerOneAvailabilityItemWeekdayMax),
+  "start": zod.string().regex(acceptPhotographyInviteResponsePhotographerOneAvailabilityItemStartRegExp),
+  "end": zod.string().regex(acceptPhotographyInviteResponsePhotographerOneAvailabilityItemEndRegExp)
+})).min(1).max(acceptPhotographyInviteResponsePhotographerOneAvailabilityMax)
+}).and(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "whatsapp": zod.string(),
+  "status": zod.enum(['invited', 'pending', 'approved', 'rejected', 'suspended']),
+  "adminNote": zod.string().nullish()
+}))
+})
+
+
+export const GetPhotographerPortalResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const updatePhotographerProfileBodyBioMax = 2000;
+
+export const updatePhotographerProfileBodyPortfolioUrlMax = 2000;
+
+
+
+
+export const updatePhotographerProfileBodyDistrictIdsMax = 200;
+
+export const updatePhotographerProfileBodySessionMinutesMin = 30;
+export const updatePhotographerProfileBodySessionMinutesMax = 240;
+
+export const updatePhotographerProfileBodyAvailabilityItemWeekdayMin = 0;
+export const updatePhotographerProfileBodyAvailabilityItemWeekdayMax = 6;
+
+export const updatePhotographerProfileBodyAvailabilityItemStartRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const updatePhotographerProfileBodyAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const updatePhotographerProfileBodyAvailabilityMax = 28;
+
+
+
+export const UpdatePhotographerProfileBody = zod.object({
+  "bio": zod.string().max(updatePhotographerProfileBodyBioMax),
+  "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
+  "portfolioUrl": zod.string().max(updatePhotographerProfileBodyPortfolioUrlMax).optional(),
+  "profileImagePath": zod.string().optional(),
+  "regionId": zod.number().int().min(1),
+  "cityId": zod.number().int().min(1),
+  "districtIds": zod.array(zod.number().int().min(1)).max(updatePhotographerProfileBodyDistrictIdsMax),
+  "allDistricts": zod.boolean(),
+  "sessionMinutes": zod.number().int().min(updatePhotographerProfileBodySessionMinutesMin).max(updatePhotographerProfileBodySessionMinutesMax),
+  "availability": zod.array(zod.object({
+  "weekday": zod.number().int().min(updatePhotographerProfileBodyAvailabilityItemWeekdayMin).max(updatePhotographerProfileBodyAvailabilityItemWeekdayMax),
+  "start": zod.string().regex(updatePhotographerProfileBodyAvailabilityItemStartRegExp),
+  "end": zod.string().regex(updatePhotographerProfileBodyAvailabilityItemEndRegExp)
+})).min(1).max(updatePhotographerProfileBodyAvailabilityMax)
+})
+
+export const updatePhotographerProfileResponsePhotographerOneBioMax = 2000;
+
+export const updatePhotographerProfileResponsePhotographerOnePortfolioUrlMax = 2000;
+
+
+
+
+export const updatePhotographerProfileResponsePhotographerOneDistrictIdsMax = 200;
+
+export const updatePhotographerProfileResponsePhotographerOneSessionMinutesMin = 30;
+export const updatePhotographerProfileResponsePhotographerOneSessionMinutesMax = 240;
+
+export const updatePhotographerProfileResponsePhotographerOneAvailabilityItemWeekdayMin = 0;
+export const updatePhotographerProfileResponsePhotographerOneAvailabilityItemWeekdayMax = 6;
+
+export const updatePhotographerProfileResponsePhotographerOneAvailabilityItemStartRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const updatePhotographerProfileResponsePhotographerOneAvailabilityItemEndRegExp = new RegExp('^(?:[01]\\d|2[0-3]):[0-5]\\d$');
+export const updatePhotographerProfileResponsePhotographerOneAvailabilityMax = 28;
+
+
+
+export const UpdatePhotographerProfileResponse = zod.object({
+  "photographer": zod.object({
+  "bio": zod.string().max(updatePhotographerProfileResponsePhotographerOneBioMax),
+  "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
+  "portfolioUrl": zod.string().max(updatePhotographerProfileResponsePhotographerOnePortfolioUrlMax).optional(),
+  "profileImagePath": zod.string().optional(),
+  "regionId": zod.number().int().min(1),
+  "cityId": zod.number().int().min(1),
+  "districtIds": zod.array(zod.number().int().min(1)).max(updatePhotographerProfileResponsePhotographerOneDistrictIdsMax),
+  "allDistricts": zod.boolean(),
+  "sessionMinutes": zod.number().int().min(updatePhotographerProfileResponsePhotographerOneSessionMinutesMin).max(updatePhotographerProfileResponsePhotographerOneSessionMinutesMax),
+  "availability": zod.array(zod.object({
+  "weekday": zod.number().int().min(updatePhotographerProfileResponsePhotographerOneAvailabilityItemWeekdayMin).max(updatePhotographerProfileResponsePhotographerOneAvailabilityItemWeekdayMax),
+  "start": zod.string().regex(updatePhotographerProfileResponsePhotographerOneAvailabilityItemStartRegExp),
+  "end": zod.string().regex(updatePhotographerProfileResponsePhotographerOneAvailabilityItemEndRegExp)
+})).min(1).max(updatePhotographerProfileResponsePhotographerOneAvailabilityMax)
+}).and(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "whatsapp": zod.string(),
+  "status": zod.enum(['invited', 'pending', 'approved', 'rejected', 'suspended']),
+  "adminNote": zod.string().nullish()
+}))
 })
 
 

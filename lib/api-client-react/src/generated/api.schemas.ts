@@ -185,6 +185,138 @@ export interface ChaletSubmission {
   createdAt: string;
 }
 
+export type PhotographerImageUploadRequestContentType = typeof PhotographerImageUploadRequestContentType[keyof typeof PhotographerImageUploadRequestContentType];
+
+
+export const PhotographerImageUploadRequestContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+} as const;
+
+export interface PhotographerImageUploadRequest {
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 5242880
+     */
+  size: number;
+  contentType: PhotographerImageUploadRequestContentType;
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  inviteToken?: string;
+}
+
+export interface PhotographerImageUploadGrant {
+  uploadURL: string;
+  objectPath: string;
+  uploadProof: string;
+}
+
+export interface PhotographerImageCompletion {
+  objectPath: string;
+  uploadProof: string;
+  /**
+     * @minLength 1
+     * @maxLength 256
+     */
+  inviteToken?: string;
+}
+
+export interface PhotographerImageResult {
+  objectPath: string;
+}
+
+export interface PhotographerAvailability {
+  /**
+     * @minimum 0
+     * @maximum 6
+     */
+  weekday: number;
+  /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
+  start: string;
+  /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
+  end: string;
+}
+
+export type PhotographerProfileInputExperienceYears = typeof PhotographerProfileInputExperienceYears[keyof typeof PhotographerProfileInputExperienceYears];
+
+
+export const PhotographerProfileInputExperienceYears = {
+  '': '',
+  under_1: 'under_1',
+  '1_3': '1_3',
+  '3_5': '3_5',
+  over_5: 'over_5',
+} as const;
+
+export interface PhotographerProfileInput {
+  /** @maxLength 2000 */
+  bio: string;
+  experienceYears?: PhotographerProfileInputExperienceYears;
+  /** @maxLength 2000 */
+  portfolioUrl?: string;
+  profileImagePath?: string;
+  /** @minimum 1 */
+  regionId: number;
+  /** @minimum 1 */
+  cityId: number;
+  /**
+     * @maxItems 200
+     * @items.minimum 1
+     */
+  districtIds: number[];
+  allDistricts: boolean;
+  /**
+     * @minimum 30
+     * @maximum 240
+     */
+  sessionMinutes: number;
+  /**
+     * @minItems 1
+     * @maxItems 28
+     */
+  availability: PhotographerAvailability[];
+}
+
+export type PhotographerApplication = PhotographerProfileInput & {
+  /**
+     * @minLength 10
+     * @maxLength 128
+     */
+  password: string;
+};
+
+export type PhotographerProfileResultPhotographerStatus = typeof PhotographerProfileResultPhotographerStatus[keyof typeof PhotographerProfileResultPhotographerStatus];
+
+
+export const PhotographerProfileResultPhotographerStatus = {
+  invited: 'invited',
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  suspended: 'suspended',
+} as const;
+
+export type PhotographerProfileResultPhotographer = PhotographerProfileInput & ({
+  id: number;
+  name: string;
+  whatsapp: string;
+  status: PhotographerProfileResultPhotographerStatus;
+  /** @nullable */
+  adminNote?: string | null;
+});
+
+export interface PhotographerProfileResult {
+  photographer: PhotographerProfileResultPhotographer;
+}
+
 export interface RequestUploadUrlBody {
   name: string;
   size: number;
@@ -488,7 +620,7 @@ export interface OwnerServiceRemoval {
   ok: boolean;
 }
 
-export interface PhotographerAvailability {
+export interface PhotographerAvailability134a8bd {
   /**
      * @minimum 0
      * @maximum 6
@@ -515,7 +647,7 @@ export interface AdminPhotographerProfileInput {
      * @minItems 1
      * @maxItems 28
      */
-  availability?: PhotographerAvailability[];
+  availability?: PhotographerAvailability134a8bd[];
 }
 
 /**
@@ -553,18 +685,6 @@ export type CheckoutPhotographyBookingBody = { [key: string]: unknown };
 export type CheckoutPhotographyBooking200 = { [key: string]: unknown };
 
 export type ConfirmPhotographyBooking200 = { [key: string]: unknown };
-
-export type GetPhotographyInvite200 = { [key: string]: unknown };
-
-export type AcceptPhotographyInviteBody = { [key: string]: unknown };
-
-export type AcceptPhotographyInvite200 = { [key: string]: unknown };
-
-export type GetPhotographerPortal200 = { [key: string]: unknown };
-
-export type UpdatePhotographerProfileBody = { [key: string]: unknown };
-
-export type UpdatePhotographerProfile200 = { [key: string]: unknown };
 
 export type LoginPhotographerBody = { [key: string]: unknown };
 
@@ -633,6 +753,14 @@ export const GetAdminBroadcastRecipientsAudience = {
 export type BeginBrowserLoginParams = {
 returnTo?: string;
 };
+
+export type GetPhotographyInvite200 = {
+  name: string;
+  whatsapp: string;
+  expiresAt: string;
+};
+
+export type GetPhotographerPortal200 = { [key: string]: unknown };
 
 export type UpdateAdminPhotographerProfile200 = { [key: string]: unknown };
 

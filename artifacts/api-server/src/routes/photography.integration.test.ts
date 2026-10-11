@@ -83,10 +83,16 @@ test("invite acceptance consumes token exactly once and issues a private persist
   const body = {
     bio: "خبرة تصوير عقارات", regionId, cityId, districtIds: [], allDistricts: true,
     sessionMinutes: 60, availability: [{ weekday: 0, start: "09:00", end: "12:00" }], password: "TestPassword123!",
+    experienceYears: "3_5", portfolioUrl: "https://www.behance.net/photo-test", profileImagePath: "",
+    whatsapp: "966599999999",
   };
   const accepted = await request<{ photographer: { status: string } }>(`/photography/invites/${invite}`, body, "");
   assert.equal(accepted.status, 200);
   assert.equal(accepted.data.photographer.status, "pending");
+  const [profile] = await db.select().from(photographersTable).where(eq(photographersTable.id, photographerId));
+  assert.equal(profile.experienceYears, "3_5");
+  assert.equal(profile.portfolioUrl, body.portfolioUrl);
+  assert.equal(profile.whatsapp, phone, "invitation phone stays server-owned even with a tampered payload");
   assert.equal("passwordHash" in accepted.data.photographer, false);
   assert.equal("inviteHash" in accepted.data.photographer, false);
   assert.match(accepted.cookie!, /HttpOnly/);

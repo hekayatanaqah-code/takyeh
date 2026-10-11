@@ -6,4 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UpdatePhotographerProfile200 = { [key: string]: unknown };
+export interface PhotographerImageUploadGrant {
+  uploadURL: string;
+  objectPath: string;
+  uploadProof: string;
+}

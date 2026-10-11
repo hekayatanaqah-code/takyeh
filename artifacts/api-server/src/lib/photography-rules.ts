@@ -18,6 +18,15 @@ export const coverageSchema = z.object({
 }).refine(v => v.allDistricts || v.districtIds.length > 0, "حدد الأحياء أو اختر كل الأحياء");
 export const photographerProfileSchema = z.object({
   bio: z.string().trim().max(2000),
+  experienceYears: z.enum(["", "under_1", "1_3", "3_5", "over_5"]).optional(),
+  portfolioUrl: z.string().trim().max(2000).refine(value => {
+    if (!value) return true;
+    try {
+      const url = new URL(value);
+      return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password;
+    } catch { return false; }
+  }, "أدخل رابط معرض أعمال صحيحاً يبدأ بـ https:// أو http://").optional(),
+  profileImagePath: z.string().regex(/^(?:|\/objects\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.webp)$/).optional(),
   regionId: z.number().int().positive(), cityId: z.number().int().positive(),
   districtIds: z.array(z.number().int().positive()).max(200), allDistricts: z.boolean(),
   sessionMinutes: z.number().int().min(30).max(240),

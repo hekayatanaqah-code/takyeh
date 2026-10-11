@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { TimePicker } from "./timePicker";
 
 export const BASE = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
 export const API = `${BASE}/api`;
@@ -22,7 +23,10 @@ export interface Photographer {
   id: number; name: string; whatsapp: string; status: Status; bio: string;
   regionId: number | null; cityId: number | null; districtIds: number[]; allDistricts: boolean;
   sessionMinutes: number; availability: Interval[]; adminNote: string;
+  experienceYears?: ExperienceYears | ""; portfolioUrl?: string; profileImagePath?: string;
 }
+export type ExperienceYears = "under_1" | "1_3" | "3_5" | "over_5";
+export const EXPERIENCE_AR: Record<ExperienceYears, string> = { under_1: "أقل من سنة", "1_3": "١-٣ سنوات", "3_5": "٣-٥ سنوات", over_5: "أكثر من ٥ سنوات" };
 export interface Pkg { id: number; name: string; priceHalalas: number; platformPercent: number; active: boolean }
 export interface Booking {
   propertyId?: number | null; serviceSubmissionId?: number | null;
@@ -146,12 +150,25 @@ export const geoError = (g: Geo) =>
   g.regionId == null ? "اختر المنطقة" : g.cityId == null ? "اختر المدينة" : !g.allDistricts && g.districtIds.length === 0 ? "اختر حيا واحدا على الأقل أو كل الأحياء" : null;
 
 /* ---- Availability ---- */
-export function AvailabilityEditor({ value, onChange }: { value: Interval[]; onChange: (v: Interval[]) => void }) {
+export function AvailabilityEditor({ value, onChange, customTimePicker = false }: { value: Interval[]; onChange: (v: Interval[]) => void; customTimePicker?: boolean }) {
   const set = (i: number, p: Partial<Interval>) => onChange(value.map((x, j) => (j === i ? { ...x, ...p } : x)));
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground">الأوقات بتوقيت السعودية (Asia/Riyadh، UTC+3).</p>
-      {value.map((v, i) => (
+      {value.map((v, i) => customTimePicker ? (
+        <div key={i} className="space-y-2 rounded-2xl border border-border bg-muted/30 p-3" data-testid={`row-interval-${i}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <select className={`${inputCls} w-auto min-w-[8rem] flex-1 sm:flex-none`} value={v.weekday} onChange={(e) => set(i, { weekday: Number(e.target.value) })} aria-label="اليوم" data-testid={`select-weekday-${i}`}>
+              {WEEKDAYS.map((w, d) => <option key={d} value={d}>{w}</option>)}
+            </select>
+            <button type="button" className={`${ghostCls} px-3 py-2`} onClick={() => onChange(value.filter((_, j) => j !== i))} data-testid={`button-remove-interval-${i}`}>حذف</button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <TimePicker label="من" value={v.start} onChange={(start) => set(i, { start })} testId={`picker-start-${i}`} />
+            <TimePicker label="إلى" value={v.end} onChange={(end) => set(i, { end })} testId={`picker-end-${i}`} />
+          </div>
+        </div>
+      ) : (
         <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2">
           <select className={inputCls} value={v.weekday} onChange={(e) => set(i, { weekday: Number(e.target.value) })} aria-label="اليوم">
             {WEEKDAYS.map((w, d) => <option key={d} value={d}>{w}</option>)}

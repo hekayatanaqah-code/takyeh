@@ -1,6 +1,29 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { availabilitySchema, coverageSchema, photoPhone, photographyQuote, photographySlots } from "./photography-rules";
+import { availabilitySchema, coverageSchema, photoPhone, photographyQuote, photographySlots, photographerProfileSchema } from "./photography-rules";
+
+test("profile details validate experience, safe portfolio links, and managed portrait paths", () => {
+  const profile = {
+    bio: "مصور عقارات", regionId: 1, cityId: 1, districtIds: [], allDistricts: true,
+    sessionMinutes: 90, availability: [{ weekday: 0, start: "09:00", end: "17:00" }],
+  };
+  assert.equal(photographerProfileSchema.safeParse(profile).success, true);
+  for (const experienceYears of ["", "under_1", "1_3", "3_5", "over_5"]) {
+    assert.equal(photographerProfileSchema.safeParse({ ...profile, experienceYears }).success, true);
+  }
+  for (const portfolioUrl of ["", "https://www.behance.net/example", "https://instagram.com/example", "http://example.com"]) {
+    assert.equal(photographerProfileSchema.safeParse({ ...profile, portfolioUrl }).success, true);
+  }
+  for (const portfolioUrl of ["not-a-url", "javascript:alert(1)", "ftp://example.com", "https://username:password@example.com"]) {
+    assert.equal(photographerProfileSchema.safeParse({ ...profile, portfolioUrl }).success, false);
+  }
+  assert.equal(photographerProfileSchema.safeParse({ ...profile, experienceYears: "100" }).success, false);
+  assert.equal(photographerProfileSchema.safeParse({ ...profile, profileImagePath: "https://example.com/a.svg" }).success, false);
+  assert.equal(photographerProfileSchema.safeParse({ ...profile, profileImagePath: "/objects/uploads/00000000-0000-0000-0000-000000000000.webp" }).success, true);
+  const cleared = photographerProfileSchema.parse({ ...profile, experienceYears: "", portfolioUrl: "", profileImagePath: "", whatsapp: "0712345678" });
+  assert.equal(cleared.profileImagePath, "");
+  assert.equal("whatsapp" in cleared, false, "invite identity cannot be supplied by the form");
+});
 
 test("Saudi phones accept both digit sets and reject invalid destinations", () => {
   assert.equal(photoPhone("٠٥٠١٢٣٤٥٦٧"), "966501234567");

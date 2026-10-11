@@ -12,6 +12,8 @@ export interface PhotographerAvailability {
      * @maximum 6
      */
   weekday: number;
+  /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
   start: string;
+  /** @pattern ^(?:[01]\d|2[0-3]):[0-5]\d$ */
   end: string;
 }

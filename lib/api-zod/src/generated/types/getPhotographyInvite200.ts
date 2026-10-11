@@ -6,4 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetPhotographyInvite200 = { [key: string]: unknown };
+export type GetPhotographyInvite200 = {
+  name: string;
+  whatsapp: string;
+  expiresAt: Date;
+};

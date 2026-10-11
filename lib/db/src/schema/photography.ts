@@ -6,6 +6,9 @@ export type PhotographyAvailability = { weekday: number; start: string; end: str
 export const photographersTable = pgTable("photographers", {
   id: serial("id").primaryKey(), name: text("name").notNull(), whatsapp: text("whatsapp").notNull().unique(),
   status: text("status").notNull().default("invited"), bio: text("bio").notNull().default(""),
+  experienceYears: text("experience_years").notNull().default(""),
+  portfolioUrl: text("portfolio_url").notNull().default(""),
+  profileImagePath: text("profile_image_path").notNull().default(""),
   regionId: integer("region_id"), cityId: integer("city_id"),
   districtIds: jsonb("district_ids").$type<number[]>().notNull().default([]),
   allDistricts: boolean("all_districts").notNull().default(false),

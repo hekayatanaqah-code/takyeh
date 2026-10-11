@@ -5,7 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { PhotographerAvailability } from './photographerAvailability';
+import type { PhotographerAvailability134a8bd } from './photographerAvailability134a8bd';
 
 export interface AdminPhotographerProfileInput {
   /**
@@ -24,5 +24,5 @@ export interface AdminPhotographerProfileInput {
      * @minItems 1
      * @maxItems 28
      */
-  availability?: PhotographerAvailability[];
+  availability?: PhotographerAvailability134a8bd[];
 }

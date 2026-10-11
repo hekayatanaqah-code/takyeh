@@ -33,10 +33,6 @@ paths:
     $ref: "./photography.yaml#/checkout"
   /photography/bookings/{id}/confirm:
     $ref: "./photography.yaml#/confirm"
-  /photography/invites/{token}:
-    $ref: "./photography.yaml#/invite"
-  /photography/portal:
-    $ref: "./photography.yaml#/portal"
   /photography/portal/login:
     $ref: "./photography.yaml#/login"
   /photography/portal/logout:
@@ -376,6 +372,134 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RequestUploadUrlResponse"
+  /photography/profile-image/upload-url:
+    post:
+      tags: [Photography]
+      operationId: requestPhotographerImageUpload
+      summary: Request a direct image upload using a photographer session or valid invitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhotographerImageUploadRequest"
+      responses:
+        '200':
+          description: Signed upload URL and account-bound completion proof
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotographerImageUploadGrant"
+        '401':
+          description: No photographer session or valid invitation
+        '400':
+          description: Invalid file metadata
+        '503':
+          description: Storage temporarily unavailable
+  /photography/profile-image/complete:
+    post:
+      tags: [Photography]
+      operationId: completePhotographerImage
+      summary: Validate, sanitize, and persist an uploaded photographer portrait
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhotographerImageCompletion"
+      responses:
+        '200':
+          description: Sanitized public portrait path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotographerImageResult"
+        '401':
+          description: No photographer session or valid invitation
+        '400':
+          description: Invalid image or upload proof
+  /photography/invites/{token}:
+    get:
+      tags: [Photography]
+      operationId: getPhotographyInvite
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Invitation identity; phone cannot be changed by application input
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, whatsapp, expiresAt]
+                properties:
+                  name: { type: string }
+                  whatsapp: { type: string }
+                  expiresAt: { type: string, format: date-time }
+        '410':
+          description: Invitation expired or consumed
+    post:
+      tags: [Photography]
+      operationId: acceptPhotographyInvite
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhotographerApplication"
+      responses:
+        '200':
+          description: Application persisted and photographer session issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotographerProfileResult"
+        '400':
+          description: Invalid profile, coverage, image ownership or password
+        '410':
+          description: Invitation expired or consumed
+  /photography/portal:
+    get:
+      tags: [Photography]
+      operationId: getPhotographerPortal
+      responses:
+        '200':
+          description: Photographer profile, bookings, and earnings
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Photographer session required
+    patch:
+      tags: [Photography]
+      operationId: updatePhotographerProfile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhotographerProfileInput"
+      responses:
+        '200':
+          description: Updated photographer profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PhotographerProfileResult"
+        '400':
+          description: Invalid profile, coverage or image ownership
+        '401':
+          description: Photographer session required
 
   /submissions/check-social-account:
     post:
@@ -738,6 +862,83 @@ components:
         - status
         - createdAt
 
+    PhotographerImageUploadRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, minimum: 1, maximum: 5242880 }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+        inviteToken: { type: string, minLength: 1, maxLength: 256 }
+    PhotographerImageUploadGrant:
+      type: object
+      required: [uploadURL, objectPath, uploadProof]
+      properties:
+        uploadURL: { type: string }
+        objectPath: { type: string }
+        uploadProof: { type: string }
+    PhotographerImageCompletion:
+      type: object
+      required: [objectPath, uploadProof]
+      properties:
+        objectPath: { type: string }
+        uploadProof: { type: string }
+        inviteToken: { type: string, minLength: 1, maxLength: 256 }
+    PhotographerImageResult:
+      type: object
+      required: [objectPath]
+      properties:
+        objectPath: { type: string }
+    PhotographerAvailability:
+      type: object
+      required: [weekday, start, end]
+      properties:
+        weekday: { type: integer, minimum: 0, maximum: 6 }
+        start: { type: string, pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$' }
+        end: { type: string, pattern: '^(?:[01]\d|2[0-3]):[0-5]\d$' }
+    PhotographerProfileInput:
+      type: object
+      required: [bio, regionId, cityId, districtIds, allDistricts, sessionMinutes, availability]
+      properties:
+        bio: { type: string, maxLength: 2000 }
+        experienceYears: { type: string, enum: ['', under_1, '1_3', '3_5', over_5] }
+        portfolioUrl: { type: string, maxLength: 2000 }
+        profileImagePath: { type: string }
+        regionId: { type: integer, minimum: 1 }
+        cityId: { type: integer, minimum: 1 }
+        districtIds:
+          type: array
+          maxItems: 200
+          items: { type: integer, minimum: 1 }
+        allDistricts: { type: boolean }
+        sessionMinutes: { type: integer, minimum: 30, maximum: 240 }
+        availability:
+          type: array
+          minItems: 1
+          maxItems: 28
+          items: { $ref: "#/components/schemas/PhotographerAvailability" }
+    PhotographerApplication:
+      allOf:
+        - $ref: "#/components/schemas/PhotographerProfileInput"
+        - type: object
+          required: [password]
+          properties:
+            password: { type: string, minLength: 10, maxLength: 128 }
+    PhotographerProfileResult:
+      type: object
+      required: [photographer]
+      properties:
+        photographer:
+          allOf:
+            - $ref: "#/components/schemas/PhotographerProfileInput"
+            - type: object
+              required: [id, name, whatsapp, status]
+              properties:
+                id: { type: integer }
+                name: { type: string }
+                whatsapp: { type: string }
+                status: { type: string, enum: [invited, pending, approved, rejected, suspended] }
+                adminNote: { type: string, nullable: true }
     RequestUploadUrlBody:
       type: object
       required: [name, size, contentType]

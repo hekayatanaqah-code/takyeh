@@ -13,3 +13,4 @@ export type {
   HealthStatus,
   SubmissionResponse,
 } from "./generated/types";
+export * from './generated/types';

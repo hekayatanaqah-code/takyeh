@@ -14,6 +14,7 @@ import { photographyReadiness } from "../lib/photography-delivery";
 import { photographyCardEnabled } from "../lib/owner-services";
 import { photographyActivities, ownedPhotographyTarget, coveredPhotographyTarget, photographyReservationSchema, exactlyOnePhotographyTarget } from "../lib/photography-targets";
 import { photographyInvoice, reconcilePhotographyBooking, reconcileExpiredPhotographyInvoices } from "../lib/photography-payment";
+import { requestProfileImage, completeProfileImage, ownsProfileImage, profileImageUploadSchema, profileImageCompleteSchema } from "../lib/photography-images";
 
 const router = Router();
 router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
@@ -60,6 +61,36 @@ async function setSession(req: Request, res: Response, id: number) {
   res.cookie(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: req.secure, maxAge: 14 * 86400000, path: "/" });
 }
 router.get("/status", async (_req, res) => res.json({ enabled: await enabled(), readiness: photographyReadiness() }));
+async function imageIdentity(req: Request, inviteToken?: string) {
+  if (!inviteToken) return photographer(req);
+  const [row] = await db.select().from(photographersTable).where(and(
+    eq(photographersTable.inviteHash, photoHash(inviteToken)), eq(photographersTable.status, "invited"),
+    gt(photographersTable.inviteExpiresAt, new Date()),
+  ));
+  return row ?? null;
+}
+router.post("/profile-image/upload-url", sameOrigin, loginLimit, async (req, res) => {
+  const parsed = profileImageUploadSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "اختر صورة JPG أو PNG أو WebP لا تتجاوز ٥ ميجابايت" });
+  const row = await imageIdentity(req, parsed.data.inviteToken);
+  if (!row) return res.status(401).json({ error: "سجل الدخول أو استخدم دعوة مصور سارية" });
+  try { return res.json(await requestProfileImage(row.id)); }
+  catch (err) {
+    req.log?.error({ err }, "Photographer image upload URL failed");
+    return res.status(503).json({ error: "تعذر بدء رفع الصورة؛ أعد المحاولة لاحقاً" });
+  }
+});
+router.post("/profile-image/complete", sameOrigin, loginLimit, async (req, res) => {
+  const parsed = profileImageCompleteSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "بيانات رفع الصورة غير صحيحة" });
+  const row = await imageIdentity(req, parsed.data.inviteToken);
+  if (!row) return res.status(401).json({ error: "سجل الدخول أو استخدم دعوة مصور سارية" });
+  try { return res.json(await completeProfileImage(row.id, parsed.data.objectPath, parsed.data.uploadProof)); }
+  catch (err) {
+    req.log?.warn({ err }, "Photographer image completion failed");
+    return res.status(400).json({ error: "تعذر اعتماد الصورة؛ اختر صورة JPG أو PNG أو WebP سليمة، بحد أقصى ٥ ميجابايت، وأعد رفعها" });
+  }
+});
 router.get("/invites/:token", async (req, res) => {
   const [row] = await db.select().from(photographersTable).where(and(
     eq(photographersTable.inviteHash, photoHash(req.params.token)), eq(photographersTable.status, "invited"),
@@ -72,6 +103,9 @@ router.post("/invites/:token", sameOrigin, loginLimit, async (req, res) => {
   const profile = photographerProfileSchema.safeParse(req.body);
   const password = z.string().min(10).max(128).safeParse(req.body?.password);
   if (!profile.success || !password.success || !await validPhotographyCoverage(profile.data)) return res.status(400).json({ error: "راجع النطاق والتفرغ وكلمة المرور (١٠ أحرف على الأقل)" });
+  const identity = await imageIdentity(req, String(req.params.token));
+  if (!identity) return res.status(410).json({ error: "الدعوة مستخدمة أو منتهية" });
+  if (!await ownsProfileImage(identity.id, profile.data.profileImagePath)) return res.status(400).json({ error: "أعد رفع الصورة الشخصية من هذا الحساب" });
   const passwordHash = await bcrypt.hash(password.data, 12);
   const [row] = await db.update(photographersTable).set({
     ...profile.data, passwordHash, status: "pending", inviteHash: null, inviteExpiresAt: null,
@@ -113,6 +147,7 @@ router.patch("/portal", sameOrigin, async (req, res) => {
   if (!row) return res.status(401).json({ error: "سجل الدخول أولاً" });
   const parsed = photographerProfileSchema.safeParse(req.body);
   if (!parsed.success || !await validPhotographyCoverage(parsed.data)) return res.status(400).json({ error: "بيانات النطاق والتفرغ غير صحيحة" });
+  if (parsed.data.profileImagePath !== row.profileImagePath && !await ownsProfileImage(row.id, parsed.data.profileImagePath)) return res.status(400).json({ error: "أعد رفع الصورة الشخصية من هذا الحساب" });
   const coverageChanged = parsed.data.regionId !== row.regionId || parsed.data.cityId !== row.cityId
     || parsed.data.allDistricts !== row.allDistricts || JSON.stringify([...parsed.data.districtIds].sort()) !== JSON.stringify([...row.districtIds].sort());
   const [updated] = await db.update(photographersTable).set({

@@ -35,3 +35,8 @@ CREATE TABLE IF NOT EXISTS photography_deliveries (
  created_at timestamptz NOT NULL DEFAULT now()
 );
 INSERT INTO site_settings(key,value) VALUES ('photography_enabled','false') ON CONFLICT(key) DO NOTHING;
+
+-- Reviewed additive development schema update for photographer profile details.
+ALTER TABLE photographers ADD COLUMN IF NOT EXISTS experience_years text NOT NULL DEFAULT '';
+ALTER TABLE photographers ADD COLUMN IF NOT EXISTS portfolio_url text NOT NULL DEFAULT '';
+ALTER TABLE photographers ADD COLUMN IF NOT EXISTS profile_image_path text NOT NULL DEFAULT '';
