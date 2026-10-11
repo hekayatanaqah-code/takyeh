@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, ExternalLink, Clock } from "lucide-react";
-import { call, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice } from "../photography/shared";
+import { call, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, type Booking } from "../photography/shared";
 import PhotographyOwner from "../photography/PhotographyOwner";
 import { ICONS, isSafeUrl, resolveUrl, isExternal, type OwnerService } from "./types";
 
@@ -15,6 +15,8 @@ function initialActive(): boolean {
 
 export default function OwnerServicesOwner() {
   const q = useQuery({ queryKey: KEY, queryFn: () => call<{ services: OwnerService[] }>("/owner-services"), refetchInterval: 30000 });
+  const history = useQuery({ queryKey: ["ph-owner-bookings"], queryFn: () => call<{ bookings: Booking[] }>("/photography/bookings"), refetchInterval: 30000 });
+  const hasBookings = (history.data?.bookings.length ?? 0) > 0;
   // Payment-return mode keeps photography mounted regardless of card visibility.
   const [paymentReturn] = useState(() => typeof window !== "undefined" && !!new URLSearchParams(window.location.search).get("photographyBooking"));
   const [active, setActive] = useState(initialActive);
@@ -22,10 +24,10 @@ export default function OwnerServicesOwner() {
 
   const photo = q.data?.services.find((s) => s.kind === "photography");
   useEffect(() => {
-    if (!active || paymentReturn || !q.data) return;
+    if (!active || paymentReturn || hasBookings || history.isLoading || !q.data) return;
     if (!photo) { setActive(false); setNotice("تم إخفاء خدمة التصوير من قبل الإدارة."); }
     else if (photo.state !== "available") { setActive(false); setNotice("خدمة التصوير متوقفة مؤقتا وستعود قريبا."); }
-  }, [active, paymentReturn, q.data, photo]);
+  }, [active, paymentReturn, hasBookings, history.isLoading, q.data, photo]);
 
   const back = () => {
     setActive(false);
@@ -46,6 +48,11 @@ export default function OwnerServicesOwner() {
     <div className="space-y-5" dir="rtl" data-testid="owner-services">
       <header>
         <h2 className="text-xl font-bold">خدمات الملاك</h2>
+        {hasBookings && <button type="button" className={ghostCls} onClick={() => {
+          setActive(true);
+          const u = new URL(window.location.href); u.searchParams.set("ownerService", "photography");
+          window.history.replaceState(window.history.state, "", u.pathname + u.search + u.hash);
+        }} data-testid="button-photography-history">حجوزات التصوير والتقييم</button>}
         <p className="text-sm text-muted-foreground">خدمات إضافية لعقاراتك وخدماتك وأنشطتك، منفصلة عن التشغيل اليومي.</p>
       </header>
       {notice && <Notice tone="warn">{notice}</Notice>}

@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { call, ORIGIN, sar, fmtDT, fmtT, Field, inputCls, btnCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, type Pkg, type Booking } from "./shared";
+import { OwnerReview } from "./operations";
+import { call, ORIGIN, sar, fmtDT, fmtT, Field, inputCls, btnCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, AssignmentBadge, type Pkg, type Booking } from "./shared";
 
 interface Catalog {
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
   properties: { id: number; nameAr: string; location?: string; district?: string; whatsappNumber?: string }[];
   services: { id: number; nameAr: string; location?: string }[];
   packages: Pkg[];
-  photographers: { id: number; name: string; bio?: string }[];
+  photographers?: { id: number; name: string; bio?: string }[];
 }
 interface Slot { startAt: string; endAt: string }
+const slotKey = (s: Slot) => `${s.startAt}|${s.endAt}`;
+const mins = (s: Slot) => Math.round((new Date(s.endAt).getTime() - new Date(s.startAt).getTime()) / 60000);
 const CK = ["ph-owner-catalog"], BK = ["ph-owner-bookings"];
 
 function ConfirmResult() {
@@ -38,7 +41,7 @@ function ConfirmResult() {
 
 function Booker({ cat }: { cat: Catalog }) {
   const qc = useQueryClient();
-  const [activityKey, setP] = useState(""); const [photographerId, setPh] = useState("");
+  const [activityKey, setP] = useState("");
   const activities = [
     ...cat.properties.map(p => ({ ...p, kind: "property" as const })),
     ...cat.services.map(s => ({ ...s, kind: "service" as const })),
@@ -46,15 +49,15 @@ function Booker({ cat }: { cat: Catalog }) {
   const activity = activities.find(a => `${a.kind}:${a.id}` === activityKey);
   const target = activity ? activity.kind === "property" ? { propertyId: activity.id } : { serviceSubmissionId: activity.id } : null;
   const [packageId, setPk] = useState(""); const [date, setDate] = useState(""); const [slot, setSlot] = useState<Slot | null>(null);
-  const ready = !!target && photographerId && date;
+  const ready = !!target && !!date;
   const slots = useQuery({
-    queryKey: ["ph-slots", activityKey, photographerId, date], enabled: !!ready,
-    queryFn: () => call<{ slots: Slot[]; timezone: string }>(`/photography/slots?${activity!.kind === "property" ? "propertyId" : "serviceSubmissionId"}=${activity!.id}&photographerId=${photographerId}&date=${date}`),
+    queryKey: ["ph-slots", activityKey, date], enabled: !!ready,
+    queryFn: () => call<{ slots: Slot[]; timezone: string }>(`/photography/slots?${activity!.kind === "property" ? "propertyId" : "serviceSubmissionId"}=${activity!.id}&date=${date}`),
   });
   const pay = useMutation({
     mutationFn: async () => {
       if (!target || !slot) throw new Error("اختر النشاط والموعد أولاً");
-      const b = await call<{ booking: Booking }>("/photography/bookings", "POST", { ...target, photographerId: Number(photographerId), packageId: Number(packageId), startAt: slot.startAt });
+      const b = await call<{ booking: Booking }>("/photography/bookings", "POST", { ...target, packageId: Number(packageId), startAt: slot.startAt, endAt: slot.endAt });
       return call<{ paymentUrl: string }>(`/photography/bookings/${b.booking.id}/checkout`, "POST", { origin: ORIGIN() });
     },
     onSuccess: (r) => { window.location.assign(r.paymentUrl); },
@@ -69,23 +72,23 @@ function Booker({ cat }: { cat: Catalog }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="العقار أو الخدمة"><select className={inputCls} value={activityKey} onChange={(e) => { setP(e.target.value); setSlot(null); }} data-testid="select-property">
           <option value="">اختر العقار أو الخدمة</option>{activities.map(a => <option key={`${a.kind}:${a.id}`} value={`${a.kind}:${a.id}`}>{a.kind === "property" ? "عقار" : "خدمة"} — {a.nameAr}</option>)}</select></Field>
-        <Field label="المصور"><select className={inputCls} value={photographerId} onChange={(e) => { setPh(e.target.value); setSlot(null); }} data-testid="select-photographer">
-          <option value="">اختر المصور</option>{cat.photographers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></Field>
         <Field label="الباقة"><select className={inputCls} value={packageId} onChange={(e) => setPk(e.target.value)} data-testid="select-package">
           <option value="">اختر الباقة</option>{cat.packages.map((p) => <option key={p.id} value={p.id}>{p.name} - {sar(p.priceHalalas)}</option>)}</select></Field>
         <Field label="التاريخ (توقيت السعودية)"><input type="date" className={inputCls} value={date} onChange={(e) => { setDate(e.target.value); setSlot(null); }} data-testid="input-date" /></Field>
       </div>
       {ready && (slots.isLoading ? <Skel n={1} /> : slots.isError ? <ErrorBox error={slots.error} onRetry={() => slots.refetch()} /> :
-        (slots.data?.slots ?? []).length === 0 ? <Empty title="لا توجد مواعيد متاحة في هذا اليوم" text="جرب تاريخا آخر أو مصورا آخر." /> : (
+        (slots.data?.slots ?? []).length === 0 ? <Empty title="لا توجد مواعيد متاحة في هذا اليوم" text="جرب تاريخا آخر." /> : (
           <div className="flex flex-wrap gap-2">
             {slots.data!.slots.map((s) => (
-              <button key={s.startAt} type="button" aria-pressed={slot?.startAt === s.startAt} onClick={() => setSlot(s)}
-                className={`rounded-xl border px-3 py-2 text-sm font-semibold ${slot?.startAt === s.startAt ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}>
-                {fmtT(s.startAt)} - {fmtT(s.endAt)}
+              <button key={slotKey(s)} type="button" aria-pressed={!!slot && slotKey(slot) === slotKey(s)} onClick={() => setSlot(s)} data-testid={`button-slot-${slotKey(s)}`}
+                className={`flex flex-col items-center rounded-xl border px-3 py-2 text-sm font-semibold ${slot && slotKey(slot) === slotKey(s) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}>
+                <span>{fmtT(s.startAt)} - {fmtT(s.endAt)}</span>
+                <span className="text-[11px] font-normal opacity-80">{mins(s).toLocaleString("ar-SA")} دقيقة</span>
               </button>
             ))}
           </div>
         ))}
+      <p className="text-xs text-muted-foreground">يعيّن مصور معتمد يغطي موقع نشاطك تلقائيا بعد اختيار الموعد.</p>
       {pay.isError && <ErrorBox error={pay.error} />}
       <button className={btnCls} disabled={!pickable || !target || !slot || !packageId || pay.isPending} onClick={() => pay.mutate()} data-testid="button-checkout">
         {pay.isPending ? "جار التحويل إلى الدفع" : `الدفع عبر بوابة الدفع${pkg ? ` (${sar(pkg.priceHalalas)})` : ""}`}
@@ -109,16 +112,20 @@ export default function PhotographyOwner() {
             <p className="mt-1 text-sm text-muted-foreground">خدمة التصوير الاحترافي غير متاحة حاليا.</p>
           </div>
         ) : cat.data.properties.length + cat.data.services.length === 0 ? <Empty title="لا توجد أنشطة مؤهلة للتصوير" text="تأكد من وجود عقار أو خدمة معتمدة ونشطة ومن اكتمال بيانات موقعها." /> :
-          cat.data.packages.length === 0 || cat.data.photographers.length === 0 ? <Empty title="لا تتوفر باقات أو مصورون معتمدون حاليا" /> : <Booker cat={cat.data} />}
+          cat.data.packages.length === 0 ? <Empty title="لا تتوفر باقات تصوير حاليا" /> : <Booker cat={cat.data} />}
       {(cat.data?.enabled || (bk.data?.bookings.length ?? 0) > 0) && (
         <section className="space-y-3">
           <h3 className="font-bold">حجوزاتي</h3>
           {bk.isLoading ? <Skel n={2} /> : bk.isError ? <ErrorBox error={bk.error} onRetry={() => bk.refetch()} /> :
             (bk.data?.bookings ?? []).length === 0 ? <Empty title="لا توجد حجوزات تصوير" /> :
               bk.data!.bookings.map((b) => (
-                <div key={b.id} className={`${cardCls} flex flex-wrap items-center justify-between gap-2`} data-testid={`card-booking-${b.id}`}>
-                  <div><p className="font-bold">{b.packageName} - {b.propertyName}</p><p className="text-sm text-muted-foreground">{b.photographerName} - {fmtDT(b.startAt)}</p></div>
-                  <div className="text-start"><StatusPill s={b.status} /><p className="mt-1 text-sm">{sar(b.priceHalalas)}</p></div>
+                <div key={b.id} className={`${cardCls} space-y-3 ${b.assignmentStatus === "needs_review" ? "border-amber-400" : ""}`} data-testid={`card-booking-${b.id}`}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div><p className="font-bold">{b.packageName} - {b.propertyName}</p><p className="text-sm text-muted-foreground">{b.assignmentStatus === "needs_review" ? "جار تعيين مصور" : b.photographerName} - {fmtDT(b.startAt)} إلى {fmtT(b.endAt)}</p></div>
+                    <div className="flex flex-col items-start gap-1"><div className="flex flex-wrap gap-1"><StatusPill s={b.deliveredAt ? "completed" : b.status} /><AssignmentBadge b={b} /></div><p className="text-sm">{sar(b.priceHalalas)}</p></div>
+                  </div>
+                  {b.assignmentStatus === "needs_review" && <Notice tone="warn"><span data-testid={`notice-needs-review-${b.id}`}>حجزك مدفوع ومؤكد، ونعمل بشكل عاجل على تعيين مصور بديل لنفس الموعد. لا يلزمك أي إجراء أو دفع إضافي، وسيظهر اسم المصور هنا فور التعيين.</span></Notice>}
+                  {b.deliveredAt && b.status === "completed" && b.assignmentStatus !== "needs_review" && <OwnerReview b={b} invalidateKey={BK} />}
                 </div>
               ))}
         </section>

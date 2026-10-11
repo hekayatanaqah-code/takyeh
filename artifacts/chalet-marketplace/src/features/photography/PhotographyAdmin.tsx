@@ -2,10 +2,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toAr, whatsappDigits } from "@/lib/utils";
 import { sanitizeInvitePhone, validInvitePhone } from "@/lib/photography-invite-phone";
-import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
+import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, AssignmentBadge, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
 import { ContractAdmin, TransfersPanel, formatIban } from "./finance";
 import { PhotographersTable } from "./PhotographersTable";
 import { UpperTabs, TabPanel } from "./portalWidgets";
+import { AlertsList, CancellationHistory, PolicyCard, ReassignButton, type PhotoAlert, type PhotoCancellation, type PhotoPolicy } from "./operations";
 
 type ATab = "photographers" | "bookings" | "settings";
 const A_TABS = [["photographers", "المصورون وطلبات الانضمام"], ["bookings", "الحجوزات والجلسات"], ["settings", "إعدادات الخدمة والباقات"]] as const;
@@ -13,6 +14,7 @@ const A_TABS = [["photographers", "المصورون وطلبات الانضما�
 interface AdminData {
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
   packages: Pkg[]; photographers: Photographer[]; bookings: Booking[]; deliveries: unknown[];
+  policy?: PhotoPolicy; alerts?: PhotoAlert[]; cancellationHistory?: PhotoCancellation[];
 }
 interface InviteRes { invitePath: string; expiresAt: string; message: string; whatsappUrl: string; delivery: { status: string; error?: string } }
 const KEY = ["ph-admin"];
@@ -196,11 +198,14 @@ export default function PhotographyAdmin() {
   if (q.isLoading) return <Skel />;
   if (q.isError || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
+  const alerts = d.alerts ?? [];
+  const names = new Map(d.photographers.map((p) => [p.id, p.name]));
   return (
     <div className="space-y-6" dir="rtl" data-testid="photography-admin">
       <div><h2 className="text-lg font-bold">التصوير الاحترافي</h2><p className="text-sm text-muted-foreground">الخدمة {d.enabled ? "متاحة للطلب" : "متوقفة عن استقبال طلبات جديدة"}</p></div>
       <AdminTabs id="pha" tabs={A_TABS} active={tab} onChange={setTab} />
       <TabPanel id="pha" k="photographers" active={tab}>
+      <AlertsList alerts={alerts} names={names} kinds={["quality", "cancellation_repeat"]} title="تنبيهات الجودة والاعتذارات" emptyText="لا توجد تنبيهات جودة أو اعتذارات متكررة" />
       <InviteBox ready={d.readiness.whatsapp} />
       <section className="space-y-3">
         <h3 className="font-bold">المصورون وطلبات الانضمام</h3>
@@ -208,18 +213,23 @@ export default function PhotographyAdmin() {
       </section>
       </TabPanel>
       <TabPanel id="pha" k="bookings" active={tab}>
+      <AlertsList alerts={alerts} names={names} kinds={["replacement_needed"]} title="حجوزات بحاجة لمصور بديل" emptyText="لا توجد حجوزات بانتظار بديل" renderExtra={(a) => a.bookingId && d.bookings.find((b) => b.id === a.bookingId)?.assignmentStatus === "needs_review" ? <ReassignButton bookingId={a.bookingId} /> : null} />
       <section className="space-y-3">
         <h3 className="font-bold">الحجوزات والجلسات</h3>
         {d.bookings.length === 0 ? <Empty title="لا توجد حجوزات" /> : (
           <div className="overflow-x-auto rounded-2xl border border-border">
             <table className="w-full text-sm"><thead className="bg-muted text-start"><tr>{["العقار / الخدمة", "المالك", "المصور", "الباقة", "الموعد", "المبلغ", "العمولة", "الحالة"].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
               <tbody>{d.bookings.map((b) => (
-                <tr key={b.id} className="border-t border-border"><td className="p-3">{b.propertyName}</td><td className="p-3" data-testid={`text-booking-owner-${b.id}`}>{b.ownerName?.trim() || <span className="text-muted-foreground">غير مسجل</span>}</td><td className="p-3">{b.photographerName}</td><td className="p-3">{b.packageName}</td>
-                  <td className="p-3">{fmtDT(b.startAt)}</td><td className="p-3">{sar(b.priceHalalas)}</td><td className="p-3">{sar(b.commissionHalalas)}</td><td className="p-3"><StatusPill s={b.status} /></td></tr>
+                <tr key={b.id} className="border-t border-border"><td className="p-3">{b.propertyName}</td><td className="p-3" data-testid={`text-booking-owner-${b.id}`}>{b.ownerName?.trim() || <span className="text-muted-foreground">غير مسجل</span>}</td><td className="p-3">{b.assignmentStatus === "needs_review" ? <span className="text-muted-foreground">بلا مصور</span> : b.photographerName}</td><td className="p-3">{b.packageName}</td>
+                  <td className="p-3">{fmtDT(b.startAt)}</td><td className="p-3">{sar(b.priceHalalas)}</td><td className="p-3">{sar(b.commissionHalalas)}</td><td className="p-3"><div className="flex flex-col items-start gap-1"><StatusPill s={b.deliveredAt ? "completed" : b.status} /><AssignmentBadge b={b} />{b.assignmentStatus === "needs_review" && <ReassignButton bookingId={b.id} />}</div></td></tr>
               ))}</tbody></table>
           </div>
         )}
       </section>
+      <details className={`${cardCls} group`} data-testid="panel-cancellation-history">
+        <summary className="cursor-pointer font-bold">سجل اعتذارات المصورين ({(d.cancellationHistory ?? []).length.toLocaleString("ar-SA")})</summary>
+        <div className="mt-3"><CancellationHistory items={d.cancellationHistory ?? []} showPhotographer /></div>
+      </details>
       </TabPanel>
       <TabPanel id="pha" k="settings" active={tab}>
       <section className={`${cardCls} flex flex-wrap items-center justify-between gap-3`}>
@@ -234,6 +244,7 @@ export default function PhotographyAdmin() {
         {toggle.isError && <div className="w-full"><ErrorBox error={toggle.error} /></div>}
       </section>
 
+      <PolicyCard policy={d.policy} />
       <section className={`${cardCls} space-y-3`} data-testid="section-contract-admin">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><h3 className="font-bold">عقد المصورين</h3><p className="text-xs text-muted-foreground">النسخة التي يوافق عليها المصور عند الانضمام.</p></div>

@@ -39,7 +39,9 @@ import type {
   CreatePhotographyPackageBody,
   CreateServiceSeasonInput,
   CreateSubmissionRequest,
+  DeclinePhotographySession200,
   DeleteServiceSeason200,
+  DeliverPhotographySession200,
   ErrorResponse,
   GetAdminBroadcastRecipientsParams,
   GetChaletsParams,
@@ -77,6 +79,8 @@ import type {
   PhotographyAdminResult,
   PhotographyContract,
   PhotographyContractInput,
+  PhotographyDeclineInput,
+  PhotographyRatingInput,
   PhotographyReservationInput,
   PhotographyTransferBalance,
   PhotographyTransferInput,
@@ -84,8 +88,11 @@ import type {
   PropertyIdentityResult,
   PropertySocialAccountInput,
   PropertySocialAccountResult,
+  RatePhotographySession200,
+  ReadPhotographyOperationalAlert200,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
+  RetryPhotographyAssignment200,
   ReviewPhotographer200,
   ReviewPhotographerBody,
   ServiceGlobalSeason,
@@ -4123,6 +4130,406 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getMarkPhotographerNotificationReadMutationOptions(options), queryClient);
+    }
+
+export const getDeliverPhotographySessionUrl = (id: number,) => {
+
+
+
+
+  return `/api/photography/portal/bookings/${id}/deliver`
+}
+
+/**
+ * @summary Assigned photographer confirms delivery after the session ends
+ */
+export const deliverPhotographySession = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<DeliverPhotographySession200> => {
+
+  return customFetch<DeliverPhotographySession200>(getDeliverPhotographySessionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeliverPhotographySessionMutationKey = () => ['deliverPhotographySession'] as const;
+
+export const getDeliverPhotographySessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deliverPhotographySession>>, TError,DeliverPhotographySessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deliverPhotographySession>>, TError,DeliverPhotographySessionMutationVariables, TContext> => {
+
+const mutationKey = getDeliverPhotographySessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deliverPhotographySession>>, DeliverPhotographySessionMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  deliverPhotographySession(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeliverPhotographySessionMutationResult = NonNullable<Awaited<ReturnType<typeof deliverPhotographySession>>>
+
+    export type DeliverPhotographySessionMutationError = ErrorType<unknown>
+    export type DeliverPhotographySessionMutationVariables = {id: number}
+
+    /**
+ * @summary Assigned photographer confirms delivery after the session ends
+ */
+export const useDeliverPhotographySession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deliverPhotographySession>>, TError,DeliverPhotographySessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deliverPhotographySession>>,
+        TError,
+        DeliverPhotographySessionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeliverPhotographySessionMutationOptions(options), queryClient);
+    }
+
+export const getDeclinePhotographySessionUrl = (id: number,) => {
+
+
+
+
+  return `/api/photography/portal/bookings/${id}/cancel`
+}
+
+/**
+ * @summary Record mandatory reason and atomically reassign the paid session without notifying the owner when a replacement exists
+ */
+export const declinePhotographySession = async (id: number,
+    photographyDeclineInput: PhotographyDeclineInput, options?: Parameters<typeof customFetch>[1]): Promise<DeclinePhotographySession200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<DeclinePhotographySession200>(getDeclinePhotographySessionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(photographyDeclineInput)
+  }
+);}
+
+
+
+
+
+export const getDeclinePhotographySessionMutationKey = () => ['declinePhotographySession'] as const;
+
+export const getDeclinePhotographySessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declinePhotographySession>>, TError,DeclinePhotographySessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof declinePhotographySession>>, TError,DeclinePhotographySessionMutationVariables, TContext> => {
+
+const mutationKey = getDeclinePhotographySessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof declinePhotographySession>>, DeclinePhotographySessionMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  declinePhotographySession(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeclinePhotographySessionMutationResult = NonNullable<Awaited<ReturnType<typeof declinePhotographySession>>>
+    export type DeclinePhotographySessionMutationBody = BodyType<PhotographyDeclineInput>
+    export type DeclinePhotographySessionMutationError = ErrorType<unknown>
+    export type DeclinePhotographySessionMutationVariables = {id: number;data: BodyType<PhotographyDeclineInput>}
+
+    /**
+ * @summary Record mandatory reason and atomically reassign the paid session without notifying the owner when a replacement exists
+ */
+export const useDeclinePhotographySession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof declinePhotographySession>>, TError,DeclinePhotographySessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof declinePhotographySession>>,
+        TError,
+        DeclinePhotographySessionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeclinePhotographySessionMutationOptions(options), queryClient);
+    }
+
+export const getRatePhotographySessionUrl = (id: number,) => {
+
+
+
+
+  return `/api/photography/bookings/${id}/review`
+}
+
+/**
+ * @summary Booking owner submits one rating after confirmed delivery; ratings below 3.5 exclude automatic allocation
+ */
+export const ratePhotographySession = async (id: number,
+    photographyRatingInput: PhotographyRatingInput, options?: Parameters<typeof customFetch>[1]): Promise<RatePhotographySession200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RatePhotographySession200>(getRatePhotographySessionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(photographyRatingInput)
+  }
+);}
+
+
+
+
+
+export const getRatePhotographySessionMutationKey = () => ['ratePhotographySession'] as const;
+
+export const getRatePhotographySessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ratePhotographySession>>, TError,RatePhotographySessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof ratePhotographySession>>, TError,RatePhotographySessionMutationVariables, TContext> => {
+
+const mutationKey = getRatePhotographySessionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ratePhotographySession>>, RatePhotographySessionMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  ratePhotographySession(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RatePhotographySessionMutationResult = NonNullable<Awaited<ReturnType<typeof ratePhotographySession>>>
+    export type RatePhotographySessionMutationBody = BodyType<PhotographyRatingInput>
+    export type RatePhotographySessionMutationError = ErrorType<unknown>
+    export type RatePhotographySessionMutationVariables = {id: number;data: BodyType<PhotographyRatingInput>}
+
+    /**
+ * @summary Booking owner submits one rating after confirmed delivery; ratings below 3.5 exclude automatic allocation
+ */
+export const useRatePhotographySession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ratePhotographySession>>, TError,RatePhotographySessionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof ratePhotographySession>>,
+        TError,
+        RatePhotographySessionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRatePhotographySessionMutationOptions(options), queryClient);
+    }
+
+export const getRetryPhotographyAssignmentUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/photography/bookings/${id}/reassign`
+}
+
+/**
+ * @summary Superadmin retries automatic assignment of a paid session awaiting urgent review without changing payment or its time
+ */
+export const retryPhotographyAssignment = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<RetryPhotographyAssignment200> => {
+
+  return customFetch<RetryPhotographyAssignment200>(getRetryPhotographyAssignmentUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRetryPhotographyAssignmentMutationKey = () => ['retryPhotographyAssignment'] as const;
+
+export const getRetryPhotographyAssignmentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryPhotographyAssignment>>, TError,RetryPhotographyAssignmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof retryPhotographyAssignment>>, TError,RetryPhotographyAssignmentMutationVariables, TContext> => {
+
+const mutationKey = getRetryPhotographyAssignmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof retryPhotographyAssignment>>, RetryPhotographyAssignmentMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  retryPhotographyAssignment(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RetryPhotographyAssignmentMutationResult = NonNullable<Awaited<ReturnType<typeof retryPhotographyAssignment>>>
+
+    export type RetryPhotographyAssignmentMutationError = ErrorType<unknown>
+    export type RetryPhotographyAssignmentMutationVariables = {id: number}
+
+    /**
+ * @summary Superadmin retries automatic assignment of a paid session awaiting urgent review without changing payment or its time
+ */
+export const useRetryPhotographyAssignment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof retryPhotographyAssignment>>, TError,RetryPhotographyAssignmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof retryPhotographyAssignment>>,
+        TError,
+        RetryPhotographyAssignmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRetryPhotographyAssignmentMutationOptions(options), queryClient);
+    }
+
+export const getReadPhotographyOperationalAlertUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/photography/alerts/${id}/read`
+}
+
+/**
+ * @summary Superadmin acknowledges a persisted operational alert without changing eligibility
+ */
+export const readPhotographyOperationalAlert = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<ReadPhotographyOperationalAlert200> => {
+
+  return customFetch<ReadPhotographyOperationalAlert200>(getReadPhotographyOperationalAlertUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getReadPhotographyOperationalAlertMutationKey = () => ['readPhotographyOperationalAlert'] as const;
+
+export const getReadPhotographyOperationalAlertMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof readPhotographyOperationalAlert>>, TError,ReadPhotographyOperationalAlertMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof readPhotographyOperationalAlert>>, TError,ReadPhotographyOperationalAlertMutationVariables, TContext> => {
+
+const mutationKey = getReadPhotographyOperationalAlertMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof readPhotographyOperationalAlert>>, ReadPhotographyOperationalAlertMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  readPhotographyOperationalAlert(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReadPhotographyOperationalAlertMutationResult = NonNullable<Awaited<ReturnType<typeof readPhotographyOperationalAlert>>>
+
+    export type ReadPhotographyOperationalAlertMutationError = ErrorType<unknown>
+    export type ReadPhotographyOperationalAlertMutationVariables = {id: number}
+
+    /**
+ * @summary Superadmin acknowledges a persisted operational alert without changing eligibility
+ */
+export const useReadPhotographyOperationalAlert = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof readPhotographyOperationalAlert>>, TError,ReadPhotographyOperationalAlertMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof readPhotographyOperationalAlert>>,
+        TError,
+        ReadPhotographyOperationalAlertMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReadPhotographyOperationalAlertMutationOptions(options), queryClient);
     }
 
 export const getGetPhotographerPortalUrl = () => {

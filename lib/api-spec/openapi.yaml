@@ -566,6 +566,16 @@ paths:
       responses:
         '200': { description: Owned internal booking notice marked read }
         '404': { description: Notice not owned by this photographer }
+  /photography/portal/bookings/{id}/deliver:
+    $ref: './photography.yaml#/deliver'
+  /photography/portal/bookings/{id}/cancel:
+    $ref: './photography.yaml#/cancel'
+  /photography/bookings/{id}/review:
+    $ref: './photography.yaml#/review'
+  /admin/photography/bookings/{id}/reassign:
+    $ref: './photography.yaml#/reassign'
+  /admin/photography/alerts/{id}/read:
+    $ref: './photography.yaml#/readAlert'
   /photography/portal:
     get:
       tags: [Photography]
@@ -719,13 +729,14 @@ components:
     PhotographyReservationInput:
       type: object
       additionalProperties: false
-      required: [photographerId, packageId, startAt]
+      required: [packageId, startAt]
       properties:
         propertyId: { type: integer, minimum: 1 }
         serviceSubmissionId: { type: integer, minimum: 1 }
         photographerId: { type: integer, minimum: 1 }
         packageId: { type: integer, minimum: 1 }
         startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time, description: Selected slot end; allocation preserves this exact interval }
       oneOf:
         - required: [propertyId]
           not: { required: [serviceSubmissionId] }

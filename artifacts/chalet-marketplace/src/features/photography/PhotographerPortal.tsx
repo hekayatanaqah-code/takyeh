@@ -5,6 +5,7 @@ import { useParams } from "wouter";
 import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./availabilityControls";
 import { profileImageError } from "./imageRules";
 import { BookingNotices, SessionCalendar, UpperTabs, TabPanel, type PortalNotification } from "./portalWidgets";
+import { BookingActions, StandingNotices, CancellationHistory, type PhotoPolicy, type PhotoCancellation } from "./operations";
 import { BankFields, bankError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
 import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
@@ -172,7 +173,7 @@ const PortalTabs = UpperTabs<PTab>;
 
 export default function PhotographerPortal() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number }; notifications?: PortalNotification[] }>("/photography/portal") });
+  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number }; notifications?: PortalNotification[]; policy?: PhotoPolicy; cancellations?: PhotoCancellation[] }>("/photography/portal") });
   const authed = !!q.data;
   useEffect(() => {
     if (!authed || typeof EventSource === "undefined") return undefined;
@@ -185,7 +186,7 @@ export default function PhotographerPortal() {
   const out = useMutation({ mutationFn: () => call("/photography/portal/logout", "POST"), onSuccess: () => { qc.removeQueries({ queryKey: ["ph-portal"] }); q.refetch(); } });
   if (q.isLoading) return <Shell><Skel /></Shell>;
   if (q.isError || !q.data) return <Login />;
-  const { photographer: p, bookings, earnings, notifications = [] } = q.data;
+  const { photographer: p, bookings, earnings, notifications = [], policy, cancellations = [] } = q.data;
   const now = Date.now();
   const upcoming = bookings.filter((b) => b.status === "confirmed" && new Date(b.endAt).getTime() >= now);
   const history = bookings.filter((b) => !upcoming.includes(b));
@@ -205,16 +206,18 @@ export default function PhotographerPortal() {
           <div key={k} className={cardCls}><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold" data-testid={`text-earnings-${k}`}>{sar(v)}</p></div>
         ))}
       </div>
+      <StandingNotices p={p} policy={policy} />
       <BookingNotices items={notifications} />
       <section className="space-y-3"><h3 className="font-bold">المواعيد القادمة</h3>
         {upcoming.length === 0 ? <Empty title="لا توجد مواعيد مؤكدة قادمة" /> : upcoming.map((b) => (
-          <div key={b.id} className={cardCls} data-testid={`card-upcoming-${b.id}`}><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - صافيك {sar(b.photographerEarningsHalalas)}</p></div>
+          <div key={b.id} className={`${cardCls} space-y-3`} data-testid={`card-upcoming-${b.id}`}><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - صافيك {sar(b.photographerEarningsHalalas)}</p></div><BookingActions b={b} /></div>
         ))}</section>
       <SessionCalendar bookings={upcoming} />
       <section className="space-y-3"><h3 className="font-bold">السجل</h3>
         {history.length === 0 ? <Empty title="لا يوجد سجل بعد" /> : history.map((b) => (
-          <div key={b.id} className={`${cardCls} flex items-center justify-between gap-2`}><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}</p></div><StatusPill s={b.status} /></div>
+          <div key={b.id} className={`${cardCls} space-y-3`} data-testid={`card-history-${b.id}`}><div className="flex items-center justify-between gap-2"><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}{b.deliveredAt ? ` - سُلّمت ${fmtDT(b.deliveredAt)}` : ""}</p></div><StatusPill s={b.deliveredAt ? "completed" : b.status} /></div><BookingActions b={b} /></div>
         ))}</section>
+      <section className="space-y-3"><h3 className="font-bold">سجل الاعتذارات</h3><CancellationHistory items={cancellations} /></section>
       </TabPanel>
       <TabPanel id="ph" k="profile" active={tab}>
       <ProfileEditor key={JSON.stringify([p.iban, p.bankName, p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />

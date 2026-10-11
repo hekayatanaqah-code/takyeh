@@ -27,7 +27,7 @@ export const GetPhotographyCatalogResponse = zod.record(zod.string(), zod.unknow
 export const GetPhotographySlotsQueryParams = zod.object({
   "propertyId": zod.coerce.number().int().min(1).optional().describe('Approved property submission ID; provide exactly one target'),
   "serviceSubmissionId": zod.coerce.number().int().min(1).optional().describe('Approved service submission ID; provide exactly one target'),
-  "photographerId": zod.coerce.number().int(),
+  "photographerId": zod.coerce.number().int().optional().describe('Legacy hint only; automatic allocation ignores caller-selected photographers'),
   "date": zod.date()
 })
 
@@ -57,19 +57,22 @@ export const CreatePhotographyBookingBody = zod.union([zod.object({
   "serviceSubmissionId": zod.never().optional(),
   "photographerId": zod.number().int().min(1).optional(),
   "packageId": zod.number().int().min(1).optional(),
-  "startAt": zod.date().optional()
+  "startAt": zod.date().optional(),
+  "endAt": zod.date().optional().describe('Selected slot end; allocation preserves this exact interval')
 }),zod.object({
   "propertyId": zod.never().optional(),
   "serviceSubmissionId": zod.number().int().min(1),
   "photographerId": zod.number().int().min(1).optional(),
   "packageId": zod.number().int().min(1).optional(),
-  "startAt": zod.date().optional()
+  "startAt": zod.date().optional(),
+  "endAt": zod.date().optional().describe('Selected slot end; allocation preserves this exact interval')
 })]).and(zod.object({
   "propertyId": zod.number().int().min(1).optional(),
   "serviceSubmissionId": zod.number().int().min(1).optional(),
-  "photographerId": zod.number().int().min(1),
+  "photographerId": zod.number().int().min(1).optional(),
   "packageId": zod.number().int().min(1),
-  "startAt": zod.date()
+  "startAt": zod.date(),
+  "endAt": zod.date().optional().describe('Selected slot end; allocation preserves this exact interval')
 }))
 
 export const CreatePhotographyBookingResponse = zod.record(zod.string(), zod.unknown())
@@ -783,6 +786,76 @@ export const MarkPhotographerNotificationReadParams = zod.object({
 })
 
 export const MarkPhotographerNotificationReadResponse = zod.unknown()
+
+
+/**
+ * @summary Assigned photographer confirms delivery after the session ends
+ */
+export const DeliverPhotographySessionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DeliverPhotographySessionResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Record mandatory reason and atomically reassign the paid session without notifying the owner when a replacement exists
+ */
+export const DeclinePhotographySessionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const declinePhotographySessionBodyDetailsMax = 2000;
+
+
+
+export const DeclinePhotographySessionBody = zod.object({
+  "reason": zod.enum(['emergency', 'equipment', 'personal', 'other']),
+  "details": zod.string().max(declinePhotographySessionBodyDetailsMax).optional()
+})
+
+export const DeclinePhotographySessionResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Booking owner submits one rating after confirmed delivery; ratings below 3.5 exclude automatic allocation
+ */
+export const RatePhotographySessionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ratePhotographySessionBodyStarsMax = 5;
+
+export const ratePhotographySessionBodyCommentMax = 1000;
+
+
+
+export const RatePhotographySessionBody = zod.object({
+  "stars": zod.number().int().min(1).max(ratePhotographySessionBodyStarsMax),
+  "comment": zod.string().max(ratePhotographySessionBodyCommentMax).optional()
+})
+
+export const RatePhotographySessionResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Superadmin retries automatic assignment of a paid session awaiting urgent review without changing payment or its time
+ */
+export const RetryPhotographyAssignmentParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const RetryPhotographyAssignmentResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Superadmin acknowledges a persisted operational alert without changing eligibility
+ */
+export const ReadPhotographyOperationalAlertParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ReadPhotographyOperationalAlertResponse = zod.record(zod.string(), zod.unknown())
 
 
 export const getPhotographerPortalResponseOnePhotographerOneBioMax = 2000;

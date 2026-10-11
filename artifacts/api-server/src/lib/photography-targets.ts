@@ -20,9 +20,10 @@ export const exactlyOnePhotographyTarget = (v: PhotographyTargetInput) =>
   (v.propertyId !== undefined) !== (v.serviceSubmissionId !== undefined);
 export const photographyReservationSchema = z.object({
   ...photographyTargetFields,
-  photographerId: z.number().int().positive(),
+  photographerId: z.number().int().positive().optional(),
   packageId: z.number().int().positive(),
   startAt: z.string().datetime({ offset: true }),
+  endAt: z.string().datetime({ offset: true }).optional(),
 }).strict().refine(exactlyOnePhotographyTarget, "اختر عقاراً أو خدمة واحدة للتصوير");
 
 export async function photographyActivities(ownerIds: string[], store: Store = db, input: PhotographyTargetInput = {}, lock = false) {
@@ -66,17 +67,17 @@ export async function ownedPhotographyTarget(ownerIds: string[], input: Photogra
     : catalog.services.find(s => s.id === input.serviceSubmissionId);
   return target?.ownerId ? { ...target, ownerId: target.ownerId } : null;
 }
-export async function coveredPhotographyTarget(target: PhotographyTarget, p: typeof photographersTable.$inferSelect) {
+export async function coveredPhotographyTarget(target: PhotographyTarget, p: typeof photographersTable.$inferSelect, store: Store = db) {
   if (p.status !== "approved" || !p.cityId || !p.regionId) return false;
-  const [city] = await db.select().from(citiesCatalogTable).where(eq(citiesCatalogTable.id, p.cityId));
-  const [region] = await db.select().from(regionsCatalogTable).where(eq(regionsCatalogTable.id, p.regionId));
+  const [city] = await store.select().from(citiesCatalogTable).where(eq(citiesCatalogTable.id, p.cityId));
+  const [region] = await store.select().from(regionsCatalogTable).where(eq(regionsCatalogTable.id, p.regionId));
   if (!city?.isActive || !region?.isActive || city.regionId !== region.id
     || city.name !== target.location || region.name !== target.region) return false;
   // Services have no district field. Only citywide photographers can cover
   // them: never silently broaden a photographer's district-only coverage.
   if (target.kind === "service") return p.allDistricts;
   if (p.allDistricts) return true;
-  const districts = p.districtIds.length ? await db.select().from(districtsCatalogTable)
+  const districts = p.districtIds.length ? await store.select().from(districtsCatalogTable)
     .where(and(eq(districtsCatalogTable.cityId, city.id), inArray(districtsCatalogTable.id, p.districtIds))) : [];
   return districts.some(d => d.isActive && d.name === target.district);
 }

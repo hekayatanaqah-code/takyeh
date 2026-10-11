@@ -1,4 +1,4 @@
-import { db, photographyDeliveriesTable } from "@workspace/db";
+import { db, photographyDeliveriesTable, photographyBookingsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -14,6 +14,18 @@ export function photographyReadiness() {
 
 /** Durable, deduplicated transactional messages. Never treat an unavailable channel as sent. */
 export async function deliverPhotographyMessage(id: number) {
+  const [notice] = await db.select().from(photographyDeliveriesTable).where(eq(photographyDeliveriesTable.id, id));
+  if (!notice || notice.status !== "pending") return { status: "already_processed" };
+  if (notice.bookingId && /^booking:\d+:photographer(?::\d+)?$/.test(notice.dedupeKey)) {
+    const [booking] = await db.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, notice.bookingId));
+    if (!booking || booking.assignmentStatus !== "assigned"
+      || notice.recipient !== booking.photographerPhone
+      || (notice.photographerId !== null && notice.photographerId !== booking.photographerId)) {
+      await db.update(photographyDeliveriesTable).set({ status: "superseded", error: "لم يعد الإشعار تابعاً للمصور المسند" })
+        .where(and(eq(photographyDeliveriesTable.id, id), eq(photographyDeliveriesTable.status, "pending")));
+      return { status: "superseded" };
+    }
+  }
   if (!photographyReadiness().whatsapp) {
     await db.update(photographyDeliveriesTable).set({ status: "blocked", error: "whatsapp_not_configured" })
       .where(and(eq(photographyDeliveriesTable.id, id), eq(photographyDeliveriesTable.status, "pending")));

@@ -27,6 +27,7 @@ export interface Photographer {
   blockedDates?: string[];
   iban?: string | null; bankName?: string | null; contractVersion?: number | null; contractAcceptedAt?: string | null;
   cityName?: string | null;
+  averageRating?: number | null; ratingCount?: number; cancellationCount30?: number; priorityReduced?: boolean; allocationEligible?: boolean; introBookingsRemaining?: number;
 }
 export type ExperienceYears = "under_1" | "1_3" | "3_5" | "over_5";
 export const EXPERIENCE_AR: Record<ExperienceYears, string> = { under_1: "أقل من سنة", "1_3": "١-٣ سنوات", "3_5": "٣-٥ سنوات", over_5: "أكثر من ٥ سنوات" };
@@ -36,11 +37,14 @@ export interface Booking {
   id: number; status: string; packageName: string; propertyName: string; photographerName: string; ownerName?: string | null;
   startAt: string; endAt: string; priceHalalas: number; commissionHalalas: number;
   photographerEarningsHalalas: number; expiresAt?: string | null;
+  photographerId?: number | null;
+  assignmentStatus?: "assigned" | "needs_review"; deliveredAt?: string | null;
+  review?: { id: number; stars: number; comment: string | null; createdAt: string } | null;
 }
 
 export const STATUS_AR: Record<string, string> = {
   invited: "مدعو", pending: "قيد المراجعة", approved: "معتمد", rejected: "مرفوض", suspended: "موقوف",
-  awaiting_payment: "بانتظار الدفع", payment_review: "قيد مراجعة الدفع", held: "محجوز مؤقتا", pending_payment: "بانتظار الدفع", confirmed: "مؤكد", cancelled: "ملغي", expired: "منتهي", completed: "مكتمل",
+  awaiting_payment: "بانتظار الدفع", payment_review: "قيد مراجعة الدفع", held: "محجوز مؤقتا", pending_payment: "بانتظار الدفع", confirmed: "مؤكد", cancelled: "ملغي", expired: "منتهي", completed: "تم التسليم", needs_review: "بانتظار مصور بديل",
 };
 export const WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 export const sar = (h: number) => `${(h / 100).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
@@ -98,8 +102,14 @@ export function Notice({ tone, children }: { tone: "ok" | "warn" | "err"; childr
 }
 
 export function StatusPill({ s }: { s: string }) {
-  const c = s === "approved" || s === "confirmed" ? "bg-emerald-500/15 text-emerald-700" : s === "rejected" || s === "suspended" || s === "cancelled" || s === "expired" ? "bg-destructive/15 text-destructive" : "bg-amber-500/15 text-amber-700";
+  const c = s === "approved" || s === "confirmed" || s === "completed" ? "bg-emerald-500/15 text-emerald-700" : s === "rejected" || s === "suspended" || s === "cancelled" || s === "expired" ? "bg-destructive/15 text-destructive" : "bg-amber-500/15 text-amber-700";
   return <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${c}`}>{STATUS_AR[s] ?? s}</span>;
+}
+
+/** Assignment badge; only renders when booking awaits admin replacement. */
+export function AssignmentBadge({ b }: { b: Pick<Booking, "id" | "assignmentStatus"> }) {
+  if (b.assignmentStatus !== "needs_review") return null;
+  return <span className="rounded-full border border-amber-500 bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900" data-testid={`badge-needs-review-${b.id}`}>بانتظار مصور بديل</span>;
 }
 
 /* ---- Geography ---- */

@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable } from "@workspace/db";
-import { and, eq, inArray, desc, sql } from "drizzle-orm";
+import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable, photographyAlertsTable } from "@workspace/db";
+import { and, eq, inArray, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createHash, randomBytes } from "node:crypto";
 import { availabilitySchema, coverageSchema, photoPhone } from "../lib/photography-rules";
@@ -8,11 +8,19 @@ import { setPhotographyServiceEnabled } from "../lib/owner-services";
 import { photographyReadiness, deliverPhotographyMessage } from "../lib/photography-delivery";
 import { cleanContractHtml, currentPhotographyContract, photographyBalances } from "../lib/photography-finance";
 import { inventoryOwnerNames } from "../lib/inventory-owner-names";
+import { recentCancellationCounts } from "../lib/photography-allocation";
+import { photographyPolicy, qualityEligible } from "../lib/photography-allocation-policy";
+import { photographyCancellationHistory, retryPhotographyAssignment } from "../lib/photography-operations";
 
 export const photoHash = (value: string) => createHash("sha256").update(value).digest("hex");
-export function publicPhotographer(row: typeof photographersTable.$inferSelect) {
-  const { passwordHash, inviteHash, inviteExpiresAt, ...safe } = row;
-  return safe;
+export function publicPhotographer(row: typeof photographersTable.$inferSelect, cancellationCount30 = 0) {
+  const { passwordHash, inviteHash, inviteExpiresAt, rotationCredit, ratingSum, ...safe } = row;
+  return {
+    ...safe, averageRating: row.ratingCount ? ratingSum / row.ratingCount : null,
+    allocationEligible: qualityEligible(row), cancellationCount30,
+    priorityReduced: cancellationCount30 >= photographyPolicy.cancellationThreshold,
+    introBookingsRemaining: Math.max(0, photographyPolicy.introBookings - row.confirmedAssignments),
+  };
 }
 export async function validPhotographyCoverage(data: { regionId: number; cityId: number; districtIds: number[]; allDistricts: boolean }) {
   const [city] = await db.select().from(citiesCatalogTable)
@@ -91,16 +99,33 @@ const packageSchema = z.object({
 });
 router.get("/", async (_req, res) => {
   const [setting] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
-  const [packages, photographers, bookings, deliveries, cities, ownerNames] = await Promise.all([
+  const [packages, photographers, bookings, deliveries, cities, ownerNames, alerts, cancellationHistory, cancellationCounts] = await Promise.all([
     db.select().from(photographyPackagesTable).orderBy(photographyPackagesTable.id),
     db.select().from(photographersTable).orderBy(desc(photographersTable.id)),
     db.select().from(photographyBookingsTable).orderBy(desc(photographyBookingsTable.id)).limit(500),
     db.select().from(photographyDeliveriesTable).orderBy(desc(photographyDeliveriesTable.id)).limit(200),
     db.select({ id: citiesCatalogTable.id, name: citiesCatalogTable.name }).from(citiesCatalogTable),
     inventoryOwnerNames(),
+    db.select().from(photographyAlertsTable).where(isNull(photographyAlertsTable.resolvedAt)).orderBy(desc(photographyAlertsTable.createdAt)).limit(200),
+    photographyCancellationHistory(), recentCancellationCounts(),
   ]);
   const cityNames = new Map(cities.map(city => [city.id, city.name]));
-  res.json({ enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings: bookings.map(booking => ({ ...booking, ownerName: ownerNames.get(booking.ownerId) ?? null })), deliveries });
+  res.json({ enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p, cancellationCounts.get(p.id) ?? 0), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings: bookings.map(booking => ({ ...booking, ownerName: ownerNames.get(booking.ownerId) ?? null })), deliveries, alerts, cancellationHistory, policy: photographyPolicy });
+});
+router.post("/alerts/:id/read", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: "معرّف غير صحيح" });
+  const [row] = await db.update(photographyAlertsTable).set({ readAt: new Date() }).where(eq(photographyAlertsTable.id, id)).returning();
+  return row ? res.json({ success: true }) : res.status(404).json({ error: "التنبيه غير موجود" });
+});
+router.post("/bookings/:id/reassign", async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: "معرّف غير صحيح" });
+  try { return res.json(await retryPhotographyAssignment(id)); }
+  catch (error) {
+    if ((error as Error).message !== "booking_unavailable") throw error;
+    return res.status(409).json({ error: "الحجز ليس ضمن الحجوزات المدفوعة المنتظرة لتأمين بديل" });
+  }
 });
 router.patch("/settings", async (req, res) => {
   const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);

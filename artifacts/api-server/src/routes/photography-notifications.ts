@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, photographyDeliveriesTable, photographyBookingsTable } from "@workspace/db";
-import { and, eq, sql, desc, isNull } from "drizzle-orm";
+import { and, eq, sql, desc, isNull, or, inArray } from "drizzle-orm";
 import { getPhotographer } from "../lib/photographer-auth";
 import { subscribePhotographyBookings } from "../lib/photography-events";
 
@@ -13,7 +13,11 @@ export async function photographerNotifications(photographerId: number) {
     whatsappStatus: photographyDeliveriesTable.status,
   }).from(photographyDeliveriesTable).innerJoin(photographyBookingsTable, eq(photographyBookingsTable.id, photographyDeliveriesTable.bookingId))
     .where(and(eq(photographyBookingsTable.photographerId, photographerId),
-      sql`${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer'`))
+      eq(photographyBookingsTable.assignmentStatus, "assigned"),
+      inArray(photographyBookingsTable.status, ["confirmed", "completed"]),
+      or(eq(photographyDeliveriesTable.photographerId, photographerId), isNull(photographyDeliveriesTable.photographerId)),
+      sql`(${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer'
+        OR ${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer:' || ${photographerId}::text)`))
     .orderBy(desc(photographyDeliveriesTable.createdAt)).limit(200);
 }
 const router = Router();
@@ -31,7 +35,10 @@ router.post("/notifications/:id/read", async (req, res) => {
     .from(photographyDeliveriesTable).innerJoin(photographyBookingsTable, eq(photographyBookingsTable.id, photographyDeliveriesTable.bookingId))
     .where(and(eq(photographyDeliveriesTable.id, Number(req.params.id)),
       eq(photographyBookingsTable.photographerId, photographer.id),
-      sql`${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer'`));
+      eq(photographyBookingsTable.assignmentStatus, "assigned"),
+      or(eq(photographyDeliveriesTable.photographerId, photographer.id), isNull(photographyDeliveriesTable.photographerId)),
+      sql`(${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer'
+        OR ${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer:' || ${photographer.id}::text)`));
   if (!notice) return res.status(404).json({ error: "الإشعار غير موجود" });
   await db.update(photographyDeliveriesTable).set({ internalReadAt: new Date() })
     .where(and(eq(photographyDeliveriesTable.id, notice.id), isNull(photographyDeliveriesTable.internalReadAt)));

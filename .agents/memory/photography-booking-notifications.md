@@ -13,3 +13,9 @@ Calendar occupancy is derived from booking intervals, not written into the photo
 **Why:** A booked session must exclude only overlapping slots. Turning a single session into a manually closed day would incorrectly remove remaining availability and mix customer purchases with photographer preferences.
 
 **How to apply:** Keep manual closures unchanged when a booking confirms, and refresh appointment/calendar data from the confirmed booking source.
+
+Successful same-time replacement must notify only the newly assigned photographer, not send an owner cancellation or rebooking message.
+
+**Why:** The user requested silent operational recovery when a substitute exists. Old queued photographer messages must not misrepresent a reassigned paid appointment.
+
+**How to apply:** Retire unsent old-photographer notices, scope internal reads and provider sends to the current assignment, and publish live updates only after commit to both affected photographer screens. Preserve historical messages for audit without exposing them as the replacement's notices.

@@ -31,7 +31,7 @@ export async function currentPhotographyContract(tx: Pick<typeof db, "select"> =
 }
 export async function photographyBalances(photographerId: number, tx: Pick<typeof db, "select"> = db) {
   const bookings = await tx.select().from(photographyBookingsTable).where(and(
-    eq(photographyBookingsTable.photographerId, photographerId), inArray(photographyBookingsTable.status, ["confirmed", "completed"]),
+    eq(photographyBookingsTable.photographerId, photographerId), eq(photographyBookingsTable.assignmentStatus, "assigned"), inArray(photographyBookingsTable.status, ["confirmed", "completed"]),
   ));
   const transfers = await tx.select().from(photographyTransfersTable).where(eq(photographyTransfersTable.photographerId, photographerId)).orderBy(desc(photographyTransfersTable.transferredAt));
   const earnedHalalas = bookings.reduce((sum, booking) => sum + booking.photographerEarningsHalalas, 0);

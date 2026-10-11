@@ -11,10 +11,12 @@ export type PhotographyReservationInput = (unknown & {
   /** @minimum 1 */
   serviceSubmissionId?: number;
   /** @minimum 1 */
-  photographerId: number;
+  photographerId?: number;
   /** @minimum 1 */
   packageId: number;
   startAt: string;
+  /** Selected slot end; allocation preserves this exact interval */
+  endAt?: string;
 });
 
 export interface ServiceGlobalSeason {
@@ -579,6 +581,32 @@ export interface Chalet {
   createdAt: string;
 }
 
+export type PhotographyDeclineInputReason = typeof PhotographyDeclineInputReason[keyof typeof PhotographyDeclineInputReason];
+
+
+export const PhotographyDeclineInputReason = {
+  emergency: 'emergency',
+  equipment: 'equipment',
+  personal: 'personal',
+  other: 'other',
+} as const;
+
+export interface PhotographyDeclineInput {
+  reason: PhotographyDeclineInputReason;
+  /** @maxLength 2000 */
+  details?: string;
+}
+
+export interface PhotographyRatingInput {
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  stars: number;
+  /** @maxLength 1000 */
+  comment?: string;
+}
+
 export interface PhotographyAdminBooking {
   id: number;
   /**
@@ -800,7 +828,10 @@ propertyId?: number;
  * @minimum 1
  */
 serviceSubmissionId?: number;
-photographerId: number;
+/**
+ * Legacy hint only; automatic allocation ignores caller-selected photographers
+ */
+photographerId?: number;
 date: string;
 };
 
@@ -887,6 +918,16 @@ export type GetPhotographyInvite200 = {
   whatsapp: string;
   expiresAt: string;
 };
+
+export type DeliverPhotographySession200 = { [key: string]: unknown };
+
+export type DeclinePhotographySession200 = { [key: string]: unknown };
+
+export type RatePhotographySession200 = { [key: string]: unknown };
+
+export type RetryPhotographyAssignment200 = { [key: string]: unknown };
+
+export type ReadPhotographyOperationalAlert200 = { [key: string]: unknown };
 
 export type UpdateAdminPhotographerProfile200 = { [key: string]: unknown };
 

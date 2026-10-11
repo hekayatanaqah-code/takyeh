@@ -55,3 +55,4 @@
 - [Photography booking notices](photography-booking-notifications.md) — confirmed paid sessions drive notices and interval occupancy; keep internal reads separate from WhatsApp delivery.
 - [Browser test database evidence](browser-test-database-evidence.md) — reconcile contradictory SQL/UI observations using the mutation response and the app’s own database connection.
 - [JSX preview transform](jsx-preview-transform.md) — avoid explicit JSX type arguments; injected preview metadata can break them despite a passing typecheck.
+- [Photography allocation policy](photography-allocation-policy.md) — new-photographer priority for three bookings; three declines in 30 days reduce priority; paid replacement failures need review, not refunds.

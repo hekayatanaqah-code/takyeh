@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
+import { RatingSummary } from "./operations";
 import { inputCls, ghostCls, StatusPill, Empty, type Photographer } from "./shared";
 
 type Tab = "all" | "pending" | "approved" | "invited";
@@ -51,8 +52,8 @@ export function PhotographersTable({ rows, renderPanel }: { rows: Photographer[]
           : <Empty title="لا توجد نتائج مطابقة" text={query ? `لا يوجد مصور يطابق "${query}" في هذا التبويب.` : "لا يوجد مصورون في هذه الحالة."} />
       ) : (
         <div className="max-w-full overflow-x-auto rounded-2xl border border-border">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-muted"><tr>{["الاسم", "الجوال", "المدينة", "الحالة", "الإجراء"].map((h) => <th key={h} className="p-3 text-start font-semibold">{h}</th>)}</tr></thead>
+          <table className="w-full min-w-[860px] text-sm">
+            <thead className="bg-muted"><tr>{["الاسم", "الجوال", "المدينة", "التقييم", "الأهلية", "الحالة", "الإجراء"].map((h) => <th key={h} className="p-3 text-start font-semibold">{h}</th>)}</tr></thead>
             <tbody>
               {slice.map((p) => {
                 const open = openId === p.id; const invited = p.status === "invited";
@@ -62,11 +63,15 @@ export function PhotographersTable({ rows, renderPanel }: { rows: Photographer[]
                       <td className="p-3 font-bold">{p.name}</td>
                       <td className="p-3"><span dir="ltr" className="font-mono text-xs">{localPhone(p.whatsapp)}</span></td>
                       <td className="p-3">{p.cityName || <span className="text-muted-foreground">غير محددة</span>}</td>
+                      <td className="p-3"><RatingSummary p={p} /></td>
+                      <td className="p-3 text-xs" data-testid={`text-eligibility-${p.id}`}>{p.status !== "approved" ? <span className="text-muted-foreground">—</span> : <div className="space-y-0.5">
+                        <p className={`font-bold ${p.allocationEligible === false ? "text-destructive" : p.priorityReduced ? "text-amber-700" : "text-emerald-700"}`}>{p.allocationEligible === false ? "خارج التوزيع" : p.priorityReduced ? "أولوية مخفضة" : "مؤهل"}</p>
+                        <p className="text-muted-foreground">تعريفية متبقية {ar(p.introBookingsRemaining ?? 0)} - اعتذارات ٣٠ يوما {ar(p.cancellationCount30 ?? 0)}</p></div>}</td>
                       <td className="p-3"><StatusPill s={p.status} /></td>
                       <td className="p-3">{invited ? <span className="text-xs text-muted-foreground" data-testid={`text-invited-${p.id}`}>بانتظار اكتمال التسجيل</span>
                         : <button className={`${ghostCls} px-3 py-1.5`} aria-expanded={open} onClick={() => setOpenId(open ? null : p.id)} data-testid={`button-review-${p.id}`}>{open ? "إغلاق" : "مراجعة"}</button>}</td>
                     </tr>
-                    {open && !invited && <tr className="border-t border-border"><td colSpan={5} className="p-3 sm:p-4">{renderPanel(p, () => setOpenId(null))}</td></tr>}
+                    {open && !invited && <tr className="border-t border-border"><td colSpan={7} className="p-3 sm:p-4">{renderPanel(p, () => setOpenId(null))}</td></tr>}
                   </Fragment>
                 );
               })}

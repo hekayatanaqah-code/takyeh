@@ -1,8 +1,9 @@
-import { db, photographyBookingsTable, photographyDeliveriesTable } from "@workspace/db";
+import { db, photographersTable, photographyBookingsTable, photographyDeliveriesTable } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import { deliverPhotographyMessage } from "./photography-delivery";
 import { logger } from "./logger";
 import { publishPhotographyBooking } from "./photography-events";
+import { lockPhotographyAllocation } from "./photography-allocation";
 
 type Invoice = {
   id: string; status: string; amount: number; currency: string; url: string;
@@ -31,6 +32,7 @@ export async function reconcilePhotographyBooking(id: number, options: {
     && p.currency === "SAR" && p.amount === initial.priceHalalas && !p.refunded);
   let newlyConfirmed = false;
   const result = await db.transaction(async tx => {
+    await lockPhotographyAllocation(tx);
     await tx.execute(sql`SELECT pg_advisory_xact_lock(731220, ${initial.photographerId})`);
     const [booking] = await tx.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, id)).for("update");
     if (!booking) throw new Error("booking_missing");
@@ -42,6 +44,8 @@ export async function reconcilePhotographyBooking(id: number, options: {
       const [confirmed] = await tx.update(photographyBookingsTable).set({ status: "confirmed", paymentId: paid.id })
         .where(eq(photographyBookingsTable.id, id)).returning();
       newlyConfirmed = true;
+      await tx.update(photographersTable).set({ confirmedAssignments: sql`${photographersTable.confirmedAssignments} + 1` })
+        .where(eq(photographersTable.id, booking.photographerId));
       const localTime = booking.startAt.toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" });
       for (const [role, recipient] of [["owner", booking.ownerPhone], ["photographer", booking.photographerPhone]]) {
         await tx.insert(photographyDeliveriesTable).values({

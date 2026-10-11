@@ -17,6 +17,9 @@ propertyId?: number;
  * @minimum 1
  */
 serviceSubmissionId?: number;
-photographerId: number;
+/**
+ * Legacy hint only; automatic allocation ignores caller-selected photographers
+ */
+photographerId?: number;
 date: Date;
 };

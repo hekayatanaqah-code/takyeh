@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, boolean, jsonb, timestamp, numeric, check } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, jsonb, timestamp, numeric, check, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
@@ -27,6 +27,11 @@ export const photographersTable = pgTable("photographers", {
   adminNote: text("admin_note"), passwordHash: text("password_hash"),
   inviteHash: text("invite_hash").unique(), inviteExpiresAt: timestamp("invite_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  rotationCredit: integer("rotation_credit").notNull().default(0),
+  confirmedAssignments: integer("confirmed_assignments").notNull().default(0),
+  lastAssignedAt: timestamp("last_assigned_at", { withTimezone: true }),
+  ratingSum: integer("rating_sum").notNull().default(0),
+  ratingCount: integer("rating_count").notNull().default(0),
 });
 export const photographyTransfersTable = pgTable("photography_transfers", {
   id: serial("id").primaryKey(),
@@ -59,6 +64,11 @@ export const photographyBookingsTable = pgTable("photography_bookings", {
   startAt: timestamp("start_at", { withTimezone: true }).notNull(), endAt: timestamp("end_at", { withTimezone: true }).notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   status: text("status").notNull().default("awaiting_payment"),
+  assignmentStatus: text("assignment_status").notNull().default("assigned"),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  targetCity: text("target_city"),
+  targetRegion: text("target_region"),
+  targetDistrict: text("target_district"),
   priceHalalas: integer("price_halalas").notNull(), commissionHalalas: integer("commission_halalas").notNull(),
   photographerEarningsHalalas: integer("photographer_earnings_halalas").notNull(),
   invoiceId: text("invoice_id").unique(), paymentId: text("payment_id").unique(), paymentUrl: text("payment_url"),
@@ -77,6 +87,42 @@ export const photographyDeliveriesTable = pgTable("photography_deliveries", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export const insertPhotographerSchema = createInsertSchema(photographersTable);
+export const photographyReviewsTable = pgTable("photography_reviews", {
+  id: serial("id").primaryKey(),
+  bookingId: integer("booking_id").notNull().references(() => photographyBookingsTable.id, { onDelete: "cascade" }),
+  photographerId: integer("photographer_id").notNull().references(() => photographersTable.id),
+  ownerId: text("owner_id").notNull(),
+  stars: integer("stars").notNull(),
+  comment: text("comment").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  uniqueIndex("photography_review_booking_unique").on(t.bookingId),
+  check("photography_rating_range", sql`${t.stars} BETWEEN 1 AND 5`),
+]);
+export const photographyCancellationsTable = pgTable("photography_cancellations", {
+  id: serial("id").primaryKey(),
+  bookingId: integer("booking_id").notNull().references(() => photographyBookingsTable.id, { onDelete: "cascade" }),
+  photographerId: integer("photographer_id").notNull().references(() => photographersTable.id),
+  reason: text("reason").notNull(),
+  details: text("details").notNull().default(""),
+  replacementPhotographerId: integer("replacement_photographer_id").references(() => photographersTable.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [
+  uniqueIndex("photography_decline_booking_photographer_unique").on(t.bookingId, t.photographerId),
+  index("photography_decline_recent_idx").on(t.photographerId, t.createdAt),
+  check("photography_decline_reason", sql`${t.reason} IN ('emergency','equipment','personal','other')`),
+]);
+export const photographyAlertsTable = pgTable("photography_alerts", {
+  id: serial("id").primaryKey(),
+  dedupeKey: text("dedupe_key").notNull().unique(),
+  kind: text("kind").notNull(),
+  photographerId: integer("photographer_id").notNull().references(() => photographersTable.id),
+  bookingId: integer("booking_id").references(() => photographyBookingsTable.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+});
 export const insertPhotographyPackageSchema = createInsertSchema(photographyPackagesTable);
 export type Photographer = typeof photographersTable.$inferSelect;
 export type PhotographyBooking = typeof photographyBookingsTable.$inferSelect;

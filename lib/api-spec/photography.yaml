@@ -39,7 +39,7 @@ slots:
     parameters:
       - { name: propertyId, in: query, required: false, schema: { type: integer, minimum: 1 }, description: Approved property submission ID; provide exactly one target }
       - { name: serviceSubmissionId, in: query, required: false, schema: { type: integer, minimum: 1 }, description: Approved service submission ID; provide exactly one target }
-      - { name: photographerId, in: query, required: true, schema: { type: integer } }
+      - { name: photographerId, in: query, required: false, schema: { type: integer }, description: Legacy hint only; automatic allocation ignores caller-selected photographers }
       - { name: date, in: query, required: true, schema: { type: string, format: date } }
     responses: *result
 bookings:
@@ -136,8 +136,62 @@ photographer:
     operationId: reviewPhotographer
     requestBody: *body
     responses: *result
+deliver:
+  parameters: [*id]
+  post:
+    operationId: deliverPhotographySession
+    summary: Assigned photographer confirms delivery after the session ends
+    responses: *result
+cancel:
+  parameters: [*id]
+  post:
+    operationId: declinePhotographySession
+    summary: Record mandatory reason and atomically reassign the paid session without notifying the owner when a replacement exists
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/PhotographyDeclineInput" }
+    responses: *result
+review:
+  parameters: [*id]
+  post:
+    operationId: ratePhotographySession
+    summary: Booking owner submits one rating after confirmed delivery; ratings below 3.5 exclude automatic allocation
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/PhotographyRatingInput" }
+    responses: *result
+reassign:
+  parameters: [*id]
+  post:
+    operationId: retryPhotographyAssignment
+    summary: Superadmin retries automatic assignment of a paid session awaiting urgent review without changing payment or its time
+    responses: *result
+readAlert:
+  parameters: [*id]
+  post:
+    operationId: readPhotographyOperationalAlert
+    summary: Superadmin acknowledges a persisted operational alert without changing eligibility
+    responses: *result
 components:
   schemas:
+    PhotographyDeclineInput:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, enum: [emergency, equipment, personal, other] }
+        details: { type: string, maxLength: 2000 }
+    PhotographyRatingInput:
+      type: object
+      additionalProperties: false
+      required: [stars]
+      properties:
+        stars: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, maxLength: 1000 }
     PhotographyAdminResult:
       type: object
       required: [bookings]

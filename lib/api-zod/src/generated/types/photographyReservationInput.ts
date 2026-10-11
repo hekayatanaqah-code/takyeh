@@ -12,8 +12,10 @@ export type PhotographyReservationInput = (unknown & {
   /** @minimum 1 */
   serviceSubmissionId?: number;
   /** @minimum 1 */
-  photographerId: number;
+  photographerId?: number;
   /** @minimum 1 */
   packageId: number;
   startAt: Date;
+  /** Selected slot end; allocation preserves this exact interval */
+  endAt?: Date;
 });
