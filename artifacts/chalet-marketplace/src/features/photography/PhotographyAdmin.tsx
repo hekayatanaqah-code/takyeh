@@ -54,7 +54,7 @@ function InviteBox({ ready }: { ready: boolean }) {
       <h3 className="font-bold">دعوة مصور</h3>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="الاسم"><input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} data-testid="input-invite-name" /></Field>
-        <Field label="رقم الواتساب"><input dir="ltr" inputMode="tel" className={inputCls} value={wa} onChange={(e) => setWa(e.target.value)} data-testid="input-invite-whatsapp" /></Field>
+        <Field label="رقم الواتساب" hint="رقم جوال سعودي يبدأ بـ 05، مكوّن من 10 أرقام"><input dir="ltr" type="tel" inputMode="tel" placeholder="05xxxxxxxx" className={`${inputCls} placeholder:text-slate-300 placeholder:opacity-100`} value={wa} onChange={(e) => setWa(e.target.value)} data-testid="input-invite-whatsapp" /></Field>
       </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={!ready} checked={auto && ready} onChange={(e) => setAuto(e.target.checked)} /> إرسال تلقائي عبر واتساب {!ready && <span className="text-muted-foreground">(غير جاهز، استخدم المشاركة اليدوية)</span>}</label>
       <button className={btnCls} disabled={!name.trim() || !wa.trim() || m.isPending} onClick={() => m.mutate()} data-testid="button-create-invite">{m.isPending ? "جار الإنشاء" : "إنشاء رابط الدعوة"}</button>

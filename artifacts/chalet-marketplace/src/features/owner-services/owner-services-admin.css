@@ -41,3 +41,7 @@
 .owner-services-admin-theme .text-emerald-700 {
   color: #6ee7b7;
 }
+
+.owner-services-admin-theme [data-testid="photography-admin"] {
+  --muted-foreground: 212.7 26.8% 83.9%; /* slate-300: explanatory text */
+}

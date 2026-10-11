@@ -13,6 +13,7 @@ const STATES: ServiceState[] = ["available", "coming_soon", "hidden"];
 const STATE_ICONS = { available: ToggleRight, coming_soon: Clock, hidden: ToggleLeft };
 const serviceInputCls = cn(inputCls, "border-slate-600 bg-slate-900 text-white placeholder:text-slate-500 focus-visible:ring-amber-500/50");
 const iconButtonCls = "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+const moveButtonCls = "inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-600 bg-slate-900 text-slate-200 transition enabled:hover:border-amber-400 enabled:hover:bg-slate-700 enabled:hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-35";
 function refreshServices(qc: ReturnType<typeof useQueryClient>) {
   for (const key of [KEY, ["owner-services"], ["ph-admin"], ["ph-owner-catalog"]]) {
     qc.invalidateQueries({ queryKey: key });
@@ -85,22 +86,23 @@ function Row({ s, i, n, onMove, moving, onEdit }: { s: OwnerService; i: number; 
     <li className={cardCls} data-testid={`row-service-${s.id}`}>
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-col gap-1">
-          <button className="rounded-lg border border-border p-1 disabled:opacity-40" disabled={i === 0 || moving} onClick={() => onMove(i, -1)} aria-label={`نقل ${s.title} للأعلى`} data-testid={`button-up-${s.id}`}><ArrowUp className="h-4 w-4" /></button>
-          <button className="rounded-lg border border-border p-1 disabled:opacity-40" disabled={i === n - 1 || moving} onClick={() => onMove(i, 1)} aria-label={`نقل ${s.title} للأسفل`} data-testid={`button-down-${s.id}`}><ArrowDown className="h-4 w-4" /></button>
+          <button type="button" className={moveButtonCls} disabled={i === 0 || moving} onClick={() => onMove(i, -1)} aria-label={`نقل ${s.title} للأعلى`} title="نقل للأعلى" data-testid={`button-up-${s.id}`}><ArrowUp className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" /></button>
+          <button type="button" className={moveButtonCls} disabled={i === n - 1 || moving} onClick={() => onMove(i, 1)} aria-label={`نقل ${s.title} للأسفل`} title="نقل للأسفل" data-testid={`button-down-${s.id}`}><ArrowDown className="h-6 w-6" strokeWidth={2.5} aria-hidden="true" /></button>
         </div>
         <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary/10 text-primary"><Icon className="h-5 w-5" aria-hidden /></span>
         <div className="min-w-0 flex-1">
           <p className="font-bold">{s.title} <span className="text-xs font-normal text-muted-foreground">({s.kind === "photography" ? "التصوير" : "رابط"})</span></p>
           {s.description && <p className="truncate text-sm text-muted-foreground">{s.description}</p>}
         </div>
-        <div role="radiogroup" aria-label={`حالة ${s.title}`} className="inline-flex overflow-hidden rounded-xl border border-border">
+        <div role="radiogroup" aria-label={`حالة ${s.title}`} className="inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-border bg-background p-1">
           {STATES.map((x) => {
             const StateIcon = STATE_ICONS[x];
             return (
             <button key={x} role="radio" aria-checked={s.state === x} disabled={st.isPending}
               onClick={() => s.state !== x && st.mutate(x)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold ${s.state === x ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-muted"}`}
-              data-testid={`button-state-${x}-${s.id}`}><StateIcon className="h-5 w-5 shrink-0" aria-hidden="true" />{STATE_AR[x]}</button>
+              className={`inline-flex min-h-10 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-50 ${s.state === x ? "bg-amber-500/10 text-amber-200 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.4)]" : "text-slate-300 hover:bg-muted hover:text-white"}`}
+              data-testid={`button-state-${x}-${s.id}`}><StateIcon className="h-5 w-5 shrink-0" aria-hidden="true" />{STATE_AR[x]}
+              {s.state === x && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-300 shadow-[0_0_8px_rgba(252,211,77,0.8)]" aria-hidden="true" />}</button>
             );
           })}
         </div>
