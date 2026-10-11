@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { whatsappDigits } from "@/lib/utils";
+import { sanitizeInvitePhone, validInvitePhone } from "@/lib/photography-invite-phone";
 import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
 
 interface AdminData {
@@ -44,8 +46,14 @@ function InviteBox({ ready }: { ready: boolean }) {
   const qc = useQueryClient();
   const { copy, done } = useCopy();
   const [name, setName] = useState(""); const [wa, setWa] = useState(""); const [auto, setAuto] = useState(false);
+  const [waTouched, setWaTouched] = useState(false);
+  const phoneValid = validInvitePhone(wa);
+  const phoneError = (waTouched || wa.length === 10) && !phoneValid;
   const m = useMutation({
-    mutationFn: () => call<InviteRes>("/admin/photography/invites", "POST", { name: name.trim(), whatsapp: wa.trim(), sendAutomatically: auto && ready, origin: ORIGIN() }),
+    mutationFn: () => {
+      if (!phoneValid) throw new Error("أدخل رقم واتساب من ١٠ أرقام يبدأ بـ ٠٥");
+      return call<InviteRes>("/admin/photography/invites", "POST", { name: name.trim(), whatsapp: wa, sendAutomatically: auto && ready, origin: ORIGIN() });
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
   const r = m.data; const full = r ? ORIGIN() + r.invitePath : "";
@@ -54,10 +62,26 @@ function InviteBox({ ready }: { ready: boolean }) {
       <h3 className="font-bold">دعوة مصور</h3>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="الاسم"><input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} data-testid="input-invite-name" /></Field>
-        <Field label="رقم الواتساب" hint="رقم جوال سعودي يبدأ بـ 05، مكوّن من 10 أرقام"><input dir="ltr" type="tel" inputMode="tel" placeholder="05xxxxxxxx" className={`${inputCls} placeholder:text-slate-300 placeholder:opacity-100`} value={wa} onChange={(e) => setWa(e.target.value)} data-testid="input-invite-whatsapp" /></Field>
+        <Field label="رقم الواتساب" hint="رقم جوال سعودي يبدأ بـ ٠٥، مكوّن من ١٠ أرقام">
+          <input dir="ltr" type="tel" inputMode="numeric" placeholder="0512345678"
+            minLength={10} maxLength={10} pattern="05[0-9]{8}" required
+            className={`${inputCls} placeholder:text-slate-300 placeholder:opacity-100`}
+            value={wa} onChange={(e) => setWa(sanitizeInvitePhone(e.target.value))}
+            onBlur={() => setWaTouched(true)}
+            onPaste={(e) => {
+              e.preventDefault();
+              const start = e.currentTarget.selectionStart ?? wa.length;
+              const end = e.currentTarget.selectionEnd ?? start;
+              const pasted = whatsappDigits(e.clipboardData.getData("text"));
+              setWa(sanitizeInvitePhone(wa.slice(0, start) + pasted + wa.slice(end)));
+            }}
+            aria-invalid={phoneError} aria-describedby={phoneError ? "invite-whatsapp-error" : undefined}
+            data-testid="input-invite-whatsapp" />
+          {phoneError && <p id="invite-whatsapp-error" role="alert" className="text-xs text-red-400">أدخل ١٠ أرقام تبدأ بـ ٠٥، دون حروف أو رموز.</p>}
+        </Field>
       </div>
       <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={!ready} checked={auto && ready} onChange={(e) => setAuto(e.target.checked)} /> إرسال تلقائي عبر واتساب {!ready && <span className="text-muted-foreground">(غير جاهز، استخدم المشاركة اليدوية)</span>}</label>
-      <button className={btnCls} disabled={!name.trim() || !wa.trim() || m.isPending} onClick={() => m.mutate()} data-testid="button-create-invite">{m.isPending ? "جار الإنشاء" : "إنشاء رابط الدعوة"}</button>
+      <button className={btnCls} disabled={!name.trim() || !phoneValid || m.isPending} onClick={() => m.mutate()} data-testid="button-create-invite">{m.isPending ? "جار الإنشاء" : "إنشاء رابط الدعوة"}</button>
       {m.isError && <ErrorBox error={m.error} />}
       {r && (
         <div className="space-y-2">
