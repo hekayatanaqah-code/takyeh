@@ -108,7 +108,16 @@ export const LogoutPhotographerResponse = zod.record(zod.string(), zod.unknown()
 /**
  * @summary Superadmin-only photographers, packages, bookings and notification delivery state
  */
-export const GetPhotographyAdministrationResponse = zod.record(zod.string(), zod.unknown())
+export const GetPhotographyAdministrationResponse = zod.object({
+  "bookings": zod.array(zod.object({
+  "id": zod.number().int(),
+  "ownerName": zod.string().nullable().describe('Registered owner name resolved by durable account identity'),
+  "propertyName": zod.string(),
+  "photographerName": zod.string(),
+  "startAt": zod.date(),
+  "status": zod.string()
+}))
+})
 
 
 export const UpdatePhotographySettingsBody = zod.record(zod.string(), zod.unknown())

@@ -1,6 +1,28 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { call, fmtDT, fmtT, ghostCls, cardCls, Empty, ErrorBox, WEEKDAYS, type Booking } from "./shared";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { call, fmtDT, fmtT, ghostCls, cardCls, Empty, ErrorBox, type Booking } from "./shared";
+
+/** Platform-consistent RTL upper tabs with always-mounted hidden panels (drafts persist). */
+export function UpperTabs<K extends string>({ id, tabs, active, onChange }: { id: string; tabs: readonly (readonly [NoInfer<K>, string])[]; active: K; onChange: (k: K) => void }) {
+  const onKey = (e: React.KeyboardEvent, i: number) => {
+    const n = tabs.length; let j = -1;
+    if (e.key === "ArrowLeft") j = (i + 1) % n; else if (e.key === "ArrowRight") j = (i - 1 + n) % n; else if (e.key === "Home") j = 0; else if (e.key === "End") j = n - 1;
+    if (j < 0) return; e.preventDefault(); onChange(tabs[j][0]); document.getElementById(`${id}-tab-${tabs[j][0]}`)?.focus();
+  };
+  return (
+    <div role="tablist" aria-label="أقسام الصفحة" className="sticky top-0 z-10 -mx-1 flex snap-x gap-1 overflow-x-auto rounded-2xl border border-border bg-card/95 p-1 backdrop-blur [scrollbar-width:none]">
+      {tabs.map(([k, l], i) => {
+        const on = k === active;
+        return <button key={k} id={`${id}-tab-${k}`} type="button" role="tab" aria-selected={on} aria-controls={`${id}-panel-${k}`} tabIndex={on ? 0 : -1} onClick={() => onChange(k)} onKeyDown={(e) => onKey(e, i)}
+          className={`min-h-11 flex-1 shrink-0 snap-start whitespace-nowrap rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${on ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`} data-testid={`tab-${id}-${k}`}>{l}</button>;
+      })}
+    </div>
+  );
+}
+export function TabPanel({ id, k, active, children }: { id: string; k: string; active: string; children: React.ReactNode }) {
+  return <div role="tabpanel" id={`${id}-panel-${k}`} aria-labelledby={`${id}-tab-${k}`} hidden={k !== active} tabIndex={0} className="space-y-5 focus-visible:outline-none" data-testid={`panel-${id}-${k}`}>{children}</div>;
+}
 
 export interface PortalNotification { id: number; bookingId: number; propertyName: string; packageName: string; startAt: string; endAt: string; createdAt: string; readAt: string | null; whatsappStatus: string }
 
@@ -36,18 +58,19 @@ export function BookingNotices({ items }: { items: PortalNotification[] }) {
 
 const keyFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" });
 const riyadhKey = (d: Date) => keyFmt.format(d);
-const monthFmt = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { month: "long", year: "numeric", timeZone: "UTC" });
 const dayFmt = new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-const utcDate = (k: string) => new Date(`${k}T00:00:00Z`);
+const hijriDayFmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const utcDate = (k: string) => new Date(`${k}T12:00:00Z`);
 /** Riyadh is fixed UTC+3; split a booking into per-day intervals. */
 function daysOf(bk: Booking): string[] {
   const s = riyadhKey(new Date(bk.startAt));
   const e = riyadhKey(new Date(Math.max(new Date(bk.startAt).getTime(), new Date(bk.endAt).getTime() - 1)));
   const out: string[] = [];
-  for (let t = utcDate(s).getTime(); t <= utcDate(e).getTime() && out.length < 31; t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
+  for (let t = new Date(`${s}T00:00:00Z`).getTime(); t <= new Date(`${e}T00:00:00Z`).getTime() && out.length < 31; t += 86400000) out.push(new Date(t).toISOString().slice(0, 10));
   return out;
 }
 
+/** Read-only booked-session view. Never mutates blocked dates or weekly availability. */
 export function SessionCalendar({ bookings }: { bookings: Booking[] }) {
   const today = riyadhKey(new Date());
   const byDay = useMemo(() => {
@@ -56,56 +79,29 @@ export function SessionCalendar({ bookings }: { bookings: Booking[] }) {
     for (const l of m.values()) l.sort((a, b) => a.startAt.localeCompare(b.startAt));
     return m;
   }, [bookings]);
-  const first = [...byDay.keys()].sort()[0];
-  const [cursor, setCursor] = useState(() => (first ?? today).slice(0, 7));
-  const [sel, setSel] = useState<string | null>(first ?? null);
-  const [y, mo] = cursor.split("-").map(Number);
-  const start = new Date(Date.UTC(y, mo - 1, 1)); const lead = start.getUTCDay();
-  const days = new Date(Date.UTC(y, mo, 0)).getUTCDate();
-  const cells: (string | null)[] = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => `${cursor}-${String(i + 1).padStart(2, "0")}`)];
-  const shift = (n: number) => { const d = new Date(Date.UTC(y, mo - 1 + n, 1)); setCursor(d.toISOString().slice(0, 7)); };
-  const selList = sel ? byDay.get(sel) ?? [] : [];
+  const occupied = useMemo(() => [...byDay.keys()].sort(), [byDay]);
+  const [sel, setSel] = useState<string>(() => occupied[0] ?? today);
+  const selList = byDay.get(sel) ?? [];
   return (
     <section className={`${cardCls} space-y-3`} data-testid="section-session-calendar">
       <div>
         <h3 className="font-bold">تقويم الجلسات المحجوزة</h3>
-        <p className="text-xs text-muted-foreground">يعرض الفترات المحجوزة فقط بتوقيت السعودية. لا يغلق اليوم كاملا ولا يغير أيام الإغلاق أو أوقات التوفر.</p>
+        <p className="text-xs text-muted-foreground">النقطة تعني وجود جلسة محجوزة، والأوقات بتوقيت السعودية. لا يغلق اليوم كاملا ولا يغير أيام الإغلاق أو أوقات التوفر.</p>
       </div>
-      <div className="flex items-center justify-between gap-2">
-        <button type="button" className={`${ghostCls} px-3 py-1.5`} onClick={() => shift(-1)} data-testid="button-cal-prev">السابق</button>
-        <p className="font-bold" data-testid="text-cal-month">{monthFmt.format(start)}</p>
-        <button type="button" className={`${ghostCls} px-3 py-1.5`} onClick={() => shift(1)} data-testid="button-cal-next">التالي</button>
+      <DualCalendarPicker inline value={sel} onChange={(v) => setSel(v || today)} occupiedDates={occupied} label="تقويم الجلسات المحجوزة" className="mx-auto max-w-[22rem]" />
+      <div className="space-y-2 border-t border-border pt-3" data-testid="panel-cal-day" aria-live="polite">
+        <p className="text-sm font-semibold">{dayFmt.format(utcDate(sel))} <span className="font-normal text-muted-foreground">- {hijriDayFmt.format(utcDate(sel))}</span></p>
+        {selList.length === 0 ? <p className="text-xs text-muted-foreground">لا توجد جلسات محجوزة في هذا اليوم.</p> : (
+          <ul className="space-y-1.5">
+            {selList.map((b) => (
+              <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm" data-testid={`row-cal-session-${b.id}`}>
+                <span className="font-bold">{fmtT(b.startAt)} - {fmtT(b.endAt)}</span>
+                <span className="text-muted-foreground">{b.propertyName} - {b.packageName}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-xs">
-        {WEEKDAYS.map((w) => <span key={w} className="py-1 font-semibold text-muted-foreground">{w.replace("ال", "").slice(0, 3)}</span>)}
-        {cells.map((k, i) => {
-          if (!k) return <span key={`e${i}`} />;
-          const n = byDay.get(k)?.length ?? 0; const active = sel === k;
-          return (
-            <button type="button" key={k} onClick={() => setSel(k)} aria-pressed={active} aria-label={`${dayFmt.format(utcDate(k))}${n ? ` - ${n} جلسة` : ""}`}
-              className={`relative flex aspect-square flex-col items-center justify-center rounded-lg border text-sm transition ${active ? "border-primary bg-primary text-primary-foreground" : n ? "border-primary/50 bg-primary/10 font-bold" : "border-transparent hover:bg-muted"} ${k === today && !active ? "ring-1 ring-primary" : ""}`}
-              data-testid={`button-cal-day-${k}`}>
-              {Number(k.slice(8)).toLocaleString("ar-SA")}
-              {n > 0 && <span className={`mt-0.5 h-1.5 w-1.5 rounded-full ${active ? "bg-primary-foreground" : "bg-primary"}`} aria-hidden />}
-            </button>
-          );
-        })}
-      </div>
-      {sel && (
-        <div className="space-y-2 border-t border-border pt-3" data-testid="panel-cal-day">
-          <p className="text-sm font-semibold">{dayFmt.format(utcDate(sel))}</p>
-          {selList.length === 0 ? <p className="text-xs text-muted-foreground">لا توجد جلسات محجوزة في هذا اليوم.</p> : (
-            <ul className="space-y-1.5">
-              {selList.map((b) => (
-                <li key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted px-3 py-2 text-sm" data-testid={`row-cal-session-${b.id}`}>
-                  <span className="font-bold">{fmtT(b.startAt)} - {fmtT(b.endAt)}</span>
-                  <span className="text-muted-foreground">{b.propertyName} - {b.packageName}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
     </section>
   );
 }

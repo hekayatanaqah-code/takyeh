@@ -43,7 +43,6 @@ import type {
   ErrorResponse,
   GetAdminBroadcastRecipientsParams,
   GetChaletsParams,
-  GetPhotographyAdministration200,
   GetPhotographyBookings200,
   GetPhotographyCatalog200,
   GetPhotographyInvite200,
@@ -75,6 +74,7 @@ import type {
   PhotographerProfileResult,
   PhotographerSupportInput,
   PhotographerSupportRequest,
+  PhotographyAdminResult,
   PhotographyContract,
   PhotographyContractInput,
   PhotographyReservationInput,
@@ -937,9 +937,9 @@ export const getGetPhotographyAdministrationUrl = () => {
 /**
  * @summary Superadmin-only photographers, packages, bookings and notification delivery state
  */
-export const getPhotographyAdministration = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetPhotographyAdministration200> => {
+export const getPhotographyAdministration = async ( options?: Parameters<typeof customFetch>[1]): Promise<PhotographyAdminResult> => {
 
-  return customFetch<GetPhotographyAdministration200>(getGetPhotographyAdministrationUrl(),
+  return customFetch<PhotographyAdminResult>(getGetPhotographyAdministrationUrl(),
   {
     ...options,
     method: 'GET'

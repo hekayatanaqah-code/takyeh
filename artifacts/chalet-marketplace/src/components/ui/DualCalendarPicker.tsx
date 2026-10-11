@@ -76,6 +76,10 @@ interface DualCalendarPickerProps {
   highlights?: GlobalSeason[];
   /** Multi-date closure mode. Opening/navigation never selects a date. */
   selectedDates?: string[];
+  /** Render the calendar body inline (no dialog trigger). Choosing a day keeps it visible. */
+  inline?: boolean;
+  /** Dates (YYYY-MM-DD) marked as occupied with a neutral dot; does not affect selection. */
+  occupiedDates?: string[];
 }
 
 type PickerView = "days" | "months" | "years";
@@ -95,7 +99,10 @@ export function DualCalendarPicker({
   seasons,
   highlights,
   selectedDates,
+  inline = false,
+  occupiedDates,
 }: DualCalendarPickerProps) {
+  const occupiedSet = React.useMemo(() => new Set(occupiedDates ?? []), [occupiedDates]);
   const [open, setOpen] = React.useState(false);
   const [pickerView, setPickerView] = React.useState<PickerView>("days");
   const [calendarMode, setCalendarMode] = React.useState<"hijri" | "gregorian">(mode);
@@ -339,51 +346,9 @@ export function DualCalendarPicker({
     return pickerGY > maxG.year || (pickerGY === maxG.year && pickerGM >= maxG.month);
   }, [calendarMode, pickerHY, pickerHM, pickerGY, pickerGM, maxH, maxG]);
 
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          aria-label={label ?? placeholder}
-          aria-expanded={open}
-          className={cn(
-            "w-full text-right bg-transparent border-0 p-0 cursor-pointer outline-none touch-manipulation focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 rounded-md",
-            compact && "h-full flex items-center",
-            className,
-          )}
-          style={{ WebkitTapHighlightColor: "transparent" }}
-        >
-          {label && !compact && (
-            <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
-          )}
-          {selectedDates ? (
-            <span className="block rounded-xl border border-border bg-card px-4 py-3 text-center text-sm font-bold text-foreground">
-              فتح تقويم أيام الإغلاق (هجري / ميلادي)
-            </span>
-          ) : value ? (
-            compact ? (
-              <p className="text-sm font-semibold text-foreground truncate leading-none">{primaryLabel}</p>
-            ) : (
-              <div>
-                <p className="text-sm font-bold text-foreground leading-tight">{primaryLabel}</p>
-                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{secondaryLabel}</p>
-              </div>
-            )
-          ) : (
-            <p className="text-sm text-muted-foreground font-medium">{placeholder}</p>
-          )}
-        </button>
-      </DialogTrigger>
-
-      <DialogContent
-        data-testid="dual-calendar-popover"
-        hideClose
-        className="w-[calc(100vw-2rem)] max-w-[22rem] min-w-0 max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto overscroll-contain rounded-2xl border border-border p-4 shadow-xl touch-pan-y [-webkit-overflow-scrolling:touch]"
-        dir="rtl"
-        aria-describedby={undefined}
-        onOpenAutoFocus={(event) => event.preventDefault()}
-      >
-        <DialogTitle className="sr-only">{label ?? placeholder}</DialogTitle>
+  const calendarBody = (
+      <>
+        {inline ? <p className="sr-only">{label ?? placeholder}</p> : <DialogTitle className="sr-only">{label ?? placeholder}</DialogTitle>}
         <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="group" aria-label="نوع التقويم">
           <button
             type="button"
@@ -609,11 +574,11 @@ export function DualCalendarPicker({
                       key={gregStr}
                       type="button"
                        data-calendar-day={gregStr}
-                        aria-label={`${dayAriaLabel(gregStr, highlights)}${selectedDates && isSelected ? " — مغلق" : ""}`}
+                        aria-label={`${dayAriaLabel(gregStr, highlights)}${selectedDates && isSelected ? " — مغلق" : ""}${occupiedSet.has(gregStr) ? " — يوجد حجز" : ""}`}
                         aria-pressed={selectedDates ? isSelected : undefined}
                        title={seasonLabel || undefined}
                       disabled={isDisabled}
-                       onClick={() => { onChange(gregStr); if (!selectedDates) setOpen(false); }}
+                       onClick={() => { onChange(gregStr); if (!selectedDates && !inline) setOpen(false); }}
                       style={{
                         pointerEvents: isDisabled ? "none" : "auto",
                         touchAction: "manipulation",
@@ -634,6 +599,9 @@ export function DualCalendarPicker({
                       <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected && !selectedDates ? "rgba(255,255,255,0.6)" : selectedDates ? "#475569" : "#a1a1aa" }}>
                         {selectedDates ? date.getDate().toLocaleString("ar-SA") : date.getDate()}
                       </span>
+                      {occupiedSet.has(gregStr) && (
+                        <span className={cn("absolute top-1 left-1 h-1.5 w-1.5 rounded-full", isSelected && !selectedDates ? "bg-primary-foreground" : "bg-primary")} data-occupied="true" aria-hidden="true" />
+                      )}
                       {highlights.length > 0 && (
                         <span className="absolute inset-x-1 bottom-0.5 flex h-1 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
                           {highlights.map((season) => (
@@ -662,11 +630,11 @@ export function DualCalendarPicker({
                       key={gregStr}
                       type="button"
                        data-calendar-day={gregStr}
-                        aria-label={`${dayAriaLabel(gregStr, highlights)}${selectedDates && isSelected ? " — مغلق" : ""}`}
+                        aria-label={`${dayAriaLabel(gregStr, highlights)}${selectedDates && isSelected ? " — مغلق" : ""}${occupiedSet.has(gregStr) ? " — يوجد حجز" : ""}`}
                         aria-pressed={selectedDates ? isSelected : undefined}
                        title={seasonLabel || undefined}
                       disabled={isDisabled}
-                       onClick={() => { onChange(gregStr); if (!selectedDates) setOpen(false); }}
+                       onClick={() => { onChange(gregStr); if (!selectedDates && !inline) setOpen(false); }}
                       style={{
                         pointerEvents: isDisabled ? "none" : "auto",
                         touchAction: "manipulation",
@@ -689,6 +657,9 @@ export function DualCalendarPicker({
                       <span className="text-[0.62rem] font-normal leading-none" style={{ color: isSelected && !selectedDates ? "rgba(255,255,255,0.6)" : selectedDates ? "#475569" : "#a1a1aa" }}>
                         {hijriDay > 0 ? hijriDay.toLocaleString("ar-SA") : ""}
                       </span>
+                      {occupiedSet.has(gregStr) && (
+                        <span className={cn("absolute top-1 left-1 h-1.5 w-1.5 rounded-full", isSelected && !selectedDates ? "bg-primary-foreground" : "bg-primary")} data-occupied="true" aria-hidden="true" />
+                      )}
                       {highlights.length > 0 && (
                         <span className="absolute inset-x-1 bottom-0.5 flex h-1 gap-0.5 overflow-hidden rounded-full" aria-hidden="true">
                           {highlights.map((season) => (
@@ -722,14 +693,14 @@ export function DualCalendarPicker({
                   const h = toHijriComponents(today);
                   setPickerHY(h.year); setPickerHM(h.month);
                   setPickerGY(today.getFullYear()); setPickerGM(today.getMonth());
-                  if (!selectedDates) { onChange(todayStr); setOpen(false); }
+                  if (!selectedDates) { onChange(todayStr); if (!inline) setOpen(false); }
                 }}
                 className="text-[0.7rem] text-primary hover:text-primary/80 font-medium transition-colors"
               >اليوم</button>
               {value && (
                 <button
                   type="button"
-                 onClick={() => { onChange(""); setOpen(false); }}
+                 onClick={() => { onChange(""); if (!inline) setOpen(false); }}
                   className="text-[0.7rem] text-muted-foreground hover:text-destructive transition-colors"
                 >مسح</button>
               )}
@@ -741,6 +712,62 @@ export function DualCalendarPicker({
             تم اختيار الأيام
           </button>
         )}
+      </>
+  );
+
+  if (inline) {
+    return (
+      <div dir="rtl" data-testid="dual-calendar-inline" className={cn("w-full min-w-0 rounded-2xl border border-border bg-card p-4", className)}>
+        {calendarBody}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          aria-label={label ?? placeholder}
+          aria-expanded={open}
+          className={cn(
+            "w-full text-right bg-transparent border-0 p-0 cursor-pointer outline-none touch-manipulation focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 rounded-md",
+            compact && "h-full flex items-center",
+            className,
+          )}
+          style={{ WebkitTapHighlightColor: "transparent" }}
+        >
+          {label && !compact && (
+            <p className="text-xs font-semibold text-muted-foreground mb-1">{label}</p>
+          )}
+          {selectedDates ? (
+            <span className="block rounded-xl border border-border bg-card px-4 py-3 text-center text-sm font-bold text-foreground">
+              فتح تقويم أيام الإغلاق (هجري / ميلادي)
+            </span>
+          ) : value ? (
+            compact ? (
+              <p className="text-sm font-semibold text-foreground truncate leading-none">{primaryLabel}</p>
+            ) : (
+              <div>
+                <p className="text-sm font-bold text-foreground leading-tight">{primaryLabel}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{secondaryLabel}</p>
+              </div>
+            )
+          ) : (
+            <p className="text-sm text-muted-foreground font-medium">{placeholder}</p>
+          )}
+        </button>
+      </DialogTrigger>
+
+      <DialogContent
+        data-testid="dual-calendar-popover"
+        hideClose
+        className="w-[calc(100vw-2rem)] max-w-[22rem] min-w-0 max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto overscroll-contain rounded-2xl border border-border p-4 shadow-xl touch-pan-y [-webkit-overflow-scrolling:touch]"
+        dir="rtl"
+        aria-describedby={undefined}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        {calendarBody}
       </DialogContent>
     </Dialog>
   );

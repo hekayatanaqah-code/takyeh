@@ -54,3 +54,4 @@
 - [Photographer contract boundaries](photography-contract-boundaries.md) — administrators supply legal terms; preserve historical consent and distinguish transfer records from moving money.
 - [Photography booking notices](photography-booking-notifications.md) — confirmed paid sessions drive notices and interval occupancy; keep internal reads separate from WhatsApp delivery.
 - [Browser test database evidence](browser-test-database-evidence.md) — reconcile contradictory SQL/UI observations using the mutation response and the app’s own database connection.
+- [JSX preview transform](jsx-preview-transform.md) — avoid explicit JSX type arguments; injected preview metadata can break them despite a passing typecheck.

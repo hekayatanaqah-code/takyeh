@@ -5,6 +5,10 @@ import { sanitizeInvitePhone, validInvitePhone } from "@/lib/photography-invite-
 import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
 import { ContractAdmin, TransfersPanel, formatIban } from "./finance";
 import { PhotographersTable } from "./PhotographersTable";
+import { UpperTabs, TabPanel } from "./portalWidgets";
+
+type ATab = "photographers" | "bookings" | "settings";
+const A_TABS = [["photographers", "المصورون وطلبات الانضمام"], ["bookings", "الحجوزات والجلسات"], ["settings", "إعدادات الخدمة والباقات"]] as const;
 
 interface AdminData {
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
@@ -173,6 +177,7 @@ function ReviewPanel({ p, onClose }: { p: Photographer; onClose: () => void }) {
   );
 }
 
+const AdminTabs = UpperTabs<ATab>;
 export default function PhotographyAdmin() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: KEY, queryFn: () => call<AdminData>("/admin/photography"), refetchInterval: 30000 });
@@ -186,15 +191,40 @@ export default function PhotographyAdmin() {
     },
   });
   const [editing, setEditing] = useState<Pkg | "new" | null>(null);
-  const [tab, setTab] = useState<"main" | "contract">("main");
+  const [tab, setTab] = useState<ATab>("photographers");
+  const [contractOpen, setContractOpen] = useState(false);
   if (q.isLoading) return <Skel />;
   if (q.isError || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
   return (
     <div className="space-y-6" dir="rtl" data-testid="photography-admin">
+      <div><h2 className="text-lg font-bold">التصوير الاحترافي</h2><p className="text-sm text-muted-foreground">الخدمة {d.enabled ? "متاحة للطلب" : "متوقفة عن استقبال طلبات جديدة"}</p></div>
+      <AdminTabs id="pha" tabs={A_TABS} active={tab} onChange={setTab} />
+      <TabPanel id="pha" k="photographers" active={tab}>
+      <InviteBox ready={d.readiness.whatsapp} />
+      <section className="space-y-3">
+        <h3 className="font-bold">المصورون وطلبات الانضمام</h3>
+        <PhotographersTable rows={d.photographers} renderPanel={(p, close) => <ReviewPanel p={p} onClose={close} />} />
+      </section>
+      </TabPanel>
+      <TabPanel id="pha" k="bookings" active={tab}>
+      <section className="space-y-3">
+        <h3 className="font-bold">الحجوزات والجلسات</h3>
+        {d.bookings.length === 0 ? <Empty title="لا توجد حجوزات" /> : (
+          <div className="overflow-x-auto rounded-2xl border border-border">
+            <table className="w-full text-sm"><thead className="bg-muted text-start"><tr>{["العقار / الخدمة", "المالك", "المصور", "الباقة", "الموعد", "المبلغ", "العمولة", "الحالة"].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
+              <tbody>{d.bookings.map((b) => (
+                <tr key={b.id} className="border-t border-border"><td className="p-3">{b.propertyName}</td><td className="p-3" data-testid={`text-booking-owner-${b.id}`}>{b.ownerName?.trim() || <span className="text-muted-foreground">غير مسجل</span>}</td><td className="p-3">{b.photographerName}</td><td className="p-3">{b.packageName}</td>
+                  <td className="p-3">{fmtDT(b.startAt)}</td><td className="p-3">{sar(b.priceHalalas)}</td><td className="p-3">{sar(b.commissionHalalas)}</td><td className="p-3"><StatusPill s={b.status} /></td></tr>
+              ))}</tbody></table>
+          </div>
+        )}
+      </section>
+      </TabPanel>
+      <TabPanel id="pha" k="settings" active={tab}>
       <section className={`${cardCls} flex flex-wrap items-center justify-between gap-3`}>
         <div>
-          <h2 className="text-lg font-bold">التصوير الاحترافي</h2>
+          <h3 className="font-bold">حالة الخدمة والجاهزية</h3>
           <p className="text-sm text-muted-foreground">الخدمة {d.enabled ? "متاحة للطلب" : "متوقفة عن استقبال طلبات جديدة"}</p>
           <p className="mt-1 text-xs">الدفع: {d.readiness.payment ? "جاهز" : "غير جاهز"} - واتساب: {d.readiness.whatsapp ? "جاهز" : "غير جاهز"}</p>
         </div>
@@ -204,10 +234,13 @@ export default function PhotographyAdmin() {
         {toggle.isError && <div className="w-full"><ErrorBox error={toggle.error} /></div>}
       </section>
 
-      <div role="tablist" className="flex flex-wrap gap-2">
-        {([["main", "إدارة الخدمة"], ["contract", "إدارة عقد المصورين"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? btnCls : ghostCls} onClick={() => setTab(k)} data-testid={`tab-photography-${k}`}>{l}</button>)}
-      </div>
-      {tab === "contract" ? <ContractAdmin /> : <>
+      <section className={`${cardCls} space-y-3`} data-testid="section-contract-admin">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div><h3 className="font-bold">عقد المصورين</h3><p className="text-xs text-muted-foreground">النسخة التي يوافق عليها المصور عند الانضمام.</p></div>
+          <button type="button" className={contractOpen ? ghostCls : btnCls} aria-expanded={contractOpen} aria-controls="contract-admin-editor" onClick={() => setContractOpen((o) => !o)} data-testid="button-manage-contract">{contractOpen ? "إغلاق والعودة" : "إدارة عقد المصورين"}</button>
+        </div>
+        {contractOpen && <div id="contract-admin-editor" className="space-y-3 border-t border-border pt-3"><ContractAdmin /><button type="button" className={ghostCls} onClick={() => setContractOpen(false)} data-testid="button-close-contract">رجوع إلى الإعدادات</button></div>}
+      </section>
       <section className="space-y-3">
         <div className="flex items-center justify-between"><h3 className="font-bold">الباقات</h3>
           <button className={btnCls} onClick={() => setEditing("new")} data-testid="button-new-package">باقة جديدة</button></div>
@@ -225,26 +258,7 @@ export default function PhotographyAdmin() {
         )}
       </section>
 
-      <InviteBox ready={d.readiness.whatsapp} />
-
-      <section className="space-y-3">
-        <h3 className="font-bold">المصورون وطلبات الانضمام</h3>
-        <PhotographersTable rows={d.photographers} renderPanel={(p, close) => <ReviewPanel p={p} onClose={close} />} />
-      </section>
-
-      <section className="space-y-3">
-        <h3 className="font-bold">الحجوزات</h3>
-        {d.bookings.length === 0 ? <Empty title="لا توجد حجوزات" /> : (
-          <div className="overflow-x-auto rounded-2xl border border-border">
-            <table className="w-full text-sm"><thead className="bg-muted text-start"><tr>{["العقار / الخدمة", "المصور", "الباقة", "الموعد", "المبلغ", "العمولة", "الحالة"].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
-              <tbody>{d.bookings.map((b) => (
-                <tr key={b.id} className="border-t border-border"><td className="p-3">{b.propertyName}</td><td className="p-3">{b.photographerName}</td><td className="p-3">{b.packageName}</td>
-                  <td className="p-3">{fmtDT(b.startAt)}</td><td className="p-3">{sar(b.priceHalalas)}</td><td className="p-3">{sar(b.commissionHalalas)}</td><td className="p-3"><StatusPill s={b.status} /></td></tr>
-              ))}</tbody></table>
-          </div>
-        )}
-      </section>
-      </>}
+      </TabPanel>
     </div>
   );
 }

@@ -33,7 +33,7 @@ export const EXPERIENCE_AR: Record<ExperienceYears, string> = { under_1: "أقل
 export interface Pkg { id: number; name: string; priceHalalas: number; platformPercent: number; active: boolean }
 export interface Booking {
   propertyId?: number | null; serviceSubmissionId?: number | null;
-  id: number; status: string; packageName: string; propertyName: string; photographerName: string;
+  id: number; status: string; packageName: string; propertyName: string; photographerName: string; ownerName?: string | null;
   startAt: string; endAt: string; priceHalalas: number; commissionHalalas: number;
   photographerEarningsHalalas: number; expiresAt?: string | null;
 }

@@ -302,3 +302,23 @@ test("other-bank names persist and administration returns searchable city names"
   assert.equal(admin.status, 200);
   assert.ok(admin.data.photographers.find(p => p.id === photographerId)?.cityName);
 });
+test("administration displays owner names for legacy and durably linked booking identities", async () => {
+  const listing = () => request<{ bookings: { id: number; ownerName: string | null }[] }>("/admin/photography", undefined, "", "superadmin");
+  assert.equal((await listing()).data.bookings.find(b => b.id === bookingId)?.ownerName, null);
+  const owner = await db.execute<{ id: number }>(sql`
+    INSERT INTO owner_applications (full_name, business_name, business_type, phone, email, password_hash, status, email_verified)
+    VALUES ('مالك جلسة اختبار', 'نشاط اختبار', 'chalet', ${phone}, ${`${ownerId}@example.test`}, '', 'approved', true)
+    RETURNING id`);
+  const id = owner.rows[0].id;
+  try {
+    await db.update(photographyBookingsTable).set({ ownerId: `owner_${id}` }).where(eq(photographyBookingsTable.id, bookingId));
+    assert.equal((await listing()).data.bookings.find(b => b.id === bookingId)?.ownerName, "مالك جلسة اختبار");
+    await db.execute(sql`INSERT INTO owner_account_links (user_id, owner_application_id) VALUES (${ownerId}, ${id})`);
+    await db.update(photographyBookingsTable).set({ ownerId }).where(eq(photographyBookingsTable.id, bookingId));
+    assert.equal((await listing()).data.bookings.find(b => b.id === bookingId)?.ownerName, "مالك جلسة اختبار");
+  } finally {
+    await db.update(photographyBookingsTable).set({ ownerId }).where(eq(photographyBookingsTable.id, bookingId));
+    await db.execute(sql`DELETE FROM owner_account_links WHERE user_id = ${ownerId}`);
+    await db.execute(sql`DELETE FROM owner_applications WHERE id = ${id}`);
+  }
+});

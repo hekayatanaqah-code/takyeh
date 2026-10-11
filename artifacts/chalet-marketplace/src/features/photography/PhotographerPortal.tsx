@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./availabilityControls";
 import { profileImageError } from "./imageRules";
-import { BookingNotices, SessionCalendar, type PortalNotification } from "./portalWidgets";
+import { BookingNotices, SessionCalendar, UpperTabs, TabPanel, type PortalNotification } from "./portalWidgets";
 import { BankFields, bankError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
 import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
@@ -166,6 +166,10 @@ function ProfileEditor({ p }: { p: Photographer }) {
   );
 }
 
+type PTab = "home" | "profile" | "support";
+const P_TABS = [["home", "الرئيسية والمواعيد"], ["profile", "الملف الشخصي والتوفر"], ["support", "مركز الدعم والطلبات"]] as const;
+const PortalTabs = UpperTabs<PTab>;
+
 export default function PhotographerPortal() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number }; notifications?: PortalNotification[] }>("/photography/portal") });
@@ -177,6 +181,7 @@ export default function PhotographerPortal() {
     es.addEventListener("booking-confirmed", onConfirmed);
     return () => { es.removeEventListener("booking-confirmed", onConfirmed); es.close(); };
   }, [authed, qc]);
+  const [tab, setTab] = useState<PTab>("home");
   const out = useMutation({ mutationFn: () => call("/photography/portal/logout", "POST"), onSuccess: () => { qc.removeQueries({ queryKey: ["ph-portal"] }); q.refetch(); } });
   if (q.isLoading) return <Shell><Skel /></Shell>;
   if (q.isError || !q.data) return <Login />;
@@ -193,6 +198,8 @@ export default function PhotographerPortal() {
       {p.status === "pending" && <Notice tone="warn">طلبك قيد المراجعة من الإدارة. لن تظهر للملاك حتى الاعتماد.</Notice>}
       {(p.status === "rejected" || p.status === "suspended") && <Notice tone="err">{p.status === "rejected" ? "تم رفض الطلب" : "تم إيقاف حسابك"}{p.adminNote ? `: ${p.adminNote}` : "."}</Notice>}
       {p.status === "approved" && p.adminNote && <Notice tone="ok">ملاحظة الإدارة: {p.adminNote}</Notice>}
+      <PortalTabs id="ph" tabs={P_TABS} active={tab} onChange={setTab} />
+      <TabPanel id="ph" k="home" active={tab}>
       <div className="mx-auto grid w-full max-w-xl grid-cols-2 gap-3 text-center">
         {([["صافي المستحقات", earnings.netDueHalalas, "due"], ["المبالغ المحولة", earnings.transferredHalalas, "transferred"]] as const).map(([l, v, k]) => (
           <div key={k} className={cardCls}><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold" data-testid={`text-earnings-${k}`}>{sar(v)}</p></div>
@@ -208,8 +215,13 @@ export default function PhotographerPortal() {
         {history.length === 0 ? <Empty title="لا يوجد سجل بعد" /> : history.map((b) => (
           <div key={b.id} className={`${cardCls} flex items-center justify-between gap-2`}><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}</p></div><StatusPill s={b.status} /></div>
         ))}</section>
-      <SupportCenter photographerId={p.id} />
+      </TabPanel>
+      <TabPanel id="ph" k="profile" active={tab}>
       <ProfileEditor key={JSON.stringify([p.iban, p.bankName, p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />
+      </TabPanel>
+      <TabPanel id="ph" k="support" active={tab}>
+      <SupportCenter photographerId={p.id} />
+      </TabPanel>
     </Shell>
   );
 }

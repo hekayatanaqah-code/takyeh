@@ -7,6 +7,7 @@ import { availabilitySchema, coverageSchema, photoPhone } from "../lib/photograp
 import { setPhotographyServiceEnabled } from "../lib/owner-services";
 import { photographyReadiness, deliverPhotographyMessage } from "../lib/photography-delivery";
 import { cleanContractHtml, currentPhotographyContract, photographyBalances } from "../lib/photography-finance";
+import { inventoryOwnerNames } from "../lib/inventory-owner-names";
 
 export const photoHash = (value: string) => createHash("sha256").update(value).digest("hex");
 export function publicPhotographer(row: typeof photographersTable.$inferSelect) {
@@ -90,15 +91,16 @@ const packageSchema = z.object({
 });
 router.get("/", async (_req, res) => {
   const [setting] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
-  const [packages, photographers, bookings, deliveries, cities] = await Promise.all([
+  const [packages, photographers, bookings, deliveries, cities, ownerNames] = await Promise.all([
     db.select().from(photographyPackagesTable).orderBy(photographyPackagesTable.id),
     db.select().from(photographersTable).orderBy(desc(photographersTable.id)),
     db.select().from(photographyBookingsTable).orderBy(desc(photographyBookingsTable.id)).limit(500),
     db.select().from(photographyDeliveriesTable).orderBy(desc(photographyDeliveriesTable.id)).limit(200),
     db.select({ id: citiesCatalogTable.id, name: citiesCatalogTable.name }).from(citiesCatalogTable),
+    inventoryOwnerNames(),
   ]);
   const cityNames = new Map(cities.map(city => [city.id, city.name]));
-  res.json({ enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings, deliveries });
+  res.json({ enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings: bookings.map(booking => ({ ...booking, ownerName: ownerNames.get(booking.ownerId) ?? null })), deliveries });
 });
 router.patch("/settings", async (req, res) => {
   const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);

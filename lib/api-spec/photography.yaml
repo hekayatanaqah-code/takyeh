@@ -101,7 +101,13 @@ admin:
   get:
     operationId: getPhotographyAdministration
     summary: Superadmin-only photographers, packages, bookings and notification delivery state
-    responses: *result
+    responses:
+      "200":
+        description: Photography administration with durable owner names for session bookings
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PhotographyAdminResult"
 settings:
   patch:
     operationId: updatePhotographySettings
@@ -130,3 +136,25 @@ photographer:
     operationId: reviewPhotographer
     requestBody: *body
     responses: *result
+components:
+  schemas:
+    PhotographyAdminResult:
+      type: object
+      required: [bookings]
+      properties:
+        bookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PhotographyAdminBooking"
+      additionalProperties: true
+    PhotographyAdminBooking:
+      type: object
+      required: [id, ownerName, propertyName, photographerName, startAt, status]
+      properties:
+        id: { type: integer }
+        ownerName: { type: ["string", "null"], description: Registered owner name resolved by durable account identity }
+        propertyName: { type: string }
+        photographerName: { type: string }
+        startAt: { type: string, format: date-time }
+        status: { type: string }
+      additionalProperties: true

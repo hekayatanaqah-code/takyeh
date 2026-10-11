@@ -579,6 +579,25 @@ export interface Chalet {
   createdAt: string;
 }
 
+export interface PhotographyAdminBooking {
+  id: number;
+  /**
+     * Registered owner name resolved by durable account identity
+     * @nullable
+     */
+  ownerName: string | null;
+  propertyName: string;
+  photographerName: string;
+  startAt: string;
+  status: string;
+  [key: string]: unknown;
+ }
+
+export interface PhotographyAdminResult {
+  bookings: PhotographyAdminBooking[];
+  [key: string]: unknown;
+ }
+
 export type OwnerServiceIcon = typeof OwnerServiceIcon[keyof typeof OwnerServiceIcon];
 
 
@@ -802,8 +821,6 @@ export type LoginPhotographerBody = { [key: string]: unknown };
 export type LoginPhotographer200 = { [key: string]: unknown };
 
 export type LogoutPhotographer200 = { [key: string]: unknown };
-
-export type GetPhotographyAdministration200 = { [key: string]: unknown };
 
 export type UpdatePhotographySettingsBody = { [key: string]: unknown };
 
