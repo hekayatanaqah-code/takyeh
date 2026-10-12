@@ -55,7 +55,9 @@
 - [Photography booking notices](photography-booking-notifications.md) — confirmed paid sessions drive notices and interval occupancy; keep internal reads separate from WhatsApp delivery.
 - [Browser test database evidence](browser-test-database-evidence.md) — reconcile contradictory SQL/UI observations using the mutation response and the app’s own database connection.
 - [JSX preview transform](jsx-preview-transform.md) — avoid explicit JSX type arguments; injected preview metadata can break them despite a passing typecheck.
-- [Photography allocation policy](photography-allocation-policy.md) — new-photographer priority for three bookings; three declines in 30 days reduce priority; paid replacement failures need review, not refunds.
+- [Photography allocation policy](photography-allocation-policy.md) — admin-editable intro, decline and rating limits; paid replacement failures need review, not refunds.
 - [Photography financial policy](photography-financial-policy.md) — partial/full admin refunds, a wallet shared with subscriptions, and delivered-only fees; preserve settled transfer history.
 - [Moyasar refund confirmation](moyasar-refund-confirmation.md) — current responses report cumulative refunds on the payment; unknown POST outcomes stay reserved and are polled.
 - [Financial browser fixture cleanup](financial-browser-fixture-cleanup.md) — cancelling a browser helper does not clean its database rows or private files; record fixture provenance outside the helper.
+- [Generated API export boundaries](generated-api-export-boundaries.md) — resolve model/schema collisions with value exports; library-only typechecks can miss lost runtime validators.
+- [Photography delivery integrity](photography-delivery-integrity.md) — actual artifacts, immutable private copies and single owner notice; current competencies stay separate from historical consent.

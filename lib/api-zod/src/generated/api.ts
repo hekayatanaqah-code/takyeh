@@ -8,9 +8,66 @@
 import * as zod from 'zod';
 
 
-/**
- * @summary Feature state and provider readiness, disabled by default
- */
+export const updatePhotographyPolicyBodyIntroBookingsMin = 0;
+export const updatePhotographyPolicyBodyIntroBookingsMax = 100;
+
+export const updatePhotographyPolicyBodyCancellationThresholdMax = 100;
+
+export const updatePhotographyPolicyBodyCancellationWindowDaysMax = 365;
+
+export const updatePhotographyPolicyBodyQualityThresholdMax = 5;
+export const updatePhotographyPolicyBodyQualityThresholdMultipleOf = 0.1;
+
+
+
+export const UpdatePhotographyPolicyBody = zod.object({
+  "introBookings": zod.number().int().min(updatePhotographyPolicyBodyIntroBookingsMin).max(updatePhotographyPolicyBodyIntroBookingsMax),
+  "cancellationThreshold": zod.number().int().min(1).max(updatePhotographyPolicyBodyCancellationThresholdMax),
+  "cancellationWindowDays": zod.number().int().min(1).max(updatePhotographyPolicyBodyCancellationWindowDaysMax),
+  "qualityThreshold": zod.number().min(1).max(updatePhotographyPolicyBodyQualityThresholdMax).multipleOf(updatePhotographyPolicyBodyQualityThresholdMultipleOf)
+})
+
+export const UpdatePhotographyPolicyResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const GetPhotographyApprovalOptionsResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const RequestPhotographySessionUploadParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const requestPhotographySessionUploadBodyNameMax = 255;
+
+export const requestPhotographySessionUploadBodySizeMax = 104857600;
+
+
+
+export const RequestPhotographySessionUploadBody = zod.object({
+  "name": zod.string().min(1).max(requestPhotographySessionUploadBodyNameMax),
+  "size": zod.number().int().min(1).max(requestPhotographySessionUploadBodySizeMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'application/zip', 'video/mp4', 'video/quicktime'])
+})
+
+export const RequestPhotographySessionUploadResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const getPhotographySessionFilePathIndexMin = 0;
+
+
+
+export const GetPhotographySessionFileParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "index": zod.coerce.number().int().min(getPhotographySessionFilePathIndexMin)
+})
+
+export const GetPhotographySessionFileQueryParams = zod.object({
+  "download": zod.enum(['1']).optional()
+})
+
+export const GetPhotographySessionFileResponse = zod.unknown()
+
+
 export const GetPhotographyStatusResponse = zod.record(zod.string(), zod.unknown())
 
 
@@ -24,7 +81,9 @@ export const GetPhotographyCatalogResponse = zod.record(zod.string(), zod.unknow
 
 
 
+
 export const GetPhotographySlotsQueryParams = zod.object({
+  "packageId": zod.coerce.number().int().min(1),
   "propertyId": zod.coerce.number().int().min(1).optional().describe('Approved property submission ID; provide exactly one target'),
   "serviceSubmissionId": zod.coerce.number().int().min(1).optional().describe('Approved service submission ID; provide exactly one target'),
   "photographerId": zod.coerce.number().int().optional().describe('Legacy hint only; automatic allocation ignores caller-selected photographers'),
@@ -904,6 +963,20 @@ export const DeliverPhotographySessionParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const deliverPhotographySessionBodyDeliveryUrlMax = 2000;
+
+export const deliverPhotographySessionBodyFilesMax = 20;
+
+
+
+export const DeliverPhotographySessionBody = zod.object({
+  "deliveryUrl": zod.string().url().max(deliverPhotographySessionBodyDeliveryUrlMax).optional(),
+  "files": zod.array(zod.object({
+  "objectPath": zod.string(),
+  "uploadProof": zod.string()
+})).max(deliverPhotographySessionBodyFilesMax).optional()
+}).describe('At least one download link or uploaded file is required. First successful delivery is immutable.')
+
 export const DeliverPhotographySessionResponse = zod.record(zod.string(), zod.unknown())
 
 
@@ -1238,6 +1311,11 @@ export const CreateSubmissionResponse = zod.object({
 })
 
 
+
+export const getOwnerServiceCardsResponseServicesItemCoverageCityIdsMax = 500;
+
+
+
 export const GetOwnerServiceCardsResponse = zod.object({
   "services": zod.array(zod.object({
   "id": zod.number().int(),
@@ -1248,9 +1326,15 @@ export const GetOwnerServiceCardsResponse = zod.object({
   "kind": zod.enum(['photography', 'link']),
   "state": zod.enum(['available', 'coming_soon', 'hidden']),
   "actionUrl": zod.string().nullable(),
-  "sortOrder": zod.number().int()
+  "sortOrder": zod.number().int(),
+  "coverageCityIds": zod.array(zod.number().int().min(1)).max(getOwnerServiceCardsResponseServicesItemCoverageCityIdsMax)
 }))
 })
+
+
+
+export const getAdminOwnerServiceCardsResponseOneServicesItemCoverageCityIdsMax = 500;
+
 
 
 export const GetAdminOwnerServiceCardsResponse = zod.object({
@@ -1263,7 +1347,8 @@ export const GetAdminOwnerServiceCardsResponse = zod.object({
   "kind": zod.enum(['photography', 'link']),
   "state": zod.enum(['available', 'coming_soon', 'hidden']),
   "actionUrl": zod.string().nullable(),
-  "sortOrder": zod.number().int()
+  "sortOrder": zod.number().int(),
+  "coverageCityIds": zod.array(zod.number().int().min(1)).max(getAdminOwnerServiceCardsResponseOneServicesItemCoverageCityIdsMax)
 }))
 }).and(zod.object({
   "readiness": zod.object({
@@ -1272,6 +1357,9 @@ export const GetAdminOwnerServiceCardsResponse = zod.object({
 })
 }))
 
+
+
+export const createOwnerServiceCardBodyCoverageCityIdsMax = 500;
 
 export const createOwnerServiceCardBodyTitleMin = 2;
 export const createOwnerServiceCardBodyTitleMax = 120;
@@ -1283,6 +1371,7 @@ export const createOwnerServiceCardBodyActionUrlMax = 2000;
 
 
 export const CreateOwnerServiceCardBody = zod.object({
+  "coverageCityIds": zod.array(zod.number().int().min(1)).max(createOwnerServiceCardBodyCoverageCityIdsMax).optional(),
   "title": zod.string().min(createOwnerServiceCardBodyTitleMin).max(createOwnerServiceCardBodyTitleMax),
   "description": zod.string().max(createOwnerServiceCardBodyDescriptionMax).optional(),
   "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']).optional(),
@@ -1290,6 +1379,11 @@ export const CreateOwnerServiceCardBody = zod.object({
   "state": zod.enum(['available', 'coming_soon', 'hidden']),
   "actionUrl": zod.string().max(createOwnerServiceCardBodyActionUrlMax).nullish()
 })
+
+
+export const createOwnerServiceCardResponseCoverageCityIdsMax = 500;
+
+
 
 export const CreateOwnerServiceCardResponse = zod.object({
   "id": zod.number().int(),
@@ -1300,7 +1394,8 @@ export const CreateOwnerServiceCardResponse = zod.object({
   "kind": zod.enum(['photography', 'link']),
   "state": zod.enum(['available', 'coming_soon', 'hidden']),
   "actionUrl": zod.string().nullable(),
-  "sortOrder": zod.number().int()
+  "sortOrder": zod.number().int(),
+  "coverageCityIds": zod.array(zod.number().int().min(1)).max(createOwnerServiceCardResponseCoverageCityIdsMax)
 })
 
 
@@ -1313,6 +1408,11 @@ export const ReorderOwnerServiceCardsBody = zod.object({
   "ids": zod.array(zod.number().int().min(1)).max(reorderOwnerServiceCardsBodyIdsMax)
 })
 
+
+export const reorderOwnerServiceCardsResponseServicesItemCoverageCityIdsMax = 500;
+
+
+
 export const ReorderOwnerServiceCardsResponse = zod.object({
   "services": zod.array(zod.object({
   "id": zod.number().int(),
@@ -1323,7 +1423,8 @@ export const ReorderOwnerServiceCardsResponse = zod.object({
   "kind": zod.enum(['photography', 'link']),
   "state": zod.enum(['available', 'coming_soon', 'hidden']),
   "actionUrl": zod.string().nullable(),
-  "sortOrder": zod.number().int()
+  "sortOrder": zod.number().int(),
+  "coverageCityIds": zod.array(zod.number().int().min(1)).max(reorderOwnerServiceCardsResponseServicesItemCoverageCityIdsMax)
 }))
 })
 
@@ -1335,6 +1436,9 @@ export const UpdateOwnerServiceCardParams = zod.object({
   "id": zod.coerce.number().int().min(1)
 })
 
+
+export const updateOwnerServiceCardBodyCoverageCityIdsMax = 500;
+
 export const updateOwnerServiceCardBodyTitleMin = 2;
 export const updateOwnerServiceCardBodyTitleMax = 120;
 
@@ -1345,12 +1449,18 @@ export const updateOwnerServiceCardBodyActionUrlMax = 2000;
 
 
 export const UpdateOwnerServiceCardBody = zod.object({
+  "coverageCityIds": zod.array(zod.number().int().min(1)).max(updateOwnerServiceCardBodyCoverageCityIdsMax).optional(),
   "title": zod.string().min(updateOwnerServiceCardBodyTitleMin).max(updateOwnerServiceCardBodyTitleMax).optional(),
   "description": zod.string().max(updateOwnerServiceCardBodyDescriptionMax).optional(),
   "icon": zod.enum(['camera', 'sparkles', 'wrench', 'shield', 'home', 'briefcase']).optional(),
   "state": zod.enum(['available', 'coming_soon', 'hidden']).optional(),
   "actionUrl": zod.string().max(updateOwnerServiceCardBodyActionUrlMax).nullish()
 })
+
+
+export const updateOwnerServiceCardResponseCoverageCityIdsMax = 500;
+
+
 
 export const UpdateOwnerServiceCardResponse = zod.object({
   "id": zod.number().int(),
@@ -1361,7 +1471,8 @@ export const UpdateOwnerServiceCardResponse = zod.object({
   "kind": zod.enum(['photography', 'link']),
   "state": zod.enum(['available', 'coming_soon', 'hidden']),
   "actionUrl": zod.string().nullable(),
-  "sortOrder": zod.number().int()
+  "sortOrder": zod.number().int(),
+  "coverageCityIds": zod.array(zod.number().int().min(1)).max(updateOwnerServiceCardResponseCoverageCityIdsMax)
 })
 
 
@@ -1384,6 +1495,13 @@ export const UpdateAdminPhotographerProfileParams = zod.object({
   "id": zod.coerce.number().int().min(1)
 })
 
+
+export const updateAdminPhotographerProfileBodyApprovedPackageIdsMax = 200;
+
+export const updateAdminPhotographerProfileBodyApprovedSpecialtiesItemMax = 120;
+
+export const updateAdminPhotographerProfileBodyApprovedSpecialtiesMax = 100;
+
 export const updateAdminPhotographerProfileBodyNameMin = 2;
 export const updateAdminPhotographerProfileBodyNameMax = 120;
 
@@ -1400,6 +1518,8 @@ export const updateAdminPhotographerProfileBodyAvailabilityMax = 28;
 
 
 export const UpdateAdminPhotographerProfileBody = zod.object({
+  "approvedPackageIds": zod.array(zod.number().int().min(1)).max(updateAdminPhotographerProfileBodyApprovedPackageIdsMax).optional(),
+  "approvedSpecialties": zod.array(zod.string().min(1).max(updateAdminPhotographerProfileBodyApprovedSpecialtiesItemMax)).max(updateAdminPhotographerProfileBodyApprovedSpecialtiesMax).optional(),
   "name": zod.string().min(updateAdminPhotographerProfileBodyNameMin).max(updateAdminPhotographerProfileBodyNameMax).optional(),
   "bio": zod.string().max(updateAdminPhotographerProfileBodyBioMax).optional(),
   "sessionMinutes": zod.number().int().min(updateAdminPhotographerProfileBodySessionMinutesMin).max(updateAdminPhotographerProfileBodySessionMinutesMax).optional(),

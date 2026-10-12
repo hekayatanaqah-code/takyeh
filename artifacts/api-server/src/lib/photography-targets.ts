@@ -11,6 +11,7 @@ export type PhotographyTargetInput = { propertyId?: number; serviceSubmissionId?
 export interface PhotographyTarget {
   id: number; kind: "property" | "service"; nameAr: string; ownerId: string;
   location: string; region: string | null; district: string | null; whatsappNumber: string;
+  typeKey?: string | null;
 }
 export const photographyTargetFields = {
   propertyId: z.number().int().positive().optional(),
@@ -32,6 +33,8 @@ export async function photographyActivities(ownerIds: string[], store: Store = d
     ownerId: chaletSubmissionsTable.ownerId, location: chaletSubmissionsTable.location,
     region: chaletSubmissionsTable.region, district: chaletSubmissionsTable.district,
     whatsappNumber: chaletSubmissionsTable.whatsappNumber,
+    typeKey: chaletSubmissionsTable.propertyType,
+    category: chaletSubmissionsTable.category,
   }).from(chaletSubmissionsTable).innerJoin(chaletsTable, eq(chaletsTable.submissionId, chaletSubmissionsTable.id))
     .where(and(inArray(chaletSubmissionsTable.ownerId, ownerIds),
       eq(chaletSubmissionsTable.status, "approved"), eq(chaletsTable.isActive, true),
@@ -40,6 +43,7 @@ export async function photographyActivities(ownerIds: string[], store: Store = d
     id: serviceProviderSubmissionsTable.id, nameAr: serviceProviderSubmissionsTable.businessName,
     ownerId: serviceProviderSubmissionsTable.ownerId, location: serviceCitiesCatalogTable.name,
     region: serviceRegionsCatalogTable.name, whatsappNumber: serviceProviderSubmissionsTable.whatsappNumber,
+    typeKey: serviceProviderSubmissionsTable.category,
   }).from(serviceProviderSubmissionsTable)
     .innerJoin(serviceProvidersTable, eq(serviceProvidersTable.submissionId, serviceProviderSubmissionsTable.id))
     .innerJoin(serviceCitiesCatalogTable, eq(serviceCitiesCatalogTable.id, serviceProviderSubmissionsTable.serviceCityId))
@@ -55,8 +59,8 @@ export async function photographyActivities(ownerIds: string[], store: Store = d
   const services = input.propertyId !== undefined ? []
     : lock ? await serviceQuery.for("share") : await serviceQuery;
   return {
-    properties: properties.map(p => ({ ...p, kind: "property" as const })),
-    services: services.map(s => ({ ...s, kind: "service" as const, district: null })),
+    properties: properties.flatMap(p => p.ownerId ? [{ ...p, ownerId: p.ownerId, typeKey: `property:${p.typeKey || p.category || "chalet"}`, kind: "property" as const }] : []),
+    services: services.flatMap(s => s.ownerId ? [{ ...s, ownerId: s.ownerId, typeKey: `service:${s.typeKey}`, kind: "service" as const, district: null }] : []),
   };
 }
 export async function ownedPhotographyTarget(ownerIds: string[], input: PhotographyTargetInput, store: Store = db, lock = false): Promise<PhotographyTarget | null> {

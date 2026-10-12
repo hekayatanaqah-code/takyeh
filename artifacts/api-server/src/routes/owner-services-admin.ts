@@ -3,7 +3,7 @@ import { db, ownerServicesTable } from "@workspace/db";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { lockOwnerServices, ownerServiceInputSchema, serviceAvailabilityError, writePhotographyGate } from "../lib/owner-services";
+import { lockOwnerServices, ownerServiceInputSchema, serviceAvailabilityError, writePhotographyGate, validServiceCities } from "../lib/owner-services";
 import { photographyReadiness } from "../lib/photography-delivery";
 
 const router = Router();
@@ -14,6 +14,7 @@ router.param("id", (_req, res, next, id) => /^[1-9]\d*$/.test(id) && Number.isSa
 router.post("/", async (req, res) => {
   const parsed = ownerServiceInputSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "راجع بيانات البطاقة ورابط الطلب" });
+  if (parsed.data.coverageCityIds && !await validServiceCities(parsed.data.coverageCityIds)) return res.status(400).json({ error: "اختر مدناً مفعّلة دون تكرار" });
   const data = { ...parsed.data, actionUrl: parsed.data.kind === "photography" ? null : parsed.data.actionUrl ?? null };
   const error = serviceAvailabilityError(data);
   if (error) return res.status(409).json({ error });
@@ -53,6 +54,7 @@ router.put("/order", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   const parsed = ownerServiceInputSchema.omit({ kind: true }).partial().safeParse(req.body);
   if (!parsed.success || !Object.keys(parsed.data).length) return res.status(400).json({ error: "بيانات البطاقة غير صحيحة" });
+  if (parsed.data.coverageCityIds && !await validServiceCities(parsed.data.coverageCityIds)) return res.status(400).json({ error: "اختر مدناً مفعّلة دون تكرار" });
   try {
     const card = await db.transaction(async tx => {
       await lockOwnerServices(tx);

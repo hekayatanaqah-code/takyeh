@@ -43,17 +43,20 @@ import type {
   DeclinePhotographySession200,
   DeleteServiceSeason200,
   DeliverPhotographySession200,
+  DeliverPhotographySessionBody,
   ErrorResponse,
   GetAdminBroadcastRecipientsParams,
   GetChaletsParams,
   GetOwnerWallet200,
   GetPhotographerStatement200,
   GetPhotographerStatementParams,
+  GetPhotographyApprovalOptions200,
   GetPhotographyBookings200,
   GetPhotographyCatalog200,
   GetPhotographyFinance200,
   GetPhotographyFinanceParams,
   GetPhotographyInvite200,
+  GetPhotographySessionFileParams,
   GetPhotographySlots200,
   GetPhotographySlotsParams,
   GetPhotographyStatus200,
@@ -104,6 +107,8 @@ import type {
   ReconcilePhotographyRefund200,
   RefundPhotographyBooking200,
   RequestPhotographyReceipt200,
+  RequestPhotographySessionUpload200,
+  RequestPhotographySessionUploadBody,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   RetryPhotographyAssignment200,
@@ -115,6 +120,8 @@ import type {
   UpdateAdminPhotographerProfile200,
   UpdatePhotographyPackage200,
   UpdatePhotographyPackageBody,
+  UpdatePhotographyPolicy200,
+  UpdatePhotographyPolicyBody,
   UpdatePhotographySettings200,
   UpdatePhotographySettingsBody,
   UpdateServiceSeasonInput,
@@ -148,6 +155,384 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
+export const getUpdatePhotographyPolicyUrl = () => {
+
+
+
+
+  return `/api/admin/photography/policy`
+}
+
+export const updatePhotographyPolicy = async (updatePhotographyPolicyBody: UpdatePhotographyPolicyBody, options?: Parameters<typeof customFetch>[1]): Promise<UpdatePhotographyPolicy200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<UpdatePhotographyPolicy200>(getUpdatePhotographyPolicyUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updatePhotographyPolicyBody)
+  }
+);}
+
+
+
+
+
+export const getUpdatePhotographyPolicyMutationKey = () => ['updatePhotographyPolicy'] as const;
+
+export const getUpdatePhotographyPolicyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePhotographyPolicy>>, TError,UpdatePhotographyPolicyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePhotographyPolicy>>, TError,UpdatePhotographyPolicyMutationVariables, TContext> => {
+
+const mutationKey = getUpdatePhotographyPolicyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePhotographyPolicy>>, UpdatePhotographyPolicyMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePhotographyPolicy(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePhotographyPolicyMutationResult = NonNullable<Awaited<ReturnType<typeof updatePhotographyPolicy>>>
+    export type UpdatePhotographyPolicyMutationBody = BodyType<UpdatePhotographyPolicyBody>
+    export type UpdatePhotographyPolicyMutationError = ErrorType<unknown>
+    export type UpdatePhotographyPolicyMutationVariables = {data: BodyType<UpdatePhotographyPolicyBody>}
+
+    export const useUpdatePhotographyPolicy = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePhotographyPolicy>>, TError,UpdatePhotographyPolicyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updatePhotographyPolicy>>,
+        TError,
+        UpdatePhotographyPolicyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdatePhotographyPolicyMutationOptions(options), queryClient);
+    }
+
+export const getGetPhotographyApprovalOptionsUrl = () => {
+
+
+
+
+  return `/api/admin/photography/options`
+}
+
+export const getPhotographyApprovalOptions = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetPhotographyApprovalOptions200> => {
+
+  return customFetch<GetPhotographyApprovalOptions200>(getGetPhotographyApprovalOptionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPhotographyApprovalOptionsQueryKey = () => {
+    return [
+    `/api/admin/photography/options`
+    ] as const;
+    }
+
+
+export const getGetPhotographyApprovalOptionsQueryOptions = <TData = Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPhotographyApprovalOptionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPhotographyApprovalOptions>>> = ({ signal }) => getPhotographyApprovalOptions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPhotographyApprovalOptionsQueryResult = NonNullable<Awaited<ReturnType<typeof getPhotographyApprovalOptions>>>
+export type GetPhotographyApprovalOptionsQueryError = ErrorType<unknown>
+
+
+export function useGetPhotographyApprovalOptions<TData = Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographyApprovalOptions>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographyApprovalOptions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographyApprovalOptions<TData = Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographyApprovalOptions>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographyApprovalOptions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographyApprovalOptions<TData = Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPhotographyApprovalOptions<TData = Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyApprovalOptions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPhotographyApprovalOptionsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRequestPhotographySessionUploadUrl = (id: number,) => {
+
+
+
+
+  return `/api/photography/portal/bookings/${id}/uploads/request`
+}
+
+export const requestPhotographySessionUpload = async (id: number,
+    requestPhotographySessionUploadBody: RequestPhotographySessionUploadBody, options?: Parameters<typeof customFetch>[1]): Promise<RequestPhotographySessionUpload200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RequestPhotographySessionUpload200>(getRequestPhotographySessionUploadUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(requestPhotographySessionUploadBody)
+  }
+);}
+
+
+
+
+
+export const getRequestPhotographySessionUploadMutationKey = () => ['requestPhotographySessionUpload'] as const;
+
+export const getRequestPhotographySessionUploadMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPhotographySessionUpload>>, TError,RequestPhotographySessionUploadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestPhotographySessionUpload>>, TError,RequestPhotographySessionUploadMutationVariables, TContext> => {
+
+const mutationKey = getRequestPhotographySessionUploadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestPhotographySessionUpload>>, RequestPhotographySessionUploadMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  requestPhotographySessionUpload(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestPhotographySessionUploadMutationResult = NonNullable<Awaited<ReturnType<typeof requestPhotographySessionUpload>>>
+    export type RequestPhotographySessionUploadMutationBody = BodyType<RequestPhotographySessionUploadBody>
+    export type RequestPhotographySessionUploadMutationError = ErrorType<unknown>
+    export type RequestPhotographySessionUploadMutationVariables = {id: number;data: BodyType<RequestPhotographySessionUploadBody>}
+
+    export const useRequestPhotographySessionUpload = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestPhotographySessionUpload>>, TError,RequestPhotographySessionUploadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof requestPhotographySessionUpload>>,
+        TError,
+        RequestPhotographySessionUploadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRequestPhotographySessionUploadMutationOptions(options), queryClient);
+    }
+
+export const getGetPhotographySessionFileUrl = (id: number,
+    index: number,
+    params?: GetPhotographySessionFileParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/photography/bookings/${id}/files/${index}?${stringifiedParams}` : `/api/photography/bookings/${id}/files/${index}`
+}
+
+export const getPhotographySessionFile = async (id: number,
+    index: number,
+    params?: GetPhotographySessionFileParams, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetPhotographySessionFileUrl(id,index,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPhotographySessionFileQueryKey = (id: number,
+    index: number,
+    params?: GetPhotographySessionFileParams,) => {
+    return [
+    `/api/photography/bookings/${id}/files/${index}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPhotographySessionFileQueryOptions = <TData = Awaited<ReturnType<typeof getPhotographySessionFile>>, TError = ErrorType<void>>(id: number,
+    index: number,
+    params?: GetPhotographySessionFileParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographySessionFile>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPhotographySessionFileQueryKey(id,index,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPhotographySessionFile>>> = ({ signal }) => getPhotographySessionFile(id,index,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && index !== null && index !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPhotographySessionFile>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPhotographySessionFileQueryResult = NonNullable<Awaited<ReturnType<typeof getPhotographySessionFile>>>
+export type GetPhotographySessionFileQueryError = ErrorType<void>
+
+
+export function useGetPhotographySessionFile<TData = Awaited<ReturnType<typeof getPhotographySessionFile>>, TError = ErrorType<void>>(
+ id: number,
+    index: number,
+    params: undefined |  GetPhotographySessionFileParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographySessionFile>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographySessionFile>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographySessionFile>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographySessionFile<TData = Awaited<ReturnType<typeof getPhotographySessionFile>>, TError = ErrorType<void>>(
+ id: number,
+    index: number,
+    params?: GetPhotographySessionFileParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographySessionFile>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPhotographySessionFile>>,
+          TError,
+          Awaited<ReturnType<typeof getPhotographySessionFile>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPhotographySessionFile<TData = Awaited<ReturnType<typeof getPhotographySessionFile>>, TError = ErrorType<void>>(
+ id: number,
+    index: number,
+    params?: GetPhotographySessionFileParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographySessionFile>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPhotographySessionFile<TData = Awaited<ReturnType<typeof getPhotographySessionFile>>, TError = ErrorType<void>>(
+ id: number,
+    index: number,
+    params?: GetPhotographySessionFileParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographySessionFile>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPhotographySessionFileQueryOptions(id,index,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetPhotographyStatusUrl = () => {
 
 
@@ -156,9 +541,6 @@ export const getGetPhotographyStatusUrl = () => {
   return `/api/photography/status`
 }
 
-/**
- * @summary Feature state and provider readiness, disabled by default
- */
 export const getPhotographyStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetPhotographyStatus200> => {
 
   return customFetch<GetPhotographyStatus200>(getGetPhotographyStatusUrl(),
@@ -227,9 +609,6 @@ export function useGetPhotographyStatus<TData = Awaited<ReturnType<typeof getPho
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Feature state and provider readiness, disabled by default
- */
 
 export function useGetPhotographyStatus<TData = Awaited<ReturnType<typeof getPhotographyStatus>>, TError = ErrorType<unknown>>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPhotographyStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
@@ -5017,14 +5396,29 @@ export const getDeliverPhotographySessionUrl = (id: number,) => {
 /**
  * @summary Assigned photographer confirms delivery after the session ends
  */
-export const deliverPhotographySession = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<DeliverPhotographySession200> => {
+export const deliverPhotographySession = async (id: number,
+    deliverPhotographySessionBody: DeliverPhotographySessionBody, options?: Parameters<typeof customFetch>[1]): Promise<DeliverPhotographySession200> => {
 
-  return customFetch<DeliverPhotographySession200>(getDeliverPhotographySessionUrl(id),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<DeliverPhotographySession200>(getDeliverPhotographySessionUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(deliverPhotographySessionBody)
   }
 );}
 
@@ -5049,9 +5443,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof deliverPhotographySession>>, DeliverPhotographySessionMutationVariables> = (props) => {
-          const {id} = props ?? {};
+          const {id,data} = props ?? {};
 
-          return  deliverPhotographySession(id,requestOptions)
+          return  deliverPhotographySession(id,data,requestOptions)
         }
 
 
@@ -5062,9 +5456,9 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type DeliverPhotographySessionMutationResult = NonNullable<Awaited<ReturnType<typeof deliverPhotographySession>>>
-
+    export type DeliverPhotographySessionMutationBody = BodyType<DeliverPhotographySessionBody>
     export type DeliverPhotographySessionMutationError = ErrorType<unknown>
-    export type DeliverPhotographySessionMutationVariables = {id: number}
+    export type DeliverPhotographySessionMutationVariables = {id: number;data: BodyType<DeliverPhotographySessionBody>}
 
     /**
  * @summary Assigned photographer confirms delivery after the session ends

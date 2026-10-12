@@ -11,6 +11,11 @@ import type { OwnerServiceInputState } from './ownerServiceInputState';
 
 export interface OwnerServiceInput {
   /**
+     * @maxItems 500
+     * @items.minimum 1
+     */
+  coverageCityIds?: number[];
+  /**
      * @minLength 2
      * @maxLength 120
      */

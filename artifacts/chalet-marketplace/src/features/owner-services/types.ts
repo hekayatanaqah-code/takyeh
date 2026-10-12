@@ -1,7 +1,7 @@
 import { Camera, Sparkles, Wrench, Shield, Home, Briefcase, type LucideIcon } from "lucide-react";
 import { ORIGIN } from "../photography/shared";
-import type { OwnerService } from "@workspace/api-client-react";
-export type { OwnerService } from "@workspace/api-client-react";
+import type { OwnerService as GenOwnerService } from "@workspace/api-client-react";
+export type OwnerService = GenOwnerService;
 
 export type ServiceIcon = "camera" | "sparkles" | "wrench" | "shield" | "home" | "briefcase";
 export type ServiceKind = "photography" | "link";

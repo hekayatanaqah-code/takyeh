@@ -9,6 +9,17 @@ import type { PhotographerAvailability134a8bd } from './photographerAvailability
 
 export interface AdminPhotographerProfileInput {
   /**
+     * @maxItems 200
+     * @items.minimum 1
+     */
+  approvedPackageIds?: number[];
+  /**
+     * @maxItems 100
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  approvedSpecialties?: string[];
+  /**
      * @minLength 2
      * @maxLength 120
      */

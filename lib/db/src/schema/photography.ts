@@ -24,6 +24,8 @@ export const photographersTable = pgTable("photographers", {
   experienceYears: text("experience_years").notNull().default(""),
   portfolioUrl: text("portfolio_url").notNull().default(""),
   profileImagePath: text("profile_image_path").notNull().default(""),
+  approvedPackageIds: jsonb("approved_package_ids").$type<number[]>().notNull().default([]),
+  approvedSpecialties: jsonb("approved_specialties").$type<string[]>().notNull().default([]),
   regionId: integer("region_id"), cityId: integer("city_id"),
   districtIds: jsonb("district_ids").$type<number[]>().notNull().default([]),
   allDistricts: boolean("all_districts").notNull().default(false),
@@ -58,6 +60,8 @@ export const photographyPackagesTable = pgTable("photography_packages", {
   priceHalalas: integer("price_halalas").notNull(),
   platformPercent: numeric("platform_percent", { precision: 5, scale: 2 }).notNull(),
   active: boolean("active").notNull().default(true),
+  propertyTypes: jsonb("property_types").$type<string[]>().notNull().default([]),
+  specialties: jsonb("specialties").$type<string[]>().notNull().default([]),
 });
 export const photographerSessionsTable = pgTable("photographer_sessions", {
   hash: text("hash").primaryKey(),
@@ -84,6 +88,9 @@ export const photographyBookingsTable = pgTable("photography_bookings", {
   targetCity: text("target_city"),
   targetRegion: text("target_region"),
   targetDistrict: text("target_district"),
+  targetType: text("target_type"),
+  deliveryUrl: text("delivery_url"),
+  deliveryFiles: jsonb("delivery_files").$type<{ objectPath: string; name: string; contentType: string; size: number }[]>().notNull().default([]),
   priceHalalas: integer("price_halalas").notNull(), commissionHalalas: integer("commission_halalas").notNull(),
   photographerEarningsHalalas: integer("photographer_earnings_halalas").notNull(),
   invoiceId: text("invoice_id").unique(), paymentId: text("payment_id").unique(), paymentUrl: text("payment_url"),

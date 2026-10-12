@@ -8,6 +8,10 @@
 
 export type GetPhotographySlotsParams = {
 /**
+ * @minimum 1
+ */
+packageId: number;
+/**
  * Approved property submission ID; provide exactly one target
  * @minimum 1
  */

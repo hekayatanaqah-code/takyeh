@@ -61,7 +61,7 @@ function SettleModal({ p, onClose }: { p: FinPhotographer; onClose: () => void }
   const submit = () => {
     if (busy.current || m.isPending) return;
     const t = new Date(date).getTime();
-    const e = !(amountH > 0) ? "أدخل مبلغا صحيحا" : amountH > p.availableHalalas ? `المبلغ أكبر من المتاح (${sar(p.availableHalalas)})` : !ref.trim() ? "أدخل مرجع الحوالة البنكية" : !date || Number.isNaN(t) ? "أدخل تاريخ ووقت التحويل" : t > Date.now() ? "وقت التحويل لا يمكن أن يكون في المستقبل" : !file ? "إرفاق إيصال الحوالة مطلوب" : !ack ? "أكد أن الحوالة نفذت فعلا من البنك" : null;
+    const e = !(amountH > 0) ? "أدخل مبلغا صحيحا" : amountH > p.availableHalalas ? `المبلغ أكبر من المتاح (${sar(p.availableHalalas)})` : !ref.trim() ? "أدخل مرجع حوالة مصرف الإنماء" : !date || Number.isNaN(t) ? "أدخل تاريخ ووقت التحويل" : t > Date.now() ? "وقت التحويل لا يمكن أن يكون في المستقبل" : !file ? "إرفاق إيصال الحوالة مطلوب" : !ack ? "أكد أن الحوالة نفذت فعلا من البنك" : null;
     setErr(e); if (e) return;
     busy.current = true; m.mutate();
   };
@@ -73,7 +73,7 @@ function SettleModal({ p, onClose }: { p: FinPhotographer; onClose: () => void }
           <DialogTitle className="flex items-center gap-2"><Landmark className="h-5 w-5 text-[#8C6246]" aria-hidden /> تسجيل حوالة بنكية يدوية</DialogTitle>
           <DialogDescription>{p.name}</DialogDescription>
         </DialogHeader>
-        <Notice tone="warn">هذه الشاشة لا تحول أي أموال. سجّل فقط حوالة نفذتها بنفسك مسبقا من حساب المنصة البنكي، مع إيصالها.</Notice>
+        <Notice tone="warn">هذه الشاشة لا تحول أي أموال. التحويل يدوي وليس تلقائيا: سجّل فقط حوالة نفذتها بنفسك مسبقا من حساب المنصة في مصرف الإنماء، مع مرجعها وإيصالها.</Notice>
         <div className="grid gap-2 rounded-xl border border-border bg-muted/40 p-3 text-sm sm:grid-cols-2">
           <p>البنك: <span className="font-semibold">{p.bankName || "غير مسجل"}</span></p>
           <p>الآيبان: <span dir="ltr" className="font-mono text-xs">{p.iban ? formatIban(p.iban) : "غير مسجل"}</span></p>
@@ -82,7 +82,7 @@ function SettleModal({ p, onClose }: { p: FinPhotographer; onClose: () => void }
         <fieldset disabled={frozen} className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="المبلغ المحول (ر.س)"><input type="number" min="0.01" step="0.01" max={p.availableHalalas / 100} className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="input-settle-amount" /></Field>
-            <Field label="مرجع الحوالة البنكية"><input dir="ltr" className={`${inputCls} font-mono`} value={ref} onChange={(e) => setRef(e.target.value)} data-testid="input-settle-reference" /></Field>
+            <Field label="مرجع حوالة مصرف الإنماء"><input dir="ltr" className={`${inputCls} font-mono`} value={ref} onChange={(e) => setRef(e.target.value)} data-testid="input-settle-reference" /></Field>
           </div>
           <Field label="تاريخ ووقت التحويل الفعلي"><input type="datetime-local" max={localNow()} className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} data-testid="input-settle-date" /></Field>
           <div className="space-y-1.5">

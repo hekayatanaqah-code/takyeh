@@ -13,3 +13,20 @@ export type {
   HealthStatus,
   SubmissionResponse,
 } from "./generated/types";
+export * from './generated/types';
+// Prefer the inferred operation schemas when Orval also emits a model alias.
+export {
+  CheckoutPhotographyBookingBody,
+  CreatePhotographyPackageBody,
+  DeliverPhotographySessionBody,
+  GetPhotographySessionFileParams,
+  InvitePhotographerBody,
+  LoginPhotographerBody,
+  RequestPhotographySessionUploadBody,
+  RequestUploadUrlBody,
+  RequestUploadUrlResponse,
+  ReviewPhotographerBody,
+  UpdatePhotographyPackageBody,
+  UpdatePhotographyPolicyBody,
+  UpdatePhotographySettingsBody,
+} from "./generated/api";

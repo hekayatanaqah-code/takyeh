@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Star } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DeliverDialog } from "./delivery";
 import { call, fmtDT, btnCls, ghostCls, cardCls, inputCls, Notice, ErrorBox, Empty, type Booking, type Photographer } from "./shared";
 
 /* ---------- Types ---------- */
@@ -68,7 +69,7 @@ export function OwnerReview({ b, invalidateKey }: { b: Booking; invalidateKey: r
 
 /* ---------- Photographer actions ---------- */
 export const canDeliver = (b: Booking, now = Date.now()) =>
-  new Date(b.endAt).getTime() <= now && !b.deliveredAt && b.assignmentStatus !== "needs_review" && (b.status === "confirmed" || b.status === "completed");
+  new Date(b.endAt).getTime() <= now && (!b.deliveredAt || (!b.deliveryUrl && !b.deliveryFiles?.length)) && b.assignmentStatus !== "needs_review" && (b.status === "confirmed" || b.status === "completed");
 export const canCancel = (b: Booking) => b.status === "confirmed" && !b.deliveredAt && b.assignmentStatus !== "needs_review";
 
 export function BookingActions({ b }: { b: Booking }) {
@@ -84,16 +85,12 @@ export function BookingActions({ b }: { b: Booking }) {
       setResult({ tone: r.reassigned ? "ok" : "warn", text: r.message || (r.reassigned ? "تم نقل الجلسة إلى مصور بديل." : "أحيلت الجلسة إلى الإدارة لتعيين بديل.") });
     },
   });
-  const deliver = useMutation({
-    mutationFn: () => call<{ booking: Booking }>(`/photography/portal/bookings/${b.id}/deliver`, "POST"),
-    onSuccess: async () => { await qc.invalidateQueries({ queryKey: ["ph-portal"] }); setOpen(null); setResult({ tone: "ok", text: "تم تسجيل تسليم الجلسة." }); },
-  });
   const showCancel = canCancel(b); const showDeliver = canDeliver(b);
   if (!showCancel && !showDeliver && !result) return null;
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {showDeliver && <button type="button" className={btnCls} disabled={deliver.isPending} onClick={() => { deliver.reset(); setOpen("deliver"); }} data-testid={`button-deliver-${b.id}`}>تسليم الجلسة</button>}
+        {showDeliver && <button type="button" className={btnCls} onClick={() => setOpen("deliver")} data-testid={`button-deliver-${b.id}`}>رفع وتسليم الجلسة</button>}
         {showCancel && <button type="button" className={ghostCls} disabled={cancel.isPending} onClick={() => { cancel.reset(); setOpen("cancel"); }} data-testid={`button-cancel-session-${b.id}`}>اعتذار عن الجلسة</button>}
       </div>
       {result && <Notice tone={result.tone}><span data-testid={`text-action-result-${b.id}`}>{result.text}</span></Notice>}
@@ -123,18 +120,7 @@ export function BookingActions({ b }: { b: Booking }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={open === "deliver"} onOpenChange={(o) => { if (!deliver.isPending) setOpen(o ? "deliver" : null); }}>
-        <DialogContent dir="rtl" className="text-right">
-          <DialogHeader><DialogTitle>تأكيد تسليم الجلسة</DialogTitle>
-            <DialogDescription>{b.propertyName} - {b.packageName} - {fmtDT(b.startAt)}</DialogDescription></DialogHeader>
-          <p className="text-sm">بتأكيدك تقر بأنك سلمت مواد الجلسة للمالك. لا يمكن التراجع عن التسليم، وسيتمكن المالك من تقييم الجلسة.</p>
-          {deliver.isError && <ErrorBox error={deliver.error} />}
-          <DialogFooter className="gap-2 sm:justify-start">
-            <button type="button" className={btnCls} disabled={deliver.isPending} onClick={() => deliver.mutate()} data-testid={`button-confirm-deliver-${b.id}`}>{deliver.isPending ? "جار التأكيد" : "تأكيد تسليم الجلسة"}</button>
-            <button type="button" className={ghostCls} disabled={deliver.isPending} onClick={() => setOpen(null)}>تراجع</button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeliverDialog b={b} open={open === "deliver"} onClose={() => setOpen(null)} onDone={() => { setOpen(null); setResult({ tone: "ok", text: "تم تسليم الجلسة وإشعار المالك." }); }} />
     </div>
   );
 }
@@ -178,7 +164,54 @@ export function CancellationHistory({ items, showPhotographer = false }: { items
 }
 
 /* ---------- Admin ---------- */
-export function PolicyCard({ policy }: { policy?: PhotoPolicy }) {
+function PolicyEditDialog({ policy, onClose, onSaved }: { policy: PhotoPolicy; onClose: () => void; onSaved: () => void }) {
+  const qc = useQueryClient();
+  const [f, setF] = useState({ introBookings: String(policy.introBookings), cancellationThreshold: String(policy.cancellationThreshold), cancellationWindowDays: String(policy.cancellationWindowDays), qualityThreshold: String(policy.qualityThreshold) });
+  const [err, setErr] = useState<string | null>(null);
+  const n = { introBookings: Number(f.introBookings), cancellationThreshold: Number(f.cancellationThreshold), cancellationWindowDays: Number(f.cancellationWindowDays), qualityThreshold: Math.round(Number(f.qualityThreshold) * 10) / 10 };
+  const intIn = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi;
+  const m = useMutation({
+    mutationFn: () => call<PhotoPolicy>("/admin/photography/policy", "PATCH", n),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["ph-admin"] }); qc.invalidateQueries({ queryKey: ["ph-portal"] }); onSaved(); onClose(); },
+  });
+  const submit = () => {
+    const e = !intIn(n.introBookings, 0, 100) ? "الجلسات التعريفية عدد صحيح بين ٠ و١٠٠"
+      : !intIn(n.cancellationThreshold, 1, 100) ? "حد الاعتذارات عدد صحيح بين ١ و١٠٠"
+      : !intIn(n.cancellationWindowDays, 1, 365) ? "نافذة الاعتذارات بين ١ و٣٦٥ يوما"
+      : !(f.qualityThreshold.trim() !== "" && n.qualityThreshold >= 1 && n.qualityThreshold <= 5) ? "حد الجودة بين ١ و٥" : null;
+    setErr(e); if (!e) m.mutate();
+  };
+  const fields: [keyof typeof f, string, string, string, string][] = [
+    ["introBookings", "الجلسات التعريفية لكل مصور جديد", "0", "100", "1"],
+    ["cancellationThreshold", "حد الاعتذارات المتكررة", "1", "100", "1"],
+    ["cancellationWindowDays", "نافذة احتساب الاعتذارات (يوم)", "1", "365", "1"],
+    ["qualityThreshold", "حد جودة التقييم (من ٥)", "1", "5", "0.1"],
+  ];
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !m.isPending) onClose(); }}>
+      <DialogContent dir="rtl" className="text-right">
+        <DialogHeader><DialogTitle>تعديل سياسة التوزيع والجودة</DialogTitle><DialogDescription>تطبق القيم الجديدة على التوزيع والتنبيهات القادمة.</DialogDescription></DialogHeader>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }}>
+          <fieldset disabled={m.isPending} className="grid gap-3 sm:grid-cols-2">
+            {fields.map(([k, l, lo, hi, st]) => (
+              <label key={k} className="block space-y-1.5"><span className="text-sm font-semibold">{l}</span>
+                <input type="number" min={lo} max={hi} step={st} className={inputCls} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} data-testid={`input-policy-${k}`} /></label>
+            ))}
+          </fieldset>
+          {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
+          <DialogFooter className="gap-2 sm:justify-start">
+            <button className={btnCls} disabled={m.isPending} data-testid="button-save-policy">{m.isPending ? "جار الحفظ" : "حفظ السياسة"}</button>
+            <button type="button" className={ghostCls} disabled={m.isPending} onClick={onClose}>إلغاء</button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function PolicyCard({ policy, editable = false }: { policy?: PhotoPolicy; editable?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
   if (!policy) return null;
   const rows: [string, string][] = [
     ["الجلسات التعريفية لكل مصور جديد", ar(policy.introBookings)],
@@ -187,9 +220,14 @@ export function PolicyCard({ policy }: { policy?: PhotoPolicy }) {
   ];
   return (
     <section className={`${cardCls} space-y-2`} data-testid="section-policy">
-      <h3 className="font-bold">سياسة التوزيع والجودة المعتمدة</h3>
-      <p className="text-xs text-muted-foreground">للاطلاع فقط. التوزيع تلقائي بالتناوب الموزون بين المصورين المؤهلين في نفس المنطقة والمدينة والحي.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-bold">سياسة التوزيع والجودة المعتمدة</h3>
+        {editable && <button type="button" className={ghostCls} onClick={() => { setSaved(false); setOpen(true); }} data-testid="button-edit-policy">تعديل السياسة</button>}
+      </div>
+      <p className="text-xs text-muted-foreground">{editable ? "" : "للاطلاع فقط. "}التوزيع تلقائي بالتناوب الموزون بين المصورين المؤهلين في نفس المنطقة والمدينة والحي.</p>
       <dl className="divide-y divide-border">{rows.map(([k, v]) => <div key={k} className="flex justify-between gap-3 py-2 text-sm"><dt className="text-muted-foreground">{k}</dt><dd className="font-bold">{v}</dd></div>)}</dl>
+      {saved && <Notice tone="ok"><span data-testid="text-policy-saved">تم حفظ السياسة.</span></Notice>}
+      {editable && open && <PolicyEditDialog policy={policy} onClose={() => setOpen(false)} onSaved={() => setSaved(true)} />}
     </section>
   );
 }

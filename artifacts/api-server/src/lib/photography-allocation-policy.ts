@@ -5,13 +5,14 @@ export const photographyPolicy = Object.freeze({
   qualityThreshold: 3.5,
 });
 
-export function qualityEligible(p: { status: string; ratingSum: number; ratingCount: number }) {
-  return p.status === "approved" && (p.ratingCount === 0 || p.ratingSum * 2 >= p.ratingCount * 7);
+export type PhotographyPolicy = { introBookings: number; cancellationThreshold: number; cancellationWindowDays: number; qualityThreshold: number };
+export function qualityEligible(p: { status: string; ratingSum: number; ratingCount: number }, policy: PhotographyPolicy = photographyPolicy) {
+  return p.status === "approved" && (p.ratingCount === 0 || p.ratingSum >= p.ratingCount * policy.qualityThreshold);
 }
-export function rotationWeight(confirmedAssignments: number, cancellations: number) {
+export function rotationWeight(confirmedAssignments: number, cancellations: number, policy: PhotographyPolicy = photographyPolicy) {
   // Temporary introduction boost; repeated declines override that boost.
-  return cancellations >= photographyPolicy.cancellationThreshold ? 1
-    : confirmedAssignments < photographyPolicy.introBookings ? 4 : 2;
+  return cancellations >= policy.cancellationThreshold ? 1
+    : confirmedAssignments < policy.introBookings ? 4 : 2;
 }
 export function roundRobinTurn<T extends { id: number; rotationCredit: number; weight: number; lastAssignedAt: Date | null }>(candidates: T[]) {
   if (!candidates.length) return null;

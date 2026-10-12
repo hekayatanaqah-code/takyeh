@@ -20,6 +20,12 @@ Future service cards may point to configured request pages; creating a card is n
 
 **How to apply:** Require a working request destination before offering a link-based card for ordering. Preserve historical photography bookings when hiding/removing its card, and keep payment reconciliation reachable after the request UI is closed.
 
+Owner service visibility follows administratively configured city coverage, including the region; zero coverage means no owners are eligible. Wallet history alone must not reveal the wallet when no covered service is enabled and the balance is nonpositive.
+
+**Why:** The user requested geographic service availability and hiding both the empty wallet and its transaction history when no enabled service applies.
+
+**How to apply:** Match the owner's active approved activities against canonical property geography by city and region names; independent service-catalog IDs are not comparable. Keep historical bookings accessible separately.
+
 قسم «خدمات الملاك» في الأدمن يتبع النمط الكحلي الداكن واللون الكهرماني لصفحة «إدارة الخدمات»، بما يشمل البطاقات والنماذج والنصوص والأزرار، ولا يستخدم بطاقات أو حقولاً بيضاء.
 
 **Why:** المستخدم طلب مطابقة القسم لبقية لوحة الأدمن بعد ظهور مكونات فاتحة فيه.

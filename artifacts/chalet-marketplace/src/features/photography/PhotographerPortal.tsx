@@ -6,6 +6,8 @@ import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./avai
 import { profileImageError } from "./imageRules";
 import { BookingNotices, SessionCalendar, UpperTabs, TabPanel, type PortalNotification } from "./portalWidgets";
 import { BookingActions, StandingNotices, CancellationHistory, type PhotoPolicy, type PhotoCancellation } from "./operations";
+import { ApprovalsSummary } from "./approvals";
+import { DeliveryView } from "./delivery";
 import { EarningsSummary, PortalStatementSection } from "./portalFinance";
 import { BankFields, bankError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
 import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
@@ -174,7 +176,7 @@ const PortalTabs = UpperTabs<PTab>;
 
 export default function PhotographerPortal() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number; pendingHalalas?: number; availableHalalas?: number; paidHalalas?: number; recoverableHalalas?: number }; notifications?: PortalNotification[]; policy?: PhotoPolicy; cancellations?: PhotoCancellation[] }>("/photography/portal") });
+  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number; pendingHalalas?: number; availableHalalas?: number; paidHalalas?: number; recoverableHalalas?: number }; notifications?: PortalNotification[]; policy?: PhotoPolicy; cancellations?: PhotoCancellation[]; approvedPackages?: { id: number; name: string }[] }>("/photography/portal") });
   const authed = !!q.data;
   useEffect(() => {
     if (!authed || typeof EventSource === "undefined") return undefined;
@@ -187,7 +189,8 @@ export default function PhotographerPortal() {
   const out = useMutation({ mutationFn: () => call("/photography/portal/logout", "POST"), onSuccess: () => { qc.removeQueries({ queryKey: ["ph-portal"] }); q.refetch(); } });
   if (q.isLoading) return <Shell><Skel /></Shell>;
   if (q.isError || !q.data) return <Login />;
-  const { photographer: p, bookings, earnings, notifications = [], policy, cancellations = [] } = q.data;
+  const { photographer: p, bookings, earnings, notifications = [], policy, cancellations = [], approvedPackages = [] } = q.data;
+  const approvals = <ApprovalsSummary id="portal" packages={approvedPackages.map((x) => x.name)} specialties={p.approvedSpecialties ?? []} />;
   const now = Date.now();
   const upcoming = bookings.filter((b) => b.status === "confirmed" && new Date(b.endAt).getTime() >= now);
   const history = bookings.filter((b) => !upcoming.includes(b));
@@ -204,6 +207,7 @@ export default function PhotographerPortal() {
       <TabPanel id="ph" k="home" active={tab}>
       <EarningsSummary e={earnings} />
       <StandingNotices p={p} policy={policy} />
+      {p.status === "approved" && approvals}
       <BookingNotices items={notifications} />
       <section className="space-y-3"><h3 className="font-bold">المواعيد القادمة</h3>
         {upcoming.length === 0 ? <Empty title="لا توجد مواعيد مؤكدة قادمة" /> : upcoming.map((b) => (
@@ -212,12 +216,19 @@ export default function PhotographerPortal() {
       <SessionCalendar bookings={upcoming} />
       <section className="space-y-3"><h3 className="font-bold">السجل</h3>
         {history.length === 0 ? <Empty title="لا يوجد سجل بعد" /> : history.map((b) => (
-          <div key={b.id} className={`${cardCls} space-y-3`} data-testid={`card-history-${b.id}`}><div className="flex items-center justify-between gap-2"><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}{b.deliveredAt ? ` - سُلّمت ${fmtDT(b.deliveredAt)}` : ""}</p></div><StatusPill s={b.deliveredAt ? "completed" : b.status} /></div><BookingActions b={b} /></div>
+          <div key={b.id} className={`${cardCls} space-y-3`} data-testid={`card-history-${b.id}`}><div className="flex items-center justify-between gap-2"><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}{b.deliveredAt ? ` - سُلّمت ${fmtDT(b.deliveredAt)}` : ""}</p></div><StatusPill s={b.deliveredAt ? "completed" : b.status} /></div><DeliveryView b={b} /><BookingActions b={b} /></div>
         ))}</section>
       <PortalStatementSection />
       <section className="space-y-3"><h3 className="font-bold">سجل الاعتذارات</h3><CancellationHistory items={cancellations} /></section>
       </TabPanel>
       <TabPanel id="ph" k="profile" active={tab}>
+      <section className={`${cardCls} space-y-3`} data-testid="section-portal-contract">
+        <h3 className="font-bold">العقد والاعتمادات</h3>
+        <p className="text-sm">العقد الموقّع: {p.contractVersion ? `الإصدار ${p.contractVersion.toLocaleString("ar-SA")}${p.contractAcceptedAt ? ` - وافقت في ${fmtDT(p.contractAcceptedAt)}` : ""}` : "لا توجد موافقة مسجلة"}</p>
+        {approvals}
+        <p className="text-xs text-muted-foreground">الاعتمادات للعرض فقط ولا يمكن تعديلها من بوابتك؛ تواصل مع الإدارة عبر مركز الدعم لطلب تحديثها.</p>
+      </section>
+      {approvals}
       <ProfileEditor key={JSON.stringify([p.iban, p.bankName, p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />
       </TabPanel>
       <TabPanel id="ph" k="support" active={tab}>

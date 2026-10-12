@@ -1,12 +1,13 @@
 import {
   db, photographersTable, photographyBookingsTable, photographyReviewsTable,
-  photographyCancellationsTable, photographyAlertsTable, photographyDeliveriesTable,
+  photographyCancellationsTable, photographyAlertsTable, photographyDeliveriesTable, ownerNotificationsTable,
 } from "@workspace/db";
 import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { ownedPhotographyTarget, type PhotographyTarget } from "./photography-targets";
 import { allocatePhotography, lockPhotographyAllocation, recentCancellationCounts, type PhotographyTx } from "./photography-allocation";
 import { photographyPolicy, qualityEligible } from "./photography-allocation-policy";
+import { getPhotographyPolicy } from "./photography-policy-settings";
 import { publishPhotographyBooking } from "./photography-events";
 import { deliverPhotographyMessage } from "./photography-delivery";
 import { logger } from "./logger";
@@ -47,7 +48,7 @@ async function frozenTarget(booking: Booking, tx: PhotographyTx): Promise<Photog
   if (booking.targetCity && booking.targetRegion) return {
     id: booking.propertyId ?? booking.serviceSubmissionId!, kind: booking.propertyId ? "property" : "service",
     ownerId: booking.ownerId, nameAr: booking.propertyName, whatsappNumber: booking.ownerPhone,
-    location: booking.targetCity, region: booking.targetRegion, district: booking.targetDistrict,
+    location: booking.targetCity, region: booking.targetRegion, district: booking.targetDistrict, typeKey: booking.targetType,
   };
   // Legacy sessions have no historical geography snapshot; never invent coverage.
   return ownedPhotographyTarget([booking.ownerId], booking.propertyId
@@ -60,6 +61,7 @@ async function replaceAssignedPhotographer(tx: PhotographyTx, booking: Booking) 
     .from(photographyCancellationsTable).where(eq(photographyCancellationsTable.bookingId, booking.id));
   const target = await frozenTarget(booking, tx);
   const choice = target ? await allocatePhotography(tx, target, booking.startAt, {
+    packageId: booking.packageId,
     endAt: booking.endAt, replacement: true, excludedIds: [...declined.map(r => r.id), booking.photographerId],
   }) : null;
   if (!choice) {
@@ -112,9 +114,10 @@ export async function declinePhotography(bookingId: number, photographerId: numb
       inArray(photographyDeliveriesTable.status, ["pending", "failed", "unconfigured"]),
     ));
     const count = (await recentCancellationCounts(tx)).get(photographerId) ?? 0;
-    if (count >= photographyPolicy.cancellationThreshold) await alert(tx, {
+    const policy = await getPhotographyPolicy(tx);
+    if (count >= policy.cancellationThreshold) await alert(tx, {
       dedupeKey: `cancellations:${photographerId}`, kind: "cancellation_repeat", photographerId,
-      message: `سُجّل للمصور ${count} اعتذارات خلال آخر ٣٠ يوماً. خُفّضت أولوية التناوب مؤقتاً؛ راجع الالتزام وأسباب الاعتذار والتحويلات السابقة إن وجدت.`,
+      message: `سُجّل للمصور ${count} اعتذارات خلال آخر ${policy.cancellationWindowDays.toLocaleString("ar-SA")} يوماً. خُفّضت أولوية التناوب مؤقتاً؛ راجع الالتزام وأسباب الاعتذار والتحويلات السابقة إن وجدت.`,
     });
     return replaceAssignedPhotographer(tx, booking);
   });
@@ -140,15 +143,21 @@ export async function retryPhotographyAssignment(bookingId: number) {
   }
   return result;
 }
-export async function deliverPhotography(bookingId: number, photographerId: number) {
+export async function deliverPhotography(bookingId: number, photographerId: number, delivery: { deliveryUrl?: string; files?: Booking["deliveryFiles"]; prepareFiles?: () => Promise<Booking["deliveryFiles"]> } = {}) {
   const booking = await db.transaction(async tx => {
     await lockPhotographyAllocation(tx);
     const [row] = await tx.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, bookingId)).for("update");
     if (!row || row.photographerId !== photographerId || row.assignmentStatus !== "assigned"
       || !["confirmed", "completed"].includes(row.status) || +row.endAt > Date.now()) throw new Error("delivery_unavailable");
-    if (row.deliveredAt) return row;
-    const [updated] = await tx.update(photographyBookingsTable).set({ status: "completed", deliveredAt: new Date() })
+    if (row.deliveredAt && (row.deliveryUrl || row.deliveryFiles.length)) return row;
+    const files = delivery.prepareFiles ? await delivery.prepareFiles() : delivery.files ?? [];
+    if (!delivery.deliveryUrl && !files.length) throw new Error("delivery_contents");
+    const [updated] = await tx.update(photographyBookingsTable).set({ status: "completed", deliveredAt: row.deliveredAt ?? new Date(), deliveryUrl: delivery.deliveryUrl ?? null, deliveryFiles: files })
       .where(eq(photographyBookingsTable.id, bookingId)).returning();
+    await tx.insert(ownerNotificationsTable).values({
+      ownerId: row.ownerId, type: "photography_delivery",
+      message: `سلّم المصور ${row.photographerName} جلسة تصوير ${row.propertyName} (حجز ${row.id}). افتح حجوزات التصوير لمراجعة الملفات وتقييم الجلسة.`,
+    });
     return updated;
   });
   publishPhotographyBooking(photographerId, bookingId);
@@ -169,9 +178,10 @@ export async function ratePhotography(bookingId: number, ownerIds: string[], inp
     const [p] = await tx.update(photographersTable).set({
       ratingSum: sql`${photographersTable.ratingSum} + ${input.stars}`, ratingCount: sql`${photographersTable.ratingCount} + 1`,
     }).where(eq(photographersTable.id, booking.photographerId)).returning();
-    if (!qualityEligible({ ...p, status: "approved" })) await alert(tx, {
+    const policy = await getPhotographyPolicy(tx);
+    if (!qualityEligible({ ...p, status: "approved" }, policy)) await alert(tx, {
       dedupeKey: `quality:${p.id}`, kind: "quality", photographerId: p.id,
-      message: `متوسط تقييم المصور ${p.name} أقل من ٣٫٥ نجوم. استُبعد من التوزيع الآلي لحين تحسن التقييم؛ الجلسات المؤكدة السابقة لم تُلغَ.`,
+      message: `متوسط تقييم المصور ${p.name} أقل من ${policy.qualityThreshold} نجوم. استُبعد من التوزيع الآلي لحين تحسن التقييم؛ الجلسات المؤكدة السابقة لم تُلغَ.`,
     });
     else await tx.update(photographyAlertsTable).set({ resolvedAt: new Date() }).where(eq(photographyAlertsTable.dedupeKey, `quality:${p.id}`));
     return saved;

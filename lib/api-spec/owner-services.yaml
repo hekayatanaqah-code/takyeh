@@ -92,7 +92,7 @@ components:
   schemas:
     OwnerService:
       type: object
-      required: [id, key, title, description, icon, kind, state, actionUrl, sortOrder]
+      required: [id, key, title, description, icon, kind, state, actionUrl, sortOrder, coverageCityIds]
       properties:
         id: { type: integer }
         key: { type: string }
@@ -103,10 +103,12 @@ components:
         state: { type: string, enum: [available, coming_soon, hidden] }
         actionUrl: { type: [string, "null"] }
         sortOrder: { type: integer }
+        coverageCityIds: { type: array, items: { type: integer, minimum: 1 }, maxItems: 500 }
     OwnerServiceInput:
       type: object
       required: [title, kind, state]
       properties:
+        coverageCityIds: { type: array, items: { type: integer, minimum: 1 }, maxItems: 500 }
         title: { type: string, minLength: 2, maxLength: 120 }
         description: { type: string, maxLength: 2000 }
         icon: { type: string, enum: [camera, sparkles, wrench, shield, home, briefcase] }
@@ -116,6 +118,7 @@ components:
     OwnerServiceUpdate:
       type: object
       properties:
+        coverageCityIds: { type: array, items: { type: integer, minimum: 1 }, maxItems: 500 }
         title: { type: string, minLength: 2, maxLength: 120 }
         description: { type: string, maxLength: 2000 }
         icon: { type: string, enum: [camera, sparkles, wrench, shield, home, briefcase] }
@@ -158,6 +161,8 @@ components:
     AdminPhotographerProfileInput:
       type: object
       properties:
+        approvedPackageIds: { type: array, items: { type: integer, minimum: 1 }, maxItems: 200 }
+        approvedSpecialties: { type: array, items: { type: string, minLength: 1, maxLength: 120 }, maxItems: 100 }
         name: { type: string, minLength: 2, maxLength: 120 }
         bio: { type: string, maxLength: 2000 }
         sessionMinutes: { type: integer, minimum: 30, maximum: 240 }

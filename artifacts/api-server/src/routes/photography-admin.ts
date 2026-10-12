@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable, photographyAlertsTable, photographyReceiptsTable } from "@workspace/db";
+import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable, photographyAlertsTable, photographyReceiptsTable, chaletCategoriesTable, serviceCategoriesTable, chaletSubmissionsTable } from "@workspace/db";
 import { and, eq, inArray, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createHash, randomBytes } from "node:crypto";
@@ -10,17 +10,18 @@ import { cleanContractHtml, currentPhotographyContract, photographyBalances } fr
 import { inventoryOwnerNames } from "../lib/inventory-owner-names";
 import { recentCancellationCounts, lockPhotographyAllocation } from "../lib/photography-allocation";
 import { photographyFinancialAdmin } from "./photography-financial";
-import { photographyPolicy, qualityEligible } from "../lib/photography-allocation-policy";
+import { photographyPolicy, qualityEligible, type PhotographyPolicy } from "../lib/photography-allocation-policy";
+import { getPhotographyPolicy, photographyPolicySchema } from "../lib/photography-policy-settings";
 import { photographyCancellationHistory, retryPhotographyAssignment } from "../lib/photography-operations";
 
 export const photoHash = (value: string) => createHash("sha256").update(value).digest("hex");
-export function publicPhotographer(row: typeof photographersTable.$inferSelect, cancellationCount30 = 0) {
+export function publicPhotographer(row: typeof photographersTable.$inferSelect, cancellationCount30 = 0, policy: PhotographyPolicy = photographyPolicy) {
   const { passwordHash, inviteHash, inviteExpiresAt, rotationCredit, ratingSum, ...safe } = row;
   return {
     ...safe, averageRating: row.ratingCount ? ratingSum / row.ratingCount : null,
-    allocationEligible: qualityEligible(row), cancellationCount30,
-    priorityReduced: cancellationCount30 >= photographyPolicy.cancellationThreshold,
-    introBookingsRemaining: Math.max(0, photographyPolicy.introBookings - row.confirmedAssignments),
+    allocationEligible: qualityEligible(row, policy) && row.approvedPackageIds.length > 0, cancellationCount30,
+    priorityReduced: cancellationCount30 >= policy.cancellationThreshold,
+    introBookingsRemaining: Math.max(0, policy.introBookings - row.confirmedAssignments),
   };
 }
 export async function validPhotographyCoverage(data: { regionId: number; cityId: number; districtIds: number[]; allDistricts: boolean }) {
@@ -103,11 +104,14 @@ router.param("id", (_req, res, next, value) => {
   return next();
 });
 const packageSchema = z.object({
+  propertyTypes: z.array(z.string().trim().min(1).max(120)).max(200).optional(),
+  specialties: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
   name: z.string().trim().min(2).max(120),
   priceHalalas: z.number().int().min(100).max(10000000),
   platformPercent: z.number().min(0).max(100).multipleOf(0.01), active: z.boolean().default(true),
 });
 router.get("/", async (_req, res) => {
+  const policy = await getPhotographyPolicy();
   const [setting] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
   const [packages, photographers, bookings, deliveries, cities, ownerNames, alerts, cancellationHistory, cancellationCounts] = await Promise.all([
     db.select().from(photographyPackagesTable).orderBy(photographyPackagesTable.id),
@@ -120,7 +124,31 @@ router.get("/", async (_req, res) => {
     photographyCancellationHistory(), recentCancellationCounts(),
   ]);
   const cityNames = new Map(cities.map(city => [city.id, city.name]));
-  res.json({ refundActor: _req.adminStaff ? `staff:${_req.adminStaff.id}` : `user:${_req.user!.id}`, enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p, cancellationCounts.get(p.id) ?? 0), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings: bookings.map(booking => ({ ...booking, ownerName: ownerNames.get(booking.ownerId) ?? null })), deliveries, alerts, cancellationHistory, policy: photographyPolicy });
+  res.json({ refundActor: _req.adminStaff ? `staff:${_req.adminStaff.id}` : `user:${_req.user!.id}`, enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p, cancellationCounts.get(p.id) ?? 0, policy), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings: bookings.map(booking => ({ ...booking, ownerName: ownerNames.get(booking.ownerId) ?? null })), deliveries, alerts, cancellationHistory, policy });
+});
+router.patch("/policy", async (req, res) => {
+  const parsed = photographyPolicySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "راجع حدود التوزيع والتقييم" });
+  await db.transaction(async tx => {
+    await lockPhotographyAllocation(tx);
+    await tx.insert(siteSettingsTable).values({ key: "photography_policy", value: JSON.stringify(parsed.data) })
+      .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value: JSON.stringify(parsed.data), updatedAt: new Date() } });
+  });
+  return res.json({ policy: parsed.data });
+});
+router.get("/options", async (_req, res) => {
+  const [categories, serviceCategories, usedTypes, packages] = await Promise.all([
+    db.select().from(chaletCategoriesTable).where(eq(chaletCategoriesTable.isActive, true)),
+    db.select().from(serviceCategoriesTable).where(eq(serviceCategoriesTable.isActive, true)),
+    db.selectDistinct({ type: chaletSubmissionsTable.propertyType, category: chaletSubmissionsTable.category }).from(chaletSubmissionsTable),
+    db.select().from(photographyPackagesTable),
+  ]);
+  const propertyNames = [...new Set([...categories.map(c => c.nameAr), ...usedTypes.flatMap(c => [c.type, c.category]).filter((x): x is string => !!x)])];
+  return res.json({
+    propertyTypes: [...propertyNames.map(name => ({ value: `property:${name}`, label: name })),
+      ...serviceCategories.map(c => ({ value: `service:${c.key}`, label: `خدمة: ${c.labelAr}` }))],
+    packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })),
+  });
 });
 router.post("/alerts/:id/read", async (req, res) => {
   const id = Number(req.params.id);
@@ -211,8 +239,16 @@ router.patch("/photographers/:id/profile", async (req, res) => {
     bio: z.string().trim().max(2000).optional(),
     sessionMinutes: z.number().int().min(30).max(240).optional(),
     availability: availabilitySchema.optional(),
+    approvedPackageIds: z.array(z.number().int().positive()).max(200).optional(),
+    approvedSpecialties: z.array(z.string().trim().min(1).max(120)).max(100).optional(),
   }).strict().safeParse(req.body);
   if (!parsed.success || !Object.keys(parsed.data).length) return res.status(400).json({ error: "راجع بيانات المصور ومدد الجلسة وأوقات التفرغ دون تداخل" });
+  if (parsed.data.approvedPackageIds) {
+    const ids = [...new Set(parsed.data.approvedPackageIds)];
+    const existing = ids.length ? await db.select({ id: photographyPackagesTable.id }).from(photographyPackagesTable).where(inArray(photographyPackagesTable.id, ids)) : [];
+    if (existing.length !== ids.length) return res.status(400).json({ error: "إحدى الباقات المعتمدة غير موجودة" });
+    parsed.data.approvedPackageIds = ids;
+  }
   const [row] = await db.update(photographersTable).set(parsed.data).where(eq(photographersTable.id, Number(req.params.id))).returning();
   return row ? res.json(publicPhotographer(row)) : res.status(404).json({ error: "المصور غير موجود" });
 });

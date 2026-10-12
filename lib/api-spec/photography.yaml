@@ -26,8 +26,59 @@ token: &token
 status:
   get:
     operationId: getPhotographyStatus
-    summary: Feature state and provider readiness, disabled by default
     responses: *result
+policy:
+  patch:
+    operationId: updatePhotographyPolicy
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [introBookings, cancellationThreshold, cancellationWindowDays, qualityThreshold]
+            properties:
+              introBookings: { type: integer, minimum: 0, maximum: 100 }
+              cancellationThreshold: { type: integer, minimum: 1, maximum: 100 }
+              cancellationWindowDays: { type: integer, minimum: 1, maximum: 365 }
+              qualityThreshold: { type: number, minimum: 1, maximum: 5, multipleOf: 0.1 }
+    responses: *result
+options:
+  get:
+    operationId: getPhotographyApprovalOptions
+    responses: *result
+sessionUpload:
+  parameters: [*id]
+  post:
+    operationId: requestPhotographySessionUpload
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, size, contentType]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 255 }
+              size: { type: integer, minimum: 1, maximum: 104857600 }
+              contentType: { type: string, enum: [image/jpeg, image/png, image/webp, application/pdf, application/zip, video/mp4, video/quicktime] }
+    responses: *result
+sessionFile:
+  parameters:
+    - *id
+    - { name: index, in: path, required: true, schema: { type: integer, minimum: 0 } }
+    - { name: download, in: query, required: false, schema: { type: string, enum: ["1"] } }
+  get:
+    operationId: getPhotographySessionFile
+    responses:
+      "200":
+        description: Private delivery attachment, authorized owner or assigned photographer only
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      "403": { description: Unauthorized access }
+      "404": { description: File not found }
 catalog:
   get:
     operationId: getPhotographyCatalog
@@ -37,6 +88,7 @@ slots:
   get:
     operationId: getPhotographySlots
     parameters:
+      - { name: packageId, in: query, required: true, schema: { type: integer, minimum: 1 } }
       - { name: propertyId, in: query, required: false, schema: { type: integer, minimum: 1 }, description: Approved property submission ID; provide exactly one target }
       - { name: serviceSubmissionId, in: query, required: false, schema: { type: integer, minimum: 1 }, description: Approved service submission ID; provide exactly one target }
       - { name: photographerId, in: query, required: false, schema: { type: integer }, description: Legacy hint only; automatic allocation ignores caller-selected photographers }
@@ -140,6 +192,25 @@ deliver:
   parameters: [*id]
   post:
     operationId: deliverPhotographySession
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            description: At least one download link or uploaded file is required. First successful delivery is immutable.
+            properties:
+              deliveryUrl: { type: string, format: uri, maxLength: 2000 }
+              files:
+                type: array
+                maxItems: 20
+                items:
+                  type: object
+                  required: [objectPath, uploadProof]
+                  properties:
+                    objectPath: { type: string }
+                    uploadProof: { type: string }
     summary: Assigned photographer confirms delivery after the session ends
     responses: *result
 cancel:

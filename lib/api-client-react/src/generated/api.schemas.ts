@@ -718,6 +718,11 @@ export interface OwnerService {
   /** @nullable */
   actionUrl: string | null;
   sortOrder: number;
+  /**
+     * @maxItems 500
+     * @items.minimum 1
+     */
+  coverageCityIds: number[];
 }
 
 export type OwnerServiceInputIcon = typeof OwnerServiceInputIcon[keyof typeof OwnerServiceInputIcon];
@@ -750,6 +755,11 @@ export const OwnerServiceInputState = {
 } as const;
 
 export interface OwnerServiceInput {
+  /**
+     * @maxItems 500
+     * @items.minimum 1
+     */
+  coverageCityIds?: number[];
   /**
      * @minLength 2
      * @maxLength 120
@@ -789,6 +799,11 @@ export const OwnerServiceUpdateState = {
 } as const;
 
 export interface OwnerServiceUpdate {
+  /**
+     * @maxItems 500
+     * @items.minimum 1
+     */
+  coverageCityIds?: number[];
   /**
      * @minLength 2
      * @maxLength 120
@@ -842,6 +857,17 @@ export interface PhotographerAvailability134a8bd {
 
 export interface AdminPhotographerProfileInput {
   /**
+     * @maxItems 200
+     * @items.minimum 1
+     */
+  approvedPackageIds?: number[];
+  /**
+     * @maxItems 100
+     * @items.minLength 1
+     * @items.maxLength 120
+     */
+  approvedSpecialties?: string[];
+  /**
      * @minLength 2
      * @maxLength 120
      */
@@ -865,11 +891,82 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type UpdatePhotographyPolicyBody = {
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  introBookings: number;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  cancellationThreshold: number;
+  /**
+     * @minimum 1
+     * @maximum 365
+     */
+  cancellationWindowDays: number;
+  /**
+     * @minimum 1
+     * @maximum 5
+     */
+  qualityThreshold: number;
+};
+
+export type UpdatePhotographyPolicy200 = { [key: string]: unknown };
+
+export type GetPhotographyApprovalOptions200 = { [key: string]: unknown };
+
+export type RequestPhotographySessionUploadBodyContentType = typeof RequestPhotographySessionUploadBodyContentType[keyof typeof RequestPhotographySessionUploadBodyContentType];
+
+
+export const RequestPhotographySessionUploadBodyContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+  'application/pdf': 'application/pdf',
+  'application/zip': 'application/zip',
+  'video/mp4': 'video/mp4',
+  'video/quicktime': 'video/quicktime',
+} as const;
+
+export type RequestPhotographySessionUploadBody = {
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 104857600
+     */
+  size: number;
+  contentType: RequestPhotographySessionUploadBodyContentType;
+};
+
+export type RequestPhotographySessionUpload200 = { [key: string]: unknown };
+
+export type GetPhotographySessionFileParams = {
+download?: GetPhotographySessionFileDownload;
+};
+
+export type GetPhotographySessionFileDownload = typeof GetPhotographySessionFileDownload[keyof typeof GetPhotographySessionFileDownload];
+
+
+export const GetPhotographySessionFileDownload = {
+  NUMBER_1: '1',
+} as const;
+
 export type GetPhotographyStatus200 = { [key: string]: unknown };
 
 export type GetPhotographyCatalog200 = { [key: string]: unknown };
 
 export type GetPhotographySlotsParams = {
+/**
+ * @minimum 1
+ */
+packageId: number;
 /**
  * Approved property submission ID; provide exactly one target
  * @minimum 1
@@ -1001,6 +1098,21 @@ export type GetPhotographyInvite200 = {
   name: string;
   whatsapp: string;
   expiresAt: string;
+};
+
+export type DeliverPhotographySessionBodyFilesItem = {
+  objectPath: string;
+  uploadProof: string;
+};
+
+/**
+ * At least one download link or uploaded file is required. First successful delivery is immutable.
+ */
+export type DeliverPhotographySessionBody = {
+  /** @maxLength 2000 */
+  deliveryUrl?: string;
+  /** @maxItems 20 */
+  files?: DeliverPhotographySessionBodyFilesItem[];
 };
 
 export type DeliverPhotographySession200 = { [key: string]: unknown };

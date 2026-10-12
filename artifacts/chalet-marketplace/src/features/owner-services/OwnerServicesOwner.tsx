@@ -3,10 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, ExternalLink, Clock } from "lucide-react";
 import { call, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, type Booking } from "../photography/shared";
 import PhotographyOwner from "../photography/PhotographyOwner";
-import { OwnerWalletPanel } from "../photography/walletPanel";
-import { ICONS, isSafeUrl, resolveUrl, isExternal, type OwnerService } from "./types";
-
-const KEY = ["owner-services"];
+import { OwnerWalletPanel, useOwnerServices } from "../photography/walletPanel";
+import { ICONS, isSafeUrl, resolveUrl, isExternal } from "./types";
 
 function initialActive(): boolean {
   if (typeof window === "undefined") return false;
@@ -15,7 +13,7 @@ function initialActive(): boolean {
 }
 
 export default function OwnerServicesOwner() {
-  const q = useQuery({ queryKey: KEY, queryFn: () => call<{ services: OwnerService[] }>("/owner-services"), refetchInterval: 30000 });
+  const q = useOwnerServices();
   const history = useQuery({ queryKey: ["ph-owner-bookings"], queryFn: () => call<{ bookings: Booking[] }>("/photography/bookings"), refetchInterval: 30000 });
   const hasBookings = (history.data?.bookings.length ?? 0) > 0;
   // Payment-return mode keeps photography mounted regardless of card visibility.
@@ -56,9 +54,9 @@ export default function OwnerServicesOwner() {
         }} data-testid="button-photography-history">حجوزات التصوير والتقييم</button>}
         <p className="text-sm text-muted-foreground">خدمات إضافية لعقاراتك وخدماتك وأنشطتك، منفصلة عن التشغيل اليومي.</p>
       </header>
-      <OwnerWalletPanel compact />
+      {q.data ? <OwnerWalletPanel compact services={q.data.services} /> : q.isLoading || q.isPending ? <div className="h-24 animate-pulse rounded-2xl bg-muted" aria-busy="true" /> : null}
       {notice && <Notice tone="warn">{notice}</Notice>}
-      {q.isLoading ? <Skel /> : q.isError || !q.data ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> :
+      {q.isLoading || q.isPending ? <Skel /> : q.isError || !q.data ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> :
         q.data.services.length === 0 ? <Empty title="لا توجد خدمات حاليا" text="ستظهر هنا الخدمات الإضافية عند إتاحتها." /> : (
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {q.data.services.map((s) => {

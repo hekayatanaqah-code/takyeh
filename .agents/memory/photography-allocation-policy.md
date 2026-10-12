@@ -2,13 +2,13 @@
 name: Photography allocation and recovery policy
 description: Agreed introduction, cancellation, rating and paid-session replacement rules
 ---
-المصور الجديد له أولوية في أول ٣ حجوزات. تنخفض أولوية المصور بعد ٣ اعتذارات خلال آخر ٣٠ يوماً، دون استبعاده لمجرد الاعتذار.
+القيم الابتدائية هي أولوية أول ٣ حجوزات، وانخفاض الأولوية بعد ٣ اعتذارات خلال ٣٠ يوماً. هذه حدود تشغيلية قابلة لتعديل الإدارة وليست ثوابت تمنع تعديل السياسة.
 
-**Why:** The user selected these limits explicitly. Priority must improve opportunity for newcomers without starving established photographers.
+**Why:** The user selected the initial limits and subsequently requested administrative policy editing. Priority must improve opportunity for newcomers without starving established photographers.
 
 **How to apply:** Use weighted round-robin over currently eligible, geographically covered and available photographers, not owner-selected identities. The introduction allowance is consumed by confirmed paid assignments, including assignments later declined; it must not be replenished by cancelling. Introduction has twice normal weight and a repeated-decline penalty has half normal weight. Calculate the penalty from a rolling window, not lifetime totals.
 
-التقييم من نجمة إلى خمس نجوم مع تعليق اختياري بعد تأكيد اكتمال وتسليم الجلسة فقط. متوسط أقل من ٣٫٥ يستبعد المصور من الحجوزات الجديدة وينبّه الإدارة، دون إلغاء جلساته المؤكدة السابقة.
+التقييم من نجمة إلى خمس نجوم مع تعليق اختياري بعد تسليم مخرجات فعلية للجلسة. الحد الابتدائي ٣٫٥ قابل لتعديل الإدارة؛ المتوسط الأقل من الحد الحالي يستبعد المصور من الحجوزات الجديدة وينبّه الإدارة، دون إلغاء الجلسات السابقة.
 
 **Why:** The user requires automatic quality protection. Acknowledging an alert is an administrative review action, not permission to bypass the quality threshold.
 

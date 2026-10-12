@@ -10,6 +10,11 @@ import type { OwnerServiceUpdateState } from './ownerServiceUpdateState';
 
 export interface OwnerServiceUpdate {
   /**
+     * @maxItems 500
+     * @items.minimum 1
+     */
+  coverageCityIds?: number[];
+  /**
      * @minLength 2
      * @maxLength 120
      */

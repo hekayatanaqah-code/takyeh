@@ -20,7 +20,11 @@ import photographySupportRouter from "./photography-support";
 import { photographyFinancialPublic } from "./photography-financial";
 import photographyNotificationsRouter, { photographerNotifications } from "./photography-notifications";
 import { photographyUnionSlots, allocatePhotography, lockPhotographyAllocation, recentCancellationCounts } from "../lib/photography-allocation";
-import { photographyPolicy } from "../lib/photography-allocation-policy";
+import { getPhotographyPolicy } from "../lib/photography-policy-settings";
+import { qualityEligible } from "../lib/photography-allocation-policy";
+import { photographyCityCovered, supportsPackage } from "../lib/photography-qualifications";
+import { sessionDeliverySchema, verifySessionFiles } from "../lib/photography-session-files";
+import photographySessionFilesRouter from "./photography-session-files";
 import { photographyCancellationHistory, photographyDeclineSchema, photographyRatingSchema, declinePhotography, deliverPhotography, ratePhotography } from "../lib/photography-operations";
 
 const router = Router();
@@ -152,7 +156,9 @@ router.get("/portal", async (req, res) => {
   const notifications = await photographerNotifications(row.id);
   const cancellations = await photographyCancellationHistory(row.id);
   const counts = await recentCancellationCounts();
-  return res.json({ photographer: publicPhotographer(row, counts.get(row.id) ?? 0), bookings, notifications, cancellations, policy: photographyPolicy, earnings: { ...earnings, pendingHalalas: balances.pendingHalalas, availableHalalas: balances.availableHalalas, paidHalalas: balances.paidHalalas, recoverableHalalas: balances.recoverableHalalas, netDueHalalas: balances.netDueHalalas, transferredHalalas: balances.transferredHalalas } });
+  const policy = await getPhotographyPolicy();
+  const approvedPackages = row.approvedPackageIds.length ? await db.select().from(photographyPackagesTable).where(inArray(photographyPackagesTable.id, row.approvedPackageIds)) : [];
+  return res.json({ photographer: publicPhotographer(row, counts.get(row.id) ?? 0, policy), approvedPackages: approvedPackages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), bookings, notifications, cancellations, policy, earnings: { ...earnings, pendingHalalas: balances.pendingHalalas, availableHalalas: balances.availableHalalas, paidHalalas: balances.paidHalalas, recoverableHalalas: balances.recoverableHalalas, netDueHalalas: balances.netDueHalalas, transferredHalalas: balances.transferredHalalas } });
 });
 router.post("/portal/bookings/:id/cancel", sameOrigin, async (req, res) => {
   const row = await photographer(req);
@@ -168,9 +174,20 @@ router.post("/portal/bookings/:id/cancel", sameOrigin, async (req, res) => {
 router.post("/portal/bookings/:id/deliver", sameOrigin, async (req, res) => {
   const row = await photographer(req);
   if (!row) return res.status(401).json({ error: "سجل الدخول أولاً" });
-  try { return res.json(await deliverPhotography(Number(req.params.id), row.id)); }
+  const parsed = sessionDeliverySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "أرفق صوراً أو ملفات نهائية أو رابط تنزيل HTTPS صحيحاً" });
+  try {
+    const [existing] = await db.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, Number(req.params.id)));
+    if (!existing || existing.photographerId !== row.id || existing.assignmentStatus !== "assigned") throw new Error("delivery_unavailable");
+    if (existing.deliveredAt && (existing.deliveryUrl || existing.deliveryFiles.length)) return res.json({ booking: existing });
+    return res.json(await deliverPhotography(existing.id, row.id, {
+      deliveryUrl: parsed.data.deliveryUrl,
+      prepareFiles: () => verifySessionFiles(existing.id, row.id, parsed.data.files),
+    }));
+  }
   catch (error) {
-    if ((error as Error).message !== "delivery_unavailable") throw error;
+    if ((error as Error).message === "delivery_files") return res.status(400).json({ error: "ملف الرفع غير صحيح أو انتهت صلاحيته أو لا يخص الجلسة" });
+    if (!["delivery_unavailable", "delivery_contents"].includes((error as Error).message)) throw error;
     return res.status(409).json({ error: "تأكيد التسليم متاح للمصور المسند فقط بعد انتهاء وقت الجلسة" });
   }
 });
@@ -205,15 +222,32 @@ router.post("/payment-callback/:id", loginLimit, async (req, res) => {
   } catch { return res.status(503).json({ error: "Invoice verification temporarily unavailable" }); }
 });
 
+router.use((req, res, next) => req.method === "GET" ? next() : sameOrigin(req, res, next));
+router.use(photographySessionFilesRouter);
 router.use(requireAuth);
 router.use((req, res, next) => req.method === "GET" ? next() : sameOrigin(req, res, next));
 router.get("/catalog", async (req, res) => {
   if (!await enabled()) return res.json({ enabled: false, readiness: photographyReadiness(), properties: [], services: [], packages: [], photographers: [] });
   const ids = await getOwnerIds(req);
-  const { properties, services } = await photographyActivities(ids);
+  const activities = await photographyActivities(ids);
+  const covered = await Promise.all([...activities.properties, ...activities.services].map(async a => ({ a, covered: await photographyCityCovered(a) })));
+  const properties = covered.filter(x => x.covered && x.a.kind === "property").map(x => x.a);
+  const services = covered.filter(x => x.covered && x.a.kind === "service").map(x => x.a);
   const packages = await db.select().from(photographyPackagesTable).where(eq(photographyPackagesTable.active, true));
   const photographers = await db.select().from(photographersTable).where(eq(photographersTable.status, "approved"));
-  return res.json({ enabled: true, readiness: photographyReadiness(), properties, services, packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })),
+  const offered = [];
+  const policy = await getPhotographyPolicy();
+  for (const pkg of packages) {
+    let eligible = false;
+    for (const target of [...properties, ...services]) {
+      for (const p of photographers) {
+        if (qualityEligible(p, policy) && supportsPackage(p, pkg, target.typeKey) && await coveredPhotographyTarget(target, p)) { eligible = true; break; }
+      }
+      if (eligible) break;
+    }
+    if (eligible) offered.push(pkg);
+  }
+  return res.json({ enabled: true, readiness: photographyReadiness(), properties, services, packages: offered.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })),
     photographers: photographers.map(p => {
       const { whatsapp, adminNote, iban, bankName, contractVersion, contractAcceptedAt, ...safe } = publicPhotographer(p);
       return safe;
@@ -232,6 +266,7 @@ router.get("/slots", async (req, res) => {
     propertyId: z.coerce.number().int().positive().optional(),
     serviceSubmissionId: z.coerce.number().int().positive().optional(),
     photographerId: z.coerce.number().int().positive().optional(),
+    packageId: z.coerce.number().int().positive(),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   }).refine(exactlyOnePhotographyTarget).safeParse(req.query);
   if (!data.success) return res.status(400).json({ error: "بيانات الموعد غير صحيحة" });
@@ -239,7 +274,7 @@ router.get("/slots", async (req, res) => {
   if (!row) return res.json({ slots: [], timezone: "Asia/Riyadh" });
   const people = await db.select({ id: photographersTable.id }).from(photographersTable).where(eq(photographersTable.status, "approved"));
   for (const p of people) await reconcileExpiredPhotographyInvoices(p.id);
-  return res.json({ slots: await photographyUnionSlots(row, data.data.date), timezone: "Asia/Riyadh" });
+  return res.json({ slots: await photographyUnionSlots(row, data.data.date, data.data.packageId), timezone: "Asia/Riyadh" });
 });
 router.get("/bookings", async (req, res) => {
   const ids = await getOwnerIds(req);
@@ -282,7 +317,7 @@ router.post("/bookings", async (req, res) => {
       const [pack] = await tx.select().from(photographyPackagesTable).where(and(eq(photographyPackagesTable.id, parsed.data.packageId), eq(photographyPackagesTable.active, true))).for("share");
       if (!pack) throw new Error("coverage");
       const startAt = new Date(parsed.data.startAt);
-      const choice = await allocatePhotography(tx, target, startAt, { endAt: parsed.data.endAt ? new Date(parsed.data.endAt) : undefined });
+      const choice = await allocatePhotography(tx, target, startAt, { packageId: pack.id, endAt: parsed.data.endAt ? new Date(parsed.data.endAt) : undefined });
       if (!choice) throw new Error("slot");
       const p = choice.photographer;
       const [row] = await tx.insert(photographyBookingsTable).values({
@@ -290,7 +325,7 @@ router.post("/bookings", async (req, res) => {
         serviceSubmissionId: target.kind === "service" ? target.id : null, photographerId: p.id, packageId: pack.id,
         propertyName: target.nameAr, photographerName: p.name, packageName: pack.name,
         ownerPhone: phone, photographerPhone: p.whatsapp, startAt, endAt: choice.endAt,
-        targetCity: target.location, targetRegion: target.region, targetDistrict: target.district,
+        targetCity: target.location, targetRegion: target.region, targetDistrict: target.district, targetType: target.typeKey,
         expiresAt: new Date(Date.now() + 15 * 60000), ...photographyQuote(pack.priceHalalas, Number(pack.platformPercent)),
       }).returning();
       return row;

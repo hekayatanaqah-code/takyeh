@@ -2,7 +2,7 @@
 name: Photography staged launch
 description: User launch scope and payment-provider choice for property photography
 ---
-The user requested the full property photography and documentation service to be prepared but remain closed pending deliberate superadmin activation. While closed, property owners should see “قريباً”.
+The user requested the full property photography and documentation service to be prepared but remain closed pending deliberate superadmin activation. Within administratively covered owner cities, closed service cards show “قريباً”; owners outside coverage do not see the card.
 
 **Why:** This is a staged launch, not permission to open bookings as soon as the implementation exists.
 

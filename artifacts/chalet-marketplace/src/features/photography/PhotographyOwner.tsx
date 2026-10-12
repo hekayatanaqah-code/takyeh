@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { OwnerReview } from "./operations";
+import { DeliveryView } from "./delivery";
 import { OwnerWalletPanel, useOwnerWallet, useOwnerId, WALLET_KEY } from "./walletPanel";
 import { walletCall, photoWalletUrl, isUncertain, useBookingWalletMarker } from "./walletOps";
 
@@ -34,8 +35,8 @@ import { call, ORIGIN, sar, fmtDT, fmtT, Field, inputCls, btnCls, cardCls, Skel,
 
 interface Catalog {
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
-  properties: { id: number; nameAr: string; location?: string; district?: string; whatsappNumber?: string }[];
-  services: { id: number; nameAr: string; location?: string }[];
+  properties: { id: number; nameAr: string; typeKey?: string; location?: string; district?: string; whatsappNumber?: string }[];
+  services: { id: number; nameAr: string; typeKey?: string; location?: string }[];
   packages: Pkg[];
   photographers?: { id: number; name: string; bio?: string }[];
 }
@@ -78,10 +79,11 @@ function Booker({ cat, marker }: { cat: Catalog; marker: BookingMarker }) {
   const activity = activities.find(a => `${a.kind}:${a.id}` === activityKey);
   const target = activity ? activity.kind === "property" ? { propertyId: activity.id } : { serviceSubmissionId: activity.id } : null;
   const [packageId, setPk] = useState(""); const [date, setDate] = useState(""); const [slot, setSlot] = useState<Slot | null>(null);
-  const ready = !!target && !!date;
+  const eligible = activity ? cat.packages.filter((p) => !!activity.typeKey && (p.propertyTypes ?? []).includes(activity.typeKey)) : [];
+  const ready = !!target && !!date && !!packageId && eligible.some((p) => String(p.id) === packageId);
   const slots = useQuery({
-    queryKey: ["ph-slots", activityKey, date], enabled: !!ready,
-    queryFn: () => call<{ slots: Slot[]; timezone: string }>(`/photography/slots?${activity!.kind === "property" ? "propertyId" : "serviceSubmissionId"}=${activity!.id}&date=${date}`),
+    queryKey: ["ph-slots", activityKey, packageId, date], enabled: !!ready,
+    queryFn: () => call<{ slots: Slot[]; timezone: string }>(`/photography/slots?${activity!.kind === "property" ? "propertyId" : "serviceSubmissionId"}=${activity!.id}&packageId=${packageId}&date=${date}`),
   });
   const pay = useMutation({
     mutationFn: async () => {
@@ -122,7 +124,7 @@ function Booker({ cat, marker }: { cat: Catalog; marker: BookingMarker }) {
       qc.invalidateQueries({ queryKey: BK }); qc.invalidateQueries({ queryKey: WALLET_KEY }); qc.invalidateQueries({ queryKey: ["ph-slots"] });
     },
   });
-  const pkg = cat.packages.find((p) => String(p.id) === packageId);
+  const pkg = eligible.find((p) => String(p.id) === packageId);
   const pickable = cat.readiness.payment;
   const balance = wallet.data?.balanceHalalas ?? 0;
   const walletCovers = !!pkg && !!wallet.data && balance >= pkg.priceHalalas;
@@ -132,12 +134,14 @@ function Booker({ cat, marker }: { cat: Catalog; marker: BookingMarker }) {
       <h3 className="font-bold">طلب جلسة تصوير</h3>
       {!pickable && <Notice tone="warn">الدفع غير جاهز حاليا، لا يمكن إتمام الحجز.</Notice>}
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="العقار أو الخدمة"><select className={inputCls} value={activityKey} onChange={(e) => { setP(e.target.value); setSlot(null); }} data-testid="select-property">
+        <Field label="العقار أو الخدمة"><select className={inputCls} value={activityKey} onChange={(e) => { setP(e.target.value); setPk(""); setSlot(null); }} data-testid="select-property">
           <option value="">اختر العقار أو الخدمة</option>{activities.map(a => <option key={`${a.kind}:${a.id}`} value={`${a.kind}:${a.id}`}>{a.kind === "property" ? "عقار" : "خدمة"} — {a.nameAr}</option>)}</select></Field>
-        <Field label="الباقة"><select className={inputCls} value={packageId} onChange={(e) => setPk(e.target.value)} data-testid="select-package">
-          <option value="">اختر الباقة</option>{cat.packages.map((p) => <option key={p.id} value={p.id}>{p.name} - {sar(p.priceHalalas)}</option>)}</select></Field>
+        <Field label="الباقة"><select className={inputCls} value={packageId} disabled={!activity || eligible.length === 0} onChange={(e) => { setPk(e.target.value); setSlot(null); }} data-testid="select-package">
+          <option value="">{!activity ? "اختر النشاط أولا" : eligible.length === 0 ? "لا توجد باقات لهذا النشاط" : "اختر الباقة"}</option>{eligible.map((p) => <option key={p.id} value={p.id}>{p.name} - {sar(p.priceHalalas)}</option>)}</select>
+          {pkg && (pkg.specialties ?? []).length > 0 && <span className="mt-1 flex flex-wrap gap-1">{pkg.specialties!.map((t) => <span key={t} className="rounded-full bg-[#8C6246]/10 px-2 py-0.5 text-[11px] font-semibold">{t}</span>)}</span>}</Field>
         <Field label="التاريخ (توقيت السعودية)"><input type="date" className={inputCls} value={date} onChange={(e) => { setDate(e.target.value); setSlot(null); }} data-testid="input-date" /></Field>
       </div>
+      {activity && eligible.length === 0 && <Notice tone="warn">لا يتوفر حاليا مصور معتمد لباقة تناسب نوع هذا النشاط في موقعه.</Notice>}
       {ready && (slots.isLoading ? <Skel n={1} /> : slots.isError ? <ErrorBox error={slots.error} onRetry={() => slots.refetch()} /> :
         (slots.data?.slots ?? []).length === 0 ? <Empty title="لا توجد مواعيد متاحة في هذا اليوم" text="جرب تاريخا آخر." /> : (
           <div className="flex flex-wrap gap-2">
@@ -216,6 +220,7 @@ export default function PhotographyOwner() {
                     </div>
                   )}
                   {b.assignmentStatus === "needs_review" && <Notice tone="warn"><span data-testid={`notice-needs-review-${b.id}`}>حجزك مدفوع ومؤكد، ونعمل بشكل عاجل على تعيين مصور بديل لنفس الموعد. لا يلزمك أي إجراء أو دفع إضافي، وسيظهر اسم المصور هنا فور التعيين.</span></Notice>}
+                  <DeliveryView b={b} />
                   {b.deliveredAt && b.status === "completed" && b.assignmentStatus !== "needs_review" && <OwnerReview b={b} invalidateKey={BK} />}
                 </div>
               ))}

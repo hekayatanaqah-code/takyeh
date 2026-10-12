@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Wallet } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
+import type { OwnerService } from "../owner-services/types";
 import { call, sar, fmtDT, cardCls, ErrorBox } from "./shared";
 
 export interface WalletEntry { id: number; kind: string; amountHalalas: number; description: string; createdAt: string }
@@ -21,11 +22,28 @@ export function useOwnerWallet(enabled = true) {
   return useQuery({ queryKey: walletKey(ownerId), queryFn: () => call<OwnerWallet>("/owner/wallet"), refetchInterval: 30000, enabled: enabled && !!ownerId });
 }
 
-export function OwnerWalletPanel({ compact = false }: { compact?: boolean }) {
+/** Owner services, scoped per authenticated owner (prefix ["owner-services"] still invalidates). */
+export const ownerServicesKey = (ownerId: string | null | undefined) => ["owner-services", ownerId ?? "anon"] as const;
+export function useOwnerServices(enabled = true) {
+  const ownerId = useOwnerId();
+  return useQuery({ queryKey: ownerServicesKey(ownerId), queryFn: () => call<{ services: OwnerService[] }>("/owner-services"), refetchInterval: 30000, enabled: enabled && !!ownerId });
+}
+
+/**
+ * Hidden entirely when balance is zero AND no available covered service exists.
+ * Pass `services` to reuse the parent's list; otherwise it queries the owner-scoped list.
+ * Shows a skeleton (never a zero flash) until both wallet and services are known.
+ */
+export function OwnerWalletPanel({ compact = false, services }: { compact?: boolean; services?: OwnerService[] }) {
   const q = useOwnerWallet();
-  if (q.isLoading || q.isPending) return <div className="h-24 animate-pulse rounded-2xl bg-muted" aria-busy="true" />;
+  const sq = useOwnerServices(services === undefined);
+  const list0 = services ?? sq.data?.services;
+  if (q.isLoading || q.isPending || (services === undefined && (sq.isLoading || sq.isPending))) return <div className="h-24 animate-pulse rounded-2xl bg-muted" aria-busy="true" />;
   if (q.isError || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
+  if (services === undefined && sq.isError) return <ErrorBox error={sq.error} onRetry={() => sq.refetch()} />;
   const { balanceHalalas, entries } = q.data;
+  const hasService = (list0 ?? []).some((s) => s.state === "available");
+  if (balanceHalalas <= 0 && !hasService) return null;
   const list = [...entries].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return (
     <section className={`${cardCls} space-y-3 border-[#8C6246]/25 bg-gradient-to-l from-[#8C6246]/[0.06] to-transparent`} data-testid="section-owner-wallet">

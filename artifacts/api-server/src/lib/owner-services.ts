@@ -1,9 +1,15 @@
-import { db, ownerServicesTable, siteSettingsTable } from "@workspace/db";
+import { db, ownerServicesTable, siteSettingsTable, citiesCatalogTable, regionsCatalogTable } from "@workspace/db";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { photographyReadiness } from "./photography-delivery";
 
 type Store = Pick<typeof db, "select" | "insert" | "update" | "execute">;
+export async function validServiceCities(ids: number[]) {
+  const cities = await db.select({ id: citiesCatalogTable.id }).from(citiesCatalogTable)
+    .innerJoin(regionsCatalogTable, eq(citiesCatalogTable.regionId, regionsCatalogTable.id))
+    .where(and(eq(citiesCatalogTable.isActive, true), eq(regionsCatalogTable.isActive, true)));
+  return new Set(ids).size === ids.length && ids.every(id => cities.some(c => c.id === id));
+}
 export const serviceStateSchema = z.enum(["available", "coming_soon", "hidden"]);
 export function safeServiceUrl(value: string) {
   if (/^\/(?!\/)/.test(value) && !/[\\\s\x00-\x1f]/.test(value)) return true;
@@ -13,6 +19,7 @@ export function safeServiceUrl(value: string) {
   } catch { return false; }
 }
 export const ownerServiceInputSchema = z.object({
+  coverageCityIds: z.array(z.number().int().positive()).max(500).optional(),
   title: z.string().trim().min(2).max(120),
   description: z.string().trim().max(2000).default(""),
   icon: z.enum(["camera", "sparkles", "wrench", "shield", "home", "briefcase"]).default("briefcase"),

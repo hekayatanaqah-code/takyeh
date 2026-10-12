@@ -20,6 +20,43 @@ function refreshServices(qc: ReturnType<typeof useQueryClient>) {
   }
 }
 
+interface Loc { id: number; name?: string; nameAr?: string; regionId?: number }
+const locName = (l: Loc) => l.nameAr ?? l.name ?? String(l.id);
+
+/** Region-qualified city multiselect, sourced from the existing property geography catalog. */
+function CityCoverage({ value, onChange }: { value: number[]; onChange: (v: number[]) => void }) {
+  const regions = useQuery({ queryKey: ["ph-regions"], queryFn: () => call<Loc[]>("/regions"), staleTime: 600000 });
+  const cities = useQuery({ queryKey: ["ph-cities-all"], queryFn: () => call<Loc[]>("/cities"), staleTime: 600000 });
+  const [filter, setFilter] = useState("");
+  if (regions.isLoading || cities.isLoading) return <Skel n={1} />;
+  if (regions.isError || cities.isError) return <ErrorBox error={regions.error ?? cities.error} onRetry={() => { regions.refetch(); cities.refetch(); }} />;
+  const rName = new Map((regions.data ?? []).map((r) => [r.id, locName(r)]));
+  const label = (c: Loc) => `${locName(c)} - ${c.regionId != null ? rName.get(c.regionId) ?? "منطقة غير معروفة" : "بدون منطقة"}`;
+  const all = (cities.data ?? []).filter((c) => c.regionId == null || rName.has(c.regionId));
+  const shown = all.filter((c) => !filter.trim() || label(c).includes(filter.trim()));
+  const unknown = value.filter((id) => !all.some((c) => c.id === id));
+  const toggle = (id: number) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+  return (
+    <fieldset className="space-y-2" data-testid="field-coverage-cities">
+      <legend className="text-sm font-semibold">مدن التغطية ({value.length.toLocaleString("ar-SA")})</legend>
+      {value.length === 0 && <p className="text-xs font-semibold text-amber-300" role="status">بدون مدن = لا تغطية؛ لن تظهر الخدمة لأي مالك.</p>}
+      <input className={serviceInputCls} placeholder="ابحث باسم المدينة أو المنطقة" value={filter} onChange={(e) => setFilter(e.target.value)} data-testid="input-coverage-filter" />
+      <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto">
+        {shown.map((c) => (
+          <button key={c.id} type="button" aria-pressed={value.includes(c.id)} onClick={() => toggle(c.id)} data-testid={`toggle-coverage-city-${c.id}`}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold ${value.includes(c.id) ? "border-amber-400 bg-amber-500/20 text-amber-100" : "border-slate-600 bg-slate-900 text-slate-300"}`}>{label(c)}</button>
+        ))}
+        {shown.length === 0 && <span className="text-xs text-muted-foreground">لا توجد مدن مطابقة</span>}
+      </div>
+      {unknown.length > 0 && <p className="text-xs text-red-400">مدن غير نشطة محفوظة: {unknown.map((x) => `#${x}`).join("، ")} <button type="button" className="underline" onClick={() => onChange(value.filter((x) => !unknown.includes(x)))}>إزالتها</button></p>}
+      <div className="flex gap-2">
+        <button type="button" className={ghostCls} onClick={() => onChange([...new Set([...value, ...shown.map((c) => c.id)])])} data-testid="button-coverage-select-shown">تحديد المعروض</button>
+        <button type="button" className={ghostCls} onClick={() => onChange([])} data-testid="button-coverage-clear">مسح الكل</button>
+      </div>
+    </fieldset>
+  );
+}
+
 function ServiceForm({ svc, onDone }: { svc?: OwnerService; onDone: () => void }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState(svc?.title ?? "");
@@ -27,11 +64,12 @@ function ServiceForm({ svc, onDone }: { svc?: OwnerService; onDone: () => void }
   const [icon, setIcon] = useState<ServiceIcon>(svc?.icon ?? "briefcase");
   const [state, setState] = useState<ServiceState>(svc?.state ?? "coming_soon");
   const [url, setUrl] = useState(svc?.actionUrl ?? "");
+  const [cityIds, setCityIds] = useState<number[]>(svc?.coverageCityIds ?? []);
   const isLink = (svc?.kind ?? "link") === "link";
   const m = useMutation({
     mutationFn: () => {
       const actionUrl = isLink && url.trim() ? url.trim() : null;
-      const body = { title: title.trim(), description: description.trim(), icon, state, actionUrl };
+      const body = { title: title.trim(), description: description.trim(), icon, state, actionUrl, coverageCityIds: cityIds };
       return svc ? call<OwnerService>(`/admin/owner-services/${svc.id}`, "PATCH", body)
         : call<OwnerService>("/admin/owner-services", "POST", { ...body, kind: "link" });
     },
@@ -60,6 +98,7 @@ function ServiceForm({ svc, onDone }: { svc?: OwnerService; onDone: () => void }
         </Field>
         {isLink && <Field label="رابط الطلب" hint="https://... أو /مسار داخل المنصة"><input dir="ltr" className={serviceInputCls} value={url} onChange={(e) => setUrl(e.target.value)} data-testid="input-service-url" /></Field>}
       </div>
+      <CityCoverage value={cityIds} onChange={setCityIds} />
       {urlErr && <p className="text-sm font-semibold text-destructive" role="alert">{urlErr}</p>}
       {m.isError && <ErrorBox error={m.error} />}
       <div className="flex gap-2">
@@ -93,6 +132,7 @@ function Row({ s, i, n, onMove, moving, onEdit }: { s: OwnerService; i: number; 
         <div className="min-w-0 flex-1">
           <p className="font-bold">{s.title} <span className="text-xs font-normal text-muted-foreground">({s.kind === "photography" ? "التصوير" : "رابط"})</span></p>
           {s.description && <p className="truncate text-sm text-muted-foreground">{s.description}</p>}
+          <p className="text-xs text-muted-foreground" data-testid={`text-coverage-${s.id}`}>{(s.coverageCityIds?.length ?? 0) === 0 ? "بلا تغطية - لا تظهر لأي مالك" : `تغطي ${(s.coverageCityIds ?? []).length.toLocaleString("ar-SA")} مدينة`}</p>
         </div>
         <div role="radiogroup" aria-label={`حالة ${s.title}`} className="inline-flex max-w-full flex-wrap gap-1 rounded-xl border border-border bg-background p-1">
           {STATES.map((x) => {

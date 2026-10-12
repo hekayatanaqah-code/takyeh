@@ -4,9 +4,9 @@ import { test, before, beforeEach, after } from "node:test";
 import {
   db, pool, photographersTable, photographyPackagesTable, photographyBookingsTable,
   photographyReviewsTable, photographyCancellationsTable, photographyAlertsTable,
-  photographyDeliveriesTable, regionsCatalogTable, citiesCatalogTable,
+  photographyDeliveriesTable, regionsCatalogTable, citiesCatalogTable, ownerServicesTable, ownerNotificationsTable,
 } from "@workspace/db";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { photographyPolicy, qualityEligible, rotationWeight, roundRobinTurn } from "./photography-allocation-policy";
 import { allocatePhotography, lockPhotographyAllocation, recentCancellationCounts, photographyUnionSlots, canCoverExactInterval } from "./photography-allocation";
 import { declinePhotography, retryPhotographyAssignment, deliverPhotography, ratePhotography, photographyDeclineSchema, photographyRatingSchema } from "./photography-operations";
@@ -17,6 +17,8 @@ import type { PhotographyTarget } from "./photography-targets";
 const suffix = randomUUID().slice(0, 8);
 const ids: number[] = [], bookingIds: number[] = [];
 let regionId: number, cityId: number, packageId: number, target: PhotographyTarget;
+let temporaryCardId: number | undefined;
+let coverageCardId: number | undefined;
 const availability = Array.from({ length: 7 }, (_, weekday) => ({ weekday, start: "00:00", end: "23:59" }));
 const date = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
 const start = new Date(`${date}T10:00:00+03:00`);
@@ -26,16 +28,25 @@ before(async () => {
   regionId = region.id;
   const [city] = await db.insert(citiesCatalogTable).values({ name: `PhotoOpsCity-${suffix}`, regionId, isActive: true }).returning();
   cityId = city.id;
-  const [pack] = await db.insert(photographyPackagesTable).values({ name: `PhotoOps-${suffix}`, priceHalalas: 10000, platformPercent: "20", active: false }).returning();
+  const [card] = await db.select().from(ownerServicesTable).where(and(eq(ownerServicesTable.kind, "photography"), isNull(ownerServicesTable.deletedAt)));
+  if (card) {
+    coverageCardId = card.id;
+    await db.update(ownerServicesTable).set({ coverageCityIds: sql`${ownerServicesTable.coverageCityIds} || ${JSON.stringify([cityId])}::jsonb` }).where(eq(ownerServicesTable.id, card.id));
+  }
+  else {
+    const [created] = await db.insert(ownerServicesTable).values({ key: `test-photo-${suffix}`, title: `PhotoOps-${suffix}`, kind: "photography", state: "coming_soon", coverageCityIds: [cityId] }).returning();
+    temporaryCardId = created.id;
+  }
+  const [pack] = await db.insert(photographyPackagesTable).values({ name: `PhotoOps-${suffix}`, priceHalalas: 10000, platformPercent: "20", active: true, propertyTypes: ["property:chalet"] }).returning();
   packageId = pack.id;
   for (let i = 0; i < 4; i++) {
     const [p] = await db.insert(photographersTable).values({
       name: `PhotoOps-${suffix}-${i}`, whatsapp: `9665${String(Number.parseInt(suffix, 16) % 10000000).padStart(7, "0")}${i}`,
-      status: "approved", regionId, cityId, allDistricts: true, sessionMinutes: 60, availability,
+      status: "approved", regionId, cityId, allDistricts: true, sessionMinutes: 60, availability, approvedPackageIds: [packageId],
     }).returning();
     ids.push(p.id);
   }
-  target = { id: 700001, kind: "property", ownerId, nameAr: `PhotoOps-${suffix}`, location: city.name, region: region.name, district: null, whatsappNumber: "966500000000" };
+  target = { id: 700001, kind: "property", ownerId, nameAr: `PhotoOps-${suffix}`, location: city.name, region: region.name, district: null, whatsappNumber: "966500000000", typeKey: "property:chalet" };
 });
 beforeEach(async () => {
   if (bookingIds.length) await db.delete(photographyBookingsTable).where(inArray(photographyBookingsTable.id, bookingIds.splice(0)));
@@ -46,12 +57,17 @@ beforeEach(async () => {
   }).where(inArray(photographersTable.id, ids));
 });
 after(async () => {
+  await db.delete(ownerNotificationsTable).where(eq(ownerNotificationsTable.ownerId, ownerId));
   if (bookingIds.length) await db.delete(photographyBookingsTable).where(inArray(photographyBookingsTable.id, bookingIds));
   if (ids.length) {
     await db.delete(photographyAlertsTable).where(inArray(photographyAlertsTable.photographerId, ids));
     await db.delete(photographersTable).where(inArray(photographersTable.id, ids));
   }
   if (packageId) await db.delete(photographyPackagesTable).where(eq(photographyPackagesTable.id, packageId));
+  if (temporaryCardId) await db.delete(ownerServicesTable).where(eq(ownerServicesTable.id, temporaryCardId));
+  else if (cityId && coverageCardId) await db.update(ownerServicesTable).set({
+    coverageCityIds: sql`coalesce((SELECT jsonb_agg(v) FROM jsonb_array_elements(${ownerServicesTable.coverageCityIds}) AS entries(v) WHERE v <> to_jsonb(${cityId}::integer)), '[]'::jsonb)`,
+  }).where(eq(ownerServicesTable.id, coverageCardId));
   if (cityId) await db.delete(citiesCatalogTable).where(eq(citiesCatalogTable.id, cityId));
   if (regionId) await db.delete(regionsCatalogTable).where(eq(regionsCatalogTable.id, regionId));
   await pool.end();
@@ -63,7 +79,7 @@ async function booking(p = ids[0], overrides: Partial<typeof photographyBookings
     photographerPhone: "966500000001", startAt: start, endAt: new Date(+start + 3600000),
     expiresAt: new Date(+start + 3600000), status: "confirmed", priceHalalas: 10000,
     commissionHalalas: 2000, photographerEarningsHalalas: 8000, invoiceId: randomUUID(), paymentId: randomUUID(),
-    targetCity: target.location, targetRegion: target.region, targetDistrict: target.district, ...overrides,
+    targetCity: target.location, targetRegion: target.region, targetDistrict: target.district, targetType: target.typeKey, ...overrides,
   }).returning();
   bookingIds.push(row.id);
   return row;
@@ -71,7 +87,7 @@ async function booking(p = ids[0], overrides: Partial<typeof photographyBookings
 async function allocateAndHold(at: Date) {
   return db.transaction(async tx => {
     await lockPhotographyAllocation(tx);
-    const choice = await allocatePhotography(tx, target, at, { endAt: new Date(+at + 3600000) });
+    const choice = await allocatePhotography(tx, target, at, { packageId, endAt: new Date(+at + 3600000) });
     if (!choice) return null;
     const p = choice.photographer;
     const [row] = await tx.insert(photographyBookingsTable).values({
@@ -130,7 +146,7 @@ test("union slots exclude closed dates, low quality, pending status and occupied
   await db.update(photographersTable).set({ status: "pending" }).where(eq(photographersTable.id, ids[1]));
   await db.update(photographersTable).set({ blockedDates: [date] }).where(eq(photographersTable.id, ids[2]));
   await booking(ids[3]);
-  const slots = await photographyUnionSlots(target, date);
+  const slots = await photographyUnionSlots(target, date, packageId);
   assert.equal(slots.some(s => s.startAt === start.toISOString()), false);
   assert.equal(slots.some(s => s.startAt === new Date(+start + 3600000).toISOString()), true);
 });
@@ -191,9 +207,13 @@ test("delivery and review require the assigned photographer, owner identity and 
   await assert.rejects(() => ratePhotography(future.id, [ownerId], { stars: 5 }), /rating_unavailable/);
   const past = await booking(ids[0], { startAt: new Date(Date.now() - 7200000), endAt: new Date(Date.now() - 3600000) });
   await assert.rejects(() => deliverPhotography(past.id, ids[1]), /delivery_unavailable/);
-  const delivered = await deliverPhotography(past.id, ids[0]);
+  await assert.rejects(() => deliverPhotography(past.id, ids[0]), /delivery_contents/);
+  const delivered = await deliverPhotography(past.id, ids[0], { deliveryUrl: "https://example.com/test-final-photos.zip" });
   assert.equal(delivered.booking.status, "completed");
   assert.ok(delivered.booking.deliveredAt);
+  const again = await deliverPhotography(past.id, ids[0], { deliveryUrl: "https://example.com/replay.zip" });
+  assert.equal(again.booking.deliveryUrl, delivered.booking.deliveryUrl);
+  assert.equal((await db.select().from(ownerNotificationsTable).where(and(eq(ownerNotificationsTable.ownerId, ownerId), eq(ownerNotificationsTable.type, "photography_delivery")))).length, 1);
   await assert.rejects(() => ratePhotography(past.id, ["wrong-owner"], { stars: 1 }), /rating_unavailable/);
   await ratePhotography(past.id, [ownerId], { stars: 1, comment: "PhotoOps quality test" });
   await assert.rejects(() => ratePhotography(past.id, [ownerId], { stars: 5 }), /already_rated/);

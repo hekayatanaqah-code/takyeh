@@ -21,6 +21,14 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /admin/photography/policy:
+    $ref: "./photography.yaml#/policy"
+  /admin/photography/options:
+    $ref: "./photography.yaml#/options"
+  /photography/portal/bookings/{id}/uploads/request:
+    $ref: "./photography.yaml#/sessionUpload"
+  /photography/bookings/{id}/files/{index}:
+    $ref: "./photography.yaml#/sessionFile"
   /photography/status:
     $ref: "./photography.yaml#/status"
   /photography/catalog:

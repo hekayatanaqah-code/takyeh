@@ -27,11 +27,13 @@ export interface Photographer {
   blockedDates?: string[];
   iban?: string | null; bankName?: string | null; contractVersion?: number | null; contractAcceptedAt?: string | null;
   cityName?: string | null;
+  approvedPackageIds?: number[]; approvedSpecialties?: string[];
   averageRating?: number | null; ratingCount?: number; cancellationCount30?: number; priorityReduced?: boolean; allocationEligible?: boolean; introBookingsRemaining?: number;
 }
 export type ExperienceYears = "under_1" | "1_3" | "3_5" | "over_5";
 export const EXPERIENCE_AR: Record<ExperienceYears, string> = { under_1: "أقل من سنة", "1_3": "١-٣ سنوات", "3_5": "٣-٥ سنوات", over_5: "أكثر من ٥ سنوات" };
-export interface Pkg { id: number; name: string; priceHalalas: number; platformPercent: number; active: boolean }
+export interface Pkg { id: number; name: string; priceHalalas: number; platformPercent: number; active: boolean; propertyTypes?: string[]; specialties?: string[] }
+export interface DeliveryFile { objectPath: string; name: string; contentType: string; size: number }
 export interface Booking {
   propertyId?: number | null; serviceSubmissionId?: number | null;
   id: number; status: string; packageName: string; propertyName: string; photographerName: string; ownerName?: string | null;
@@ -39,6 +41,7 @@ export interface Booking {
   photographerEarningsHalalas: number; expiresAt?: string | null;
   photographerId?: number | null;
   assignmentStatus?: "assigned" | "needs_review"; deliveredAt?: string | null;
+  deliveryUrl?: string | null; deliveryFiles?: DeliveryFile[];
   review?: { id: number; stars: number; comment: string | null; createdAt: string } | null;
   paymentMethod?: "card" | "wallet" | null; paymentId?: string | null; refundedHalalas?: number;
   financialStatus?: "paid" | "refund_pending" | "partially_refunded" | "refunded" | "refund_failed" | null;

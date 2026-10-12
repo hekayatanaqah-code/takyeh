@@ -9,6 +9,7 @@ import { RefundAction } from "./refunds";
 import { FIN_STATUS_AR, PAY_METHOD_AR } from "./money";
 import { PhotographersTable } from "./PhotographersTable";
 import { UpperTabs, TabPanel } from "./portalWidgets";
+import { ApprovalsEditor, TagInput, Chips, usePhOptions, OPTIONS_KEY } from "./approvals";
 import { AlertsList, CancellationHistory, PolicyCard, ReassignButton, type PhotoAlert, type PhotoCancellation, type PhotoPolicy } from "./operations";
 
 type ATab = "photographers" | "bookings" | "settings" | "finance";
@@ -29,14 +30,17 @@ function PackageForm({ pkg, onDone }: { pkg?: Pkg; onDone: () => void }) {
   const [price, setPrice] = useState(pkg ? String(pkg.priceHalalas / 100) : "");
   const [pct, setPct] = useState(pkg ? String(pkg.platformPercent) : "");
   const [active, setActive] = useState(pkg?.active ?? true);
+  const [types, setTypes] = useState<string[]>(pkg?.propertyTypes ?? []);
+  const [specs, setSpecs] = useState<string[]>(pkg?.specialties ?? []);
+  const opts = usePhOptions();
   const m = useMutation({
     mutationFn: () => {
-      const data = { name: name.trim(), priceHalalas: Math.round(Number(price) * 100), platformPercent: Number(pct), active };
+      const data = { name: name.trim(), priceHalalas: Math.round(Number(price) * 100), platformPercent: Number(pct), active, propertyTypes: types, specialties: specs };
       return pkg ? call(`/admin/photography/packages/${pkg.id}`, "PATCH", data) : call("/admin/photography/packages", "POST", data);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: KEY }); onDone(); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: KEY }); qc.invalidateQueries({ queryKey: OPTIONS_KEY }); qc.invalidateQueries({ queryKey: ["ph-owner-catalog"] }); onDone(); },
   });
-  const bad = !name.trim() || !(Number(price) > 0) || pct === "" || Number(pct) < 0 || Number(pct) > 100;
+  const bad = types.length === 0 || !name.trim() || !(Number(price) > 0) || pct === "" || Number(pct) < 0 || Number(pct) > 100;
   return (
     <form className={`${cardCls} space-y-3`} onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -44,6 +48,16 @@ function PackageForm({ pkg, onDone }: { pkg?: Pkg; onDone: () => void }) {
         <Field label="السعر (ر.س)"><input type="number" min="0" step="0.01" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} data-testid="input-package-price" /></Field>
         <Field label="نسبة المنصة %"><input type="number" min="0" max="100" step="0.1" className={inputCls} value={pct} onChange={(e) => setPct(e.target.value)} data-testid="input-package-percent" /></Field>
       </div>
+      <fieldset className="space-y-1.5"><legend className="text-sm font-semibold">أنواع العقارات والخدمات المشمولة (مطلوب)</legend>
+        {opts.isLoading ? <Skel n={1} /> : opts.isError ? <ErrorBox error={opts.error} onRetry={() => opts.refetch()} /> : (
+          <div className="flex flex-wrap gap-1.5">{(opts.data?.propertyTypes ?? []).map((t) => (
+            <button key={t.value} type="button" aria-pressed={types.includes(t.value)} onClick={() => setTypes(types.includes(t.value) ? types.filter((x) => x !== t.value) : [...types, t.value])}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${types.includes(t.value) ? "border-[#8C6246] bg-[#8C6246] text-white" : "border-border bg-background"}`} data-testid={`toggle-package-type-${t.value}`}>{t.label}</button>
+          ))}</div>
+        )}
+        {types.filter((t) => opts.data && !opts.data.propertyTypes.some((o) => o.value === t)).map((t) => <p key={t} className="text-xs text-destructive">نوع غير متاح حاليا: <span dir="ltr">{t}</span> <button type="button" className="underline" onClick={() => setTypes(types.filter((x) => x !== t))}>إزالة</button></p>)}
+      </fieldset>
+      <div className="space-y-1.5"><p className="text-sm font-semibold">التخصصات المطلوبة للباقة</p><TagInput value={specs} onChange={setSpecs} testId="package-specialty" /></div>
       <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> الباقة مفعلة</label>
       {m.isError && <ErrorBox error={m.error} />}
       <div className="flex gap-2">
@@ -167,8 +181,9 @@ function ReviewPanel({ p, onClose }: { p: Photographer; onClose: () => void }) {
       <div className="grid gap-2 rounded-xl border border-border p-3 text-sm sm:grid-cols-2" data-testid={`info-bank-${p.id}`}>
         <p>البنك: <span className="font-semibold">{p.bankName || "غير مسجل"}</span></p>
         <p>الآيبان: <span dir="ltr" className="font-mono">{p.iban ? formatIban(p.iban) : "غير مسجل"}</span></p>
-        <p className="sm:col-span-2">العقد: {p.contractVersion ? `وافق على الإصدار ${p.contractVersion.toLocaleString("ar-SA")}${p.contractAcceptedAt ? ` في ${fmtDT(p.contractAcceptedAt)}` : ""}` : "لا توجد موافقة مسجلة"}</p>
+        <p className="sm:col-span-2">العقد الموقّع: {p.contractVersion ? `وافق على الإصدار ${p.contractVersion.toLocaleString("ar-SA")}${p.contractAcceptedAt ? ` في ${fmtDT(p.contractAcceptedAt)}` : ""}` : "لا توجد موافقة مسجلة"}</p>
       </div>
+      <ApprovalsEditor key={JSON.stringify([p.approvedPackageIds, p.approvedSpecialties])} p={p} />
       <TransfersPanel id={p.id} />
       <ProfileEditor p={p} />
       <GeoPicker value={geo} onChange={setGeo} />
@@ -200,6 +215,8 @@ export default function PhotographyAdmin() {
   const [tab, setTab] = useState<ATab>("photographers");
   const [contractOpen, setContractOpen] = useState(false);
   const actor = q.data?.refundActor ?? null;
+  const opts = usePhOptions();
+  const typeLabel = new Map((opts.data?.propertyTypes ?? []).map((t) => [t.value, t.label]));
   if (q.isLoading) return <Skel />;
   if (q.isError || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
@@ -249,7 +266,7 @@ export default function PhotographyAdmin() {
         {toggle.isError && <div className="w-full"><ErrorBox error={toggle.error} /></div>}
       </section>
 
-      <PolicyCard policy={d.policy} />
+      <PolicyCard policy={d.policy} editable />
       <section className={`${cardCls} space-y-3`} data-testid="section-contract-admin">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div><h3 className="font-bold">عقد المصورين</h3><p className="text-xs text-muted-foreground">النسخة التي يوافق عليها المصور عند الانضمام.</p></div>
@@ -265,7 +282,8 @@ export default function PhotographyAdmin() {
           <div className="grid gap-3 sm:grid-cols-2">
             {d.packages.map((p) => (
               <div key={p.id} className={`${cardCls} flex items-center justify-between gap-3`} data-testid={`card-package-${p.id}`}>
-                <div><p className="font-bold">{p.name}</p><p className="text-sm text-muted-foreground">{sar(p.priceHalalas)} - عمولة المنصة {p.platformPercent.toLocaleString("ar-SA")}٪</p></div>
+                <div><p className="font-bold">{p.name}</p><p className="text-sm text-muted-foreground">{sar(p.priceHalalas)} - عمولة المنصة {p.platformPercent.toLocaleString("ar-SA")}٪</p>
+                  <div className="mt-2 space-y-1"><Chips items={(p.propertyTypes ?? []).map((t) => typeLabel.get(t) ?? t)} empty="لم تحدد الأنواع" testId={`text-package-types-${p.id}`} /><Chips items={p.specialties ?? []} empty="بلا تخصصات" testId={`text-package-specialties-${p.id}`} /></div></div>
                 <div className="flex items-center gap-2"><StatusPill s={p.active ? "approved" : "suspended"} />
                   <button className={ghostCls} onClick={() => setEditing(p)}>تعديل</button></div>
               </div>

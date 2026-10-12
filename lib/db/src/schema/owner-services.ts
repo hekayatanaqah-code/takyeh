@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
 export const ownerServicesTable = pgTable("owner_services", {
@@ -9,6 +9,7 @@ export const ownerServicesTable = pgTable("owner_services", {
   icon: text("icon").notNull().default("briefcase"),
   kind: text("kind").notNull().default("link"),
   state: text("state").notNull().default("coming_soon"),
+  coverageCityIds: jsonb("coverage_city_ids").$type<number[]>().notNull().default([]),
   actionUrl: text("action_url"),
   sortOrder: integer("sort_order").notNull().default(0),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

@@ -3,6 +3,8 @@ import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { coveredPhotographyTarget, type PhotographyTarget } from "./photography-targets";
 import { photographySlots } from "./photography-rules";
 import { photographyPolicy, qualityEligible, rotationWeight, roundRobinTurn } from "./photography-allocation-policy";
+import { getPhotographyPolicy } from "./photography-policy-settings";
+import { packageEligible, photographyCityCovered } from "./photography-qualifications";
 
 export type PhotographyTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Store = Pick<typeof db, "select">;
@@ -12,11 +14,12 @@ export async function lockPhotographyAllocation(tx: PhotographyTx) {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(731226, 1)`);
 }
 export async function recentCancellationCounts(store: Store = db) {
+  const policy = await getPhotographyPolicy(store);
   const rows = await store.select({
     id: photographyCancellationsTable.photographerId,
     count: sql<number>`count(*)::integer`,
   }).from(photographyCancellationsTable)
-    .where(gte(photographyCancellationsTable.createdAt, new Date(Date.now() - photographyPolicy.cancellationWindowDays * 86400000)))
+    .where(gte(photographyCancellationsTable.createdAt, new Date(Date.now() - policy.cancellationWindowDays * 86400000)))
     .groupBy(photographyCancellationsTable.photographerId);
   return new Map(rows.map(r => [r.id, r.count]));
 }
@@ -48,12 +51,14 @@ export function canCoverExactInterval(
     && !busy.some(b => +b.startAt < +end && +b.endAt > +start);
 }
 
-export async function photographyUnionSlots(target: PhotographyTarget, date: string) {
+export async function photographyUnionSlots(target: PhotographyTarget, date: string, packageId?: number) {
+  if (!packageId || !await photographyCityCovered(target)) return [];
+  const policy = await getPhotographyPolicy();
   const people = await db.select().from(photographersTable).where(eq(photographersTable.status, "approved"));
   const busy = await photographyBusyIntervals(people.map(p => p.id));
   const slots = new Map<string, { startAt: string; endAt: string }>();
   for (const p of people) {
-    if (!qualityEligible(p) || !await coveredPhotographyTarget(target, p)) continue;
+    if (!qualityEligible(p, policy) || !await packageEligible(p, packageId, target.typeKey) || !await coveredPhotographyTarget(target, p)) continue;
     for (const s of photographySlots(date, p.sessionMinutes, p.availability, busy.filter(b => b.photographerId === p.id), new Date(), p.blockedDates)) {
       slots.set(`${s.startAt}/${s.endAt}`, s);
     }
@@ -63,15 +68,17 @@ export async function photographyUnionSlots(target: PhotographyTarget, date: str
 
 /** Caller holds the allocation lock. Requested identities are never trusted. */
 export async function allocatePhotography(
-  tx: PhotographyTx, target: PhotographyTarget, start: Date, options: { endAt?: Date; replacement?: boolean; excludedIds?: number[] } = {},
+  tx: PhotographyTx, target: PhotographyTarget, start: Date, options: { endAt?: Date; replacement?: boolean; excludedIds?: number[]; packageId?: number } = {},
 ) {
+  if (!options.packageId || (!options.replacement && !await photographyCityCovered(target, tx))) return null;
+  const policy = await getPhotographyPolicy(tx);
   const people = await tx.select().from(photographersTable).where(eq(photographersTable.status, "approved")).orderBy(photographersTable.id).for("update");
   const busy = await photographyBusyIntervals(people.map(p => p.id), tx);
   const counts = await recentCancellationCounts(tx);
   const date = new Date(+start + 3 * 3600000).toISOString().slice(0, 10);
   const candidates: (Photographer & { weight: number; selectedEnd: Date })[] = [];
   for (const p of people) {
-    if (options.excludedIds?.includes(p.id) || !qualityEligible(p) || !await coveredPhotographyTarget(target, p, tx)) continue;
+    if (options.excludedIds?.includes(p.id) || !qualityEligible(p, policy) || !await packageEligible(p, options.packageId, target.typeKey, tx, options.replacement) || !await coveredPhotographyTarget(target, p, tx)) continue;
     const occupied = busy.filter(b => b.photographerId === p.id);
     let end: Date | undefined;
     if (options.replacement && options.endAt) {
@@ -81,7 +88,7 @@ export async function allocatePhotography(
         .find(s => s.startAt === start.toISOString() && (!options.endAt || s.endAt === options.endAt.toISOString()));
       if (slot) end = new Date(slot.endAt);
     }
-    if (end) candidates.push({ ...p, selectedEnd: end, weight: rotationWeight(p.confirmedAssignments, counts.get(p.id) ?? 0) });
+    if (end) candidates.push({ ...p, selectedEnd: end, weight: rotationWeight(p.confirmedAssignments, counts.get(p.id) ?? 0, policy) });
   }
   const turn = roundRobinTurn(candidates);
   if (!turn) return null;

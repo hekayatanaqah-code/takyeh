@@ -20,4 +20,9 @@ export interface OwnerService {
   /** @nullable */
   actionUrl: string | null;
   sortOrder: number;
+  /**
+     * @maxItems 500
+     * @items.minimum 1
+     */
+  coverageCityIds: number[];
 }
