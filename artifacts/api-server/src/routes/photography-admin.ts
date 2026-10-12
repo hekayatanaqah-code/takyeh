@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable, photographyAlertsTable } from "@workspace/db";
+import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable, photographyAlertsTable, photographyReceiptsTable } from "@workspace/db";
 import { and, eq, inArray, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { createHash, randomBytes } from "node:crypto";
@@ -8,7 +8,8 @@ import { setPhotographyServiceEnabled } from "../lib/owner-services";
 import { photographyReadiness, deliverPhotographyMessage } from "../lib/photography-delivery";
 import { cleanContractHtml, currentPhotographyContract, photographyBalances } from "../lib/photography-finance";
 import { inventoryOwnerNames } from "../lib/inventory-owner-names";
-import { recentCancellationCounts } from "../lib/photography-allocation";
+import { recentCancellationCounts, lockPhotographyAllocation } from "../lib/photography-allocation";
+import { photographyFinancialAdmin } from "./photography-financial";
 import { photographyPolicy, qualityEligible } from "../lib/photography-allocation-policy";
 import { photographyCancellationHistory, retryPhotographyAssignment } from "../lib/photography-operations";
 
@@ -42,6 +43,7 @@ export function photoOrigin(input: string, req: { get(name: string): string | un
 }
 const router = Router();
 router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+router.use(photographyFinancialAdmin);
 router.get("/contract", async (_req, res) => res.json(await currentPhotographyContract() ?? { id: null, html: "", createdAt: null }));
 router.post("/contract", async (req, res) => {
   const parsed = z.object({ html: z.string().min(1).max(100000) }).safeParse(req.body);
@@ -64,18 +66,26 @@ router.post("/photographers/:id/transfers", async (req, res) => {
   const parsed = z.object({
     amountHalalas: z.number().int().positive().max(2147483647),
     reference: z.string().trim().min(1).max(200),
+    receiptId: z.number().int().positive(),
     transferredAt: z.string().datetime().refine(value => +new Date(value) <= Date.now(), "لا يمكن تسجيل تحويل مستقبلي"),
   }).safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "راجع مبلغ التحويل ومرجعه وتاريخه (لا يقبل تاريخاً مستقبلياً)" });
+  if (!parsed.success) return res.status(400).json({ error: "أرفق إيصال التحويل وراجع المبلغ والمرجع والتاريخ (لا يقبل تاريخاً مستقبلياً)" });
   try {
     const result = await db.transaction(async tx => {
+      await lockPhotographyAllocation(tx);
       const [photographer] = await tx.select().from(photographersTable).where(eq(photographersTable.id, Number(req.params.id))).for("update");
       if (!photographer) return { error: "المصور غير موجود", status: 404 };
       if (!photographer.iban || !photographer.bankName) return { error: "أكمل بيانات حساب المصور البنكي أولاً", status: 400 };
+      const actor = req.adminStaff ? `admin-staff:${req.adminStaff.id}` : req.user!.id;
+      const [receipt] = await tx.select().from(photographyReceiptsTable).where(eq(photographyReceiptsTable.id, parsed.data.receiptId));
+      if (!receipt || receipt.uploadedBy !== actor) return { error: "ارفع إيصالاً خاصاً بهذا التحويل من حسابك", status: 400 };
+      const [duplicate] = await tx.select().from(photographyTransfersTable).where(sql`lower(${photographyTransfersTable.reference}) = lower(${parsed.data.reference})`);
+      if (duplicate) return { error: "مرجع التحويل مستخدم سابقاً", status: 409 };
       const balance = await photographyBalances(photographer.id, tx);
       if (parsed.data.amountHalalas > balance.netDueHalalas) return { error: "مبلغ التحويل يتجاوز صافي المستحقات", status: 400 };
       const [transfer] = await tx.insert(photographyTransfersTable).values({
-        photographerId: photographer.id, ...parsed.data, transferredAt: new Date(parsed.data.transferredAt),
+        photographerId: photographer.id, ...parsed.data, reference: parsed.data.reference.toUpperCase(),
+        recordedBy: actor, transferredAt: new Date(parsed.data.transferredAt),
       }).returning();
       return { transfer };
     });
@@ -110,7 +120,7 @@ router.get("/", async (_req, res) => {
     photographyCancellationHistory(), recentCancellationCounts(),
   ]);
   const cityNames = new Map(cities.map(city => [city.id, city.name]));
-  res.json({ enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p, cancellationCounts.get(p.id) ?? 0), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings: bookings.map(booking => ({ ...booking, ownerName: ownerNames.get(booking.ownerId) ?? null })), deliveries, alerts, cancellationHistory, policy: photographyPolicy });
+  res.json({ refundActor: _req.adminStaff ? `staff:${_req.adminStaff.id}` : `user:${_req.user!.id}`, enabled: setting?.value === "true", readiness: photographyReadiness(), packages: packages.map(p => ({ ...p, platformPercent: Number(p.platformPercent) })), photographers: photographers.map(p => ({ ...publicPhotographer(p, cancellationCounts.get(p.id) ?? 0), cityName: p.cityId ? cityNames.get(p.cityId) ?? null : null })), bookings: bookings.map(booking => ({ ...booking, ownerName: ownerNames.get(booking.ownerId) ?? null })), deliveries, alerts, cancellationHistory, policy: photographyPolicy });
 });
 router.post("/alerts/:id/read", async (req, res) => {
   const id = Number(req.params.id);

@@ -541,6 +541,7 @@ export const subscriptionCheckoutIntentsTable = pgTable("subscription_checkout_i
   ownerId: text("owner_id").notNull(),
   plan: text("plan").notNull(),
   amountHalala: integer("amount_halala").notNull(),
+  paymentMethod: text("payment_method").notNull().default("card"),
   listPriceHalala: integer("list_price_halala").notNull(),
   durationDays: integer("duration_days").notNull(),
   planLabel: text("plan_label").notNull(),

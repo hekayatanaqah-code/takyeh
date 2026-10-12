@@ -1,0 +1,112 @@
+result: &result
+  "200":
+    description: Financial result in integer Saudi halalas
+    content:
+      application/json:
+        schema: { type: object, additionalProperties: true }
+id: &id
+  name: id
+  in: path
+  required: true
+  schema: { type: integer, minimum: 1 }
+month: &month
+  name: month
+  in: query
+  required: false
+  schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+admin:
+  get:
+    operationId: getPhotographyFinance
+    parameters: [*month]
+    responses: *result
+upload:
+  post:
+    operationId: requestPhotographyReceipt
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ReceiptUploadInput' }
+    responses: *result
+complete:
+  post:
+    operationId: completePhotographyReceipt
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ReceiptCompleteInput' }
+    responses: *result
+refunds:
+  parameters: [*id]
+  post:
+    operationId: refundPhotographyBooking
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/PhotographyRefundInput' }
+    responses: *result
+reconcile:
+  parameters: [*id]
+  post:
+    operationId: reconcilePhotographyRefund
+    responses: *result
+statement:
+  get:
+    operationId: getPhotographerStatement
+    parameters: [*month]
+    responses: *result
+receipt:
+  parameters: [*id]
+  get:
+    operationId: downloadPhotographyReceipt
+    responses:
+      "200": { description: "Private receipt binary, available only to superadmin and the paid photographer" }
+pay:
+  parameters: [*id]
+  post:
+    operationId: payPhotographyWithWallet
+    responses: *result
+wallet:
+  get:
+    operationId: getOwnerWallet
+    responses: *result
+subscription:
+  post:
+    operationId: paySubscriptionWithWallet
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/WalletSubscriptionInput' }
+    responses: *result
+components:
+  schemas:
+    ReceiptUploadInput:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, maxLength: 255 }
+        size: { type: integer, minimum: 1, maximum: 10485760 }
+        contentType: { type: string, enum: [application/pdf, image/jpeg, image/png, image/webp] }
+    ReceiptCompleteInput:
+      type: object
+      required: [objectPath, uploadProof]
+      properties:
+        objectPath: { type: string }
+        uploadProof: { type: string }
+    PhotographyRefundInput:
+      type: object
+      additionalProperties: false
+      required: [requestKey, amountHalalas, destination, reason]
+      properties:
+        requestKey: { type: string, format: uuid }
+        amountHalalas: { type: integer, minimum: 1 }
+        destination: { type: string, enum: [card, wallet] }
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+    WalletSubscriptionInput:
+      type: object
+      required: [checkoutId]
+      properties:
+        checkoutId: { type: string }

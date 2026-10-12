@@ -186,38 +186,19 @@ export function ContractAdmin() {
 /* ---- Transfers (admin) ---- */
 interface Transfers { transfers: { id: number; amountHalalas: number; reference: string; transferredAt: string }[]; netDueHalalas: number; transferredHalalas: number }
 export function TransfersPanel({ id }: { id: number }) {
-  const qc = useQueryClient();
   const key = ["ph-transfers", id];
   const q = useQuery({ queryKey: key, queryFn: () => call<Transfers>(`/admin/photography/photographers/${id}/transfers`) });
-  const [amount, setAmount] = useState(""); const [ref, setRef] = useState(""); const [date, setDate] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-  const m = useMutation({
-    mutationFn: () => call(`/admin/photography/photographers/${id}/transfers`, "POST", { amountHalalas: Math.round(Number(amount) * 100), reference: ref.trim(), transferredAt: new Date(date).toISOString() }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: key }); setAmount(""); setRef(""); setDate(""); },
-  });
   if (q.isLoading) return <Skel n={1} />;
   if (q.isError || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
-  const submit = () => {
-    const h = Math.round(Number(amount) * 100);
-    const e = !(h > 0) ? "أدخل مبلغا صحيحا" : h > d.netDueHalalas ? `المبلغ أكبر من المستحق (${sar(d.netDueHalalas)})` : !ref.trim() ? "أدخل مرجع التحويل" : !date || Number.isNaN(new Date(date).getTime()) ? "أدخل تاريخ التحويل" : new Date(date).getTime() > Date.now() ? "تاريخ التحويل لا يمكن أن يكون في المستقبل" : d.transfers.some((t) => t.reference.trim().toLowerCase() === ref.trim().toLowerCase()) ? "مرجع التحويل مستخدم مسبقا" : null;
-    setErr(e); if (!e) m.mutate();
-  };
   return (
     <div className="space-y-3 rounded-xl border border-border p-3" data-testid={`panel-transfers-${id}`}>
       <p className="font-bold">سجل التحويلات</p>
-      <p className="text-xs text-muted-foreground">تسجيل تحويل تم خارج المنصة فقط، لا يتم تنفيذ أي تحويل بنكي من هنا.</p>
+      <p className="text-xs text-muted-foreground">لتسجيل حوالة وإرفاق إيصالها أو معاينة الإيصالات، افتح تبويب «المستحقات والحوالات». التسجيل لا ينفّذ تحويلاً بنكياً.</p>
       <div className="grid grid-cols-2 gap-2 text-center">
         <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">صافي المستحقات</p><p className="font-bold" data-testid={`text-due-${id}`}>{sar(d.netDueHalalas)}</p></div>
         <div className="rounded-xl bg-muted p-3"><p className="text-xs text-muted-foreground">المبالغ المحولة</p><p className="font-bold" data-testid={`text-transferred-${id}`}>{sar(d.transferredHalalas)}</p></div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <Field label="المبلغ (ر.س)"><input type="number" min="0.01" step="0.01" className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="input-transfer-amount" /></Field>
-        <Field label="مرجع التحويل"><input dir="ltr" className={inputCls} value={ref} onChange={(e) => setRef(e.target.value)} data-testid="input-transfer-reference" /></Field>
-        <Field label="تاريخ التحويل"><input type="datetime-local" className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} data-testid="input-transfer-date" /></Field>
-      </div>
-      {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
-      <button type="button" className={btnCls} disabled={m.isPending || d.netDueHalalas <= 0} onClick={submit} data-testid="button-record-transfer">{m.isPending ? "جار التسجيل" : "تسجيل تحويل خارجي"}</button>
       {d.transfers.length === 0 ? <p className="text-xs text-muted-foreground">لا توجد تحويلات مسجلة.</p> : (
         <ul className="divide-y divide-border text-sm">
           {d.transfers.map((t) => <li key={t.id} className="flex flex-wrap justify-between gap-2 py-2" data-testid={`row-transfer-${t.id}`}><span className="font-bold">{sar(t.amountHalalas)}</span><span dir="ltr" className="font-mono text-xs">{t.reference}</span><span className="text-xs text-muted-foreground">{fmtDT(t.transferredAt)}</span></li>)}

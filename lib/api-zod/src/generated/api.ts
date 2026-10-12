@@ -123,6 +123,111 @@ export const GetPhotographyAdministrationResponse = zod.object({
 })
 
 
+export const getPhotographyFinanceQueryMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+
+
+export const GetPhotographyFinanceQueryParams = zod.object({
+  "month": zod.coerce.string().regex(getPhotographyFinanceQueryMonthRegExp).optional()
+})
+
+export const GetPhotographyFinanceResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const requestPhotographyReceiptBodyNameMax = 255;
+
+export const requestPhotographyReceiptBodySizeMax = 10485760;
+
+
+
+export const RequestPhotographyReceiptBody = zod.object({
+  "name": zod.string().max(requestPhotographyReceiptBodyNameMax),
+  "size": zod.number().int().min(1).max(requestPhotographyReceiptBodySizeMax),
+  "contentType": zod.enum(['application/pdf', 'image/jpeg', 'image/png', 'image/webp'])
+})
+
+export const RequestPhotographyReceiptResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const CompletePhotographyReceiptBody = zod.object({
+  "objectPath": zod.string(),
+  "uploadProof": zod.string()
+})
+
+export const CompletePhotographyReceiptResponse = zod.record(zod.string(), zod.unknown())
+
+
+
+
+
+export const RefundPhotographyBookingParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+
+export const refundPhotographyBookingBodyReasonMax = 2000;
+
+
+
+export const RefundPhotographyBookingBody = zod.object({
+  "requestKey": zod.string().uuid(),
+  "amountHalalas": zod.number().int().min(1),
+  "destination": zod.enum(['card', 'wallet']),
+  "reason": zod.string().min(1).max(refundPhotographyBookingBodyReasonMax)
+})
+
+export const RefundPhotographyBookingResponse = zod.record(zod.string(), zod.unknown())
+
+
+
+
+
+export const ReconcilePhotographyRefundParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const ReconcilePhotographyRefundResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const getPhotographerStatementQueryMonthRegExp = new RegExp('^\\d{4}-\\d{2}$');
+
+
+export const GetPhotographerStatementQueryParams = zod.object({
+  "month": zod.coerce.string().regex(getPhotographerStatementQueryMonthRegExp).optional()
+})
+
+export const GetPhotographerStatementResponse = zod.record(zod.string(), zod.unknown())
+
+
+
+
+
+export const DownloadPhotographyReceiptParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const DownloadPhotographyReceiptResponse = zod.unknown()
+
+
+
+
+
+export const PayPhotographyWithWalletParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const PayPhotographyWithWalletResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const GetOwnerWalletResponse = zod.record(zod.string(), zod.unknown())
+
+
+export const PaySubscriptionWithWalletBody = zod.object({
+  "checkoutId": zod.string()
+})
+
+export const PaySubscriptionWithWalletResponse = zod.record(zod.string(), zod.unknown())
+
+
 export const UpdatePhotographySettingsBody = zod.record(zod.string(), zod.unknown())
 
 export const UpdatePhotographySettingsResponse = zod.record(zod.string(), zod.unknown())
@@ -740,11 +845,13 @@ export const getPhotographerTransfersResponseTransfersItemOneReferenceMax = 200;
 
 
 
+
 export const GetPhotographerTransfersResponse = zod.object({
   "transfers": zod.array(zod.object({
   "amountHalalas": zod.number().int().min(1).max(getPhotographerTransfersResponseTransfersItemOneAmountHalalasMax),
   "reference": zod.string().min(1).max(getPhotographerTransfersResponseTransfersItemOneReferenceMax),
-  "transferredAt": zod.date()
+  "transferredAt": zod.date(),
+  "receiptId": zod.number().int().min(1)
 }).and(zod.object({
   "id": zod.number().int()
 }))),
@@ -766,10 +873,12 @@ export const recordPhotographerTransferBodyReferenceMax = 200;
 
 
 
+
 export const RecordPhotographerTransferBody = zod.object({
   "amountHalalas": zod.number().int().min(1).max(recordPhotographerTransferBodyAmountHalalasMax),
   "reference": zod.string().min(1).max(recordPhotographerTransferBodyReferenceMax),
-  "transferredAt": zod.date()
+  "transferredAt": zod.date(),
+  "receiptId": zod.number().int().min(1)
 })
 
 export const RecordPhotographerTransferResponse = zod.void()

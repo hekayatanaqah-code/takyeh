@@ -6,6 +6,7 @@ import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./avai
 import { profileImageError } from "./imageRules";
 import { BookingNotices, SessionCalendar, UpperTabs, TabPanel, type PortalNotification } from "./portalWidgets";
 import { BookingActions, StandingNotices, CancellationHistory, type PhotoPolicy, type PhotoCancellation } from "./operations";
+import { EarningsSummary, PortalStatementSection } from "./portalFinance";
 import { BankFields, bankError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
 import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
@@ -173,7 +174,7 @@ const PortalTabs = UpperTabs<PTab>;
 
 export default function PhotographerPortal() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number }; notifications?: PortalNotification[]; policy?: PhotoPolicy; cancellations?: PhotoCancellation[] }>("/photography/portal") });
+  const q = useQuery({ queryKey: ["ph-portal"], retry: false, refetchInterval: 30000, queryFn: () => call<{ photographer: Photographer; bookings: Booking[]; earnings: { netDueHalalas: number; transferredHalalas: number; pendingHalalas?: number; availableHalalas?: number; paidHalalas?: number; recoverableHalalas?: number }; notifications?: PortalNotification[]; policy?: PhotoPolicy; cancellations?: PhotoCancellation[] }>("/photography/portal") });
   const authed = !!q.data;
   useEffect(() => {
     if (!authed || typeof EventSource === "undefined") return undefined;
@@ -201,11 +202,7 @@ export default function PhotographerPortal() {
       {p.status === "approved" && p.adminNote && <Notice tone="ok">ملاحظة الإدارة: {p.adminNote}</Notice>}
       <PortalTabs id="ph" tabs={P_TABS} active={tab} onChange={setTab} />
       <TabPanel id="ph" k="home" active={tab}>
-      <div className="mx-auto grid w-full max-w-xl grid-cols-2 gap-3 text-center">
-        {([["صافي المستحقات", earnings.netDueHalalas, "due"], ["المبالغ المحولة", earnings.transferredHalalas, "transferred"]] as const).map(([l, v, k]) => (
-          <div key={k} className={cardCls}><p className="text-xs text-muted-foreground">{l}</p><p className="text-lg font-bold" data-testid={`text-earnings-${k}`}>{sar(v)}</p></div>
-        ))}
-      </div>
+      <EarningsSummary e={earnings} />
       <StandingNotices p={p} policy={policy} />
       <BookingNotices items={notifications} />
       <section className="space-y-3"><h3 className="font-bold">المواعيد القادمة</h3>
@@ -217,6 +214,7 @@ export default function PhotographerPortal() {
         {history.length === 0 ? <Empty title="لا يوجد سجل بعد" /> : history.map((b) => (
           <div key={b.id} className={`${cardCls} space-y-3`} data-testid={`card-history-${b.id}`}><div className="flex items-center justify-between gap-2"><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}{b.deliveredAt ? ` - سُلّمت ${fmtDT(b.deliveredAt)}` : ""}</p></div><StatusPill s={b.deliveredAt ? "completed" : b.status} /></div><BookingActions b={b} /></div>
         ))}</section>
+      <PortalStatementSection />
       <section className="space-y-3"><h3 className="font-bold">سجل الاعتذارات</h3><CancellationHistory items={cancellations} /></section>
       </TabPanel>
       <TabPanel id="ph" k="profile" active={tab}>

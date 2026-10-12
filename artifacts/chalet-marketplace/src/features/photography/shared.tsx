@@ -40,6 +40,9 @@ export interface Booking {
   photographerId?: number | null;
   assignmentStatus?: "assigned" | "needs_review"; deliveredAt?: string | null;
   review?: { id: number; stars: number; comment: string | null; createdAt: string } | null;
+  paymentMethod?: "card" | "wallet" | null; paymentId?: string | null; refundedHalalas?: number;
+  financialStatus?: "paid" | "refund_pending" | "partially_refunded" | "refunded" | "refund_failed" | null;
+  refunds?: { id: number; amountHalalas: number; destination: "card" | "wallet"; status: "pending" | "succeeded" | "failed"; createdAt: string; completedAt: string | null; reason?: string; error?: string | null }[];
 }
 
 export const STATUS_AR: Record<string, string> = {

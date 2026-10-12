@@ -41,7 +41,7 @@ export async function reconcilePhotographyBooking(id: number, options: {
     if (invoice.status === "paid" && paid) {
       // Invoiced reservations are held until the provider reports a final state,
       // so payment made before invoice expiry remains safe even when reconciliation is delayed.
-      const [confirmed] = await tx.update(photographyBookingsTable).set({ status: "confirmed", paymentId: paid.id })
+       const [confirmed] = await tx.update(photographyBookingsTable).set({ status: "confirmed", paymentId: paid.id, financialStatus: "paid" })
         .where(eq(photographyBookingsTable.id, id)).returning();
       newlyConfirmed = true;
       await tx.update(photographersTable).set({ confirmedAssignments: sql`${photographersTable.confirmedAssignments} + 1` })

@@ -39,6 +39,26 @@ paths:
     $ref: "./photography.yaml#/logout"
   /admin/photography:
     $ref: "./photography.yaml#/admin"
+  /admin/photography/finance:
+    $ref: "./photography-finance.yaml#/admin"
+  /admin/photography/receipt/upload-url:
+    $ref: "./photography-finance.yaml#/upload"
+  /admin/photography/receipt/complete:
+    $ref: "./photography-finance.yaml#/complete"
+  /admin/photography/bookings/{id}/refunds:
+    $ref: "./photography-finance.yaml#/refunds"
+  /admin/photography/refunds/{id}/reconcile:
+    $ref: "./photography-finance.yaml#/reconcile"
+  /photography/portal/statement:
+    $ref: "./photography-finance.yaml#/statement"
+  /photography/receipts/{id}:
+    $ref: "./photography-finance.yaml#/receipt"
+  /photography/bookings/{id}/wallet-pay:
+    $ref: "./photography-finance.yaml#/pay"
+  /owner/wallet:
+    $ref: "./photography-finance.yaml#/wallet"
+  /owner/subscription/wallet-pay:
+    $ref: "./photography-finance.yaml#/subscription"
   /admin/photography/settings:
     $ref: "./photography.yaml#/settings"
   /admin/photography/packages:
@@ -1110,11 +1130,12 @@ components:
         created_at: { type: string, format: date-time }
     PhotographyTransferInput:
       type: object
-      required: [amountHalalas, reference, transferredAt]
+      required: [amountHalalas, reference, transferredAt, receiptId]
       properties:
         amountHalalas: { type: integer, minimum: 1, maximum: 2147483647 }
         reference: { type: string, minLength: 1, maxLength: 200 }
         transferredAt: { type: string, format: date-time }
+        receiptId: { type: integer, minimum: 1 }
     PhotographyTransfer:
       allOf:
         - $ref: "#/components/schemas/PhotographyTransferInput"

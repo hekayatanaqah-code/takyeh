@@ -17,7 +17,7 @@ export default defineConfig({
   "api-client-react": {
     input: {
       target: "./openapi.yaml",
-      parserOptions: { externalRefs: { allow: ["./photography.yaml", "./owner-services.yaml"] } },
+      parserOptions: { externalRefs: { allow: ["./photography.yaml", "./owner-services.yaml", "./photography-finance.yaml"] } },
       override: {
         transformer: titleTransformer,
       },
@@ -45,7 +45,7 @@ export default defineConfig({
   zod: {
     input: {
       target: "./openapi.yaml",
-      parserOptions: { externalRefs: { allow: ["./photography.yaml", "./owner-services.yaml"] } },
+      parserOptions: { externalRefs: { allow: ["./photography.yaml", "./owner-services.yaml", "./photography-finance.yaml"] } },
       override: {
         transformer: titleTransformer,
       },

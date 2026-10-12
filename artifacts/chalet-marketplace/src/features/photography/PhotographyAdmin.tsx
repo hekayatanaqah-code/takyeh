@@ -4,14 +4,18 @@ import { toAr, whatsappDigits } from "@/lib/utils";
 import { sanitizeInvitePhone, validInvitePhone } from "@/lib/photography-invite-phone";
 import { call, ORIGIN, sar, fmtDT, Field, inputCls, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, AssignmentBadge, GeoPicker, geoError, useCopy, AvailabilityEditor, availabilityError, type Interval, type Pkg, type Photographer, type Booking, type Geo } from "./shared";
 import { ContractAdmin, TransfersPanel, formatIban } from "./finance";
+import { FinanceTab } from "./adminFinance";
+import { RefundAction } from "./refunds";
+import { FIN_STATUS_AR, PAY_METHOD_AR } from "./money";
 import { PhotographersTable } from "./PhotographersTable";
 import { UpperTabs, TabPanel } from "./portalWidgets";
 import { AlertsList, CancellationHistory, PolicyCard, ReassignButton, type PhotoAlert, type PhotoCancellation, type PhotoPolicy } from "./operations";
 
-type ATab = "photographers" | "bookings" | "settings";
-const A_TABS = [["photographers", "المصورون وطلبات الانضمام"], ["bookings", "الحجوزات والجلسات"], ["settings", "إعدادات الخدمة والباقات"]] as const;
+type ATab = "photographers" | "bookings" | "settings" | "finance";
+const A_TABS = [["photographers", "المصورون وطلبات الانضمام"], ["bookings", "الحجوزات والجلسات"], ["settings", "إعدادات الخدمة والباقات"], ["finance", "المستحقات والحوالات"]] as const;
 
 interface AdminData {
+  refundActor: string;
   enabled: boolean; readiness: { payment: boolean; whatsapp: boolean };
   packages: Pkg[]; photographers: Photographer[]; bookings: Booking[]; deliveries: unknown[];
   policy?: PhotoPolicy; alerts?: PhotoAlert[]; cancellationHistory?: PhotoCancellation[];
@@ -195,6 +199,7 @@ export default function PhotographyAdmin() {
   const [editing, setEditing] = useState<Pkg | "new" | null>(null);
   const [tab, setTab] = useState<ATab>("photographers");
   const [contractOpen, setContractOpen] = useState(false);
+  const actor = q.data?.refundActor ?? null;
   if (q.isLoading) return <Skel />;
   if (q.isError || !q.data) return <ErrorBox error={q.error} onRetry={() => q.refetch()} />;
   const d = q.data;
@@ -218,10 +223,10 @@ export default function PhotographyAdmin() {
         <h3 className="font-bold">الحجوزات والجلسات</h3>
         {d.bookings.length === 0 ? <Empty title="لا توجد حجوزات" /> : (
           <div className="overflow-x-auto rounded-2xl border border-border">
-            <table className="w-full text-sm"><thead className="bg-muted text-start"><tr>{["العقار / الخدمة", "المالك", "المصور", "الباقة", "الموعد", "المبلغ", "العمولة", "الحالة"].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
+            <table className="w-full text-sm"><thead className="bg-muted text-start"><tr>{["العقار / الخدمة", "المالك", "المصور", "الباقة", "الموعد", "المبلغ", "العمولة", "الدفع والاسترداد", "الحالة"].map((h) => <th key={h} className="p-3 text-start">{h}</th>)}</tr></thead>
               <tbody>{d.bookings.map((b) => (
                 <tr key={b.id} className="border-t border-border"><td className="p-3">{b.propertyName}</td><td className="p-3" data-testid={`text-booking-owner-${b.id}`}>{b.ownerName?.trim() || <span className="text-muted-foreground">غير مسجل</span>}</td><td className="p-3">{b.assignmentStatus === "needs_review" ? <span className="text-muted-foreground">بلا مصور</span> : b.photographerName}</td><td className="p-3">{b.packageName}</td>
-                  <td className="p-3">{fmtDT(b.startAt)}</td><td className="p-3">{sar(b.priceHalalas)}</td><td className="p-3">{sar(b.commissionHalalas)}</td><td className="p-3"><div className="flex flex-col items-start gap-1"><StatusPill s={b.deliveredAt ? "completed" : b.status} /><AssignmentBadge b={b} />{b.assignmentStatus === "needs_review" && <ReassignButton bookingId={b.id} />}</div></td></tr>
+                  <td className="p-3">{fmtDT(b.startAt)}</td><td className="p-3">{sar(b.priceHalalas)}</td><td className="p-3">{sar(b.commissionHalalas)}</td><td className="p-3 text-xs" data-testid={`text-booking-finance-${b.id}`}>{b.paymentMethod ? <div className="flex flex-col items-start gap-1"><span>{PAY_METHOD_AR[b.paymentMethod]}</span>{b.financialStatus && b.financialStatus !== "paid" && <span className={b.financialStatus === "refund_failed" ? "font-bold text-destructive" : "font-semibold"}>{FIN_STATUS_AR[b.financialStatus]}</span>}{(b.refundedHalalas ?? 0) > 0 && <span>مسترد {sar(b.refundedHalalas!)}</span>}<RefundAction b={b} actor={actor} /></div> : <span className="text-muted-foreground">—</span>}</td><td className="p-3"><div className="flex flex-col items-start gap-1"><StatusPill s={b.deliveredAt ? "completed" : b.status} /><AssignmentBadge b={b} />{b.assignmentStatus === "needs_review" && <ReassignButton bookingId={b.id} />}</div></td></tr>
               ))}</tbody></table>
           </div>
         )}
@@ -269,6 +274,9 @@ export default function PhotographyAdmin() {
         )}
       </section>
 
+      </TabPanel>
+      <TabPanel id="pha" k="finance" active={tab}>
+      {tab === "finance" && <FinanceTab />}
       </TabPanel>
     </div>
   );

@@ -418,6 +418,8 @@ export interface PhotographyTransferInput {
      */
   reference: string;
   transferredAt: string;
+  /** @minimum 1 */
+  receiptId: number;
 }
 
 export type PhotographyTransfer = PhotographyTransferInput & {
@@ -625,6 +627,56 @@ export interface PhotographyAdminResult {
   bookings: PhotographyAdminBooking[];
   [key: string]: unknown;
  }
+
+export type ReceiptUploadInputContentType = typeof ReceiptUploadInputContentType[keyof typeof ReceiptUploadInputContentType];
+
+
+export const ReceiptUploadInputContentType = {
+  'application/pdf': 'application/pdf',
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+} as const;
+
+export interface ReceiptUploadInput {
+  /** @maxLength 255 */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  size: number;
+  contentType: ReceiptUploadInputContentType;
+}
+
+export interface ReceiptCompleteInput {
+  objectPath: string;
+  uploadProof: string;
+}
+
+export type PhotographyRefundInputDestination = typeof PhotographyRefundInputDestination[keyof typeof PhotographyRefundInputDestination];
+
+
+export const PhotographyRefundInputDestination = {
+  card: 'card',
+  wallet: 'wallet',
+} as const;
+
+export interface PhotographyRefundInput {
+  requestKey: string;
+  /** @minimum 1 */
+  amountHalalas: number;
+  destination: PhotographyRefundInputDestination;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  reason: string;
+}
+
+export interface WalletSubscriptionInput {
+  checkoutId: string;
+}
 
 export type OwnerServiceIcon = typeof OwnerServiceIcon[keyof typeof OwnerServiceIcon];
 
@@ -852,6 +904,38 @@ export type LoginPhotographerBody = { [key: string]: unknown };
 export type LoginPhotographer200 = { [key: string]: unknown };
 
 export type LogoutPhotographer200 = { [key: string]: unknown };
+
+export type GetPhotographyFinanceParams = {
+/**
+ * @pattern ^\d{4}-\d{2}$
+ */
+month?: string;
+};
+
+export type GetPhotographyFinance200 = { [key: string]: unknown };
+
+export type RequestPhotographyReceipt200 = { [key: string]: unknown };
+
+export type CompletePhotographyReceipt200 = { [key: string]: unknown };
+
+export type RefundPhotographyBooking200 = { [key: string]: unknown };
+
+export type ReconcilePhotographyRefund200 = { [key: string]: unknown };
+
+export type GetPhotographerStatementParams = {
+/**
+ * @pattern ^\d{4}-\d{2}$
+ */
+month?: string;
+};
+
+export type GetPhotographerStatement200 = { [key: string]: unknown };
+
+export type PayPhotographyWithWallet200 = { [key: string]: unknown };
+
+export type GetOwnerWallet200 = { [key: string]: unknown };
+
+export type PaySubscriptionWithWallet200 = { [key: string]: unknown };
 
 export type UpdatePhotographySettingsBody = { [key: string]: unknown };
 

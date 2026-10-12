@@ -53,7 +53,8 @@ import { ensureOwnerProfile } from "../lib/ownerProfile";
 import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys, getOwnerFreeAccess } from "../lib/subscription-access";
 import { getOwnerAccountDiscount } from "../lib/subscription-discounts";
 import { getReminderPreview } from "../lib/subscription-reminder-preview";
-import { createSubscriptionCheckout, previewSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
+import { createSubscriptionCheckout, previewSubscriptionCheckout, confirmSubscriptionCheckout, redeemFreeSubscriptionCheckout, payWalletSubscriptionCheckout, SubscriptionCheckoutError } from "../lib/subscription-checkout";
+import { ownerWallet } from "../lib/owner-wallet";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { createAddonCheckout, previewAddonCheckout, readAddonCheckoutQuote, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
 import { getSubscriptionBillingReadiness } from "../lib/subscription-renewals";
@@ -3033,6 +3034,11 @@ router.get("/plans", async (_req, res) => {
 });
 
 /* POST /owner/subscription/initiate — create a Moyasar payment and return payment_id + form data */
+router.get("/wallet", async (req, res) => res.json(await ownerWallet(req.user!.id)));
+router.post("/subscription/wallet-pay", async (req, res) => {
+  try { return res.json(await payWalletSubscriptionCheckout({ ownerId: req.user!.id, checkoutId: req.body?.checkoutId })); }
+  catch (error) { if (error instanceof SubscriptionCheckoutError) return res.status(error.statusCode).json({ error: error.message }); throw error; }
+});
 router.post("/subscription/preview", async (req, res) => {
   const parsed = z.object({
     plan: z.string().min(1).max(100),
@@ -3055,17 +3061,19 @@ router.post("/subscription/preview", async (req, res) => {
 
 router.post("/subscription/initiate", async (req, res) => {
   try {
-    const { plan, promoCode, autoRenewConsent } = req.body ?? {};
+    const { plan, promoCode, autoRenewConsent, paymentMethod } = req.body ?? {};
+    if (paymentMethod !== undefined && !["card", "wallet"].includes(paymentMethod)) return res.status(400).json({ error: "وسيلة الدفع غير صالحة" });
     if (autoRenewConsent !== undefined && typeof autoRenewConsent !== "boolean") {
       return res.status(400).json({ error: "موافقة التجديد التلقائي يجب أن تكون قيمة منطقية" });
     }
     const checkout = await createSubscriptionCheckout({
-      ownerId: req.user!.id, plan, promoCode, autoRenewConsent: autoRenewConsent === true,
+      ownerId: req.user!.id, plan, promoCode,
+      autoRenewConsent: paymentMethod === "wallet" ? false : autoRenewConsent === true, paymentMethod,
     });
     return res.json({
       ...checkout,
-      autoRenewConsent: autoRenewConsent === true,
-      saveCard: autoRenewConsent === true,
+      autoRenewConsent: paymentMethod !== "wallet" && autoRenewConsent === true,
+      saveCard: paymentMethod !== "wallet" && autoRenewConsent === true,
       autoRenewAvailable: checkout.canSavePaymentMethod,
     });
   } catch (error) {

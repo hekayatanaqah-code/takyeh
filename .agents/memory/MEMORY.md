@@ -56,3 +56,6 @@
 - [Browser test database evidence](browser-test-database-evidence.md) — reconcile contradictory SQL/UI observations using the mutation response and the app’s own database connection.
 - [JSX preview transform](jsx-preview-transform.md) — avoid explicit JSX type arguments; injected preview metadata can break them despite a passing typecheck.
 - [Photography allocation policy](photography-allocation-policy.md) — new-photographer priority for three bookings; three declines in 30 days reduce priority; paid replacement failures need review, not refunds.
+- [Photography financial policy](photography-financial-policy.md) — partial/full admin refunds, a wallet shared with subscriptions, and delivered-only fees; preserve settled transfer history.
+- [Moyasar refund confirmation](moyasar-refund-confirmation.md) — current responses report cumulative refunds on the payment; unknown POST outcomes stay reserved and are polled.
+- [Financial browser fixture cleanup](financial-browser-fixture-cleanup.md) — cancelling a browser helper does not clean its database rows or private files; record fixture provenance outside the helper.

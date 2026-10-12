@@ -18,4 +18,6 @@ export interface PhotographyTransferInput {
      */
   reference: string;
   transferredAt: Date;
+  /** @minimum 1 */
+  receiptId: number;
 }

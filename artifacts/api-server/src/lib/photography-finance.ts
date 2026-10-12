@@ -1,6 +1,6 @@
 import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
-import { db, photographyContractsTable, photographyBookingsTable, photographyTransfersTable } from "@workspace/db";
+import { db, photographyContractsTable, photographyBookingsTable, photographyTransfersTable, photographyRefundsTable } from "@workspace/db";
 import { and, eq, inArray, desc } from "drizzle-orm";
 
 export const SAUDI_BANKS = ["الإنماء", "الراجحي", "الأهلي السعودي", "الرياض", "البلاد", "الجزيرة", "السعودي الأول", "العربي الوطني", "السعودي الفرنسي", "السعودي للاستثمار", "الخليج الدولي", "إس تي سي بنك", "دال ثلاثمائة وستون"];
@@ -34,7 +34,43 @@ export async function photographyBalances(photographerId: number, tx: Pick<typeo
     eq(photographyBookingsTable.photographerId, photographerId), eq(photographyBookingsTable.assignmentStatus, "assigned"), inArray(photographyBookingsTable.status, ["confirmed", "completed"]),
   ));
   const transfers = await tx.select().from(photographyTransfersTable).where(eq(photographyTransfersTable.photographerId, photographerId)).orderBy(desc(photographyTransfersTable.transferredAt));
-  const earnedHalalas = bookings.reduce((sum, booking) => sum + booking.photographerEarningsHalalas, 0);
+  const pendingRefunds = bookings.length ? await tx.select().from(photographyRefundsTable).where(and(
+    inArray(photographyRefundsTable.bookingId, bookings.map(b => b.id)), eq(photographyRefundsTable.status, "pending"),
+  )) : [];
+  let earnedHalalas = 0, pendingHalalas = 0;
+  for (const b of bookings) {
+    const reserved = pendingRefunds.filter(r => r.bookingId === b.id).reduce((sum, r) => sum + r.amountHalalas, 0);
+    const refundableNet = photographyRemainingQuote(b, Math.min(b.priceHalalas, b.refundedHalalas + reserved)).netHalalas;
+    if (b.status === "completed" && b.deliveredAt) earnedHalalas += refundableNet;
+    else pendingHalalas += refundableNet;
+  }
   const transferredHalalas = transfers.reduce((sum, transfer) => sum + transfer.amountHalalas, 0);
-  return { netDueHalalas: earnedHalalas - transferredHalalas, transferredHalalas, transfers };
+  const signedDue = earnedHalalas - transferredHalalas;
+  return {
+    pendingHalalas, availableHalalas: Math.max(0, signedDue), paidHalalas: transferredHalalas,
+    recoverableHalalas: Math.max(0, -signedDue), netDueHalalas: Math.max(0, signedDue),
+    transferredHalalas, transfers,
+  };
+}
+export function photographyRemainingQuote(b: { priceHalalas: number; commissionHalalas: number }, refundedHalalas: number) {
+  const totalHalalas = Math.max(0, b.priceHalalas - refundedHalalas);
+  const commissionHalalas = b.priceHalalas ? Math.round(b.commissionHalalas * totalHalalas / b.priceHalalas) : 0;
+  return { totalHalalas, commissionHalalas, netHalalas: totalHalalas - commissionHalalas };
+}
+export function photographyStatement(bookings: typeof photographyBookingsTable.$inferSelect[], month: string) {
+  const rows = bookings.filter(b => new Date(+b.createdAt + 3 * 3600000).toISOString().startsWith(month));
+  const totals = rows.reduce((sum, b) => {
+    const quote = photographyRemainingQuote(b, b.refundedHalalas);
+    return {
+      count: sum.count + 1, totalHalalas: sum.totalHalalas + b.priceHalalas,
+      commissionHalalas: sum.commissionHalalas + (b.status === "cancelled" ? quote.totalHalalas : quote.commissionHalalas),
+      netHalalas: sum.netHalalas + (b.status === "cancelled" ? 0 : quote.netHalalas),
+      refundedHalalas: sum.refundedHalalas + b.refundedHalalas,
+    };
+  }, { count: 0, totalHalalas: 0, commissionHalalas: 0, netHalalas: 0, refundedHalalas: 0 });
+  return { ...totals, bookings: rows.map(b => {
+    const quote = photographyRemainingQuote(b, b.refundedHalalas);
+    return { ...b, commissionHalalas: b.status === "cancelled" ? quote.totalHalalas : quote.commissionHalalas,
+      photographerEarningsHalalas: b.status === "cancelled" ? 0 : quote.netHalalas };
+  }) };
 }

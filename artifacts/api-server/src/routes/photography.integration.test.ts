@@ -7,7 +7,7 @@ import type { Server } from "node:http";
 import {
   db, pool, photographersTable, photographyPackagesTable, photographyBookingsTable,
   photographyDeliveriesTable, siteSettingsTable, regionsCatalogTable, citiesCatalogTable,
-  photographyContractsTable, photographyTransfersTable,
+  photographyContractsTable, photographyTransfersTable, photographyReceiptsTable,
 } from "@workspace/db";
 import { and, eq, sql } from "drizzle-orm";
 import photographyRouter from "./photography";
@@ -72,6 +72,7 @@ before(async () => {
 after(async () => {
   await db.execute(sql`DELETE FROM owner_support_requests WHERE owner_id = ${`photographer_${photographerId}`}`);
   await db.delete(photographyTransfersTable).where(eq(photographyTransfersTable.photographerId, photographerId));
+  await db.delete(photographyReceiptsTable).where(eq(photographyReceiptsTable.uploadedBy, ownerId));
   await db.delete(photographyBookingsTable).where(eq(photographyBookingsTable.ownerId, ownerId));
   await db.delete(photographersTable).where(eq(photographersTable.id, photographerId));
   await db.delete(photographyPackagesTable).where(eq(photographyPackagesTable.id, packageId));
@@ -279,8 +280,16 @@ test("photographer support reaches the shared admin inbox and reads are owner-sc
 });
 test("recorded external transfers reduce net due without executing payments or double counting", async () => {
   const route = `/admin/photography/photographers/${photographerId}/transfers`;
-  const record = { amountHalalas: 2000, reference: `photo-test-transfer-${randomUUID()}`, transferredAt: new Date(Date.now() - 60000).toISOString() };
+  const [receipt] = await db.insert(photographyReceiptsTable).values({
+    objectPath: `/objects/uploads/${randomUUID()}.pdf`, name: "إيصال اختبار.pdf", contentType: "application/pdf", size: 100, uploadedBy: ownerId,
+  }).returning();
+  const record = { amountHalalas: 2000, reference: `photo-test-transfer-${randomUUID()}`, transferredAt: new Date(Date.now() - 60000).toISOString(), receiptId: receipt.id };
   assert.equal((await request(route, record, "", "owner")).status, 403);
+  assert.equal((await request(route, { ...record, receiptId: undefined }, "", "superadmin")).status, 400);
+  assert.equal((await request(route, record, "", "superadmin")).status, 400, "Confirmed but undelivered earnings cannot be paid");
+  await db.update(photographyBookingsTable).set({ status: "completed", deliveredAt: new Date() }).where(and(
+    eq(photographyBookingsTable.photographerId, photographerId), eq(photographyBookingsTable.ownerId, ownerId), eq(photographyBookingsTable.status, "confirmed"),
+  ));
   assert.equal((await request(route, { ...record, amountHalalas: 8001 }, "", "superadmin")).status, 400);
   assert.equal((await request(route, record, "", "superadmin")).status, 201);
   assert.equal((await request(route, record, "", "superadmin")).status, 409);
@@ -288,6 +297,8 @@ test("recorded external transfers reduce net due without executing payments or d
   assert.equal(portal.data.earnings.netDueHalalas, 6000);
   assert.equal(portal.data.earnings.transferredHalalas, 2000);
   assert.equal((await request(route, { ...record, reference: `${record.reference}-future`, transferredAt: new Date(Date.now() + 86400000).toISOString() }, "", "superadmin")).status, 400);
+  await db.delete(photographyTransfersTable).where(eq(photographyTransfersTable.receiptId, receipt.id));
+  await db.delete(photographyReceiptsTable).where(eq(photographyReceiptsTable.id, receipt.id));
 });
 test("other-bank names persist and administration returns searchable city names", async () => {
   const portal = await request<{ photographer: Record<string, unknown> }>("/photography/portal");

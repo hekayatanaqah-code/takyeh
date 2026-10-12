@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, ExternalLink, Clock } from "lucide-react";
 import { call, btnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, type Booking } from "../photography/shared";
 import PhotographyOwner from "../photography/PhotographyOwner";
+import { OwnerWalletPanel } from "../photography/walletPanel";
 import { ICONS, isSafeUrl, resolveUrl, isExternal, type OwnerService } from "./types";
 
 const KEY = ["owner-services"];
@@ -55,6 +56,7 @@ export default function OwnerServicesOwner() {
         }} data-testid="button-photography-history">حجوزات التصوير والتقييم</button>}
         <p className="text-sm text-muted-foreground">خدمات إضافية لعقاراتك وخدماتك وأنشطتك، منفصلة عن التشغيل اليومي.</p>
       </header>
+      <OwnerWalletPanel compact />
       {notice && <Notice tone="warn">{notice}</Notice>}
       {q.isLoading ? <Skel /> : q.isError || !q.data ? <ErrorBox error={q.error} onRetry={() => q.refetch()} /> :
         q.data.services.length === 0 ? <Empty title="لا توجد خدمات حاليا" text="ستظهر هنا الخدمات الإضافية عند إتاحتها." /> : (

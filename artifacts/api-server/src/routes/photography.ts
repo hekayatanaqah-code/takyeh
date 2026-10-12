@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import {
   db, photographersTable, photographyPackagesTable, photographerSessionsTable, photographyBookingsTable,
-  siteSettingsTable, photographyReviewsTable,
+  siteSettingsTable, photographyReviewsTable, photographyRefundsTable,
 } from "@workspace/db";
 import { and, eq, inArray, sql, desc, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
@@ -17,6 +17,7 @@ import { requestProfileImage, completeProfileImage, ownsProfileImage, profileIma
 import { getPhotographer as photographer, setPhotographerSession as setSession } from "../lib/photographer-auth";
 import { currentPhotographyContract, ibanSchema, bankSchema, photographyBalances } from "../lib/photography-finance";
 import photographySupportRouter from "./photography-support";
+import { photographyFinancialPublic } from "./photography-financial";
 import photographyNotificationsRouter, { photographerNotifications } from "./photography-notifications";
 import { photographyUnionSlots, allocatePhotography, lockPhotographyAllocation, recentCancellationCounts } from "../lib/photography-allocation";
 import { photographyPolicy } from "../lib/photography-allocation-policy";
@@ -28,6 +29,7 @@ router.param("id", (_req, res, next, value) => {
   if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) return res.status(400).json({ error: "معرّف غير صحيح" });
   return next();
 });
+router.use(photographyFinancialPublic);
 const COOKIE = "photographer_session";
 async function enabled() {
   const [row] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
@@ -150,7 +152,7 @@ router.get("/portal", async (req, res) => {
   const notifications = await photographerNotifications(row.id);
   const cancellations = await photographyCancellationHistory(row.id);
   const counts = await recentCancellationCounts();
-  return res.json({ photographer: publicPhotographer(row, counts.get(row.id) ?? 0), bookings, notifications, cancellations, policy: photographyPolicy, earnings: { ...earnings, netDueHalalas: balances.netDueHalalas, transferredHalalas: balances.transferredHalalas } });
+  return res.json({ photographer: publicPhotographer(row, counts.get(row.id) ?? 0), bookings, notifications, cancellations, policy: photographyPolicy, earnings: { ...earnings, pendingHalalas: balances.pendingHalalas, availableHalalas: balances.availableHalalas, paidHalalas: balances.paidHalalas, recoverableHalalas: balances.recoverableHalalas, netDueHalalas: balances.netDueHalalas, transferredHalalas: balances.transferredHalalas } });
 });
 router.post("/portal/bookings/:id/cancel", sameOrigin, async (req, res) => {
   const row = await photographer(req);
@@ -243,7 +245,11 @@ router.get("/bookings", async (req, res) => {
   const ids = await getOwnerIds(req);
   const bookings = await db.select().from(photographyBookingsTable).where(inArray(photographyBookingsTable.ownerId, ids)).orderBy(desc(photographyBookingsTable.id));
   const reviews = bookings.length ? await db.select().from(photographyReviewsTable).where(inArray(photographyReviewsTable.bookingId, bookings.map(b => b.id))) : [];
-  res.json({ bookings: bookings.map(b => ({ ...b, review: reviews.find(r => r.bookingId === b.id) ?? null })) });
+  const refunds = bookings.length ? await db.select({
+    id: photographyRefundsTable.id, bookingId: photographyRefundsTable.bookingId, amountHalalas: photographyRefundsTable.amountHalalas,
+    destination: photographyRefundsTable.destination, status: photographyRefundsTable.status, createdAt: photographyRefundsTable.createdAt, completedAt: photographyRefundsTable.completedAt,
+  }).from(photographyRefundsTable).where(inArray(photographyRefundsTable.bookingId, bookings.map(b => b.id))) : [];
+  res.json({ bookings: bookings.map(b => ({ ...b, review: reviews.find(r => r.bookingId === b.id) ?? null, refunds: refunds.filter(r => r.bookingId === b.id) })) });
 });
 router.post("/bookings/:id/review", async (req, res) => {
   const parsed = photographyRatingSchema.safeParse(req.body);

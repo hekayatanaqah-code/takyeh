@@ -6,8 +6,10 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   Crown, CheckCircle2, Download, Loader2, AlertTriangle, CreditCard,
-  Calendar, ShieldCheck, Star, Building2, Package, Zap,
+  Calendar, ShieldCheck, Star, Building2, Package, Zap, Wallet,
 } from "lucide-react";
+import { useOwnerWallet, useOwnerId, WALLET_KEY } from "@/features/photography/walletPanel";
+import { walletCall, isUncertain, useSubWalletMarker } from "@/features/photography/walletOps";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 async function apiFetch(path: string, opts?: RequestInit) {
@@ -306,6 +308,16 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
   const [returnPaymentStatus, setReturnPaymentStatus] = useState<string | null>(null);
   const [returnNotice, setReturnNotice] = useState<string | null>(null);
   const handledReturnRef = useRef<string | null>(null);
+  const [paidByWallet, setPaidByWallet] = useState(false);
+  const walletLock = useRef(false);
+  const wallet = useOwnerWallet(open);
+  const ownerId = useOwnerId();
+  const walletMarker = useSubWalletMarker(ownerId);
+  const walletPending = walletMarker.value;
+  const walletMarkerRef = useRef(walletMarker);
+  walletMarkerRef.current = walletMarker;
+  const [walletUncertain, setWalletUncertain] = useState(false);
+  useEffect(() => { if (open) walletMarkerRef.current.refresh(); }, [open, ownerId]);
 
   /* Load plans */
   useEffect(() => {
@@ -327,6 +339,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
       setPlanQuote(null);
       setPlanQuoteLoading(false);
       setActivationWithoutSavedCard(false);
+      setPaidByWallet(false);
       moyasarInstance.current = null;
     }
   }, [open]);
@@ -446,6 +459,43 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     },
   });
 
+  /* Wallet: full-balance payment of the server checkout; no card, no recurring consent. */
+  const walletPayMutation = useMutation({
+    mutationFn: ({ checkoutId }: { checkoutId: string }) =>
+      walletCall<{ subscription: any; invoice: Invoice }>(`${BASE}/api/owner/subscription/wallet-pay`, { checkoutId }),
+    onSuccess: (data, variables) => {
+      if (walletMarkerRef.current.value?.checkoutId === variables.checkoutId) walletMarkerRef.current.clear();
+      setWalletUncertain(false);
+      setInvoice({
+        ...data.invoice,
+        cycleDays: Number(data.subscription?.billingCycleDays ?? data.invoice.cycleDays ?? selectedPlan?.days ?? 30),
+      });
+      setPaidByWallet(true);
+      setStep("success");
+      setPaying(false);
+      setPayError(null);
+      qc.invalidateQueries({ queryKey: ["owner", "subscription"] });
+      qc.invalidateQueries({ queryKey: ["owner", "subscription-header"] });
+      qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+    },
+    onError: (err: Error, variables) => {
+      if (isUncertain(err)) {
+        // Unknown outcome: keep the SAME checkout for verification, never start a new one.
+        setWalletUncertain(true);
+        setPayError(`لم نتمكن من التأكد من نتيجة الدفع من المحفظة (${err.message}). لا تعِد الدفع؛ استخدم «التحقق من عملية المحفظة» لإكمال العملية نفسها.`);
+      } else {
+        if (walletMarkerRef.current.value?.checkoutId === variables.checkoutId) walletMarkerRef.current.clear();
+        setWalletUncertain(false);
+        setPayError(`رفض الخادم الدفع من المحفظة ولم يُخصم أي مبلغ: ${err.message}`);
+      }
+      setPaying(false);
+    },
+    onSettled: () => {
+      walletLock.current = false;
+      qc.invalidateQueries({ queryKey: WALLET_KEY });
+    },
+  });
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has("checkout_flow") && params.get("checkout_flow") !== "subscription") return;
@@ -530,6 +580,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
 
   /* Step 1: Select a plan */
   function handleSelectPlan(p: Plan) {
+    if (walletMarkerRef.current.value) return;
     setSelectedPlan(p);
     setConsentToRecurring(false);
     setPlanQuote(null);
@@ -554,6 +605,10 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     }
     if (p.price > 0 && !consentToRecurring) {
       setPayError(`للمتابعة إلى دفع دورة التجديد (${planQuote?.days ?? p.days} يوم)، يجب تأكيد موافقتك الصريحة أولاً.`);
+      return;
+    }
+    if (walletMarkerRef.current.value) {
+      setPayError("توجد عملية دفع من المحفظة قيد التحقق؛ لن نبدأ دفعاً بالبطاقة قبل حسمها.");
       return;
     }
     const existingPending = readPendingSubscriptionCheckout();
@@ -634,6 +689,75 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     }
   }
 
+  function resumeWalletPay() {
+    const m = walletMarkerRef.current.value;
+    if (!m || walletLock.current || walletPayMutation.isPending) return;
+    walletLock.current = true;
+    setPayError(null);
+    setPaying(true);
+    walletPayMutation.mutate({ checkoutId: m.checkoutId });
+  }
+
+  async function handleWalletPay() {
+    const p = selectedPlan;
+    if (!p || walletLock.current || paying || walletPayMutation.isPending) return;
+    if (!ownerId) { setPayError("تعذّر التحقق من هوية الحساب؛ أعد تحميل الصفحة."); return; }
+    if (walletMarkerRef.current.value) { setPayError("توجد عملية دفع من المحفظة قيد التحقق؛ أكملها أولاً."); return; }
+    if (planQuoteLoading || !planQuote || planQuote.promoCode !== promoCode.trim()) {
+      setPayError("انتظر حتى يكتمل عرض السعر الحالي قبل المتابعة.");
+      return;
+    }
+    const balance = wallet.data?.balanceHalalas;
+    if (balance == null || balance < planQuote.amountHalala) {
+      setPayError("رصيد المحفظة لا يغطي كامل المبلغ المستحق؛ لا يمكن الجمع بين المحفظة والبطاقة.");
+      return;
+    }
+    if (readPendingSubscriptionCheckout()) {
+      setPendingCheckout(readPendingSubscriptionCheckout());
+      setPayError("توجد عملية اشتراك سابقة قيد التأكيد؛ لن نبدأ عملية دفع جديدة قبل حسمها.");
+      return;
+    }
+    walletLock.current = true;
+    setPayError(null);
+    setPaying(true);
+    setConsentToRecurring(false);
+    try {
+      const r = await apiFetch("/owner/subscription/initiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan: p.id,
+          autoRenewConsent: false,
+          paymentMethod: "wallet",
+          ...(promoCode.trim() ? { promoCode: promoCode.trim() } : {}),
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "تعذّر إعداد الدفع من المحفظة");
+      const finalQuote = normalizePlanQuote(data, p, promoCode.trim());
+      const checkoutId = String(data.checkoutId ?? "");
+      if (!checkoutId || !Number.isSafeInteger(finalQuote.amountHalala) || finalQuote.amountHalala < 0) {
+        throw new Error("تعذّر إعداد مبلغ الدفع. حاول مرة أخرى.");
+      }
+      if (finalQuote.amountHalala !== planQuote.amountHalala || finalQuote.discountHalala !== planQuote.discountHalala || finalQuote.days !== planQuote.days) {
+        setPlanQuote({ ...finalQuote, checkoutId: undefined });
+        throw new Error("تغيّر المبلغ المستحق أثناء التأكيد. راجع العرض المحدّث ثم أعد المحاولة.");
+      }
+      if (finalQuote.amountHalala > balance) {
+        throw new Error("رصيد المحفظة لا يغطي كامل المبلغ المستحق.");
+      }
+      // Persist BEFORE sending so a lost response can be resumed with this exact checkout.
+      if (!walletMarkerRef.current.save({ checkoutId, plan: p.id, amountHalala: finalQuote.amountHalala, createdAt: new Date().toISOString() })) {
+        throw new Error("تعذّر حفظ مرجع العملية في المتصفح؛ لم يُرسل طلب الدفع حفاظاً على أموالك.");
+      }
+      walletPayMutation.mutate({ checkoutId });
+    } catch (cause) {
+      walletLock.current = false;
+      setPaying(false);
+      setPayError(cause instanceof Error ? cause.message : "تعذّر الاتصال بخدمة الدفع.");
+    }
+  }
+
   const formatPrice = (halala: number) =>
     `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
   const cycleLabel = (days: number) => days === 30 ? "شهرياً" : `لكل دورة (${days} يوم)`;
@@ -643,7 +767,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     planQuote.promoCode === promoCode.trim() && !planQuoteLoading;
 
   const closeModal = () => {
-    if (paying || confirmMutation.isPending || redeemMutation.isPending) return;
+    if (paying || confirmMutation.isPending || redeemMutation.isPending || walletPayMutation.isPending) return;
     setReturnDialogOpen(false);
     onClose();
   };
@@ -684,6 +808,22 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               </DialogDescription>
             </DialogHeader>
              <div className="p-5 grid gap-2 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
+              {walletPending && (
+                <div className="rounded-xl border border-[#8C6246]/40 bg-[#8C6246]/5 p-3 text-sm" data-testid="notice-wallet-pending">
+                  <p className="font-semibold">عملية دفع اشتراك من المحفظة بانتظار التأكيد</p>
+                  <p className="mt-1 text-muted-foreground">
+                    الخطة: {walletPending.plan} — المبلغ: {formatPrice(walletPending.amountHalala)}. {walletUncertain || !walletPayMutation.isPending ? "قد يكون المبلغ خُصم بالفعل. التحقق يعيد إرسال العملية نفسها فقط ولن يخصم مرتين." : ""}
+                  </p>
+                  <Button
+                    className="mt-3 w-full bg-[#8C6246] hover:bg-[#734f36] text-white"
+                    onClick={resumeWalletPay}
+                    disabled={walletPayMutation.isPending || paying}
+                    data-testid="button-wallet-resume"
+                  >
+                    {walletPayMutation.isPending ? "جارٍ التحقق..." : "التحقق من عملية المحفظة وإكمالها"}
+                  </Button>
+                </div>
+              )}
               {pendingCheckout && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
                   <p className="font-semibold">توجد عملية اشتراك محفوظة قيد التأكيد</p>
@@ -746,7 +886,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 return (
                   <button
                     key={p.id}
-                    onClick={() => !paying && !planQuoteLoading && !redeemMutation.isPending && !pendingCheckout && handleSelectPlan(p)}
+                    onClick={() => !paying && !planQuoteLoading && !redeemMutation.isPending && !pendingCheckout && !walletPending && handleSelectPlan(p)}
                     disabled={paying || planQuoteLoading || redeemMutation.isPending || !!pendingCheckout}
                     className={`w-full text-start rounded-2xl border-2 p-4 flex items-center gap-3 transition-all cursor-pointer hover:border-primary/70 hover:bg-primary/5 disabled:opacity-60 disabled:cursor-default ${
                       isCurrent ? "border-primary bg-primary/5" : "border-border"
@@ -842,7 +982,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                         data-testid="button-continue-subscription-checkout"
                         onClick={handleContinueWithPlan}
                         disabled={!consentToRecurring || paying || planQuoteLoading ||
-                          planQuote.promoCode !== promoCode.trim() || !!pendingCheckout || redeemMutation.isPending}
+                          planQuote.promoCode !== promoCode.trim() || !!pendingCheckout || !!walletPending || redeemMutation.isPending}
                       >
                         متابعة إلى الدفع
                       </Button>
@@ -859,13 +999,35 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                       </div>
                     )
                   )}
+                  {selectedPlan.price > 0 && planQuote && !planQuoteLoading && planQuote.amountHalala > 0 && (() => {
+                    const bal = wallet.data?.balanceHalalas;
+                    const covers = bal != null && bal >= planQuote.amountHalala;
+                    return (
+                      <div className="rounded-xl border border-[#8C6246]/30 bg-[#8C6246]/5 p-3 space-y-2" data-testid="option-subscription-wallet">
+                        <p className="flex items-center gap-2 text-sm font-semibold"><Wallet className="h-4 w-4 text-[#8C6246]" /> أو ادفع من رصيد المحفظة</p>
+                        <p className="text-xs text-muted-foreground">
+                          الرصيد الحالي: {bal == null ? (wallet.isError ? "تعذّر التحميل" : "جارٍ التحميل") : formatPrice(bal)} — يجب أن يغطي كامل المستحق الآن ({formatPrice(planQuote.amountHalala)}). لا يتم الجمع بين المحفظة والبطاقة.
+                        </p>
+                        <p className="text-xs text-muted-foreground">الدفع من المحفظة لا يحفظ بطاقة ولا يفعّل تجديداً تلقائياً؛ ستحتاج لتجديد الاشتراك يدوياً عند انتهائه.</p>
+                        <Button
+                          className="w-full bg-[#8C6246] hover:bg-[#734f36] text-white"
+                          data-testid="button-subscription-wallet-pay"
+                          onClick={handleWalletPay}
+                          disabled={!covers || paying || planQuoteLoading || planQuote.promoCode !== promoCode.trim() ||
+                            !!pendingCheckout || !!walletPending || redeemMutation.isPending || walletPayMutation.isPending}
+                        >
+                          {walletPayMutation.isPending || (paying && walletLock.current) ? "جارٍ الدفع من المحفظة..." : `الدفع من المحفظة (${formatPrice(planQuote.amountHalala)})`}
+                        </Button>
+                      </div>
+                    );
+                  })()}
                   {selectedPlan.price === 0 && (
                     <Button
                       className="w-full"
                       data-testid="button-activate-free-subscription"
                       onClick={handleContinueWithPlan}
                       disabled={paying || planQuoteLoading || !planQuote ||
-                        planQuote.promoCode !== promoCode.trim() || !!pendingCheckout || redeemMutation.isPending}
+                        planQuote.promoCode !== promoCode.trim() || !!pendingCheckout || !!walletPending || redeemMutation.isPending}
                     >
                       تفعيل الخطة المجانية
                     </Button>
@@ -1022,6 +1184,11 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                     : <p className="mt-1">لم يرسل الخادم مبلغ التجديد التالي.</p>}
                   {invoice.nextBillingAt && <p className="mt-1">موعد التجديد التالي: {new Date(invoice.nextBillingAt).toLocaleDateString("ar-SA")}</p>}
                 </div>
+              )}
+              {paidByWallet && (
+                <p role="status" className="w-full rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100" data-testid="text-paid-by-wallet">
+                  دُفع كامل المبلغ من رصيد المحفظة؛ لم تُحفظ بطاقة ولم يُفعّل تجديد تلقائي جديد.
+                </p>
               )}
               {activationWithoutSavedCard && (
                 <p role="status" className="w-full rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-100">

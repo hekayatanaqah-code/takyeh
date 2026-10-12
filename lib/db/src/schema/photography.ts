@@ -3,6 +3,16 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
 export type PhotographyAvailability = { weekday: number; start: string; end: string }[];
+export const photographyReceiptsTable = pgTable("photography_receipts", {
+  id: serial("id").primaryKey(),
+  objectPath: text("object_path").notNull().unique(),
+  sourcePath: text("source_path").unique(),
+  name: text("name").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  uploadedBy: text("uploaded_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 export const photographyContractsTable = pgTable("photography_contracts", {
   id: serial("id").primaryKey(),
   html: text("html").notNull(),
@@ -39,8 +49,10 @@ export const photographyTransfersTable = pgTable("photography_transfers", {
   amountHalalas: integer("amount_halalas").notNull(),
   reference: text("reference").notNull().unique(),
   transferredAt: timestamp("transferred_at", { withTimezone: true }).notNull(),
+  receiptId: integer("receipt_id").references(() => photographyReceiptsTable.id),
+  recordedBy: text("recorded_by"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, table => [check("photography_transfer_positive", sql`${table.amountHalalas} > 0`)]);
+}, table => [check("photography_transfer_positive", sql`${table.amountHalalas} > 0`), uniqueIndex("photography_transfer_receipt_unique").on(table.receiptId)]);
 export const photographyPackagesTable = pgTable("photography_packages", {
   id: serial("id").primaryKey(), name: text("name").notNull(),
   priceHalalas: integer("price_halalas").notNull(),
@@ -66,6 +78,9 @@ export const photographyBookingsTable = pgTable("photography_bookings", {
   status: text("status").notNull().default("awaiting_payment"),
   assignmentStatus: text("assignment_status").notNull().default("assigned"),
   deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  paymentMethod: text("payment_method").notNull().default("card"),
+  refundedHalalas: integer("refunded_halalas").notNull().default(0),
+  financialStatus: text("financial_status").notNull().default("unpaid"),
   targetCity: text("target_city"),
   targetRegion: text("target_region"),
   targetDistrict: text("target_district"),
@@ -123,6 +138,31 @@ export const photographyAlertsTable = pgTable("photography_alerts", {
   readAt: timestamp("read_at", { withTimezone: true }),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
 });
+export const photographyRefundsTable = pgTable("photography_refunds", {
+  id: serial("id").primaryKey(),
+  requestKey: text("request_key").notNull().unique(),
+  bookingId: integer("booking_id").notNull().references(() => photographyBookingsTable.id, { onDelete: "cascade" }),
+  ownerId: text("owner_id").notNull(),
+  amountHalalas: integer("amount_halalas").notNull(),
+  destination: text("destination").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("pending"),
+  providerRefundId: text("provider_refund_id"),
+  attemptedAt: timestamp("attempted_at", { withTimezone: true }),
+  error: text("error"),
+  requestedBy: text("requested_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, t => [check("photography_refund_positive", sql`${t.amountHalalas} > 0`)]);
+export const ownerWalletEntriesTable = pgTable("owner_wallet_entries", {
+  id: serial("id").primaryKey(),
+  ownerId: text("owner_id").notNull(),
+  sourceKey: text("source_key").notNull().unique(),
+  kind: text("kind").notNull(),
+  amountHalalas: integer("amount_halalas").notNull(),
+  description: text("description").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, t => [index("owner_wallet_owner_idx").on(t.ownerId), check("owner_wallet_nonzero", sql`${t.amountHalalas} <> 0`)]);
 export const insertPhotographyPackageSchema = createInsertSchema(photographyPackagesTable);
 export type Photographer = typeof photographersTable.$inferSelect;
 export type PhotographyBooking = typeof photographyBookingsTable.$inferSelect;

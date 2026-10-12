@@ -39,6 +39,7 @@ import {
   type UpcomingInvoiceLine,
 } from "./subscription-billing-math";
 import { retrySubscriptionPaymentReconciliation } from "./subscription-payment-reconciliation";
+import { debitOwnerWallet, ownerWallet } from "./owner-wallet";
 import {
   accountDiscountView,
   discountInvoiceLines,
@@ -306,6 +307,7 @@ export async function createSubscriptionCheckout(input: {
   plan: string;
   promoCode?: string;
   autoRenewConsent?: boolean;
+  paymentMethod?: "card" | "wallet";
 }): Promise<{
   checkoutId: string;
   amountHalala: number;
@@ -417,7 +419,11 @@ export async function createSubscriptionCheckout(input: {
       accountDiscounts: accountDiscountRows,
       quotedAt: now,
     });
-    assertPaymentConfigured(checkoutQuote.amountHalala);
+    if (input.paymentMethod === "wallet") {
+      if ((await ownerWallet(input.ownerId, tx)).balanceHalalas < checkoutQuote.amountHalala) {
+        throw new SubscriptionCheckoutError("رصيد المحفظة لا يغطي كامل الفاتورة؛ لم يتم الخصم", 409);
+      }
+    } else assertPaymentConfigured(checkoutQuote.amountHalala);
     const recurringAddonSnapshot = makeRecurringAddonSnapshot(recurringAddonRows);
     const [intent] = await tx.insert(subscriptionCheckoutIntentsTable).values({
       id: checkoutId,
@@ -425,6 +431,7 @@ export async function createSubscriptionCheckout(input: {
       plan: plan.slug,
       listPriceHalala,
       amountHalala: checkoutQuote.amountHalala,
+      paymentMethod: input.paymentMethod ?? "card",
       durationDays: plan.days,
       planLabel: plan.label,
       termsSnapshot: plan.terms,
@@ -433,7 +440,7 @@ export async function createSubscriptionCheckout(input: {
       accountDiscountSnapshot: checkoutQuote.accountDiscountSnapshot,
       quotedBaseExpiresAt: lockedSubscription.expiresAt,
       recurringAddonSnapshot,
-      autoRenewConsent: input.autoRenewConsent === true,
+      autoRenewConsent: input.paymentMethod !== "wallet" && input.autoRenewConsent === true,
       expiresAt,
     }).returning();
     return {
@@ -651,6 +658,7 @@ async function finalizeCheckout(input: {
   paidAtKnown: boolean;
   allowExpiredIntent: boolean;
   paymentToken?: string;
+  walletPayment?: boolean;
 }): Promise<CompletedCheckout> {
   const ownerKeys = await subscriptionOwnerKeys(input.ownerId);
   if (!ownerKeys.length) throw new SubscriptionCheckoutError("يجب تسجيل الدخول أولاً", 401);
@@ -755,6 +763,9 @@ async function finalizeCheckout(input: {
       if (samePayment) throw new SubscriptionCheckoutError("سبق استخدام عملية الدفع هذه", 409);
       if (intent.amountHalala !== input.paidAmountHalala) {
         throw new SubscriptionCheckoutError("المبلغ المدفوع لا يتطابق مع طلب الدفع", 400);
+      }
+      if (intent.amountHalala > 0 && (input.walletPayment === true) !== (intent.paymentMethod === "wallet")) {
+        throw new SubscriptionCheckoutError("وسيلة الدفع لا تتطابق مع هذا الطلب؛ ابدأ طلباً جديداً", 409);
       }
       if (intent.expiresAt <= new Date() &&
           (!input.allowExpiredIntent || input.paidAt > intent.expiresAt)) {
@@ -869,6 +880,7 @@ async function finalizeCheckout(input: {
             termsSnapshot: intent.termsSnapshot,
           }).returning();
 
+      if (input.walletPayment) await debitOwnerWallet(tx, intent.ownerId, intent.amountHalala, `subscription-payment:${intent.id}`, `اشتراك ${intent.planLabel}`);
       await tx.insert(subscriptionPaymentsTable).values({
         paymentId: input.paymentId,
         ownerId: intent.ownerId,
@@ -931,6 +943,7 @@ async function finalizeCheckout(input: {
       if (result) return result;
     }
     if (error instanceof StaleSubscriptionCheckoutError) {
+      if (input.walletPayment) throw new SubscriptionCheckoutError("تغيّرت الفاتورة؛ لم يُخصم رصيد المحفظة. ابدأ طلباً جديداً", 409);
       if (input.paidAmountHalala > 0) {
         const status = await recordAndRefundStaleCapturedCheckout({
           checkoutId: input.checkoutId,
@@ -1079,4 +1092,20 @@ export async function redeemFreeSubscriptionCheckout(input: {
     paidAtKnown: true,
     allowExpiredIntent: false,
   });
+}
+export async function payWalletSubscriptionCheckout(input: { ownerId: string; checkoutId: string }): Promise<CompletedCheckout> {
+  if (typeof input.checkoutId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(input.checkoutId)) throw new SubscriptionCheckoutError("طلب الدفع غير صالح");
+  const [intent] = await db.select().from(subscriptionCheckoutIntentsTable).where(eq(subscriptionCheckoutIntentsTable.id, input.checkoutId));
+  if (!intent || !(await subscriptionOwnerKeys(input.ownerId)).includes(intent.ownerId)) throw new SubscriptionCheckoutError("طلب الدفع لا يخص هذا الحساب", 404);
+  if (intent.paymentMethod !== "wallet") throw new SubscriptionCheckoutError("هذا الطلب مخصص للبطاقة؛ ابدأ طلب محفظة جديداً", 409);
+  if (intent.amountHalala <= 0) throw new SubscriptionCheckoutError("استخدم استرداد الاشتراك المجاني لهذا الطلب");
+  try {
+    return await finalizeCheckout({
+      ...input, paymentId: `wallet:${intent.id}`, paidAmountHalala: intent.amountHalala,
+      paidAt: new Date(), paidAtKnown: true, allowExpiredIntent: false, walletPayment: true,
+    });
+  } catch (error) {
+    if ((error as Error).message === "wallet_insufficient") throw new SubscriptionCheckoutError("رصيد المحفظة لا يغطي كامل الفاتورة؛ لم يتم الخصم", 409);
+    throw error;
+  }
 }
