@@ -8,6 +8,7 @@ import {
   clearSession,
   getOidcConfig,
   getSessionId,
+  getSession,
   createSession,
   SESSION_COOKIE,
   SESSION_TTL,
@@ -181,6 +182,13 @@ router.get("/callback", async (req: Request, res: Response) => {
 });
 
 router.get("/logout", async (req: Request, res: Response) => {
+  const localSid = getSessionId(req);
+  const localSession = localSid ? await getSession(localSid) : null;
+  if (!localSid || localSession?.access_token === "owner_password_auth") {
+    await clearSession(res, localSid);
+    res.redirect(getSafeReturnTo(req.query.returnTo));
+    return;
+  }
   const config = await getOidcConfig();
   const origin = getOrigin(req);
 

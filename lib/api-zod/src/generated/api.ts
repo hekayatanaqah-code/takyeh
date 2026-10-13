@@ -8,6 +8,62 @@
 import * as zod from 'zod';
 
 
+/**
+ * @summary Verify credentials before choosing independently authorized roles
+ */
+export const roleLoginBodyIdentifierMax = 160;
+
+export const roleLoginBodyPasswordMax = 128;
+
+
+
+export const RoleLoginBody = zod.object({
+  "identifier": zod.string().min(1).max(roleLoginBodyIdentifierMax),
+  "password": zod.string().min(1).max(roleLoginBodyPasswordMax),
+  "rememberMe": zod.boolean().optional()
+})
+
+export const RoleLoginResponse = zod.object({
+  "ok": zod.boolean().optional(),
+  "role": zod.enum(['owner', 'photographer', 'admin', 'staff']).optional(),
+  "redirect": zod.string().optional(),
+  "requiresRole": zod.boolean().optional(),
+  "roles": zod.array(zod.object({
+  "key": zod.string(),
+  "role": zod.enum(['owner', 'photographer', 'admin', 'staff']),
+  "label": zod.string(),
+  "requiresPassword": zod.boolean()
+})).optional()
+})
+
+
+/**
+ * @summary Consume the login challenge and create only the chosen role's session
+ */
+export const selectLoginRoleBodyKeyRegExp = new RegExp('^(owner|photographer|admin|staff):[1-9]\\d*$');
+export const selectLoginRoleBodyPasswordMax = 128;
+
+
+
+export const SelectLoginRoleBody = zod.object({
+  "key": zod.string().regex(selectLoginRoleBodyKeyRegExp),
+  "password": zod.string().min(1).max(selectLoginRoleBodyPasswordMax).optional().describe('Required if the chosen role has a different password.')
+})
+
+export const SelectLoginRoleResponse = zod.object({
+  "ok": zod.boolean().optional(),
+  "role": zod.enum(['owner', 'photographer', 'admin', 'staff']).optional(),
+  "redirect": zod.string().optional(),
+  "requiresRole": zod.boolean().optional(),
+  "roles": zod.array(zod.object({
+  "key": zod.string(),
+  "role": zod.enum(['owner', 'photographer', 'admin', 'staff']),
+  "label": zod.string(),
+  "requiresPassword": zod.boolean()
+})).optional()
+})
+
+
 export const updatePhotographyPolicyBodyIntroBookingsMin = 0;
 export const updatePhotographyPolicyBodyIntroBookingsMax = 100;
 
@@ -62,7 +118,8 @@ export const GetPhotographySessionFileParams = zod.object({
 })
 
 export const GetPhotographySessionFileQueryParams = zod.object({
-  "download": zod.enum(['1']).optional()
+  "download": zod.enum(['1']).optional(),
+  "role": zod.enum(['owner', 'photographer']).optional().describe('Explicit role context; no fallback to the other role\'s cookie.')
 })
 
 export const GetPhotographySessionFileResponse = zod.unknown()
@@ -707,6 +764,8 @@ export const AcceptPhotographyInviteParams = zod.object({
   "token": zod.coerce.string()
 })
 
+export const acceptPhotographyInviteBodyOneEmailMax = 254;
+
 export const acceptPhotographyInviteBodyOneBioMax = 2000;
 
 export const acceptPhotographyInviteBodyOnePortfolioUrlMax = 2000;
@@ -743,6 +802,7 @@ export const acceptPhotographyInviteBodyTwoBankNameMax = 120;
 
 
 export const AcceptPhotographyInviteBody = zod.object({
+  "email": zod.string().max(acceptPhotographyInviteBodyOneEmailMax).optional().describe('Optional photographer login email; may match another role\'s email.'),
   "bio": zod.string().max(acceptPhotographyInviteBodyOneBioMax),
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(acceptPhotographyInviteBodyOnePortfolioUrlMax).optional(),
@@ -767,6 +827,8 @@ export const AcceptPhotographyInviteBody = zod.object({
   "contractAccepted": zod.literal(true),
   "contractVersion": zod.number().int().min(1)
 }))
+
+export const acceptPhotographyInviteResponsePhotographerOneEmailMax = 254;
 
 export const acceptPhotographyInviteResponsePhotographerOneBioMax = 2000;
 
@@ -797,6 +859,7 @@ export const acceptPhotographyInviteResponsePhotographerOneBlockedDatesMax = 366
 
 export const AcceptPhotographyInviteResponse = zod.object({
   "photographer": zod.object({
+  "email": zod.string().max(acceptPhotographyInviteResponsePhotographerOneEmailMax).optional().describe('Optional photographer login email; may match another role\'s email.'),
   "bio": zod.string().max(acceptPhotographyInviteResponsePhotographerOneBioMax),
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(acceptPhotographyInviteResponsePhotographerOnePortfolioUrlMax).optional(),
@@ -1040,6 +1103,8 @@ export const ReadPhotographyOperationalAlertParams = zod.object({
 export const ReadPhotographyOperationalAlertResponse = zod.record(zod.string(), zod.unknown())
 
 
+export const getPhotographerPortalResponseOnePhotographerOneEmailMax = 254;
+
 export const getPhotographerPortalResponseOnePhotographerOneBioMax = 2000;
 
 export const getPhotographerPortalResponseOnePhotographerOnePortfolioUrlMax = 2000;
@@ -1069,6 +1134,7 @@ export const getPhotographerPortalResponseOnePhotographerOneBlockedDatesMax = 36
 
 export const GetPhotographerPortalResponse = zod.object({
   "photographer": zod.object({
+  "email": zod.string().max(getPhotographerPortalResponseOnePhotographerOneEmailMax).optional().describe('Optional photographer login email; may match another role\'s email.'),
   "bio": zod.string().max(getPhotographerPortalResponseOnePhotographerOneBioMax),
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(getPhotographerPortalResponseOnePhotographerOnePortfolioUrlMax).optional(),
@@ -1113,6 +1179,8 @@ export const GetPhotographerPortalResponse = zod.object({
 }))
 
 
+export const updatePhotographerProfileBodyEmailMax = 254;
+
 export const updatePhotographerProfileBodyBioMax = 2000;
 
 export const updatePhotographerProfileBodyPortfolioUrlMax = 2000;
@@ -1141,6 +1209,7 @@ export const updatePhotographerProfileBodyBlockedDatesMax = 3660;
 
 
 export const UpdatePhotographerProfileBody = zod.object({
+  "email": zod.string().max(updatePhotographerProfileBodyEmailMax).optional().describe('Optional photographer login email; may match another role\'s email.'),
   "bio": zod.string().max(updatePhotographerProfileBodyBioMax),
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(updatePhotographerProfileBodyPortfolioUrlMax).optional(),
@@ -1159,6 +1228,8 @@ export const UpdatePhotographerProfileBody = zod.object({
 })).max(updatePhotographerProfileBodyAvailabilityMax),
   "blockedDates": zod.array(zod.date()).max(updatePhotographerProfileBodyBlockedDatesMax).optional()
 })
+
+export const updatePhotographerProfileResponsePhotographerOneEmailMax = 254;
 
 export const updatePhotographerProfileResponsePhotographerOneBioMax = 2000;
 
@@ -1189,6 +1260,7 @@ export const updatePhotographerProfileResponsePhotographerOneBlockedDatesMax = 3
 
 export const UpdatePhotographerProfileResponse = zod.object({
   "photographer": zod.object({
+  "email": zod.string().max(updatePhotographerProfileResponsePhotographerOneEmailMax).optional().describe('Optional photographer login email; may match another role\'s email.'),
   "bio": zod.string().max(updatePhotographerProfileResponsePhotographerOneBioMax),
   "experienceYears": zod.enum(['', 'under_1', '1_3', '3_5', 'over_5']).optional(),
   "portfolioUrl": zod.string().max(updatePhotographerProfileResponsePhotographerOnePortfolioUrlMax).optional(),

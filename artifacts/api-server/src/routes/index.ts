@@ -17,11 +17,13 @@ import registrationRouter from "./registration";
 import contactRouter from "./contact";
 import photographyRouter from "./photography";
 import ownerServicesRouter from "./owner-services";
+import roleLoginRouter from "./role-login";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(roleLoginRouter);
 router.use(staffAuthRouter);
 router.use(adminStaffAuthRouter);
 router.use(passwordResetRouter);

@@ -114,6 +114,10 @@ import type {
   RetryPhotographyAssignment200,
   ReviewPhotographer200,
   ReviewPhotographerBody,
+  RoleLogin200,
+  RoleLoginBody,
+  SelectLoginRole200,
+  SelectLoginRoleBody,
   ServiceGlobalSeason,
   ServiceSeason,
   SubmissionResponse,
@@ -154,6 +158,182 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getRoleLoginUrl = () => {
+
+
+
+
+  return `/api/auth/role-login`
+}
+
+/**
+ * @summary Verify credentials before choosing independently authorized roles
+ */
+export const roleLogin = async (roleLoginBody: RoleLoginBody, options?: Parameters<typeof customFetch>[1]): Promise<RoleLogin200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RoleLogin200>(getRoleLoginUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(roleLoginBody)
+  }
+);}
+
+
+
+
+
+export const getRoleLoginMutationKey = () => ['roleLogin'] as const;
+
+export const getRoleLoginMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof roleLogin>>, TError,RoleLoginMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof roleLogin>>, TError,RoleLoginMutationVariables, TContext> => {
+
+const mutationKey = getRoleLoginMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof roleLogin>>, RoleLoginMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  roleLogin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RoleLoginMutationResult = NonNullable<Awaited<ReturnType<typeof roleLogin>>>
+    export type RoleLoginMutationBody = BodyType<RoleLoginBody>
+    export type RoleLoginMutationError = ErrorType<void>
+    export type RoleLoginMutationVariables = {data: BodyType<RoleLoginBody>}
+
+    /**
+ * @summary Verify credentials before choosing independently authorized roles
+ */
+export const useRoleLogin = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof roleLogin>>, TError,RoleLoginMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof roleLogin>>,
+        TError,
+        RoleLoginMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRoleLoginMutationOptions(options), queryClient);
+    }
+
+export const getSelectLoginRoleUrl = () => {
+
+
+
+
+  return `/api/auth/select-role`
+}
+
+/**
+ * @summary Consume the login challenge and create only the chosen role's session
+ */
+export const selectLoginRole = async (selectLoginRoleBody: SelectLoginRoleBody, options?: Parameters<typeof customFetch>[1]): Promise<SelectLoginRole200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SelectLoginRole200>(getSelectLoginRoleUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(selectLoginRoleBody)
+  }
+);}
+
+
+
+
+
+export const getSelectLoginRoleMutationKey = () => ['selectLoginRole'] as const;
+
+export const getSelectLoginRoleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof selectLoginRole>>, TError,SelectLoginRoleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof selectLoginRole>>, TError,SelectLoginRoleMutationVariables, TContext> => {
+
+const mutationKey = getSelectLoginRoleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof selectLoginRole>>, SelectLoginRoleMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  selectLoginRole(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SelectLoginRoleMutationResult = NonNullable<Awaited<ReturnType<typeof selectLoginRole>>>
+    export type SelectLoginRoleMutationBody = BodyType<SelectLoginRoleBody>
+    export type SelectLoginRoleMutationError = ErrorType<void>
+    export type SelectLoginRoleMutationVariables = {data: BodyType<SelectLoginRoleBody>}
+
+    /**
+ * @summary Consume the login challenge and create only the chosen role's session
+ */
+export const useSelectLoginRole = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof selectLoginRole>>, TError,SelectLoginRoleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof selectLoginRole>>,
+        TError,
+        SelectLoginRoleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSelectLoginRoleMutationOptions(options), queryClient);
+    }
 
 export const getUpdatePhotographyPolicyUrl = () => {
 

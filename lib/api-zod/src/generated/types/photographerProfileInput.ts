@@ -9,6 +9,11 @@ import type { PhotographerAvailability } from './photographerAvailability';
 import type { PhotographerProfileInputExperienceYears } from './photographerProfileInputExperienceYears';
 
 export interface PhotographerProfileInput {
+  /**
+     * Optional photographer login email; may match another role's email.
+     * @maxLength 254
+     */
+  email?: string;
   /** @maxLength 2000 */
   bio: string;
   experienceYears?: PhotographerProfileInputExperienceYears;

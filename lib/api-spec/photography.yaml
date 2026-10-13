@@ -69,6 +69,7 @@ sessionFile:
     - *id
     - { name: index, in: path, required: true, schema: { type: integer, minimum: 0 } }
     - { name: download, in: query, required: false, schema: { type: string, enum: ["1"] } }
+    - { name: role, in: query, required: false, schema: { type: string, enum: [owner, photographer] }, description: "Explicit role context; no fallback to the other role's cookie." }
   get:
     operationId: getPhotographySessionFile
     responses:
@@ -78,6 +79,7 @@ sessionFile:
           application/octet-stream:
             schema: { type: string, format: binary }
       "403": { description: Unauthorized access }
+      "401": { description: Selected role is not authenticated }
       "404": { description: File not found }
 catalog:
   get:

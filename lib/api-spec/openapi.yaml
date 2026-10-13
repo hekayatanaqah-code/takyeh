@@ -21,6 +21,10 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /auth/role-login:
+    $ref: "./role-login.yaml#/login"
+  /auth/select-role:
+    $ref: "./role-login.yaml#/select"
   /admin/photography/policy:
     $ref: "./photography.yaml#/policy"
   /admin/photography/options:
@@ -1038,6 +1042,7 @@ components:
       type: object
       required: [bio, regionId, cityId, districtIds, allDistricts, sessionMinutes, availability]
       properties:
+        email: { type: string, maxLength: 254, description: "Optional photographer login email; may match another role's email." }
         bio: { type: string, maxLength: 2000 }
         experienceYears: { type: string, enum: ['', under_1, '1_3', '3_5', over_5] }
         portfolioUrl: { type: string, maxLength: 2000 }

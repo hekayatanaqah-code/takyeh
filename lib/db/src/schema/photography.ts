@@ -20,6 +20,7 @@ export const photographyContractsTable = pgTable("photography_contracts", {
 });
 export const photographersTable = pgTable("photographers", {
   id: serial("id").primaryKey(), name: text("name").notNull(), whatsapp: text("whatsapp").notNull().unique(),
+  email: text("email").notNull().default(""),
   status: text("status").notNull().default("invited"), bio: text("bio").notNull().default(""),
   experienceYears: text("experience_years").notNull().default(""),
   portfolioUrl: text("portfolio_url").notNull().default(""),

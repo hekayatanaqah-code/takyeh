@@ -23,7 +23,7 @@ export interface Photographer {
   id: number; name: string; whatsapp: string; status: Status; bio: string;
   regionId: number | null; cityId: number | null; districtIds: number[]; allDistricts: boolean;
   sessionMinutes: number; availability: Interval[]; adminNote: string;
-  experienceYears?: ExperienceYears | ""; portfolioUrl?: string; profileImagePath?: string;
+  experienceYears?: ExperienceYears | ""; portfolioUrl?: string; profileImagePath?: string; email?: string;
   blockedDates?: string[];
   iban?: string | null; bankName?: string | null; contractVersion?: number | null; contractAcceptedAt?: string | null;
   cityName?: string | null;

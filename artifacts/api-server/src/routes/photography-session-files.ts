@@ -26,8 +26,11 @@ router.post("/portal/bookings/:id/uploads/request", async (req, res) => {
   return res.json(await requestSessionFile(b.id, p.id, parsed.data));
 });
 router.get("/bookings/:id/files/:index", async (req, res) => {
-  const p = await getPhotographer(req);
-  const ownerIds = req.isAuthenticated() ? await getOwnerIds(req) : [];
+  const asRole = req.query.role;
+  if (asRole !== undefined && asRole !== "owner" && asRole !== "photographer") return res.status(400).json({ error: "صفة العرض غير صحيحة" });
+  const ownerIds = asRole !== "photographer" && req.isAuthenticated() ? await getOwnerIds(req) : [];
+  // Never fall through to another role when an owner context is explicitly selected.
+  const p = asRole === "owner" || (asRole === undefined && ownerIds.length) ? null : await getPhotographer(req);
   if (!p && !ownerIds.length) return res.status(401).json({ error: "سجّل الدخول لمراجعة ملفات الجلسة" });
   const [b] = await db.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, Number(req.params.id)));
   if (!b || (!ownerIds.includes(b.ownerId) && p?.id !== b.photographerId)) return res.status(403).json({ error: "ملفات الجلسة خاصة بالمالك والمصور المسند" });

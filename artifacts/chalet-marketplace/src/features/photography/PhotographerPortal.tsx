@@ -12,8 +12,8 @@ import { EarningsSummary, PortalStatementSection } from "./portalFinance";
 import { BankFields, bankError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
 import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
-interface Profile { bio: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string; blockedDates: string[] }
-const emptyProfile: Profile = { bio: "", sessionMinutes: 90, availability: [], experienceYears: "", portfolioUrl: "", profileImagePath: "", blockedDates: [] };
+interface Profile { bio: string; email: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string; blockedDates: string[] }
+const emptyProfile: Profile = { bio: "", email: "", sessionMinutes: 90, availability: [], experienceYears: "", portfolioUrl: "", profileImagePath: "", blockedDates: [] };
 
 /** 9665XXXXXXXX -> 05XXXXXXXX, then Eastern digits. */
 export function waDisplay(w: string): string {
@@ -62,6 +62,9 @@ function ImageUpload({ value, onChange, inviteToken, onBusy }: { value: string; 
 function ProfileFields({ geo, setGeo, prof, setProf, inviteToken, onBusy }: { geo: Geo; setGeo: (g: Geo) => void; prof: Profile; setProf: React.Dispatch<React.SetStateAction<Profile>>; inviteToken?: string; onBusy: (b: boolean) => void }) {
   return (
     <div className="space-y-4">
+      <Field label="البريد الإلكتروني للدخول (اختياري)" hint="يمكن استخدام البريد نفسه لحساب المالك والمصور؛ لكل دور كلمة مروره الخاصة.">
+        <input type="email" dir="ltr" value={prof.email} onChange={e => setProf({ ...prof, email: e.target.value })} className={inputCls} data-testid="input-photographer-email" autoComplete="email" />
+      </Field>
       <ImageUpload value={prof.profileImagePath} onChange={(profileImagePath) => setProf(current => ({ ...current, profileImagePath }))} inviteToken={inviteToken} onBusy={onBusy} />
       <Field label="نبذة عنك"><textarea rows={3} className={inputCls} placeholder="اكتب نبذة مختصرة عن خبرتك ومعداتك في تصوير العقارات والأنشطة" value={prof.bio} onChange={(e) => setProf({ ...prof, bio: e.target.value })} data-testid="input-bio" /></Field>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -151,7 +154,7 @@ function Login() {
 function ProfileEditor({ p }: { p: Photographer }) {
   const qc = useQueryClient();
   const [geo, setGeo] = useState<Geo>({ regionId: p.regionId, cityId: p.cityId, districtIds: p.districtIds ?? [], allDistricts: p.allDistricts });
-  const [prof, setProf] = useState<Profile>({ bio: p.bio ?? "", sessionMinutes: p.sessionMinutes || 90, availability: p.availability ?? [], experienceYears: p.experienceYears ?? "", portfolioUrl: p.portfolioUrl ?? "", profileImagePath: p.profileImagePath ?? "", blockedDates: p.blockedDates ?? [] });
+  const [prof, setProf] = useState<Profile>({ bio: p.bio ?? "", email: p.email ?? "", sessionMinutes: p.sessionMinutes || 90, availability: p.availability ?? [], experienceYears: p.experienceYears ?? "", portfolioUrl: p.portfolioUrl ?? "", profileImagePath: p.profileImagePath ?? "", blockedDates: p.blockedDates ?? [] });
   const [uploading, setUploading] = useState(false);
   const [bank, setBank] = useState<Bank>({ iban: p.iban ?? "", bankName: p.bankName ?? "" });
   const [err, setErr] = useState<string | null>(null);
@@ -216,7 +219,7 @@ export default function PhotographerPortal() {
       <SessionCalendar bookings={upcoming} />
       <section className="space-y-3"><h3 className="font-bold">السجل</h3>
         {history.length === 0 ? <Empty title="لا يوجد سجل بعد" /> : history.map((b) => (
-          <div key={b.id} className={`${cardCls} space-y-3`} data-testid={`card-history-${b.id}`}><div className="flex items-center justify-between gap-2"><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}{b.deliveredAt ? ` - سُلّمت ${fmtDT(b.deliveredAt)}` : ""}</p></div><StatusPill s={b.deliveredAt ? "completed" : b.status} /></div><DeliveryView b={b} /><BookingActions b={b} /></div>
+          <div key={b.id} className={`${cardCls} space-y-3`} data-testid={`card-history-${b.id}`}><div className="flex items-center justify-between gap-2"><div><p className="font-bold">{b.propertyName}</p><p className="text-sm text-muted-foreground">{b.packageName} - {fmtDT(b.startAt)} - عمولة {sar(b.commissionHalalas)}{b.deliveredAt ? ` - سُلّمت ${fmtDT(b.deliveredAt)}` : ""}</p></div><StatusPill s={b.deliveredAt ? "completed" : b.status} /></div><DeliveryView b={b} role="photographer" /><BookingActions b={b} /></div>
         ))}</section>
       <PortalStatementSection />
       <section className="space-y-3"><h3 className="font-bold">سجل الاعتذارات</h3><CancellationHistory items={cancellations} /></section>
@@ -229,7 +232,7 @@ export default function PhotographerPortal() {
         <p className="text-xs text-muted-foreground">الاعتمادات للعرض فقط ولا يمكن تعديلها من بوابتك؛ تواصل مع الإدارة عبر مركز الدعم لطلب تحديثها.</p>
       </section>
       {approvals}
-      <ProfileEditor key={JSON.stringify([p.iban, p.bankName, p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />
+      <ProfileEditor key={JSON.stringify([p.email, p.iban, p.bankName, p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />
       </TabPanel>
       <TabPanel id="ph" k="support" active={tab}>
       <SupportCenter photographerId={p.id} />

@@ -32,7 +32,7 @@ export function deliveryUrlError(u: string): string | null {
   } catch { return "رابط التسليم غير صالح"; }
 }
 
-export const fileHref = (bookingId: number, index: number, download = false) => `${API}/photography/bookings/${bookingId}/files/${index}${download ? "?download=1" : ""}`;
+export const fileHref = (bookingId: number, index: number, download = false, role: "owner" | "photographer" = "owner") => `${API}/photography/bookings/${bookingId}/files/${index}?role=${role}${download ? "&download=1" : ""}`;
 const previewable = (t: string) => t.startsWith("image/") || t === "application/pdf";
 function FileIcon({ t }: { t: string }) {
   const C = t.startsWith("image/") ? FileImage : t.startsWith("video/") ? FileVideo : t === "application/pdf" ? FileText : FileArchive;
@@ -40,7 +40,7 @@ function FileIcon({ t }: { t: string }) {
 }
 
 /** Delivered materials (link + protected files) for owner and assigned photographer. */
-export function DeliveryView({ b }: { b: Booking }) {
+export function DeliveryView({ b, role = "owner" }: { b: Booking; role?: "owner" | "photographer" }) {
   const files: DeliveryFile[] = b.deliveryFiles ?? [];
   if (!b.deliveryUrl && files.length === 0) return null;
   return (
@@ -58,8 +58,8 @@ export function DeliveryView({ b }: { b: Booking }) {
               <FileIcon t={f.contentType} />
               <span className="min-w-0 flex-1 truncate font-semibold" dir="ltr">{f.name}</span>
               <span className="text-xs text-muted-foreground">{mb(f.size)} م.ب</span>
-              {previewable(f.contentType) && <a className={`${ghostCls} px-2.5 py-1.5`} href={fileHref(b.id, i)} target="_blank" rel="noopener noreferrer" data-testid={`link-preview-file-${b.id}-${i}`}><Eye className="h-4 w-4" aria-hidden /> معاينة</a>}
-              <a className={`${ghostCls} px-2.5 py-1.5`} href={fileHref(b.id, i, true)} download data-testid={`link-download-file-${b.id}-${i}`}><Download className="h-4 w-4" aria-hidden /> تنزيل</a>
+               {previewable(f.contentType) && <a className={`${ghostCls} px-2.5 py-1.5`} href={fileHref(b.id, i, false, role)} target="_blank" rel="noopener noreferrer" data-testid={`link-preview-file-${b.id}-${i}`}><Eye className="h-4 w-4" aria-hidden /> معاينة</a>}
+               <a className={`${ghostCls} px-2.5 py-1.5`} href={fileHref(b.id, i, true, role)} download data-testid={`link-download-file-${b.id}-${i}`}><Download className="h-4 w-4" aria-hidden /> تنزيل</a>
             </li>
           ))}
         </ul>

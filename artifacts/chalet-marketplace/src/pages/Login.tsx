@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import AuthBrand from "@/components/AuthBrand";
 import { AUTH_LABELS, normalizeIdentifier } from "@/lib/authLabels";
 import { Eye, EyeOff, ShieldAlert, Info } from "lucide-react";
+import LoginRoleSelector, { type LoginRole } from "@/components/LoginRoleSelector";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -17,6 +18,23 @@ export default function Login() {
   const [error, setError]           = useState<string | null>(null);
   const [isAdminBlock, setIsAdminBlock] = useState(false);
   const [rememberMe, setRememberMe]     = useState(false);
+  const [roles, setRoles] = useState<LoginRole[] | null>(null);
+
+  async function finishLogin(data: { redirect?: string }) {
+    await qc.cancelQueries();
+    qc.clear();
+    // Full navigation also drops role-specific component state and in-flight identity reads.
+    window.location.assign(`${BASE}${data.redirect ?? "/dashboard"}`);
+  }
+  async function chooseRole(role: LoginRole, rolePassword?: string) {
+    const r = await fetch(`${BASE}/api/auth/select-role`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
+      body: JSON.stringify({ key: role.key, ...(rolePassword ? { password: rolePassword } : {}) }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error ?? "تعذّر اختيار الدور");
+    await finishLogin(data);
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -31,10 +49,8 @@ export default function Login() {
       const isEmail = norm.kind === "email";
       const isPhone = /^[+\d٠-٩۰-۹\s()-]+$/.test(trimmed);
       const ident = isEmail || isPhone ? norm.value : trimmed;
-      const endpoint = isEmail || isPhone ? "/api/owner-login" : "/api/unified-login";
-      const body = isEmail || isPhone
-        ? JSON.stringify({ identifier: ident, password, rememberMe })
-        : JSON.stringify({ username: trimmed, password, rememberMe });
+      const endpoint = "/api/auth/role-login";
+      const body = JSON.stringify({ identifier: ident, password, rememberMe });
 
       const r = await fetch(`${BASE}${endpoint}`, {
         method: "POST",
@@ -53,10 +69,12 @@ export default function Login() {
         return;
       }
 
-      qc.invalidateQueries({ queryKey: ["auth", "user"] });
-      qc.invalidateQueries({ queryKey: ["staff", "me"] });
-      qc.invalidateQueries({ queryKey: ["ph-portal"] });
-      navigate(data.redirect ?? "/dashboard");
+      if (data.requiresRole) {
+        setPassword("");
+        setRoles(data.roles);
+        return;
+      }
+      await finishLogin(data);
     } catch {
       setError("تعذّر الاتصال بالخادم. يرجى المحاولة مرة أخرى");
     } finally {
@@ -66,6 +84,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#FBF9F6] flex flex-col items-center justify-center p-4" dir="rtl">
+      {roles && <LoginRoleSelector roles={roles} onChoose={chooseRole} onClose={() => { setRoles(null); setPassword(""); }} />}
 
       <AuthBrand />
 

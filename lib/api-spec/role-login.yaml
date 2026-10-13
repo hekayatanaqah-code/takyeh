@@ -1,0 +1,69 @@
+login:
+  post:
+    operationId: roleLogin
+    tags: [Auth]
+    summary: Verify credentials before choosing independently authorized roles
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [identifier, password]
+            properties:
+              identifier: { type: string, minLength: 1, maxLength: 160 }
+              password: { type: string, minLength: 1, maxLength: 128 }
+              rememberMe: { type: boolean }
+    responses:
+      "200":
+        description: Session established or short-lived role choice issued in an HttpOnly cookie
+        content:
+          application/json:
+            schema:
+              $ref: "#/Result"
+      "400": { description: Invalid input }
+      "401": { description: Incorrect credentials }
+      "403": { description: Invalid origin }
+      "429": { description: Too many attempts }
+select:
+  post:
+    operationId: selectLoginRole
+    tags: [Auth]
+    summary: Consume the login challenge and create only the chosen role's session
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [key]
+            properties:
+              key: { type: string, pattern: '^(owner|photographer|admin|staff):[1-9]\d*$' }
+              password: { type: string, minLength: 1, maxLength: 128, description: "Required if the chosen role has a different password." }
+    responses:
+      "200":
+        description: Role session established
+        content:
+          application/json:
+            schema:
+              $ref: "#/Result"
+      "401": { description: Invalid or expired challenge or incorrect role password }
+      "403": { description: Invalid origin }
+      "429": { description: Too many attempts }
+Result:
+  type: object
+  properties:
+    ok: { type: boolean }
+    role: { type: string, enum: [owner, photographer, admin, staff] }
+    redirect: { type: string }
+    requiresRole: { type: boolean }
+    roles:
+      type: array
+      items:
+        type: object
+        required: [key, role, label, requiresPassword]
+        properties:
+          key: { type: string }
+          role: { type: string, enum: [owner, photographer, admin, staff] }
+          label: { type: string }
+          requiresPassword: { type: boolean }

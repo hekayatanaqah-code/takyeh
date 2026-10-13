@@ -259,6 +259,11 @@ export const PhotographerProfileInputExperienceYears = {
 } as const;
 
 export interface PhotographerProfileInput {
+  /**
+     * Optional photographer login email; may match another role's email.
+     * @maxLength 254
+     */
+  email?: string;
   /** @maxLength 2000 */
   bio: string;
   experienceYears?: PhotographerProfileInputExperienceYears;
@@ -891,6 +896,101 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type RoleLoginBody = {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  identifier: string;
+  /**
+     * @minLength 1
+     * @maxLength 128
+     */
+  password: string;
+  rememberMe?: boolean;
+};
+
+export type RoleLogin200Role = typeof RoleLogin200Role[keyof typeof RoleLogin200Role];
+
+
+export const RoleLogin200Role = {
+  owner: 'owner',
+  photographer: 'photographer',
+  admin: 'admin',
+  staff: 'staff',
+} as const;
+
+export type RoleLogin200RolesItemRole = typeof RoleLogin200RolesItemRole[keyof typeof RoleLogin200RolesItemRole];
+
+
+export const RoleLogin200RolesItemRole = {
+  owner: 'owner',
+  photographer: 'photographer',
+  admin: 'admin',
+  staff: 'staff',
+} as const;
+
+export type RoleLogin200RolesItem = {
+  key: string;
+  role: RoleLogin200RolesItemRole;
+  label: string;
+  requiresPassword: boolean;
+};
+
+export type RoleLogin200 = {
+  ok?: boolean;
+  role?: RoleLogin200Role;
+  redirect?: string;
+  requiresRole?: boolean;
+  roles?: RoleLogin200RolesItem[];
+};
+
+export type SelectLoginRoleBody = {
+  /** @pattern ^(owner|photographer|admin|staff):[1-9]\d*$ */
+  key: string;
+  /**
+     * Required if the chosen role has a different password.
+     * @minLength 1
+     * @maxLength 128
+     */
+  password?: string;
+};
+
+export type SelectLoginRole200Role = typeof SelectLoginRole200Role[keyof typeof SelectLoginRole200Role];
+
+
+export const SelectLoginRole200Role = {
+  owner: 'owner',
+  photographer: 'photographer',
+  admin: 'admin',
+  staff: 'staff',
+} as const;
+
+export type SelectLoginRole200RolesItemRole = typeof SelectLoginRole200RolesItemRole[keyof typeof SelectLoginRole200RolesItemRole];
+
+
+export const SelectLoginRole200RolesItemRole = {
+  owner: 'owner',
+  photographer: 'photographer',
+  admin: 'admin',
+  staff: 'staff',
+} as const;
+
+export type SelectLoginRole200RolesItem = {
+  key: string;
+  role: SelectLoginRole200RolesItemRole;
+  label: string;
+  requiresPassword: boolean;
+};
+
+export type SelectLoginRole200 = {
+  ok?: boolean;
+  role?: SelectLoginRole200Role;
+  redirect?: string;
+  requiresRole?: boolean;
+  roles?: SelectLoginRole200RolesItem[];
+};
+
 export type UpdatePhotographyPolicyBody = {
   /**
      * @minimum 0
@@ -949,6 +1049,10 @@ export type RequestPhotographySessionUpload200 = { [key: string]: unknown };
 
 export type GetPhotographySessionFileParams = {
 download?: GetPhotographySessionFileDownload;
+/**
+ * Explicit role context; no fallback to the other role's cookie.
+ */
+role?: GetPhotographySessionFileRole;
 };
 
 export type GetPhotographySessionFileDownload = typeof GetPhotographySessionFileDownload[keyof typeof GetPhotographySessionFileDownload];
@@ -956,6 +1060,14 @@ export type GetPhotographySessionFileDownload = typeof GetPhotographySessionFile
 
 export const GetPhotographySessionFileDownload = {
   NUMBER_1: '1',
+} as const;
+
+export type GetPhotographySessionFileRole = typeof GetPhotographySessionFileRole[keyof typeof GetPhotographySessionFileRole];
+
+
+export const GetPhotographySessionFileRole = {
+  owner: 'owner',
+  photographer: 'photographer',
 } as const;
 
 export type GetPhotographyStatus200 = { [key: string]: unknown };

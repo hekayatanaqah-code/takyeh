@@ -139,6 +139,7 @@ router.post("/portal/login", sameOrigin, loginLimit, async (req, res) => {
 router.post("/portal/logout", sameOrigin, async (req, res) => {
   if (req.cookies?.[COOKIE]) await db.delete(photographerSessionsTable).where(eq(photographerSessionsTable.hash, photoHash(req.cookies[COOKIE])));
   res.clearCookie(COOKIE, { path: "/" });
+  res.clearCookie(COOKIE, { path: "/api/photography" });
   res.json({ ok: true });
 });
 router.get("/portal", async (req, res) => {

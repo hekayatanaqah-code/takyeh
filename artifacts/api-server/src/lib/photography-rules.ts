@@ -22,6 +22,7 @@ export const coverageSchema = z.object({
   allDistricts: z.boolean(),
 }).refine(v => v.allDistricts || v.districtIds.length > 0, "حدد الأحياء أو اختر كل الأحياء");
 export const photographerProfileSchema = z.object({
+  email: z.union([z.literal(""), z.string().trim().email().max(254)]).transform(v => v.toLowerCase()).optional(),
   bio: z.string().trim().max(2000),
   experienceYears: z.enum(["", "under_1", "1_3", "3_5", "over_5"]).optional(),
   portfolioUrl: z.string().trim().max(2000).refine(value => {

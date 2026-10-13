@@ -61,3 +61,4 @@
 - [Financial browser fixture cleanup](financial-browser-fixture-cleanup.md) — cancelling a browser helper does not clean its database rows or private files; record fixture provenance outside the helper.
 - [Generated API export boundaries](generated-api-export-boundaries.md) — resolve model/schema collisions with value exports; library-only typechecks can miss lost runtime validators.
 - [Photography delivery integrity](photography-delivery-integrity.md) — actual artifacts, immutable private copies and single owner notice; current competencies stay separate from historical consent.
+- [Multi-role authentication](multi-role-authentication.md) — shared contacts discover roles, not permissions; retain password choice and independent owner/photographer login and logout.

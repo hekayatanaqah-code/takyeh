@@ -6,7 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GetPhotographySessionFileDownload } from './getPhotographySessionFileDownload';
+import type { GetPhotographySessionFileRole } from './getPhotographySessionFileRole';
 
 export type GetPhotographySessionFileParams = {
 download?: GetPhotographySessionFileDownload;
+/**
+ * Explicit role context; no fallback to the other role's cookie.
+ */
+role?: GetPhotographySessionFileRole;
 };
