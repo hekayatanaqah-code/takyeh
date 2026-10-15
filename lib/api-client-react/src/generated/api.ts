@@ -265,7 +265,7 @@ export function useAdminListPartnerPhotographers<TData = Awaited<ReturnType<type
 
 
 
-export const getAdminUpdatePartnerAccountUrl = (kind: 'owner' | 'photographer',
+export const getAdminUpdatePartnerAccountUrl = (kind: 'photographer',
     id: number,) => {
 
 
@@ -275,9 +275,9 @@ export const getAdminUpdatePartnerAccountUrl = (kind: 'owner' | 'photographer',
 }
 
 /**
- * @summary Update an exact role account without merging shared contacts or identities
+ * @summary Update a photographer account; owner personal information is owner-managed only
  */
-export const adminUpdatePartnerAccount = async (kind: 'owner' | 'photographer',
+export const adminUpdatePartnerAccount = async (kind: 'photographer',
     id: number,
     adminUpdatePartnerAccountBody: AdminUpdatePartnerAccountBody, options?: Parameters<typeof customFetch>[1]): Promise<AdminUpdatePartnerAccount200> => {
 
@@ -340,10 +340,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type AdminUpdatePartnerAccountMutationResult = NonNullable<Awaited<ReturnType<typeof adminUpdatePartnerAccount>>>
     export type AdminUpdatePartnerAccountMutationBody = BodyType<AdminUpdatePartnerAccountBody>
     export type AdminUpdatePartnerAccountMutationError = ErrorType<void>
-    export type AdminUpdatePartnerAccountMutationVariables = {kind: 'owner' | 'photographer';id: number;data: BodyType<AdminUpdatePartnerAccountBody>}
+    export type AdminUpdatePartnerAccountMutationVariables = {kind: 'photographer';id: number;data: BodyType<AdminUpdatePartnerAccountBody>}
 
     /**
- * @summary Update an exact role account without merging shared contacts or identities
+ * @summary Update a photographer account; owner personal information is owner-managed only
  */
 export const useAdminUpdatePartnerAccount = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminUpdatePartnerAccount>>, TError,AdminUpdatePartnerAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -366,8 +366,8 @@ export const getAdminResetPartnerPasswordUrl = (kind: 'owner' | 'photographer',
 }
 
 /**
- * Owner recovery enables password sign-in without changing inventory approvals. Incomplete photographer invitations cannot bypass registration or legal consent.
- * @summary Manually recover an account and revoke its role-specific password sessions
+ * Owner recovery requires a nonblank reason, durable administrative audit and an available WhatsApp security sender. Failure to confirm sending aborts the change. Notifications contain no passwords and use only the stored owner phone. Incomplete photographer invitations cannot bypass legal consent.
+ * @summary Emergency account recovery with role-specific session revocation
  */
 export const adminResetPartnerPassword = async (kind: 'owner' | 'photographer',
     id: number,
@@ -435,7 +435,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type AdminResetPartnerPasswordMutationVariables = {kind: 'owner' | 'photographer';id: number;data: BodyType<AdminResetPartnerPasswordBody>}
 
     /**
- * @summary Manually recover an account and revoke its role-specific password sessions
+ * @summary Emergency account recovery with role-specific session revocation
  */
 export const useAdminResetPartnerPassword = <TError = ErrorType<void>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminResetPartnerPassword>>, TError,AdminResetPartnerPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}

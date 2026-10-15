@@ -352,6 +352,8 @@ const auditSafeSettingValueLimits: Record<string, number> = {
 
 function adminAuditOwnerId(req: Request): string | null {
   const segments = req.path.split("/").filter(Boolean);
+  if (segments[0] === "partner-accounts" && segments[1] === "owner"
+    && /^[1-9]\d*$/.test(segments[2] ?? "") && segments[3] === "password") return `owner_${segments[2]}`;
   if (segments[0] !== "owners" || segments.length !== 3
     || !["free-access", "discount", "subscription-grant"].includes(segments[2])) return null;
   const ownerId = segments[1];
@@ -551,11 +553,15 @@ router.use(async (req, res, next) => {
     // Refuse a staff mutation if it cannot be attributed to a named employee.
     const actorName = req.adminStaff
       ? req.adminStaff.name?.trim()
-      : (req.user as { name?: string } | undefined)?.name?.trim() || "المشرف العام";
+      : (req.user as { name?: string } | undefined)?.name?.trim()
+        || [req.user?.firstName, req.user?.lastName].filter(Boolean).join(" ").trim()
+        || "المشرف العام";
     if (!actorName) throw new Error("Authenticated admin staff member has no name");
 
     const targetOwnerId = adminAuditOwnerId(req);
-    const action = `${req.method.toLowerCase()}_${entity}`.slice(0, 255);
+    const action = req.method === "POST" && entity === "partner-accounts" && targetOwnerId
+      ? "owner_emergency_password_reset"
+      : `${req.method.toLowerCase()}_${entity}`.slice(0, 255);
     const [audit] = await db.insert(adminAuditLogsTable).values({
       actorId,
       actorName: String(actorName).slice(0, 255),
@@ -567,6 +573,7 @@ router.use(async (req, res, next) => {
       targetOwnerId,
       metadata: { source: "admin-router", status: "started", action, targetOwnerId },
     }).returning({ id: adminAuditLogsTable.id });
+    res.locals.adminAuditId = audit.id;
 
     let settingsBaseline: Map<string, string | null> | undefined;
     if (req.path === "/settings" && req.method === "PATCH") {
@@ -619,6 +626,7 @@ router.use(async (req, res, next) => {
             targetOwnerId,
             before: beforeSnapshot,
             after: afterSnapshot,
+            ...res.locals.adminAuditDetails,
           },
         })
         .where(eq(adminAuditLogsTable.id, audit.id));

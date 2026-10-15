@@ -23,13 +23,13 @@ export const AdminListPartnerPhotographersResponse = zod.array(AdminListPartnerP
 
 
 /**
- * @summary Update an exact role account without merging shared contacts or identities
+ * @summary Update a photographer account; owner personal information is owner-managed only
  */
 
 
 
 export const AdminUpdatePartnerAccountParams = zod.object({
-  "kind": zod.enum(['owner', 'photographer']),
+  "kind": zod.enum(['photographer']),
   "id": zod.coerce.number().int().min(1)
 })
 
@@ -54,8 +54,8 @@ export const AdminUpdatePartnerAccountResponse = zod.object({
 
 
 /**
- * Owner recovery enables password sign-in without changing inventory approvals. Incomplete photographer invitations cannot bypass registration or legal consent.
- * @summary Manually recover an account and revoke its role-specific password sessions
+ * Owner recovery requires a nonblank reason, durable administrative audit and an available WhatsApp security sender. Failure to confirm sending aborts the change. Notifications contain no passwords and use only the stored owner phone. Incomplete photographer invitations cannot bypass legal consent.
+ * @summary Emergency account recovery with role-specific session revocation
  */
 
 
@@ -68,10 +68,14 @@ export const AdminResetPartnerPasswordParams = zod.object({
 export const adminResetPartnerPasswordBodyPasswordMin = 10;
 export const adminResetPartnerPasswordBodyPasswordMax = 72;
 
+export const adminResetPartnerPasswordBodyReasonMin = 5;
+export const adminResetPartnerPasswordBodyReasonMax = 500;
+
 
 
 export const AdminResetPartnerPasswordBody = zod.object({
-  "password": zod.string().min(adminResetPartnerPasswordBodyPasswordMin).max(adminResetPartnerPasswordBodyPasswordMax).describe('Maximum 72 UTF-8 bytes; never logged or returned')
+  "password": zod.string().min(adminResetPartnerPasswordBodyPasswordMin).max(adminResetPartnerPasswordBodyPasswordMax).describe('Maximum 72 UTF-8 bytes; never logged or returned'),
+  "reason": zod.string().min(adminResetPartnerPasswordBodyReasonMin).max(adminResetPartnerPasswordBodyReasonMax).optional().describe('Mandatory for owner recovery; trimmed and persisted with the authenticated actor and target account')
 })
 
 export const AdminResetPartnerPasswordResponse = zod.object({

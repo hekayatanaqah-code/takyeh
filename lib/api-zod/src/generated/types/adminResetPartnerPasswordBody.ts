@@ -13,4 +13,10 @@ export type AdminResetPartnerPasswordBody = {
      * @maxLength 72
      */
   password: string;
+  /**
+     * Mandatory for owner recovery; trimmed and persisted with the authenticated actor and target account
+     * @minLength 5
+     * @maxLength 500
+     */
+  reason?: string;
 };

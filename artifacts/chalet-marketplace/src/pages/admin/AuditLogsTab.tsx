@@ -76,6 +76,7 @@ export function AuditLogsTab() {
       delete: "حذف",
       approve: "موافقة",
       reject: "رفض",
+      owner_emergency_password_reset: "إعادة تعيين طارئة لكلمة مرور مالك",
     };
     return map[action] || action;
   };
@@ -145,6 +146,16 @@ export function AuditLogsTab() {
                           {log.actorName || log.actorId || "النظام"}
                         </span>
                       </div>
+                      {typeof log.metadata?.reason === "string" && (
+                        <div className="mt-2 space-y-1 text-xs leading-6" data-testid={`audit-reset-reason-${log.id}`}>
+                          <p className="text-amber-200">سبب التغيير: {log.metadata.reason}</p>
+                          <p className="text-slate-400">الحالة: {log.metadata.status === "completed" ? "نُفّذت" : log.metadata.status === "failed" ? "لم تُنفّذ" : "قيد التحقق"}</p>
+                          <p className="text-slate-300">الحساب المستهدف: {typeof log.metadata.targetOwnerId === "string" ? log.metadata.targetOwnerId : log.entityId}</p>
+                          {log.metadata.whatsappNotification && typeof log.metadata.whatsappNotification === "object" ? (
+                            <p className="text-slate-400">تنبيه واتساب: {(log.metadata.whatsappNotification as { status?: string }).status === "accepted" ? "قبِل مزوّد واتساب الرسالة (لا يثبت استلامها)" : "لم يُؤكد الإرسال"}</p>
+                          ) : null}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">

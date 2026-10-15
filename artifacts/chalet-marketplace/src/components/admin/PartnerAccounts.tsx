@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -22,16 +23,18 @@ export function PartnerAccountActions({ partner }: { partner: Partner }) {
   const [mode, setMode] = useState<"edit" | "password" | null>(null);
   const [name, setName] = useState(""), [phone, setPhone] = useState(""), [email, setEmail] = useState("");
   const [password, setPassword] = useState(""), [confirm, setConfirm] = useState("");
+  const [reason, setReason] = useState("");
   const client = useQueryClient();
   const { toast } = useToast();
   const save = useMutation({
     mutationFn: async () => {
       if (mode === "password" && password !== confirm) throw new Error("كلمتا المرور غير متطابقتين");
+      if (mode === "password" && partner.kind === "owner" && reason.trim().length < 5) throw new Error("سبب التغيير مطلوب (٥–٥٠٠ حرف)");
       return call(`/${partner.kind}/${partner.id}${mode === "password" ? "/password" : ""}`,
-        mode === "password" ? "POST" : "PATCH", mode === "password" ? { password } : { name, phone, email });
+        mode === "password" ? "POST" : "PATCH", mode === "password" ? { password, ...(partner.kind === "owner" ? { reason: reason.trim() } : {}) } : { name, phone, email });
     },
     onSuccess: () => {
-      setPassword(""); setConfirm(""); setMode(null);
+      setPassword(""); setConfirm(""); setReason(""); setMode(null);
       void client.invalidateQueries({ queryKey: ["admin", "owners"] });
       void client.invalidateQueries({ queryKey: ["admin", "partner-photographers"] });
       void client.invalidateQueries({ queryKey: ["ph-admin"] });
@@ -40,16 +43,16 @@ export function PartnerAccountActions({ partner }: { partner: Partner }) {
   });
   function open(next: "edit" | "password") {
     setName(partner.name); setPhone(partner.phone); setEmail(partner.email || "");
-    setPassword(""); setConfirm(""); save.reset(); setMode(next);
+    setPassword(""); setConfirm(""); setReason(""); save.reset(); setMode(next);
   }
   return <>
-    <Button type="button" variant="outline" size="sm" className="h-8 border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700"
-      data-testid={`button-edit-partner-${partner.kind}-${partner.id}`} onClick={() => open("edit")}>تعديل المستخدم</Button>
+    {partner.kind === "photographer" && <Button type="button" variant="outline" size="sm" className="h-8 border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700"
+      data-testid={`button-edit-partner-${partner.kind}-${partner.id}`} onClick={() => open("edit")}>تعديل المستخدم</Button>}
     <Button type="button" variant="outline" size="sm" className="h-8 border-amber-800 bg-slate-800 text-amber-300 hover:bg-slate-700"
       disabled={partner.canResetPassword === false}
       title={partner.canResetPassword === false ? "يجب إكمال التسجيل وقبول العقد أولاً" : undefined}
       data-testid={`button-reset-partner-${partner.kind}-${partner.id}`} onClick={() => open("password")}>إعادة تعيين كلمة المرور</Button>
-    <Dialog open={mode !== null} onOpenChange={open => { if (!open && !save.isPending) { setMode(null); setPassword(""); setConfirm(""); } }}>
+    <Dialog open={mode !== null} onOpenChange={open => { if (!open && !save.isPending) { setMode(null); setPassword(""); setConfirm(""); setReason(""); } }}>
       <DialogContent dir="rtl" className="max-w-md max-h-[90dvh] overflow-y-auto border-slate-700 bg-slate-900 text-slate-100">
         <DialogHeader>
           <DialogTitle>{mode === "password" ? "إعادة تعيين كلمة المرور" : "تعديل المستخدم"}</DialogTitle>
@@ -62,6 +65,14 @@ export function PartnerAccountActions({ partner }: { partner: Partner }) {
               تُحفظ كلمة المرور الجديدة فوراً وتُنهي جلسات هذا الدور فقط. لن تتغير كلمة مرور أي دور آخر يشارك الجوال أو البريد.
               {partner.kind === "owner" && " تُعد هذه العملية استعادة إدارية للحساب وتُمكّن الدخول بكلمة المرور، دون تغيير اعتماد العقارات أو الخدمات."}
             </p>
+            {partner.kind === "owner" && <>
+              <p className="text-xs leading-6 text-amber-200">للحالات الطارئة فقط. يُوثّق اسم المشرف والحساب والسبب والتوقيت، ويُرسل تنبيه أمني إلى جوال المالك المسجّل. يتوقف الإجراء إذا تعذر إرسال التنبيه.</p>
+              <label className="block space-y-2"><span>سبب التغيير (إلزامي)</span>
+                <Textarea className={fieldClass} required minLength={5} maxLength={500}
+                  value={reason} onChange={event => setReason(event.target.value)} data-testid="input-admin-reset-reason"
+                  placeholder="اشرح الحالة الطارئة دون إدخال كلمات مرور أو بيانات سرية" />
+              </label>
+            </>}
             <label className="block space-y-2"><span>كلمة المرور الجديدة</span>
               <Input className={fieldClass} type="password" autoComplete="new-password" required minLength={10} maxLength={72}
                 value={password} onChange={event => setPassword(event.target.value)} data-testid="input-admin-new-password" /></label>
@@ -78,7 +89,7 @@ export function PartnerAccountActions({ partner }: { partner: Partner }) {
           {save.isError && <p role="alert" className="text-sm text-red-300">{save.error.message}</p>}
           <div className="flex gap-2">
             <Button type="submit" disabled={save.isPending} className="bg-amber-700 hover:bg-amber-600" data-testid="button-save-partner-account">{save.isPending ? "جارٍ الحفظ..." : "حفظ"}</Button>
-            <Button type="button" variant="outline" className="border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700" disabled={save.isPending} onClick={() => { setMode(null); setPassword(""); setConfirm(""); }}>إلغاء</Button>
+            <Button type="button" variant="outline" className="border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700" disabled={save.isPending} onClick={() => { setMode(null); setPassword(""); setConfirm(""); setReason(""); }}>إلغاء</Button>
           </div>
           </fieldset>
         </form>

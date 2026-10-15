@@ -832,6 +832,9 @@ router.get("/profile", async (req, res) => {
 
 /* ── PUT /owner/profile — update owner profile ─────────────── */
 router.put("/profile", async (req, res) => {
+  if ((req.user as { isImpersonated?: boolean } | undefined)?.isImpersonated) {
+    return res.status(403).json({ error: "تعديل البيانات الشخصية متاح للمالك فقط، وليس أثناء الدخول الإداري نيابة عنه" });
+  }
   try {
     const userId = req.user?.id;
     const ownerAccount = await resolveOwnerApplication(req);

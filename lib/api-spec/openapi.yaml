@@ -46,12 +46,12 @@ paths:
         "403": { description: User-management permission required }
   /admin/partner-accounts/{kind}/{id}:
     parameters:
-      - { name: kind, in: path, required: true, schema: { type: string, enum: [owner, photographer] } }
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [photographer] } }
       - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
     patch:
       operationId: adminUpdatePartnerAccount
       tags: [admin]
-      summary: Update an exact role account without merging shared contacts or identities
+      summary: Update a photographer account; owner personal information is owner-managed only
       requestBody:
         required: true
         content:
@@ -74,7 +74,7 @@ paths:
                 required: [ok]
                 properties: { ok: { type: boolean } }
         "400": { description: Invalid profile }
-        "403": { description: User-management permission and matching origin required }
+        "403": { description: Owner personal information cannot be edited by administrators; user-management permission and matching origin required }
         "404": { description: Account missing }
         "409": { description: Contact already used by another account in the same role }
   /admin/partner-accounts/{kind}/{id}/password:
@@ -84,8 +84,8 @@ paths:
     post:
       operationId: adminResetPartnerPassword
       tags: [admin]
-      summary: Manually recover an account and revoke its role-specific password sessions
-      description: Owner recovery enables password sign-in without changing inventory approvals. Incomplete photographer invitations cannot bypass registration or legal consent.
+      summary: Emergency account recovery with role-specific session revocation
+      description: Owner recovery requires a nonblank reason, durable administrative audit and an available WhatsApp security sender. Failure to confirm sending aborts the change. Notifications contain no passwords and use only the stored owner phone. Incomplete photographer invitations cannot bypass legal consent.
       requestBody:
         required: true
         content:
@@ -96,6 +96,7 @@ paths:
               required: [password]
               properties:
                 password: { type: string, minLength: 10, maxLength: 72, description: Maximum 72 UTF-8 bytes; never logged or returned }
+                reason: { type: string, minLength: 5, maxLength: 500, description: Mandatory for owner recovery; trimmed and persisted with the authenticated actor and target account }
       responses:
         "200":
           description: Password changed and role-specific sessions revoked
@@ -109,6 +110,8 @@ paths:
         "403": { description: User-management permission and matching origin required }
         "404": { description: Account missing }
         "409": { description: Photographer must complete registration first }
+        "502": { description: WhatsApp sending unconfirmed; password change rolled back }
+        "503": { description: WhatsApp security sender or auditing unavailable; password unchanged }
   /auth/role-login:
     $ref: "./role-login.yaml#/login"
   /auth/select-role:
