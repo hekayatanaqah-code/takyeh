@@ -36,6 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
 import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
@@ -23553,17 +23554,23 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  {season.enabled && (
+                  <UiTooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex" tabIndex={season.enabled ? undefined : 0} aria-label={season.enabled ? undefined : "فعّل الموسم لتتمكن من تحديد الأسعار"}>
                     <Button
                       size="sm"
                       variant="outline"
                       className="h-8 text-xs gap-1.5"
+                      disabled={!season.enabled}
                       onClick={() => openGlobalPricing(season)}
                     >
                       <Pencil className="w-3.5 h-3.5" />
                       تخصيص الأسعار
                     </Button>
-                  )}
+                      </span>
+                    </TooltipTrigger>
+                    {!season.enabled && <TooltipContent dir="rtl">فعّل الموسم لتتمكن من تحديد الأسعار</TooltipContent>}
+                  </UiTooltip>
                   <span className="text-xs text-muted-foreground">{season.enabled ? "مفعّل" : "غير مفعّل"}</span>
                   <Switch
                     checked={season.enabled}
@@ -23698,8 +23705,12 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
           <div className="overflow-y-auto flex-1 space-y-4 py-2 pl-1">
             {/* Name */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">اسم الموسم</label>
-              <Input placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} disabled={!!editGlobalSeasonId} />
+              <label htmlFor="property-season-name" className="text-sm font-medium flex items-center gap-1.5">
+                اسم الموسم
+                {!!editGlobalSeasonId && <Lock className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />}
+              </label>
+              <Input id="property-season-name" aria-describedby={editGlobalSeasonId ? "property-season-name-hint" : undefined} placeholder="اسم الموسم..." value={nameAr} onChange={(e) => setNameAr(e.target.value)} disabled={!!editGlobalSeasonId} />
+              {!!editGlobalSeasonId && <p id="property-season-name-hint" className="text-xs text-muted-foreground">اسم الموسم محدد آلياً من إدارة المنصة</p>}
               {!editGlobalSeasonId && <div className="flex gap-2 flex-wrap pt-1">
                 {["عيد الأضحى", "عيد الفطر", "رمضان", "الإجازة الصيفية", "نهاية السنة", "الإجازة الشتوية"].map((n) => (
                   <button key={n} onClick={() => setNameAr(n)}
