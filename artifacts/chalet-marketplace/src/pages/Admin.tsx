@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { refreshCatalogsAfterWrite } from "@/lib/query-client";
 import { matchesOwnerDirectoryTab, ownerWhatsAppUrl, type OwnerDirectoryTab } from "@/lib/owner-directory";
+import { PartnerAccountActions, PhotographerAccounts } from "@/components/admin/PartnerAccounts";
 import InventoryFilters, { type InventoryFilterState } from "@/components/admin/InventoryFilters";
 import { useInventoryCatalogs } from "@/hooks/useInventoryCatalogs";
 import { emptyInventoryFilters, filterAndSortInventory, servicePricingOptions, type InventoryDescriptor } from "@/lib/inventory-filters";
@@ -193,6 +194,8 @@ interface Amenity {
 
 interface Owner {
   ownerId: string;
+  accountId: number | null;
+  email: string;
   ownerName: string;
   ownerKind: 'property'|'service'|'both'|'none';
   isRegistered: boolean;
@@ -1625,6 +1628,7 @@ function DeleteSafeModal({
 }
 
 function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
+  const [accountGroup, setAccountGroup] = useState<"owners" | "photographers">("owners");
   const [mainTab, setMainTab]             = useState<OwnerDirectoryTab>("all");
   const [search, setSearch]               = useState("");
   const [regionFilter, setRegionFilter]   = useState("");
@@ -1980,8 +1984,14 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
   const colSpan = 6;
 
+  if (accountGroup === "photographers") return <div className="space-y-4">
+    <Button variant="outline" className="border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700" onClick={() => setAccountGroup("owners")}>العودة إلى حسابات الملاك</Button>
+    <PhotographerAccounts />
+  </div>;
+
   return (
     <div className="space-y-4">
+      <Button variant="outline" className="border-slate-600 bg-slate-800 text-slate-100 hover:bg-slate-700" onClick={() => setAccountGroup("photographers")} data-testid="button-partner-photographers">حسابات المصورين</Button>
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
@@ -2410,6 +2420,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
                 <TableCell>
                   <div className="flex flex-wrap items-center justify-end gap-1">
+                    {owner.accountId != null && <PartnerAccountActions partner={{ id: owner.accountId, kind: "owner", name: owner.ownerName, phone: owner.whatsappNumber || "", email: owner.email || "" }} />}
                     {isSuperAdmin && (
                       <>
                         <Button

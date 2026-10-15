@@ -21,6 +21,94 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /admin/partner-accounts/photographers:
+    get:
+      operationId: adminListPartnerPhotographers
+      tags: [admin]
+      summary: List photographer login accounts for authorized user managers
+      responses:
+        "200":
+          description: Accounts, without credentials
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, name, phone, email, status, canResetPassword]
+                  properties:
+                    id: { type: integer }
+                    name: { type: string }
+                    phone: { type: string }
+                    email: { type: string }
+                    status: { type: string }
+                    canResetPassword: { type: boolean }
+        "403": { description: User-management permission required }
+  /admin/partner-accounts/{kind}/{id}:
+    parameters:
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [owner, photographer] } }
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    patch:
+      operationId: adminUpdatePartnerAccount
+      tags: [admin]
+      summary: Update an exact role account without merging shared contacts or identities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, phone, email]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                phone: { type: string, maxLength: 30, description: Saudi mobile in local or international form; Arabic digits accepted }
+                email: { type: string, maxLength: 254, description: Valid email or empty string to remove it }
+      responses:
+        "200":
+          description: Saved atomically; account identity is unchanged
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties: { ok: { type: boolean } }
+        "400": { description: Invalid profile }
+        "403": { description: User-management permission and matching origin required }
+        "404": { description: Account missing }
+        "409": { description: Contact already used by another account in the same role }
+  /admin/partner-accounts/{kind}/{id}/password:
+    parameters:
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [owner, photographer] } }
+      - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      operationId: adminResetPartnerPassword
+      tags: [admin]
+      summary: Manually recover an account and revoke its role-specific password sessions
+      description: Owner recovery enables password sign-in without changing inventory approvals. Incomplete photographer invitations cannot bypass registration or legal consent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password]
+              properties:
+                password: { type: string, minLength: 10, maxLength: 72, description: Maximum 72 UTF-8 bytes; never logged or returned }
+      responses:
+        "200":
+          description: Password changed and role-specific sessions revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties: { ok: { type: boolean } }
+        "400": { description: Invalid password or target }
+        "403": { description: User-management permission and matching origin required }
+        "404": { description: Account missing }
+        "409": { description: Photographer must complete registration first }
   /auth/role-login:
     $ref: "./role-login.yaml#/login"
   /auth/select-role:

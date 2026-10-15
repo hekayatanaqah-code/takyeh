@@ -26,7 +26,12 @@ import type {
 
 import type {
   AdminBroadcastRecipientsResponse,
+  AdminListPartnerPhotographers200Item,
   AdminPhotographerProfileInput,
+  AdminResetPartnerPassword200,
+  AdminResetPartnerPasswordBody,
+  AdminUpdatePartnerAccount200,
+  AdminUpdatePartnerAccountBody,
   AuthUserEnvelope,
   BeginBrowserLoginParams,
   Chalet,
@@ -158,6 +163,290 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getAdminListPartnerPhotographersUrl = () => {
+
+
+
+
+  return `/api/admin/partner-accounts/photographers`
+}
+
+/**
+ * @summary List photographer login accounts for authorized user managers
+ */
+export const adminListPartnerPhotographers = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminListPartnerPhotographers200Item[]> => {
+
+  return customFetch<AdminListPartnerPhotographers200Item[]>(getAdminListPartnerPhotographersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getAdminListPartnerPhotographersQueryKey = () => {
+    return [
+    `/api/admin/partner-accounts/photographers`
+    ] as const;
+    }
+
+
+export const getAdminListPartnerPhotographersQueryOptions = <TData = Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getAdminListPartnerPhotographersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof adminListPartnerPhotographers>>> = ({ signal }) => adminListPartnerPhotographers({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type AdminListPartnerPhotographersQueryResult = NonNullable<Awaited<ReturnType<typeof adminListPartnerPhotographers>>>
+export type AdminListPartnerPhotographersQueryError = ErrorType<void>
+
+
+export function useAdminListPartnerPhotographers<TData = Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof adminListPartnerPhotographers>>,
+          TError,
+          Awaited<ReturnType<typeof adminListPartnerPhotographers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAdminListPartnerPhotographers<TData = Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof adminListPartnerPhotographers>>,
+          TError,
+          Awaited<ReturnType<typeof adminListPartnerPhotographers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useAdminListPartnerPhotographers<TData = Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List photographer login accounts for authorized user managers
+ */
+
+export function useAdminListPartnerPhotographers<TData = Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof adminListPartnerPhotographers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getAdminListPartnerPhotographersQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAdminUpdatePartnerAccountUrl = (kind: 'owner' | 'photographer',
+    id: number,) => {
+
+
+
+
+  return `/api/admin/partner-accounts/${kind}/${id}`
+}
+
+/**
+ * @summary Update an exact role account without merging shared contacts or identities
+ */
+export const adminUpdatePartnerAccount = async (kind: 'owner' | 'photographer',
+    id: number,
+    adminUpdatePartnerAccountBody: AdminUpdatePartnerAccountBody, options?: Parameters<typeof customFetch>[1]): Promise<AdminUpdatePartnerAccount200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminUpdatePartnerAccount200>(getAdminUpdatePartnerAccountUrl(kind,id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminUpdatePartnerAccountBody)
+  }
+);}
+
+
+
+
+
+export const getAdminUpdatePartnerAccountMutationKey = () => ['adminUpdatePartnerAccount'] as const;
+
+export const getAdminUpdatePartnerAccountMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminUpdatePartnerAccount>>, TError,AdminUpdatePartnerAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminUpdatePartnerAccount>>, TError,AdminUpdatePartnerAccountMutationVariables, TContext> => {
+
+const mutationKey = getAdminUpdatePartnerAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminUpdatePartnerAccount>>, AdminUpdatePartnerAccountMutationVariables> = (props) => {
+          const {kind,id,data} = props ?? {};
+
+          return  adminUpdatePartnerAccount(kind,id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminUpdatePartnerAccountMutationResult = NonNullable<Awaited<ReturnType<typeof adminUpdatePartnerAccount>>>
+    export type AdminUpdatePartnerAccountMutationBody = BodyType<AdminUpdatePartnerAccountBody>
+    export type AdminUpdatePartnerAccountMutationError = ErrorType<void>
+    export type AdminUpdatePartnerAccountMutationVariables = {kind: 'owner' | 'photographer';id: number;data: BodyType<AdminUpdatePartnerAccountBody>}
+
+    /**
+ * @summary Update an exact role account without merging shared contacts or identities
+ */
+export const useAdminUpdatePartnerAccount = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminUpdatePartnerAccount>>, TError,AdminUpdatePartnerAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof adminUpdatePartnerAccount>>,
+        TError,
+        AdminUpdatePartnerAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAdminUpdatePartnerAccountMutationOptions(options), queryClient);
+    }
+
+export const getAdminResetPartnerPasswordUrl = (kind: 'owner' | 'photographer',
+    id: number,) => {
+
+
+
+
+  return `/api/admin/partner-accounts/${kind}/${id}/password`
+}
+
+/**
+ * Owner recovery enables password sign-in without changing inventory approvals. Incomplete photographer invitations cannot bypass registration or legal consent.
+ * @summary Manually recover an account and revoke its role-specific password sessions
+ */
+export const adminResetPartnerPassword = async (kind: 'owner' | 'photographer',
+    id: number,
+    adminResetPartnerPasswordBody: AdminResetPartnerPasswordBody, options?: Parameters<typeof customFetch>[1]): Promise<AdminResetPartnerPassword200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminResetPartnerPassword200>(getAdminResetPartnerPasswordUrl(kind,id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminResetPartnerPasswordBody)
+  }
+);}
+
+
+
+
+
+export const getAdminResetPartnerPasswordMutationKey = () => ['adminResetPartnerPassword'] as const;
+
+export const getAdminResetPartnerPasswordMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminResetPartnerPassword>>, TError,AdminResetPartnerPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof adminResetPartnerPassword>>, TError,AdminResetPartnerPasswordMutationVariables, TContext> => {
+
+const mutationKey = getAdminResetPartnerPasswordMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof adminResetPartnerPassword>>, AdminResetPartnerPasswordMutationVariables> = (props) => {
+          const {kind,id,data} = props ?? {};
+
+          return  adminResetPartnerPassword(kind,id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AdminResetPartnerPasswordMutationResult = NonNullable<Awaited<ReturnType<typeof adminResetPartnerPassword>>>
+    export type AdminResetPartnerPasswordMutationBody = BodyType<AdminResetPartnerPasswordBody>
+    export type AdminResetPartnerPasswordMutationError = ErrorType<void>
+    export type AdminResetPartnerPasswordMutationVariables = {kind: 'owner' | 'photographer';id: number;data: BodyType<AdminResetPartnerPasswordBody>}
+
+    /**
+ * @summary Manually recover an account and revoke its role-specific password sessions
+ */
+export const useAdminResetPartnerPassword = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof adminResetPartnerPassword>>, TError,AdminResetPartnerPasswordMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof adminResetPartnerPassword>>,
+        TError,
+        AdminResetPartnerPasswordMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAdminResetPartnerPasswordMutationOptions(options), queryClient);
+    }
 
 export const getRoleLoginUrl = () => {
 

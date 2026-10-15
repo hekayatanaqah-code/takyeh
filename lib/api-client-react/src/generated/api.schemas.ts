@@ -896,6 +896,50 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type AdminListPartnerPhotographers200Item = {
+  id: number;
+  name: string;
+  phone: string;
+  email: string;
+  status: string;
+  canResetPassword: boolean;
+};
+
+export type AdminUpdatePartnerAccountBody = {
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name: string;
+  /**
+     * Saudi mobile in local or international form; Arabic digits accepted
+     * @maxLength 30
+     */
+  phone: string;
+  /**
+     * Valid email or empty string to remove it
+     * @maxLength 254
+     */
+  email: string;
+};
+
+export type AdminUpdatePartnerAccount200 = {
+  ok: boolean;
+};
+
+export type AdminResetPartnerPasswordBody = {
+  /**
+     * Maximum 72 UTF-8 bytes; never logged or returned
+     * @minLength 10
+     * @maxLength 72
+     */
+  password: string;
+};
+
+export type AdminResetPartnerPassword200 = {
+  ok: boolean;
+};
+
 export type RoleLoginBody = {
   /**
      * @minLength 1

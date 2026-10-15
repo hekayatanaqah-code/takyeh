@@ -526,7 +526,7 @@ export async function resolveOwnerApplication(req: Request): Promise<ResolvedOwn
   const userId       = req.user?.id ?? null;
 
   /* Strategy 1 — durable account-to-profile mapping */
-  if (userId) {
+  if (userId && !/^owner_\d+$/.test(String(userId))) {
     const r = await db.execute(
       sql`SELECT oa.id, oa.email
           FROM owner_account_links link
@@ -548,7 +548,7 @@ export async function resolveOwnerApplication(req: Request): Promise<ResolvedOwn
         sql`SELECT id, email FROM owner_applications WHERE id = ${n} LIMIT 1`
       );
       const hit = ((r as any).rows as ResolvedOwnerApplication[])[0];
-      if (hit?.email) return hit;
+      return hit ?? null;
     }
   }
 
@@ -662,7 +662,8 @@ export async function getOwnerIds(req: Request): Promise<string[]> {
       const applicationId = Number(legacyOwnerMatch[1]);
       const r = await db.execute(sql`
         SELECT user_id FROM owner_account_links
-        WHERE owner_application_id = ${applicationId} LIMIT 1
+        WHERE owner_application_id = ${applicationId}
+          AND user_id !~ '^owner_[0-9]+$' LIMIT 1
       `);
       const linkedUserId = ((r as any).rows as Array<{ user_id: string }>)[0]?.user_id;
       linkedAlias = linkedUserId ?? null;

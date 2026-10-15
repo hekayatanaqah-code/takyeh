@@ -1,5 +1,6 @@
 import { Router } from "express";
 import photographyAdminRouter from "./photography-admin";
+import partnerAccountsRouter from "./admin-partner-accounts";
 import ownerServicesAdminRouter from "./owner-services-admin";
 import { inventoryOwnerNames } from "../lib/inventory-owner-names";
 import multer from "multer";
@@ -296,7 +297,7 @@ function staffHasPermission(perms: AdminStaffPermissions | undefined, key: Admin
 
 const adminRoutePermissions: Array<[RegExp, AdminPermKey]> = [
   [/^\/(?:submissions|chalets|pause-alerts)(?:\/|$)/, "chaletApprovals"],
-  [/^\/(?:owners|applications)(?:\/|$)/, "userManagement"],
+  [/^\/(?:owners|applications|partner-accounts)(?:\/|$)/, "userManagement"],
   [/^\/(?:regions|cities|districts|amenities|categories)(?:\/|$)/, "platformSettings"],
   [/^\/(?:services)(?:\/|$)/, "serviceListings"],
   [/^\/(?:service-categories|service-regions|service-cities|service-districts)(?:\/|$)/, "serviceCatalog"],
@@ -709,6 +710,7 @@ router.delete("/global-seasons/:id", requirePlatformSettingsAdmin, async (req, r
 // to the authenticated superadmin before any recipient deliveries are queued.
 router.use("/broadcast", requireSuperAdmin, broadcastRouter);
 router.use("/photography", requireSuperAdmin, photographyAdminRouter);
+router.use("/partner-accounts", partnerAccountsRouter);
 router.use("/owner-services", requireSuperAdmin, ownerServicesAdminRouter);
 
 router.get("/access-check", (req, res) => {
@@ -1256,11 +1258,11 @@ router.get("/owners", async (_req, res) => {
   }
 
   const appRows = await db.execute<{
-    id: number; full_name: string; phone: string; created_at: string;
+    id: number; full_name: string; phone: string; email: string | null; created_at: string;
     user_id: string | null; deleted_at: string | null;
     has_activity: boolean;
   }>(
-    sql`SELECT oa.id, oa.full_name, oa.phone, oa.created_at, oa.deleted_at, oal.user_id,
+    sql`SELECT oa.id, oa.full_name, oa.phone, oa.email, oa.created_at, oa.deleted_at, oal.user_id,
                activity.has_activity
         FROM owner_applications oa
         LEFT JOIN owner_account_links oal
@@ -1281,7 +1283,7 @@ router.get("/owners", async (_req, res) => {
   const ownerAliases = new Map<string, string>();
   const deletedOwnerIds = new Set<string>();
   const appByOwnerId = new Map<string, {
-    fullName: string; phone: string; createdAt: string; hasActivity: boolean;
+    id: number; email: string; fullName: string; phone: string; createdAt: string; hasActivity: boolean;
   }>();
   for (const a of (appRows as any).rows) {
     const legacyOwnerId = `owner_${a.id}`;
@@ -1293,6 +1295,8 @@ router.get("/owners", async (_req, res) => {
       continue;
     }
     const app = {
+      id: a.id,
+      email: a.email ?? "",
       fullName: a.full_name ?? "",
       phone: a.phone ?? "",
       createdAt: a.created_at ?? "",
@@ -1443,6 +1447,8 @@ router.get("/owners", async (_req, res) => {
     return {
       ownerId: owner.ownerId,
       ownerName: app?.fullName || owner.ownerId,
+      accountId: app?.id ?? null,
+      email: app?.email ?? "",
       ownerKind,
       isRegistered: !!app,
       hasActivity: app?.hasActivity ?? (propertyCount > 0 || serviceCount > 0),

@@ -11,6 +11,6 @@ Owner account settings must authorize and update profiles through a durable one-
 
 Treat `owner_N` as a reserved application alias, not an external user identity, even if historical account-link data contains such a value.
 
-**Why:** A historical alias link can point at another application's reserved ID. Blind canonicalization then collapses two real registrations into one, despite one-to-one link constraints.
+**Why:** A historical alias link can point at another application's reserved ID. Blind canonicalization then collapses two real registrations into one, despite one-to-one link constraints. A correct password can consequently open the wrong profile; checking the password alone does not verify the resolved identity.
 
-**How to apply:** Ignore reserved aliases when deriving an external canonical user ID. Do not repair or delete historical links silently; keep each actual registered account distinct and use its own reserved alias when no valid external link exists.
+**How to apply:** Ignore reserved aliases when deriving an external canonical user ID. Apply this rule to authenticated profile resolution as well as directory aggregation. Do not repair or delete historical links silently; keep each actual registered account distinct and use its own reserved alias when no valid external link exists.

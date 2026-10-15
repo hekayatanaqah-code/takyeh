@@ -9,6 +9,77 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary List photographer login accounts for authorized user managers
+ */
+export const AdminListPartnerPhotographersResponseItem = zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "phone": zod.string(),
+  "email": zod.string(),
+  "status": zod.string(),
+  "canResetPassword": zod.boolean()
+})
+export const AdminListPartnerPhotographersResponse = zod.array(AdminListPartnerPhotographersResponseItem)
+
+
+/**
+ * @summary Update an exact role account without merging shared contacts or identities
+ */
+
+
+
+export const AdminUpdatePartnerAccountParams = zod.object({
+  "kind": zod.enum(['owner', 'photographer']),
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const adminUpdatePartnerAccountBodyNameMin = 2;
+export const adminUpdatePartnerAccountBodyNameMax = 120;
+
+export const adminUpdatePartnerAccountBodyPhoneMax = 30;
+
+export const adminUpdatePartnerAccountBodyEmailMax = 254;
+
+
+
+export const AdminUpdatePartnerAccountBody = zod.object({
+  "name": zod.string().min(adminUpdatePartnerAccountBodyNameMin).max(adminUpdatePartnerAccountBodyNameMax),
+  "phone": zod.string().max(adminUpdatePartnerAccountBodyPhoneMax).describe('Saudi mobile in local or international form; Arabic digits accepted'),
+  "email": zod.string().max(adminUpdatePartnerAccountBodyEmailMax).describe('Valid email or empty string to remove it')
+})
+
+export const AdminUpdatePartnerAccountResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * Owner recovery enables password sign-in without changing inventory approvals. Incomplete photographer invitations cannot bypass registration or legal consent.
+ * @summary Manually recover an account and revoke its role-specific password sessions
+ */
+
+
+
+export const AdminResetPartnerPasswordParams = zod.object({
+  "kind": zod.enum(['owner', 'photographer']),
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const adminResetPartnerPasswordBodyPasswordMin = 10;
+export const adminResetPartnerPasswordBodyPasswordMax = 72;
+
+
+
+export const AdminResetPartnerPasswordBody = zod.object({
+  "password": zod.string().min(adminResetPartnerPasswordBodyPasswordMin).max(adminResetPartnerPasswordBodyPasswordMax).describe('Maximum 72 UTF-8 bytes; never logged or returned')
+})
+
+export const AdminResetPartnerPasswordResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * @summary Verify credentials before choosing independently authorized roles
  */
 export const roleLoginBodyIdentifierMax = 160;

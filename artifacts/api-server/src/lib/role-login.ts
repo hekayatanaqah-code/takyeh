@@ -31,7 +31,7 @@ async function candidates(identifier: string): Promise<Candidate[]> {
   const email = identifier.toLowerCase();
   const result = await db.execute(sql`
     SELECT 'owner' AS role, id, password_hash FROM owner_applications
-    WHERE email_verified = true AND password_hash IS NOT NULL AND
+    WHERE email_verified = true AND deleted_at IS NULL AND password_hash IS NOT NULL AND
       (LOWER(email) = ${email} OR (${phone} <> '' AND
         regexp_replace(regexp_replace(translate(phone, '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), '[^0-9]', '', 'g'), '^(00966|966|0)', '') = ${phone}))
     UNION ALL
