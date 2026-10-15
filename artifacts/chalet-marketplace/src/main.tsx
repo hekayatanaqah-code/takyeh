@@ -1,6 +1,9 @@
 import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
+import { installConnectionMonitor } from "./lib/connection-monitor";
+
+installConnectionMonitor();
 
 const MOBILE_UI_CACHE_RELEASE = "partners-mobile-ui-2026-09";
 

@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/query-client";
 import { Toaster } from "@/components/ui/toaster";
+import AppStatus from "@/components/AppStatus";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import { useAuth } from "@workspace/replit-auth-web";
@@ -176,6 +177,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AppStatus />
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Router />

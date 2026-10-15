@@ -7,6 +7,8 @@
     <meta http-equiv="Expires" content="0" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="%BASE_URL%status.css" />
+    <link rel="preload" as="image" href="%BASE_URL%images/splash-logo.webp" />
     <title>منصة تكية - لحجز الوجهات والخدمات</title>
     <meta name="description" content="منصة تكية لحجز الوجهات والخدمات، نضع بين أيديكم خيارات متنوعة وتجربة حجز فريدة وموثوقة." />
     <link rel="canonical" href="https://takyah.replit.app/" />
@@ -25,6 +27,34 @@
     <meta name="twitter:description" content="منصة تكية لحجز الوجهات والخدمات، نضع بين أيديكم خيارات متنوعة وتجربة حجز فريدة وموثوقة." />
   </head>
   <body>
+    <div id="takyah-boot" class="takyah-status" role="status" aria-live="polite" aria-atomic="true">
+      <div class="takyah-status__content">
+        <div class="takyah-status__brand">
+          <span class="takyah-status__fallback" aria-hidden="true">تكية</span>
+          <img src="%BASE_URL%images/splash-logo.webp" alt="شعار منصة تكية" width="144" height="144"
+            onerror="this.style.visibility='hidden'" />
+        </div>
+        <div class="takyah-status__dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <p id="takyah-boot-message">جارٍ التحميل...</p>
+      </div>
+    </div>
+    <script>
+      // Available before the application bundle or any API response arrives.
+      (() => {
+        let wasOffline = !navigator.onLine;
+        const showConnection = () => {
+          const message = document.getElementById("takyah-boot-message");
+          if (message) message.textContent = "جاري الاتصال... يرجى التأكد من شبكة الإنترنت";
+        };
+        if (wasOffline) showConnection();
+        window.addEventListener("offline", () => { wasOffline = true; showConnection(); });
+        window.addEventListener("online", () => {
+          // Reload only if the app has NEVER mounted; there can be no form to lose.
+          if (wasOffline && document.getElementById("takyah-boot")) location.reload();
+        });
+        setTimeout(showConnection, 12000);
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
