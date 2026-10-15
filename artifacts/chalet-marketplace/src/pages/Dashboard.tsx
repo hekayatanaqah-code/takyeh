@@ -21491,7 +21491,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
 /* ── Reviews Tab ─────────────────────────────── */
 interface OwnerChalet { id: number; nameAr: string; photos: string[]; waReviewTemplate: string | null }
 
-const DEFAULT_REVIEW_TEMPLATE = "أهلاً [اسم_الضيف]، يسعدنا تقييمك لتجربتك في [اسم_الشاليه].\nاضغط هنا لتقييمك: [الرابط]";
+const DEFAULT_REVIEW_TEMPLATE = "أهلاً [اسم الضيف]، يسعدنا تقييمك لتجربتك في [اسم الشاليه].\nاضغط هنا لتقييمك: [الرابط]";
 
 function fmtDT(iso: string): string {
   try {
@@ -21870,9 +21870,9 @@ function ReviewsTab() {
     const text = template
       .replace(/\[الرابط\]/g, link)
       .replace(/\{link\}/g, link)
-      .replace(/\[اسم_الشاليه\]/g, chalet.nameAr ?? "عقارنا")
+      .replace(/\[اسم[ _]الشاليه\]/g, chalet.nameAr ?? "عقارنا")
       .replace(/\{chalet_name\}/g, chalet.nameAr ?? "عقارنا")
-      .replace(/\[اسم_الضيف\]/g, "")
+      .replace(/\[اسم[ _]الضيف\]/g, "")
       .replace(/\{guest_name\}/g, "");
     window.open(`https://wa.me/?text=${encodeWhatsAppText(text)}`, "_blank");
   }
@@ -22081,10 +22081,29 @@ function ReviewsTab() {
 
               {/* Custom WhatsApp message template per chalet */}
               <div className="border border-border rounded-xl p-4 space-y-3 bg-muted/20">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <MessageSquare className="w-4 h-4 text-muted-foreground" />
                   <p className="text-sm font-semibold text-foreground">رسالة واتساب مخصصة</p>
-                  <span className="text-xs text-muted-foreground mr-auto">ضع [الرابط] حيث تريد رابط التقييم</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs gap-1.5 mr-auto"
+                    disabled={saveTemplate.isPending}
+                    onClick={() => {
+                      setTemplateDraft((prev) => ({
+                        ...prev,
+                        [selectedChalet.id]: siteSettings.wa_review_template?.trim()
+                          ? siteSettings.wa_review_template
+                          : DEFAULT_REVIEW_TEMPLATE,
+                      }));
+                      setTemplateSaved(null);
+                    }}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                    استعادة النص الافتراضي
+                  </Button>
+                  <span className="text-xs text-muted-foreground w-full">ضع [الرابط] حيث تريد رابط التقييم</span>
                 </div>
                 <Textarea
                   dir="rtl"
