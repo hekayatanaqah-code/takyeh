@@ -10,6 +10,7 @@ import {
 } from "node:test";
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
+import { INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import { createSession } from "../lib/auth";
 import {
   chaletSubmissionsTable,
@@ -297,6 +298,96 @@ after(async () => {
 });
 
 describe("owner product isolation for service-only and mixed accounts", () => {
+  it("blocks early insurance settlement and review creation/open/submission while allowing receipt", async () => {
+    const { ownerId, sessionId } = await createOwner();
+    const chaletId = await createChalet(ownerId);
+    await createChaletBooking(ownerId, submissionIds[0], "ضيف إقامة مستقبلية", "0509999999");
+    const bookingId = bookingIds[0];
+    await db.update(ownerBookingsTable).set({ bookingDate: "2099-06-15", insuranceFee: "300" })
+      .where(eq(ownerBookingsTable.id, bookingId));
+    const receipt = await request(`/owner/bookings/${bookingId}`, sessionId, {
+      method: "PATCH", body: JSON.stringify({ insuranceReceived: true }),
+    });
+    assert.equal(receipt.response.status, 200);
+    assert.equal(receipt.json.insuranceReceived, true);
+    for (const patch of [{ insuranceRefunded: true }, { insuranceDeducted: 50, insuranceDeductReason: "تلفيات" }]) {
+      const result = await request(`/owner/bookings/${bookingId}`, sessionId, {
+        method: "PATCH", body: JSON.stringify(patch),
+      });
+      assert.equal(result.response.status, 409);
+      assert.equal(result.json.error, INSURANCE_NOT_READY_MESSAGE);
+    }
+    const earlyInvite = await request("/owner/review-invite", sessionId, {
+      method: "POST", body: JSON.stringify({ chaletId, bookingId }),
+    });
+    assert.equal(earlyInvite.response.status, 409);
+    assert.equal(earlyInvite.json.error, REVIEW_NOT_READY_MESSAGE);
+    // Historical links must be blocked too, on both read and write.
+    const [invitation] = await db.insert(reviewInvitationsTable).values({
+      token: randomUUID(), chaletId, bookingId,
+    }).returning();
+    reviewInvitationIds.push(invitation.id);
+    for (const init of [{}, { method: "POST", body: JSON.stringify({ rating: 5 }) }]) {
+      const result = await request(`/reviews/${invitation.token}`, "", init);
+      assert.equal(result.response.status, 409);
+      assert.equal(result.json.error, REVIEW_NOT_READY_MESSAGE);
+    }
+    const [unchanged] = await db.select().from(ownerBookingsTable).where(eq(ownerBookingsTable.id, bookingId));
+    assert.equal(unchanged.insuranceRefunded, false);
+    assert.equal(Number(unchanged.insuranceDeducted ?? 0), 0);
+    const [unused] = await db.select().from(reviewInvitationsTable).where(eq(reviewInvitationsTable.id, invitation.id));
+    assert.equal(unused.used, false);
+  });
+
+  it("allows completed-stay settlement and reviews, but rechecks a link after rescheduling", async () => {
+    const { ownerId, sessionId } = await createOwner();
+    const chaletId = await createChalet(ownerId);
+    await createChaletBooking(ownerId, submissionIds[0], "ضيف إقامة مكتملة", "0508888888");
+    const bookingId = bookingIds[0];
+    await db.update(ownerBookingsTable).set({ bookingDate: "2020-06-15", insuranceFee: "300" })
+      .where(eq(ownerBookingsTable.id, bookingId));
+    const refund = await request(`/owner/bookings/${bookingId}`, sessionId, {
+      method: "PATCH", body: JSON.stringify({ insuranceRefunded: true, insuranceDeducted: 0 }),
+    });
+    assert.equal(refund.response.status, 200);
+    assert.equal(refund.json.insuranceRefunded, true);
+    const invite = await request("/owner/review-invite", sessionId, {
+      method: "POST", body: JSON.stringify({ chaletId, bookingId }),
+    });
+    assert.equal(invite.response.status, 200);
+    const [invitation] = await db.select().from(reviewInvitationsTable)
+      .where(eq(reviewInvitationsTable.token, invite.json.token));
+    reviewInvitationIds.push(invitation.id);
+    assert.equal((await request(`/reviews/${invite.json.token}`, "")).response.status, 200);
+    await db.update(ownerBookingsTable).set({ bookingDate: "2099-06-15" }).where(eq(ownerBookingsTable.id, bookingId));
+    assert.equal((await request(`/reviews/${invite.json.token}`, "")).response.status, 409);
+    assert.equal((await request(`/reviews/${invite.json.token}`, "", {
+      method: "POST", body: JSON.stringify({ rating: 5 }),
+    })).response.status, 409);
+    // Restore completion and verify that a real review can be submitted.
+    await db.update(ownerBookingsTable).set({ bookingDate: "2020-06-15" }).where(eq(ownerBookingsTable.id, bookingId));
+    const submitted = await request(`/reviews/${invite.json.token}`, "", {
+      method: "POST", body: JSON.stringify({ rating: 5 }),
+    });
+    const created = await db.select().from(reviewsTable).where(eq(reviewsTable.invitationId, invitation.id));
+    reviewIds.push(...created.map(row => row.id));
+    assert.equal(submitted.response.status, 200);
+    assert.equal(created.length, 1);
+  });
+
+  it("cannot attach an owner's review invitation to another property's booking", async () => {
+    const { ownerId, sessionId } = await createOwner();
+    const chaletId = await createChalet(ownerId);
+    const otherChaletId = await createChalet(ownerId);
+    await createChaletBooking(ownerId, submissionIds[0], "ضيف", "0507777777");
+    await db.update(ownerBookingsTable).set({ bookingDate: "2020-06-15" }).where(eq(ownerBookingsTable.id, bookingIds[0]));
+    const result = await request("/owner/review-invite", sessionId, {
+      method: "POST", body: JSON.stringify({ chaletId: otherChaletId, bookingId: bookingIds[0] }),
+    });
+    assert.equal(result.response.status, 400);
+    assert.notEqual(chaletId, otherChaletId);
+  });
+
   it("keeps a services-only account out of chalet reviews and exposes its service clients", async () => {
     const { ownerId, sessionId } = await createOwner();
     const providerId = await createProvider(ownerId, "خدمة منفردة");

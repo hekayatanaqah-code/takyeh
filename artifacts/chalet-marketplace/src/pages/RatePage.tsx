@@ -4,6 +4,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Star, Upload, CheckCircle, X, Loader2, AlertCircle, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -143,6 +144,7 @@ export default function RatePage() {
     const msg = (error as Error).message;
     const isUsed = msg === "token_used";
     const isExpired = msg === "token_expired";
+    const isNotReady = msg === REVIEW_NOT_READY_MESSAGE;
     return (
       <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center px-4" dir="rtl">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
@@ -152,10 +154,10 @@ export default function RatePage() {
             <AlertCircle className="w-14 h-14 text-red-400 mx-auto mb-4" />
           )}
           <h2 className="text-xl font-bold text-gray-800 mb-2">
-            {isUsed ? "شكراً لك! 🌟" : isExpired ? "انتهت صلاحية الرابط" : "رابط غير صالح"}
+            {isUsed ? "شكراً لك! 🌟" : isNotReady ? "التقييم غير متاح بعد" : isExpired ? "انتهت صلاحية الرابط" : "رابط غير صالح"}
           </h2>
           <p className="text-gray-500 text-sm leading-relaxed">
-            {isUsed
+            {isNotReady ? REVIEW_NOT_READY_MESSAGE : isUsed
               ? "لقد تم استلام تقييمك مسبقاً بنجاح. نقدّر وقتك وآراءك التي تساعدنا على تحسين خدماتنا."
               : isExpired
               ? "هذا الرابط لم يعد صالحاً، يرجى طلب رابط جديد."

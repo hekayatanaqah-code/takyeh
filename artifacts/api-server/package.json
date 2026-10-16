@@ -17,6 +17,7 @@
     "test:service-seasons": "NODE_ENV=production tsx --test src/routes/service-seasons.integration.test.ts"
   },
   "dependencies": {
+    "@workspace/booking-time": "workspace:*",
     "@google-cloud/storage": "^7.22.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/nodemailer": "^7.0.11",

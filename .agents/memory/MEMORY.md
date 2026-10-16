@@ -64,3 +64,4 @@
 - [Photography delivery integrity](photography-delivery-integrity.md) — actual artifacts, immutable private copies and single owner notice; current competencies stay separate from historical consent.
 - [Multi-role authentication](multi-role-authentication.md) — shared contacts discover roles, not permissions; retain password choice and independent owner/photographer login and logout.
 - [Connection recovery boundaries](connection-recovery-boundaries.md) — preserve mounted forms; recover data reads without replaying saves, payments or authentication actions.
+- [Property stay completion](property-stay-completion.md) — Saudi check-out controls insurance settlement, booking-linked reviews and automatic non-destructive archiving.

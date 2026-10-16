@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
+import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
 // useGetMySubmissions replaced by inline apiFetch query (see line ~12593)
 import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
@@ -2807,6 +2808,7 @@ function ManageInsuranceDialog({
   onSaved,
   apiFetch,
   formatAmount,
+  canSettle,
 }: {
   booking: OwnerBooking | null;
   open: boolean;
@@ -2814,6 +2816,7 @@ function ManageInsuranceDialog({
   onSaved: () => void;
   apiFetch: (url: string, opts?: RequestInit) => Promise<Response>;
   formatAmount: (v: string | number | null | undefined) => string;
+  canSettle: boolean;
 }) {
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
   const [mode, setMode] = useState<"choose" | "refund" | "deduct">("choose");
@@ -2822,12 +2825,14 @@ function ManageInsuranceDialog({
   const [proofImages, setProofImages] = useState<string[]>([]);      // uploaded URLs
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setMode("choose"); setDeductAmount(""); setDeductReason("");
       setProofImages([]); setUploading(false); setSaving(false);
+      setSaveError("");
     }
   }, [open]);
 
@@ -2864,30 +2869,37 @@ function ManageInsuranceDialog({
   const fullUrl = (url: string) =>
     url.startsWith("http") ? url : `${window.location.origin}${BASE}${url}`;
 
+  const saveInsurance = async (patch: Record<string, unknown>) => {
+    setSaving(true); setSaveError("");
+    try {
+      const response = await apiFetch(`/owner/bookings/${booking.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "تعذر حفظ التأمين");
+      }
+      onSaved(); onClose();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "تعذر حفظ التأمين");
+    } finally { setSaving(false); }
+  };
+
   const handleFullRefund = async () => {
-    setSaving(true);
-    await apiFetch(`/owner/bookings/${booking.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ insuranceRefunded: true, insuranceDeducted: 0, insuranceDeductReason: null }),
-    });
-    onSaved(); onClose();
+    if (!canSettle) return;
+    await saveInsurance({ insuranceRefunded: true, insuranceDeducted: 0, insuranceDeductReason: null });
   };
 
   const handleDeduct = async () => {
-    if (deductVal <= 0 || deductVal > insurance) return;
-    setSaving(true);
-    await apiFetch(`/owner/bookings/${booking.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    if (!canSettle || deductVal <= 0 || deductVal > insurance) return;
+    await saveInsurance({
         insuranceRefunded: true,
         insuranceDeducted: deductVal,
         insuranceDeductReason: deductReason || undefined,
         insuranceProofImages: proofImages,
-      }),
     });
-    onSaved(); onClose();
   };
 
   return (
@@ -2901,19 +2913,31 @@ function ManageInsuranceDialog({
             مبلغ التأمين: <span className="font-bold text-orange-600">{formatAmount(booking.insuranceFee)}</span>
           </div>
         </DialogHeader>
+        {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
+        {!canSettle && <p className="text-xs text-muted-foreground">{INSURANCE_NOT_READY_MESSAGE}</p>}
 
         {mode === "choose" && (
           <div className="flex flex-col gap-3 py-2">
+            {!booking.insuranceReceived && (
+              <Button type="button" disabled={saving} onClick={() => saveInsurance({ insuranceReceived: true })}>
+                {saving ? "جارٍ التسجيل..." : "تسجيل استلام التأمين"}
+              </Button>
+            )}
+            {booking.insuranceReceived && <p className="text-xs text-emerald-700">تم تسجيل استلام التأمين</p>}
             <button
+              disabled={!canSettle || saving}
+              title={!canSettle ? INSURANCE_NOT_READY_MESSAGE : undefined}
               onClick={() => setMode("refund")}
-              className="w-full rounded-lg border-2 border-green-200 bg-green-50 p-4 text-right hover:bg-green-100 transition"
+              className="w-full rounded-lg border-2 border-green-200 bg-green-50 p-4 text-right hover:bg-green-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="font-bold text-green-700">✅ إرجاع بالكامل</div>
               <div className="text-sm text-green-600 mt-1">إعادة كامل مبلغ التأمين للعميل دون أي خصم</div>
             </button>
             <button
+              disabled={!canSettle || saving}
+              title={!canSettle ? INSURANCE_NOT_READY_MESSAGE : undefined}
               onClick={() => setMode("deduct")}
-              className="w-full rounded-lg border-2 border-red-200 bg-red-50 p-4 text-right hover:bg-red-100 transition"
+              className="w-full rounded-lg border-2 border-red-200 bg-red-50 p-4 text-right hover:bg-red-100 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="font-bold text-red-700">✂️ خصم من التأمين</div>
               <div className="text-sm text-red-600 mt-1">خصم مبلغ بسبب تلفيات مع رفع صور الإثبات</div>
@@ -4484,6 +4508,16 @@ function BookingCalendarTab({
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const [addOpen, setAddOpen] = useState(false);
+  const [stayClock, setStayClock] = useState(Date.now);
+  useEffect(() => {
+    const tick = () => setStayClock(Date.now());
+    const timer = window.setInterval(tick, 30_000);
+    window.addEventListener("focus", tick);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", tick); };
+  }, []);
+  const bookingIsComplete = (booking: OwnerBooking) => isStayComplete(
+    booking, ownerChalets.find((chalet: any) => chalet.submissionId === booking.submissionId), stayClock,
+  );
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
   const [prefilledPeriod, setPrefilledPeriod] = useState<string | null>(null);
   const [backToSummaryDate, setBackToSummaryDate] = useState<string | null>(null);
@@ -4719,14 +4753,23 @@ function BookingCalendarTab({
 
   /* ── Send review invite via WhatsApp ── */
   async function sendReviewRequest(b: OwnerBooking) {
-    if (!activeChaletId) return;
+    if (!bookingIsComplete(b)) {
+      toast({ title: REVIEW_NOT_READY_MESSAGE, variant: "destructive" });
+      return;
+    }
+    const bookingChalet = ownerChalets.find((c: any) => c.submissionId === b.submissionId);
+    if (!bookingChalet) return;
     setReviewPendingId(b.id);
     try {
       const r = await apiFetch("/owner/review-invite", {
         method: "POST",
-        body: JSON.stringify({ chaletId: activeChaletId, guestName: b.clientName, bookingId: b.id }),
+        body: JSON.stringify({ chaletId: bookingChalet.id, guestName: b.clientName, bookingId: b.id }),
       });
-      if (!r.ok) return;
+      if (!r.ok) {
+        const error = await r.json();
+        toast({ title: error.error || "تعذر إنشاء رابط التقييم", variant: "destructive" });
+        return;
+      }
       const data = await r.json();
       const base = import.meta.env.BASE_URL.replace(/\/$/, "");
       const link = `${window.location.origin}${base}/r/${data.token}`;
@@ -5070,13 +5113,9 @@ function BookingCalendarTab({
 
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const today = getLocalDateStr();
     return bookings.filter((b) => {
       // Exclude past (completed) bookings — they move to archive "المكتملة" tab
-      const endD = new Date(b.bookingDate + "T00:00:00");
-      endD.setDate(endD.getDate() + (b.durationDays ?? 1) - 1);
-      const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
-      if (endStr < today) return false;
+      if (bookingIsComplete(b)) return false;
 
       if (filterFrom && b.bookingDate < filterFrom) return false;
       if (filterTo && b.bookingDate > filterTo) return false;
@@ -5090,16 +5129,12 @@ function BookingCalendarTab({
       }
       return true;
     }).sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
-  }, [bookings, filterFrom, filterTo, searchQuery, ownerChalets]);
+  }, [bookings, filterFrom, filterTo, searchQuery, ownerChalets, stayClock]);
 
   const completedBookings = useMemo(() => {
-    const today = getLocalDateStr();
     const q = searchQuery.trim().toLowerCase();
     return bookings.filter((b) => {
-      const endD = new Date(b.bookingDate + "T00:00:00");
-      endD.setDate(endD.getDate() + (b.durationDays ?? 1) - 1);
-      const endStr = `${endD.getFullYear()}-${String(endD.getMonth() + 1).padStart(2, "0")}-${String(endD.getDate()).padStart(2, "0")}`;
-      if (endStr >= today) return false;
+      if (!bookingIsComplete(b)) return false;
       if (q) {
         const nameMatch = b.clientName?.toLowerCase().includes(q);
         const phoneMatch = b.clientPhone?.toLowerCase().includes(q);
@@ -5110,7 +5145,7 @@ function BookingCalendarTab({
       }
       return true;
     }).sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
-  }, [bookings, searchQuery, ownerChalets]);
+  }, [bookings, searchQuery, ownerChalets, stayClock]);
 
   const bookingYearOptions = useMemo(() => {
     const years = new Set<string>();
@@ -5649,7 +5684,7 @@ function BookingCalendarTab({
                   const popDur = Math.max(1, b.durationDays ?? 1);
                   const popEndD = new Date(new Date(b.bookingDate + "T00:00:00").getTime() + (popDur - 1) * 86400000);
                   const popEndStr = `${popEndD.getFullYear()}-${String(popEndD.getMonth() + 1).padStart(2, "0")}-${String(popEndD.getDate()).padStart(2, "0")}`;
-                  const isPastBooking = popEndStr < new Date().toLocaleDateString("en-CA");
+                  const isPastBooking = bookingIsComplete(b);
                   const popStartH = formatDualDate(b.bookingDate).hijri.replace(/\s*هـ\s*$/, "");
                   const popStartG = formatDualDate(b.bookingDate).gregorian;
                   const popEndH   = formatDualDate(popEndStr).hijri.replace(/\s*هـ\s*$/, "");
@@ -6074,7 +6109,8 @@ function BookingCalendarTab({
                                 <div className="col-span-2 flex gap-1.5">
                                   {showReviewBtn && (
                                     <button
-                                      disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                                      disabled={!bookingIsComplete(b) || reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                                      title={!bookingIsComplete(b) ? REVIEW_NOT_READY_MESSAGE : undefined}
                                       onClick={() => { setSummaryDate(null); sendReviewRequest(b); }}
                                       className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 border border-teal-300 dark:border-teal-700 rounded-lg py-2 hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors disabled:opacity-50"
                                     >
@@ -6517,6 +6553,21 @@ function BookingCalendarTab({
                         <div className="bg-muted/40 px-3 py-3 text-xs font-bold text-foreground">
                           <p>{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
                           <p className="text-muted-foreground font-medium mt-0.5">{dual.gregorian}</p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 h-7 gap-1 text-xs"
+                            disabled={isReadOnly}
+                            onClick={() => {
+                              setPrefilledDate(row.dateStr);
+                              setPrefilledPeriod(null);
+                              setBackToSummaryDate(null);
+                              setAddOpen(true);
+                            }}
+                          >
+                            <Plus className="w-3 h-3" aria-hidden="true" /> إضافة حجز
+                          </Button>
                         </div>
                         <div className="px-3 py-3 space-y-2 min-h-[3.25rem]">
                           {row.bookings.length === 0 ? (
@@ -7617,7 +7668,8 @@ function BookingCalendarTab({
                         </span>
                       ) : (
                         <button
-                          disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                          disabled={!bookingIsComplete(b) || reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                          title={!bookingIsComplete(b) ? REVIEW_NOT_READY_MESSAGE : undefined}
                           onClick={() => sendReviewRequest(b)}
                           className="flex items-center gap-1.5 text-xs font-medium text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg px-2.5 py-1 hover:bg-teal-100 dark:hover:bg-teal-900/30 transition-colors disabled:opacity-50"
                         >
@@ -8084,6 +8136,22 @@ function BookingCalendarTab({
                           </button>
                         )}
                       </div>
+                      {!isReadOnly && (
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          {!!b.insuranceFee && Number(b.insuranceFee) > 0 && !b.insuranceRefunded && (
+                            <Button type="button" size="sm" variant="outline" onClick={() => setInsuranceTarget(b)}>
+                              إدارة التأمين
+                            </Button>
+                          )}
+                          {b.ratedAt ? <span className="text-xs text-emerald-700">تم التقييم</span> : (
+                            <Button type="button" size="sm" variant="outline"
+                              disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                              onClick={() => sendReviewRequest(b)}>
+                              {reviewPendingId === b.id ? "جارٍ الإنشاء..." : reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "إرسال رابط التقييم"}
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                     </Fragment>
                   );
@@ -8097,6 +8165,7 @@ function BookingCalendarTab({
       {/* Manage Insurance Dialog */}
       <ManageInsuranceDialog
         booking={insuranceTarget}
+        canSettle={!!insuranceTarget && bookingIsComplete(bookings.find(b => b.id === insuranceTarget.id) ?? insuranceTarget)}
         open={!!insuranceTarget}
         onClose={() => setInsuranceTarget(null)}
         onSaved={() => qc.invalidateQueries({ queryKey: ["owner", "bookings"] })}
@@ -22396,6 +22465,7 @@ interface DepositEntry {
   period?: string | null;
   insuranceFee: string;
   insuranceRefunded: boolean;
+  insuranceReceived?: boolean | null;
   insuranceDeducted?: string | null;
   insuranceDeductReason?: string | null;
   insuranceProofImages?: string | null;
@@ -22423,6 +22493,22 @@ function DepositsTab() {
   const [filterChalet, setFilterChalet] = useState("all");
   const [calendarMode, setCalendarMode] = useState<"hijri" | "gregorian">("hijri");
   const [currentPage, setCurrentPage] = useState(1);
+  const [stayClock, setStayClock] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setStayClock(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const { data: depositChalets = [] } = useQuery<any[]>({
+    queryKey: ["owner", "chalets"],
+    queryFn: async () => {
+      const response = await apiFetch("/owner/chalets");
+      if (!response.ok) throw new Error("تعذر تحميل توقيتات العقارات");
+      return response.json();
+    },
+  });
+  const canSettleDeposit = (entry: DepositEntry) => isStayComplete(
+    entry, depositChalets.find(chalet => chalet.submissionId === entry.submissionId), stayClock,
+  );
 
   const { data: deposits = [], isLoading } = useQuery<DepositEntry[]>({
     queryKey: ["owner", "deposits"],
@@ -22439,7 +22525,10 @@ function DepositsTab() {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
-      if (!r.ok) throw new Error("فشل");
+      if (!r.ok) {
+        const data = await r.json();
+        throw new Error(data.error || "فشل");
+      }
       return r.json();
     },
     onSuccess: () => {
@@ -22449,7 +22538,7 @@ function DepositsTab() {
   });
 
   const handleRefund = async () => {
-    if (!refundConfirm) return;
+    if (!refundConfirm || !canSettleDeposit(refundConfirm)) return;
     try {
       await patchMutation.mutateAsync({
         id: refundConfirm.id,
@@ -22489,7 +22578,7 @@ function DepositsTab() {
   };
 
   const handleDeduct = async () => {
-    if (!deductDialog) return;
+    if (!deductDialog || !canSettleDeposit(deductDialog)) return;
     const amount = Number(deductAmount);
     if (!amount || amount <= 0) {
       toast({ title: "أدخل مبلغ الخصم بشكل صحيح", variant: "destructive" });
@@ -23020,6 +23109,8 @@ function DepositsTab() {
                   size="sm"
                   variant="outline"
                   className="flex-1 border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20 gap-1.5"
+                  disabled={!canSettleDeposit(d) || patchMutation.isPending}
+                  title={!canSettleDeposit(d) ? INSURANCE_NOT_READY_MESSAGE : undefined}
                   onClick={() => setRefundConfirm(d)}
                 >
                   <CheckCircle className="w-4 h-4" />
@@ -23029,7 +23120,10 @@ function DepositsTab() {
                   size="sm"
                   variant="outline"
                   className="flex-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20 gap-1.5"
+                  disabled={!canSettleDeposit(d) || patchMutation.isPending}
+                  title={!canSettleDeposit(d) ? INSURANCE_NOT_READY_MESSAGE : undefined}
                   onClick={() => {
+                    if (!canSettleDeposit(d)) return;
                     setDeductDialog(d);
                     setDeductAmount("");
                     setDeductReason("");

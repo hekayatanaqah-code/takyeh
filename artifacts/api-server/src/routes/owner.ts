@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { propertyStayComplete } from "../lib/booking-completion";
+import { INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import multer from "multer";
 import sharp from "sharp";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -1770,6 +1772,14 @@ router.patch("/bookings/:id", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
   const { insuranceDeducted, insuranceProofImages, restore, bookingDate, durationDays, period, rescheduleReason, ...rest } = body.data;
 
+  const settlesInsurance = body.data.insuranceRefunded === true
+    || insuranceDeducted !== undefined || body.data.insuranceDeductReason !== undefined
+    || insuranceProofImages !== undefined;
+  if (settlesInsurance) {
+    if (bookingDate !== undefined || durationDays !== undefined || period !== undefined)
+      return res.status(400).json({ error: "احفظ تعديل موعد الحجز أولاً قبل تسوية التأمين" });
+  }
+
   // If rescheduling, fetch the old booking first to record a log entry
   const isReschedule = bookingDate !== undefined || durationDays !== undefined || period !== undefined;
   let oldBooking: typeof ownerBookingsTable.$inferSelect | null = null;
@@ -1830,7 +1840,17 @@ router.patch("/bookings/:id", async (req, res) => {
   }
   // ───────────────────────────────────────────────────────────────────
 
-  const [row] = await db
+  const updateResult = await db.transaction(async tx => {
+    if (settlesInsurance) {
+      // Lock against concurrent rescheduling while checking and settling.
+      const [existing] = await tx.select().from(ownerBookingsTable)
+        .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
+        .limit(1).for("update");
+      if (!existing) return { error: "الحجز غير موجود", status: 404 };
+      if (!await propertyStayComplete(existing))
+        return { error: INSURANCE_NOT_READY_MESSAGE, status: 409 };
+    }
+    const [row] = await tx
     .update(ownerBookingsTable)
     .set({
       ...rest,
@@ -1843,6 +1863,10 @@ router.patch("/bookings/:id", async (req, res) => {
     })
     .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
     .returning();
+    return { row };
+  });
+  if (updateResult.status !== undefined) return res.status(updateResult.status).json({ error: updateResult.error });
+  const row = updateResult.row;
   if (!row) return res.status(404).json({ error: "not found" });
 
   // Insert reschedule log if date/duration/period changed
@@ -2156,6 +2180,17 @@ router.post("/review-invite", async (req, res) => {
     .limit(1);
 
   if (!chalet) return res.status(403).json({ error: "غير مصرح أو الشاليه غير موجود" });
+
+  if (body.data.bookingId) {
+    const [booking] = await db.select().from(ownerBookingsTable)
+      .where(and(eq(ownerBookingsTable.id, body.data.bookingId),
+        inArray(ownerBookingsTable.ownerId, await getOwnerIds(req)))).limit(1);
+    if (!booking || booking.submissionId !== (await db.select({ submissionId: chaletsTable.submissionId })
+      .from(chaletsTable).where(eq(chaletsTable.id, chalet.id)).limit(1))[0]?.submissionId || booking.cancelledAt)
+      return res.status(400).json({ error: "الحجز غير مرتبط بهذا العقار أو غير متاح" });
+    if (!await propertyStayComplete(booking))
+      return res.status(409).json({ error: REVIEW_NOT_READY_MESSAGE });
+  }
 
   const token = randomBytes(5).toString("hex");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

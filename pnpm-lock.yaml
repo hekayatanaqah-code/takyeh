@@ -191,6 +191,9 @@ importers:
       '@workspace/api-zod':
         specifier: workspace:*
         version: link:../../lib/api-zod
+      '@workspace/booking-time':
+        specifier: workspace:*
+        version: link:../../lib/booking-time
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
@@ -282,6 +285,9 @@ importers:
 
   artifacts/chalet-marketplace:
     dependencies:
+      '@workspace/booking-time':
+        specifier: workspace:*
+        version: link:../../lib/booking-time
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1
@@ -715,6 +721,8 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 3.25.76
+
+  lib/booking-time: {}
 
   lib/db:
     dependencies:

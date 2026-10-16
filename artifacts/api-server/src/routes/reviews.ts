@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { propertyStayComplete } from "../lib/booking-completion";
+import { REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import { db } from "@workspace/db";
 import {
   reviewInvitationsTable,
@@ -21,6 +23,18 @@ const router = Router();
 
 function getRouteParam(value: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+async function linkedStayError(bookingId: number | null, chaletId: number): Promise<string | null> {
+  // Generic invitations retain their existing behavior; booking invitations
+  // always re-read the actual booking so rescheduling cannot bypass the gate.
+  if (!bookingId) return null;
+  const [booking] = await db.select().from(ownerBookingsTable)
+    .where(eq(ownerBookingsTable.id, bookingId)).limit(1);
+  const [chalet] = await db.select({ submissionId: chaletsTable.submissionId })
+    .from(chaletsTable).where(eq(chaletsTable.id, chaletId)).limit(1);
+  if (!booking || booking.cancelledAt || !chalet || chalet.submissionId !== booking.submissionId) return "invalid_token";
+  return await propertyStayComplete(booking) ? null : REVIEW_NOT_READY_MESSAGE;
 }
 
 /* ── POST /admin/chalets/:id/review-invite ─────────────────────
@@ -81,6 +95,8 @@ router.get("/reviews/:token", async (req, res) => {
   if (inv.used) return res.status(410).json({ error: "token_used" });
   if (inv.expiresAt && inv.expiresAt < new Date())
     return res.status(410).json({ error: "token_expired" });
+  const stayError = await linkedStayError(inv.bookingId, inv.chaletId);
+  if (stayError) return res.status(stayError === "invalid_token" ? 404 : 409).json({ error: stayError });
 
   const [chalet] = await db
     .select({ id: chaletsTable.id, nameAr: chaletsTable.nameAr, photos: chaletsTable.photos })
@@ -157,6 +173,8 @@ router.post("/reviews/:token", async (req, res) => {
   if (inv.used) return res.status(410).json({ error: "token_used" });
   if (inv.expiresAt && inv.expiresAt < new Date())
     return res.status(410).json({ error: "token_expired" });
+  const stayError = await linkedStayError(inv.bookingId, inv.chaletId);
+  if (stayError) return res.status(stayError === "invalid_token" ? 404 : 409).json({ error: stayError });
 
   /* Fetch chalet + owner ID via submission (ownerId lives in submissions, not chaletsTable) */
   const [chaletRow] = await db
