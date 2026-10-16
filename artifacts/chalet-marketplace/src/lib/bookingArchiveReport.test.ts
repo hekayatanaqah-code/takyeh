@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { archiveTotals, buildArchiveExportTable, createArchiveWorkbook, SAR_ACCOUNTING_FORMAT } from "./bookingArchiveExport";
 import { buildArchivePdfPage } from "./bookingArchivePdf";
-import { archivePdfColumnGroups } from "./bookingArchivePdfExport";
+import { archivePdfColumns } from "./bookingArchivePdfColumns";
+import { calendarOpeningDate } from "./calendarOpeningDate";
 import { reportAmount, reportDateRange, reportDualDate, reportIssuedAt, type ArchiveReportContext } from "./bookingArchiveReport";
 import { getArchiveDateError, EMPTY_ARCHIVE_FILTERS } from "./bookingArchive";
 
@@ -40,16 +41,26 @@ describe("formal archive report", () => {
     assert(reportAmount(-12.5).includes("("));
     assert(reportAmount(-12.5).includes("ر.س"));
   });
-  it("covers every column in bounded PDF groups, repeating booking identity", () => {
-    const groups = archivePdfColumnGroups(table);
-    assert(groups.every(group => group.columns.length <= 7));
-    assert.equal(new Set(groups.flatMap(group => group.columns)).size, table.headers.length);
-    assert(groups.every(group => group.columns.includes(0) && group.columns.includes(2)));
+  it("keeps every booking field in a single horizontal row, including cancellation extras", () => {
+    for (const tab of ["completed", "cancelled", "rescheduled"] as const) {
+      const report = buildArchiveExportTable(tab, bookings, [], () => "شاليه الياسمين", "hijri");
+      const columns = archivePdfColumns(report);
+      const fields = columns.flatMap(column => column.fields.map(field => field.index));
+      assert.equal(fields.length, report.headers.length);
+      assert.equal(new Set(fields).size, report.headers.length);
+      if (tab === "completed") assert.equal(columns.length, 11);
+      const html = buildArchivePdfPage({ table: report, context, rows: report.rows.slice(0, 2),
+        includeSummary: true, pageNumber: 1, totalPages: 1 });
+      assert.equal((html.match(/<table /g) ?? []).length, 1);
+      assert.equal((html.match(/data-booking-row=/g) ?? []).length, report.rows.slice(0, 2).length);
+      if (report.rows.length) for (let index = 0; index < report.headers.length; index++) {
+        assert(html.split("</tbody>")[0].includes(`data-field="${index}"`));
+      }
+    }
   });
   it("includes genuine branding, owner identity, dual metadata, copyright and global totals without unsafe HTML", () => {
-    const financial = archivePdfColumnGroups(table).find(group => group.columns.includes(7))!;
     const html = buildArchivePdfPage({ table, context, rows: table.rows.slice(0, 1), includeSummary: true,
-      pageNumber: 2, totalPages: 3, columns: financial.columns, sectionTitle: financial.title });
+      pageNumber: 2, totalPages: 3 });
     assert(html.includes("أرشيف حجوزات: شاليه الياسمين"));
     assert(html.includes("/platform-logo.png"));
     assert(html.includes("/owner-logo.png"));
@@ -78,11 +89,18 @@ describe("formal archive report", () => {
       assert(totalCell.formula.startsWith("SUM("));
       assert.equal(totalCell.result, archiveTotals(longTable)[column]);
       assert.equal(totalCell.numFmt, SAR_ACCOUNTING_FORMAT);
+      assert.equal(typeof sheet.getRow(8).getCell(column + 1).value, "number");
     }
     assert.equal(sheet.getRow(sheet.rowCount).getCell(1).value, "الإجمالي");
   });
   it("keeps date-range validation independent of the picker calendar", () => {
     assert(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "custom", from: "2026-01-02", to: "2026-01-01" }));
     assert.equal(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "custom", from: "2026-01-01", to: "2026-01-01" }), null);
+  });
+  it("anchors end-date navigation on the start date, clamping bounds without choosing today", () => {
+    assert.equal(calendarOpeningDate("2026-10-17", "2024-02-14", "2024-02-14"), "2024-02-14");
+    assert.equal(calendarOpeningDate("2026-10-17", "2028-02-14", "2028-02-14"), "2028-02-14");
+    assert.equal(calendarOpeningDate("2026-10-17", undefined, "2028-02-14"), "2028-02-14");
+    assert.equal(calendarOpeningDate("2026-10-17", undefined, undefined, "2024-02-14"), "2024-02-14");
   });
 });

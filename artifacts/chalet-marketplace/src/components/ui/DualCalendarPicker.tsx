@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { calendarOpeningDate } from "@/lib/calendarOpeningDate";
 import {
   HIJRI_MONTHS_AR,
   toHijriComponents,
@@ -66,6 +67,10 @@ interface DualCalendarPickerProps {
   maxDate?: string;
   /** When no value is selected, open the picker navigation on this date's month (instead of current month or minDate). */
   initialDate?: string;
+  /** Navigate to this date on every opening, preserving any previously selected value. */
+  openingDate?: string;
+  /** Disable automatic selection on opening for range/search fields. */
+  selectOnOpen?: boolean;
   label?: string;
   className?: string;
   compact?: boolean;
@@ -94,6 +99,8 @@ export function DualCalendarPicker({
   minDate,
   maxDate,
   initialDate,
+  openingDate,
+  selectOnOpen = true,
   label,
   className,
   compact = false,
@@ -143,18 +150,6 @@ export function DualCalendarPicker({
       } catch { /* */ }
     }
   }, [value]);
-
-  /* When popover opens without a selected value, jump to initialDate's month */
-  React.useEffect(() => {
-    if (open && !value && initialDate) {
-      try {
-        const h = toHijriComponents(new Date(initialDate + "T12:00:00"));
-        setPickerHY(h.year); setPickerHM(h.month);
-        const g = new Date(initialDate + "T12:00:00");
-        setPickerGY(g.getFullYear()); setPickerGM(g.getMonth());
-      } catch { /* */ }
-    }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* Reset to days view when popover closes */
   React.useEffect(() => {
@@ -226,24 +221,19 @@ export function DualCalendarPicker({
       setCalendarMode(mode);
       setPickerView("days");
 
-      if (!value) {
-        const initialValue =
-          minDateStr && todayStr < minDateStr
-            ? minDateStr
-            : maxDateStr && todayStr > maxDateStr
-              ? maxDateStr
-              : todayStr;
+      if (!value || openingDate) {
+        const initialValue = calendarOpeningDate(todayStr, openingDate || initialDate, minDateStr, maxDateStr);
         const initial = new Date(initialValue + "T12:00:00");
         const h = toHijriComponents(initial);
         setPickerHY(h.year);
         setPickerHM(h.month);
         setPickerGY(initial.getFullYear());
         setPickerGM(initial.getMonth());
-        if (!selectedDates) onChange(initialValue);
+        if (!value && selectOnOpen && !selectedDates) onChange(initialValue);
       }
     }
     setOpen(nextOpen);
-  }, [maxDateStr, minDateStr, mode, onChange, todayStr, value, selectedDates]);
+  }, [maxDateStr, minDateStr, mode, onChange, todayStr, value, selectedDates, initialDate, openingDate, selectOnOpen]);
 
   /* ── Year/month ranges for picker ── */
   const nowH = React.useMemo(() => toHijriComponents(new Date()), []);

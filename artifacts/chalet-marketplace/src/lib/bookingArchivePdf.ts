@@ -1,4 +1,5 @@
 import { archiveTotals, type ArchiveCell, type ArchiveExportTable } from "./bookingArchiveExport";
+import { archivePdfColumns, type ArchivePdfColumn } from "./bookingArchivePdfColumns";
 import {
   reportAmount, reportDateRange, reportEscape, reportIssuedAt, reportPropertyTitle,
   type ArchiveReportContext,
@@ -33,9 +34,16 @@ const STYLES = `
 .archive-pdf-page .ap-note{margin:10px 0 0;padding:8px 14px;border:1px dashed ${BROWN};color:#5b3f2c;font-size:16px;background:#fbf7f2}
 .archive-pdf-page .ap-section{margin-top:18px}
 .archive-pdf-page .ap-section h3{margin:0 0 6px;font-size:18px;font-weight:800;color:${TEAL_DARK}}
-.archive-pdf-page table{width:100%;border-collapse:collapse;table-layout:auto;font-size:18px}
-.archive-pdf-page th{background:${TEAL};color:#fff;font-weight:700;padding:9px 8px;border:1px solid #6aa9b0;text-align:right;vertical-align:middle;white-space:normal;overflow-wrap:anywhere}
-.archive-pdf-page td{padding:8px 8px;border:1px solid #cdd9db;vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere;word-break:normal}
+.archive-pdf-page table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:15.5px;line-height:1.65}
+.archive-pdf-page th{background:${TEAL};color:#fff;font-weight:700;padding:9px 4px;border:1px solid #6aa9b0;text-align:right;vertical-align:middle;white-space:normal;overflow-wrap:break-word;font-size:14.5px}
+.archive-pdf-page td{padding:9px 5px;border:1px solid #cdd9db;vertical-align:top;white-space:normal;overflow-wrap:anywhere;word-break:normal}
+.archive-pdf-page tr{break-inside:avoid;page-break-inside:avoid}
+.archive-pdf-page .ap-value{display:block}
+.archive-pdf-page .ap-field-label{display:block;font-size:12px;color:#58666b;font-weight:500}
+.archive-pdf-page .ap-value+.ap-value{margin-top:5px}
+.archive-pdf-page .ap-money{display:block;white-space:normal;font-variant-numeric:tabular-nums}
+.archive-pdf-page .ap-phone{direction:ltr;unicode-bidi:isolate;display:block}
+.archive-pdf-page .ap-negative{color:#b42318;font-weight:700}
 .archive-pdf-page tbody tr:nth-child(even) td{background:#eef6f6}
 .archive-pdf-page tbody tr:nth-child(odd) td{background:#ffffff}
 .archive-pdf-page td.ap-num{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -49,70 +57,50 @@ const STYLES = `
 
 const isNum = (v: ArchiveCell): v is number => typeof v === "number" && Number.isFinite(v);
 
-function cell(value: ArchiveCell, monetary: boolean, key: boolean): string {
-  if (monetary && isNum(value)) {
-    return `<td class="ap-num${value < 0 ? " ap-neg" : ""}">${reportEscape(reportAmount(value))}</td>`;
-  }
-  const text = value == null ? "" : String(value);
-  return `<td class="${key ? "ap-key" : ""}">${reportEscape(text)}</td>`;
+function cell(column: ArchivePdfColumn, row: ArchiveCell[], table: ArchiveExportTable, summary = false): string {
+  const values = column.fields.filter(field => !summary || table.numericColumns.includes(field.index)).map(field => {
+    const value = row[field.index] ?? "";
+    const monetary = table.numericColumns.includes(field.index);
+    const text = monetary && isNum(value) ? reportAmount(value) : String(value);
+    const label = field.label ? `<span class="ap-field-label">${reportEscape(field.label)}</span>` : "";
+    const classes = monetary ? `ap-money${isNum(value) && value < 0 ? " ap-negative" : ""}`
+      : table.headers[field.index] === "رقم الجوال" ? "ap-phone" : "";
+    return `<span class="ap-value" data-field="${field.index}">${label}<span class="${classes}">${reportEscape(text)}</span></span>`;
+  }).join("");
+  return `<td${column.fields[0].index === 0 ? ' class="ap-key"' : ""}>${values}</td>`;
 }
 
 function renderTable(
-  caption: string, cols: number[], table: ArchiveExportTable, rows: ArchiveCell[][],
+  caption: string, columns: ArchivePdfColumn[], table: ArchiveExportTable, rows: ArchiveCell[][],
   totals: (number | null)[] | null,
 ): string {
   const money = new Set(table.numericColumns);
-  const head = `<thead><tr>${cols.map(c => `<th scope="col">${reportEscape(table.headers[c] ?? "")}</th>`).join("")}</tr></thead>`;
+  const width = columns.reduce((sum, column) => sum + column.width, 0);
+  const colgroup = `<colgroup>${columns.map(column => `<col style="width:${column.width * 100 / width}%">`).join("")}</colgroup>`;
+  const head = `<thead><tr>${columns.map(column => `<th scope="col">${reportEscape(column.title)}</th>`).join("")}</tr></thead>`;
   const body = rows.length
-    ? rows.map(r => `<tr>${cols.map((c, i) => cell(r[c] ?? "", money.has(c), i === 0)).join("")}</tr>`).join("")
-    : `<tr><td class="ap-empty" colspan="${cols.length}">${totals ? "ملخص جميع السجلات المطابقة" : "لا توجد سجلات مطابقة"}</td></tr>`;
+    ? rows.map(r => `<tr data-booking-row="true">${columns.map(column => cell(column, r, table)).join("")}</tr>`).join("")
+    : `<tr><td class="ap-empty" colspan="${columns.length}">${totals ? "ملخص جميع السجلات المطابقة" : "لا توجد سجلات مطابقة"}</td></tr>`;
   let foot = "";
-  if (totals && cols.some(c => money.has(c))) {
-    let labelled = false;
-    foot = `<tfoot><tr>${cols.map(c => {
-      const t = totals[c];
-      if (money.has(c) && typeof t === "number") {
-        return `<td class="ap-num${t < 0 ? " ap-neg" : ""}">${reportEscape(reportAmount(t))}</td>`;
-      }
-      if (!labelled) { labelled = true; return `<td>الإجمالي (كل السجلات المطابقة)</td>`; }
-      return `<td></td>`;
-    }).join("")}</tr></tfoot>`;
+  if (totals && money.size) {
+    const firstMoney = columns.findIndex(column => column.fields.some(field => money.has(field.index)));
+    const totalValues = totals.map(value => value ?? "");
+    foot = `<tfoot><tr><td colspan="${firstMoney}">الإجمالي (كل السجلات المطابقة)</td>${columns.slice(firstMoney)
+      .map(column => cell(column, totalValues, table, true)).join("")}</tr></tfoot>`;
   }
-  return `<section class="ap-section"><h3>${reportEscape(caption)}</h3><table dir="rtl">${head}<tbody>${body}</tbody>${foot}</table></section>`;
+  return `<section class="ap-section"><h3>${reportEscape(caption)}</h3><table dir="rtl">${colgroup}${head}<tbody>${body}</tbody>${foot}</table></section>`;
 }
 
-export function buildArchivePdfPage({ table, context, rows, includeSummary, pageNumber, totalPages, columns, sectionTitle }: {
+export function buildArchivePdfPage({ table, context, rows, includeSummary, pageNumber, totalPages, width = 1200 }: {
   table: ArchiveExportTable; context: ArchiveReportContext; rows: ArchiveCell[][];
   includeSummary: boolean; pageNumber: number; totalPages: number;
-  columns?: number[]; sectionTitle?: string;
+  width?: number;
 }): string {
   const money = table.numericColumns.filter(c => c >= 0 && c < table.headers.length);
   const financial = money.length > 0;
-  const totals = includeSummary && financial && !columns?.length ? archiveTotals(table) : null;
-  const all = table.headers.map((_, i) => i);
-  const idCol = 0;
-  const clientCol = table.headers.findIndex(h => h.includes("اسم العميل"));
-  const keyCols = [idCol, ...(clientCol > 0 ? [clientCol] : [])];
-
-  let sections = "";
-  if (columns && columns.length) {
-    const cols = columns.filter(c => c >= 0 && c < table.headers.length);
-    const groupTotals = includeSummary && cols.some(c => money.includes(c)) ? archiveTotals(table) : null;
-    sections = renderTable(sectionTitle || "تفاصيل السجلات", cols, table, rows, groupTotals);
-  } else if (!financial) {
-    sections = renderTable("تفاصيل السجلات", all, table, rows, null);
-  } else {
-    const identity = all.filter(c => !money.includes(c));
-    sections += renderTable("بيانات الحجز", identity, table, rows, null);
-    const groupSize = money.length > 9 ? 6 : money.length;
-    const groups: number[][] = [];
-    for (let i = 0; i < money.length; i += groupSize) groups.push(money.slice(i, i + groupSize));
-    groups.forEach((g, i) => {
-      const cols = [...keyCols.filter(c => !g.includes(c)), ...g];
-      const caption = groups.length > 1 ? `البيانات المالية (${i + 1} من ${groups.length})` : "البيانات المالية";
-      sections += renderTable(caption, cols, table, rows, totals);
-    });
-  }
+  const totals = includeSummary && financial ? archiveTotals(table) : null;
+  const sections = renderTable(financial ? "سجل الحجوزات والبيانات المالية — المبالغ بالريال السعودي" : "تفاصيل إعادة الجدولة",
+    archivePdfColumns(table), table, rows, totals);
 
   const ownerLogo = context.ownerLogoUrl
     ? `<img class="ap-logo" src="${reportEscape(context.ownerLogoUrl)}" alt="${reportEscape(context.ownerName)}" />` : "";
@@ -120,7 +108,7 @@ export function buildArchivePdfPage({ table, context, rows, includeSummary, page
     ? `<p class="ap-note">التأمين مستقل عن الإيجار والتحصيلات، ولا يمثل إيراداً من الإيجار. المبالغ بالريال السعودي، والقيم السالبة تظهر باللون الأحمر بين قوسين.</p>`
     : "";
 
-  return `<div class="archive-pdf-page" dir="rtl" lang="ar"><style>${STYLES}</style>
+  return `<div class="archive-pdf-page" style="width:${width}px" dir="rtl" lang="ar"><style>${STYLES}</style>
 <header class="ap-head">
   <div class="ap-brand">
     <img class="ap-logo" src="${reportEscape(context.platformLogoUrl)}" alt="منصة تكيّة" />

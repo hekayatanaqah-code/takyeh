@@ -17,7 +17,7 @@ interface ExportLog {
 export interface ArchiveExportTable { title: string; headers: string[]; rows: Cell[][]; numericColumns: number[]; summaryNote?: string }
 export const ARCHIVE_TAB_LABELS: Record<ArchiveTab, string> = { cancelled: "الملغاة", rescheduled: "المعاد جدولتها", completed: "المكتملة" };
 const periodLabel = (value?: string | null) => ({ morning: "صباحي", evening: "مسائي", full_day: "يوم كامل" }[value ?? ""] ?? "");
-const money = (value?: string | null): Cell => value == null || value === "" ? "" : Number(value);
+const money = (value?: string | null): number => value == null || value === "" ? 0 : Number(value);
 
 export function buildArchiveExportTable(tab: ArchiveTab, bookings: ExportBooking[], logs: ExportLog[],
   propertyName: (id?: number | null) => string, calendarPreference?: ReportCalendar): ArchiveExportTable {

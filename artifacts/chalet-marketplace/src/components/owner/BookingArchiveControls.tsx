@@ -198,6 +198,7 @@ export default function BookingArchiveControls({
               <DualCalendarPicker
                 label="من تاريخ"
                 value={filters.from}
+                selectOnOpen={false}
                 maxDate={filters.to || undefined}
                 onChange={(from) => set({ from })}
                 mode={calendarMode}
@@ -210,6 +211,8 @@ export default function BookingArchiveControls({
                 label="إلى تاريخ"
                 value={filters.to}
                 minDate={filters.from || undefined}
+                openingDate={filters.from || undefined}
+                selectOnOpen={false}
                 onChange={(to) => set({ to })}
                 mode={calendarMode}
                 className={cn("h-10 rounded-lg text-sm", dateError && "border-destructive")}
