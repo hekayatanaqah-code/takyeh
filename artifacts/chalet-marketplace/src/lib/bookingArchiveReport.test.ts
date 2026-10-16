@@ -4,8 +4,8 @@ import { archiveTotals, buildArchiveExportTable, createArchiveWorkbook, SAR_ACCO
 import { buildArchivePdfPage } from "./bookingArchivePdf";
 import { archivePdfColumns } from "./bookingArchivePdfColumns";
 import { calendarOpeningDate } from "./calendarOpeningDate";
-import { reportAmount, reportDateRange, reportDualDate, reportIssuedAt, type ArchiveReportContext } from "./bookingArchiveReport";
-import { getArchiveDateError, EMPTY_ARCHIVE_FILTERS } from "./bookingArchive";
+import { reportAmount, reportDateRange, reportDualDate, reportIssuedAt, reportShortDate, type ArchiveReportContext } from "./bookingArchiveReport";
+import { archiveToday, getArchiveDateError, EMPTY_ARCHIVE_FILTERS } from "./bookingArchive";
 
 const context: ArchiveReportContext = {
   propertyNames: ["شاليه الياسمين"], ownerName: "نشاط تجريبي", ownerPhone: "0500000000",
@@ -28,7 +28,8 @@ describe("formal archive report", () => {
     assert(gregorian.indexOf(" م") < gregorian.indexOf("هـ"));
     assert(reportDateRange(context).includes(hijri));
     assert(reportIssuedAt(context).includes(reportDualDate("2026-01-02", "hijri"))); // 01:05 Saudi
-    assert.equal(reportDateRange({ ...context, from: undefined, to: undefined }), "جميع التواريخ");
+    assert.equal(reportDateRange({ ...context, from: undefined, to: undefined }), "جميع الفترات (حتى تاريخه)");
+    assert(!reportIssuedAt(context).includes("السعودية"));
     assert(reportDateRange({ ...context, to: undefined }).includes("نهاية السجلات"));
   });
   it("uses exact minor-unit totals over all matched rows, with actual received insurance separate", () => {
@@ -48,7 +49,8 @@ describe("formal archive report", () => {
       const fields = columns.flatMap(column => column.fields.map(field => field.index));
       assert.equal(fields.length, report.headers.length);
       assert.equal(new Set(fields).size, report.headers.length);
-      if (tab === "completed") assert.equal(columns.length, 11);
+      if (tab === "completed") assert.equal(columns.length, 15);
+      assert(columns.every(column => column.fields.length === 1));
       const html = buildArchivePdfPage({ table: report, context, rows: report.rows.slice(0, 2),
         includeSummary: true, pageNumber: 1, totalPages: 1 });
       assert.equal((html.match(/<table /g) ?? []).length, 1);
@@ -68,7 +70,10 @@ describe("formal archive report", () => {
     assert(html.includes("0500000000"));
     assert(html.includes("جميع الحقوق محفوظة لمنصة تكيّة"));
     assert(html.includes("الإجمالي (كل السجلات المطابقة)"));
-    assert(html.includes(reportAmount(1.4)));
+    assert(html.includes(reportAmount(1.4).replace(" ر.س", "")));
+    assert(html.includes(reportShortDate(bookings[0].bookingDate, context.calendarPreference)));
+    assert(html.includes("letter-spacing:0!important"));
+    assert(!html.includes('class="ap-field-label"'));
     assert(!html.includes('<script>alert("x")</script>'));
     assert(html.includes("&lt;script&gt;"));
     const noTotals = buildArchivePdfPage({ table, context, rows: table.rows.slice(0, 1), includeSummary: false, pageNumber: 1, totalPages: 3 });
@@ -82,14 +87,22 @@ describe("formal archive report", () => {
     await workbook.xlsx.load(buffer);
     const sheet = workbook.getWorksheet(1)!;
     assert.equal(sheet.getColumn(3).width, 76);
+    assert.equal(sheet.views[0].rightToLeft, true);
+    assert.equal(sheet.views[0].activeCell, "A8");
+    assert.equal(sheet.getCell("A1").alignment.horizontal, "right");
+    assert.equal(sheet.getCell("A1").alignment.readingOrder, "rtl");
+    assert.equal(sheet.getCell("A7").value, "رقم الحجز");
+    assert.equal(sheet.getCell("I7").value, "العربون المسجل (ر.س)");
+    assert.equal(sheet.getCell("J7").value, "التحصيلات من الإيجار (ر.س)");
     assert((sheet.getRow(21).height ?? 0) > 28);
     assert(String(sheet.getCell("A3").value).indexOf(" م") < String(sheet.getCell("A3").value).indexOf("هـ"));
     for (const column of longTable.numericColumns) {
-      const totalCell = sheet.getRow(sheet.rowCount).getCell(column + 1);
+      const exportedColumn = (sheet.getRow(7).values as string[]).indexOf(longTable.headers[column]);
+      const totalCell = sheet.getRow(sheet.rowCount).getCell(exportedColumn);
       assert(totalCell.formula.startsWith("SUM("));
       assert.equal(totalCell.result, archiveTotals(longTable)[column]);
       assert.equal(totalCell.numFmt, SAR_ACCOUNTING_FORMAT);
-      assert.equal(typeof sheet.getRow(8).getCell(column + 1).value, "number");
+      assert.equal(typeof sheet.getRow(8).getCell(exportedColumn).value, "number");
     }
     assert.equal(sheet.getRow(sheet.rowCount).getCell(1).value, "الإجمالي");
   });
@@ -102,5 +115,13 @@ describe("formal archive report", () => {
     assert.equal(calendarOpeningDate("2026-10-17", "2028-02-14", "2028-02-14"), "2028-02-14");
     assert.equal(calendarOpeningDate("2026-10-17", undefined, "2028-02-14"), "2028-02-14");
     assert.equal(calendarOpeningDate("2026-10-17", undefined, undefined, "2024-02-14"), "2024-02-14");
+  });
+  it("blocks future range boundaries using today's Saudi day, including the UTC midnight boundary", () => {
+    const now = Date.parse("2026-10-16T21:05:00Z");
+    assert.equal(archiveToday(now), "2026-10-17");
+    assert.equal(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "custom", from: "2026-10-17", to: "2026-10-17" }, now), null);
+    for (const boundary of ["from", "to"] as const) {
+      assert(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "custom", [boundary]: "2026-10-18" }, now));
+    }
   });
 });

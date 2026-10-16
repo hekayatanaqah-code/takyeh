@@ -3,7 +3,7 @@ import { Search, RotateCcw, Download, FileSpreadsheet, FileText, ChevronDown, Lo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
-import { getArchiveDateError } from "@/lib/bookingArchive";
+import { archiveToday, getArchiveDateError } from "@/lib/bookingArchive";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu,
@@ -62,6 +62,7 @@ export default function BookingArchiveControls({
   const errorId = `${uid}-err`;
 
   const dateError = getArchiveDateError(filters);
+  const today = archiveToday();
   const isDirty =
     filters.search !== "" || filters.period !== "all" || filters.year !== "" || filters.from !== "" || filters.to !== "";
   const exportDisabled = loading || exporting || total === 0 || !!dateError;
@@ -199,7 +200,7 @@ export default function BookingArchiveControls({
                 label="من تاريخ"
                 value={filters.from}
                 selectOnOpen={false}
-                maxDate={filters.to || undefined}
+                maxDate={filters.to && filters.to < today ? filters.to : today}
                 onChange={(from) => set({ from })}
                 mode={calendarMode}
                 className={cn("h-10 rounded-lg text-sm", dateError && "border-destructive")}
@@ -211,6 +212,7 @@ export default function BookingArchiveControls({
                 label="إلى تاريخ"
                 value={filters.to}
                 minDate={filters.from || undefined}
+                maxDate={today}
                 openingDate={filters.from || undefined}
                 selectOnOpen={false}
                 onChange={(to) => set({ to })}

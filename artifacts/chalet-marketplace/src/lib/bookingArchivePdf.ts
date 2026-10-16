@@ -1,7 +1,7 @@
 import { archiveTotals, type ArchiveCell, type ArchiveExportTable } from "./bookingArchiveExport";
 import { archivePdfColumns, type ArchivePdfColumn } from "./bookingArchivePdfColumns";
 import {
-  reportAmount, reportDateRange, reportEscape, reportIssuedAt, reportPropertyTitle,
+  reportAmount, reportDateRange, reportEscape, reportIssuedAt, reportPropertyTitle, reportShortDate,
   type ArchiveReportContext,
 } from "./bookingArchiveReport";
 
@@ -11,14 +11,14 @@ const BROWN = "#8c6246";
 const INK = "#1d2a2e";
 
 const STYLES = `
-.archive-pdf-page{box-sizing:border-box;width:1200px;background:#ffffff;color:${INK};padding:24px 26px;direction:rtl;font-family:"Noto Sans Arabic","Segoe UI",Tahoma,sans-serif;font-size:18px;line-height:1.55;font-feature-settings:"locl" 1}
-.archive-pdf-page *{box-sizing:border-box}
-.archive-pdf-page .ap-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:14px;border-bottom:3px solid ${TEAL}}
+.archive-pdf-page{box-sizing:border-box;width:1200px;background:#ffffff;color:${INK};padding:20px 22px;direction:rtl;text-align:right;font-family:Arial,Tahoma,"Noto Sans Arabic",sans-serif;font-size:16px;line-height:1.4}
+.archive-pdf-page *{box-sizing:border-box;letter-spacing:0!important;font-kerning:normal}
+.archive-pdf-page .ap-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:10px;border-bottom:2px solid ${TEAL}}
 .archive-pdf-page .ap-brand{display:flex;align-items:center;gap:14px}
-.archive-pdf-page .ap-logo{height:64px;width:auto;max-width:150px;object-fit:contain}
-.archive-pdf-page .ap-platform{font-size:15px;color:${BROWN};font-weight:700;letter-spacing:.2px}
-.archive-pdf-page .ap-title{margin:2px 0 0;font-size:26px;font-weight:800;color:${TEAL_DARK};line-height:1.35}
-.archive-pdf-page .ap-status{display:inline-block;margin-top:6px;padding:3px 12px;border:1px solid ${TEAL};border-radius:4px;color:${TEAL};font-size:16px;font-weight:700}
+.archive-pdf-page .ap-logo{height:48px;width:auto;max-width:120px;object-fit:contain}
+.archive-pdf-page .ap-platform{font-size:13px;color:${BROWN};font-weight:700}
+.archive-pdf-page .ap-title{margin:2px 0 0;font-size:23px;font-weight:700;color:${TEAL_DARK};line-height:1.35}
+.archive-pdf-page .ap-status{display:block;margin-top:4px;color:${TEAL};font-size:16px;font-weight:700}
 .archive-pdf-page .ap-owner{display:flex;align-items:center;gap:12px;text-align:left}
 .archive-pdf-page .ap-owner-text{text-align:right}
 .archive-pdf-page .ap-owner-name{font-size:19px;font-weight:700;color:${INK}}
@@ -28,21 +28,20 @@ const STYLES = `
 .archive-pdf-page .ap-property-logo img{width:52px;height:48px;object-fit:contain}
 .archive-pdf-page .ap-lbl{color:#8c6246;font-weight:700;font-size:15px}
 .archive-pdf-page .ap-owner-phone-row{font-size:16px}
-.archive-pdf-page .ap-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:14px 0 6px;padding:10px 14px;background:#f5efe7;border-right:4px solid ${BROWN};font-size:16px}
+.archive-pdf-page .ap-meta{display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;margin:10px 0 6px;padding:8px 10px;background:#f5efe7;font-size:14px}
 .archive-pdf-page .ap-meta b{color:${BROWN};font-weight:700;margin-left:6px}
 .archive-pdf-page .ap-meta .ap-wide{grid-column:1/-1}
 .archive-pdf-page .ap-note{margin:10px 0 0;padding:8px 14px;border:1px dashed ${BROWN};color:#5b3f2c;font-size:16px;background:#fbf7f2}
-.archive-pdf-page .ap-section{margin-top:18px}
-.archive-pdf-page .ap-section h3{margin:0 0 6px;font-size:18px;font-weight:800;color:${TEAL_DARK}}
-.archive-pdf-page table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:15.5px;line-height:1.65}
-.archive-pdf-page th{background:${TEAL};color:#fff;font-weight:700;padding:9px 4px;border:1px solid #6aa9b0;text-align:right;vertical-align:middle;white-space:normal;overflow-wrap:break-word;font-size:14.5px}
-.archive-pdf-page td{padding:9px 5px;border:1px solid #cdd9db;vertical-align:top;white-space:normal;overflow-wrap:anywhere;word-break:normal}
+.archive-pdf-page .ap-section{margin-top:10px}
+.archive-pdf-page .ap-section h3{margin:0 0 6px;font-size:16px;font-weight:700;color:${TEAL_DARK}}
+.archive-pdf-page table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:var(--ap-table-font,16px);line-height:1.35}
+.archive-pdf-page th{background:${TEAL};color:#fff;font-weight:700;padding:7px 4px;border:1px solid #6aa9b0;text-align:right;vertical-align:middle;white-space:normal;overflow-wrap:normal;font-size:.9em}
+.archive-pdf-page td{padding:5px 4px;border:1px solid #cdd9db;vertical-align:middle;white-space:normal;overflow-wrap:break-word;word-break:normal}
 .archive-pdf-page tr{break-inside:avoid;page-break-inside:avoid}
-.archive-pdf-page .ap-value{display:block}
-.archive-pdf-page .ap-field-label{display:block;font-size:12px;color:#58666b;font-weight:500}
-.archive-pdf-page .ap-value+.ap-value{margin-top:5px}
-.archive-pdf-page .ap-money{display:block;white-space:normal;font-variant-numeric:tabular-nums}
-.archive-pdf-page .ap-phone{direction:ltr;unicode-bidi:isolate;display:block}
+.archive-pdf-page .ap-value{display:inline}
+.archive-pdf-page .ap-money{display:inline-block;white-space:nowrap;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+.archive-pdf-page .ap-phone{direction:ltr;unicode-bidi:isolate;display:inline-block;white-space:nowrap}
+.archive-pdf-page .ap-date{white-space:nowrap;unicode-bidi:isolate}
 .archive-pdf-page .ap-negative{color:#b42318;font-weight:700}
 .archive-pdf-page tbody tr:nth-child(even) td{background:#eef6f6}
 .archive-pdf-page tbody tr:nth-child(odd) td{background:#ffffff}
@@ -51,35 +50,40 @@ const STYLES = `
 .archive-pdf-page td.ap-key{font-weight:700;color:${TEAL_DARK}}
 .archive-pdf-page tfoot td{background:#f2e8dc !important;font-weight:800;border-top:2px solid ${BROWN}}
 .archive-pdf-page .ap-empty{padding:18px;text-align:center;color:#6b5b4e;border:1px solid #cdd9db}
-.archive-pdf-page .ap-summary-note{margin-top:14px;font-size:16px;color:#4a3a2e}
-.archive-pdf-page .ap-foot{display:flex;justify-content:space-between;gap:16px;margin-top:20px;padding-top:10px;border-top:1px solid ${BROWN};font-size:15px;color:#5b4a3d}
+.archive-pdf-page .ap-summary-note{margin:8px 0 0;font-size:13px;color:#4a3a2e}
+.archive-pdf-page .ap-foot{display:flex;justify-content:space-between;gap:16px;margin-top:12px;padding-top:7px;border-top:1px solid ${BROWN};font-size:13px;color:#5b4a3d}
 `;
 
 const isNum = (v: ArchiveCell): v is number => typeof v === "number" && Number.isFinite(v);
 
-function cell(column: ArchivePdfColumn, row: ArchiveCell[], table: ArchiveExportTable, summary = false): string {
+function cell(column: ArchivePdfColumn, row: ArchiveCell[], table: ArchiveExportTable, summary = false, dates?: Map<number, string>): string {
   const values = column.fields.filter(field => !summary || table.numericColumns.includes(field.index)).map(field => {
     const value = row[field.index] ?? "";
     const monetary = table.numericColumns.includes(field.index);
-    const text = monetary && isNum(value) ? reportAmount(value) : String(value);
-    const label = field.label ? `<span class="ap-field-label">${reportEscape(field.label)}</span>` : "";
+    const text = monetary && isNum(value) ? reportAmount(value).replace(" ر.س", "") : dates?.get(field.index) ?? String(value);
     const classes = monetary ? `ap-money${isNum(value) && value < 0 ? " ap-negative" : ""}`
-      : table.headers[field.index] === "رقم الجوال" ? "ap-phone" : "";
-    return `<span class="ap-value" data-field="${field.index}">${label}<span class="${classes}">${reportEscape(text)}</span></span>`;
+      : table.headers[field.index] === "رقم الجوال" ? "ap-phone" : dates?.has(field.index) ? "ap-date" : "";
+    return `<span class="ap-value" data-field="${field.index}"><span class="${classes}">${reportEscape(text)}</span></span>`;
   }).join("");
   return `<td${column.fields[0].index === 0 ? ' class="ap-key"' : ""}>${values}</td>`;
 }
 
 function renderTable(
   caption: string, columns: ArchivePdfColumn[], table: ArchiveExportTable, rows: ArchiveCell[][],
-  totals: (number | null)[] | null,
+  totals: (number | null)[] | null, context: ArchiveReportContext,
 ): string {
   const money = new Set(table.numericColumns);
   const width = columns.reduce((sum, column) => sum + column.width, 0);
   const colgroup = `<colgroup>${columns.map(column => `<col style="width:${column.width * 100 / width}%">`).join("")}</colgroup>`;
   const head = `<thead><tr>${columns.map(column => `<th scope="col">${reportEscape(column.title)}</th>`).join("")}</tr></thead>`;
+  const positions = new Map(table.rows.map((row, index) => [row, index]));
   const body = rows.length
-    ? rows.map(r => `<tr data-booking-row="true">${columns.map(column => cell(column, r, table)).join("")}</tr>`).join("")
+    ? rows.map(r => {
+      const position = positions.get(r);
+      const dates = new Map((table.dateValues ?? []).flatMap(({ column, values }) =>
+        position != null && values[position] ? [[column, reportShortDate(values[position], context.calendarPreference)] as [number, string]] : []));
+      return `<tr data-booking-row="true">${columns.map(column => cell(column, r, table, false, dates)).join("")}</tr>`;
+    }).join("")
     : `<tr><td class="ap-empty" colspan="${columns.length}">${totals ? "ملخص جميع السجلات المطابقة" : "لا توجد سجلات مطابقة"}</td></tr>`;
   let foot = "";
   if (totals && money.size) {
@@ -100,22 +104,18 @@ export function buildArchivePdfPage({ table, context, rows, includeSummary, page
   const financial = money.length > 0;
   const totals = includeSummary && financial ? archiveTotals(table) : null;
   const sections = renderTable(financial ? "سجل الحجوزات والبيانات المالية — المبالغ بالريال السعودي" : "تفاصيل إعادة الجدولة",
-    archivePdfColumns(table), table, rows, totals);
+    archivePdfColumns(table), table, rows, totals, context);
 
   const ownerLogo = context.ownerLogoUrl
     ? `<img class="ap-logo" src="${reportEscape(context.ownerLogoUrl)}" alt="${reportEscape(context.ownerName)}" />` : "";
-  const insuranceNote = financial && table.headers.some(h => h.includes("التأمين"))
-    ? `<p class="ap-note">التأمين مستقل عن الإيجار والتحصيلات، ولا يمثل إيراداً من الإيجار. المبالغ بالريال السعودي، والقيم السالبة تظهر باللون الأحمر بين قوسين.</p>`
-    : "";
-
-  return `<div class="archive-pdf-page" style="width:${width}px" dir="rtl" lang="ar"><style>${STYLES}</style>
+  return `<div class="archive-pdf-page" style="width:${width}px;--ap-table-font:${width >= 1800 ? 18 : 16}px" dir="rtl" lang="ar"><style>${STYLES}</style>
 <header class="ap-head">
   <div class="ap-brand">
     <img class="ap-logo" src="${reportEscape(context.platformLogoUrl)}" alt="منصة تكيّة" />
     <div>
       <div class="ap-platform">منصة تكيّة — تقرير رسمي</div>
       <h1 class="ap-title">${reportEscape(reportPropertyTitle(context))}</h1>
-      <span class="ap-status">${reportEscape(table.title)}</span>
+      <div class="ap-status">${reportEscape(table.title)}</div>
     </div>
   </div>
   <div class="ap-owner">
@@ -134,7 +134,6 @@ ${context.propertyLogos?.length ? `<div class="ap-property-logos">${context.prop
   <div><b>سجلات هذه الصفحة:</b>${reportEscape(rows.length.toLocaleString("ar-SA"))}</div>
   ${context.search ? `<div class="ap-wide"><b>بحث:</b>${reportEscape(context.search)}</div>` : ""}
 </div>
-${insuranceNote}
 ${sections}
 ${includeSummary && table.summaryNote ? `<p class="ap-summary-note">${reportEscape(table.summaryNote)}</p>` : ""}
 <footer class="ap-foot">

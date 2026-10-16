@@ -53,7 +53,7 @@ describe("archive financial Excel export", () => {
     assert.equal(sheet.getCell(`C${start}`).type, ExcelJS.ValueType.String);
     assert.equal(sheet.getCell(`D${start}`).value, "0501234567");
     assert.equal(sheet.getCell(`H${start}`).value, 250.5);
-    assert.equal(sheet.getCell(`J${start}`).value, 150.25);
+    assert.equal(sheet.getCell(`K${start}`).value, 150.25);
     assert.equal(sheet.getCell(`B${start + 1}`).value, "شاليه الاختبار");
     assert(String(sheet.getCell("A1").value).includes("شاليه الاختبار"));
     assert(String(sheet.getCell("A2").value).includes("المالك التجريبي"));
@@ -63,7 +63,7 @@ describe("archive financial Excel export", () => {
     assert.equal(sheet.getCell(`H${end + 1}`).formula, `SUM(H${start}:H${end})`);
     assert.equal(sheet.getCell(`H${end + 1}`).result, 3006);
     assert.equal(sheet.getCell(`I${end + 1}`).result, 1203);
-    assert.equal(sheet.getCell(`K${end + 1}`).result, 6000);
+    assert.equal(sheet.getCell(`M${end + 1}`).result, 6000);
     // ExcelJS's reader does not deserialize calcPr; formulas and cached results are checked above.
     assert((sheet.getColumn(3).width ?? 0) > 20);
   });

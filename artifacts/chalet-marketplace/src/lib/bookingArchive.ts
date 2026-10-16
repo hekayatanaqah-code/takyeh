@@ -2,8 +2,15 @@ import type { ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 
 export const EMPTY_ARCHIVE_FILTERS: ArchiveFilters = { search: "", period: "all", year: "", from: "", to: "" };
 
-export function getArchiveDateError(filters: ArchiveFilters): string | null {
-  return filters.period === "custom" && filters.from && filters.to && filters.from > filters.to
+export function archiveToday(now = Date.now()): string {
+  return new Date(now + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export function getArchiveDateError(filters: ArchiveFilters, now = Date.now()): string | null {
+  if (filters.period !== "custom") return null;
+  const today = archiveToday(now);
+  if (filters.from > today || filters.to > today) return "لا يمكن اختيار تاريخ بعد اليوم في الأرشيف والتقارير";
+  return filters.from && filters.to && filters.from > filters.to
     ? "تاريخ البداية يجب أن يكون قبل تاريخ النهاية أو مساويًا له" : null;
 }
 

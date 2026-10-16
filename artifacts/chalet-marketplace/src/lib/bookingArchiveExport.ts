@@ -1,4 +1,5 @@
 import { reportDualDate, reportDateRange, reportIssuedAt, reportPropertyTitle, type ArchiveReportContext, type ReportCalendar } from "./bookingArchiveReport";
+import { archiveAccountingOrder } from "./archiveAccountingOrder";
 
 export type ArchiveTab = "cancelled" | "rescheduled" | "completed";
 export type ArchiveCell = string | number;
@@ -14,7 +15,11 @@ interface ExportLog {
   bookingId: number; clientName: string; clientPhone?: string | null; oldDate: string; newDate: string;
   oldDuration: number; newDuration: number; reason: string; rescheduledAt: string;
 }
-export interface ArchiveExportTable { title: string; headers: string[]; rows: Cell[][]; numericColumns: number[]; summaryNote?: string }
+export interface ArchiveExportTable {
+  title: string; headers: string[]; rows: Cell[][]; numericColumns: number[]; summaryNote?: string;
+  /** Original ISO dates for compact PDF cells, without parsing localized text or changing Excel. */
+  dateValues?: { column: number; values: string[] }[];
+}
 export const ARCHIVE_TAB_LABELS: Record<ArchiveTab, string> = { cancelled: "الملغاة", rescheduled: "المعاد جدولتها", completed: "المكتملة" };
 const periodLabel = (value?: string | null) => ({ morning: "صباحي", evening: "مسائي", full_day: "يوم كامل" }[value ?? ""] ?? "");
 const money = (value?: string | null): number => value == null || value === "" ? 0 : Number(value);
@@ -28,6 +33,10 @@ export function buildArchiveExportTable(tab: ArchiveTab, bookings: ExportBooking
     rows: logs.map(log => [log.bookingId, log.clientName, log.clientPhone ?? "", dateLabel(log.oldDate), dateLabel(log.newDate),
       log.oldDuration, log.newDuration, log.reason, calendarPreference ? reportDualDate(log.rescheduledAt, calendarPreference) : new Date(log.rescheduledAt).toLocaleString("ar-SA", { timeZone: "Asia/Riyadh", calendar: "gregory" })]),
     numericColumns: [],
+    dateValues: [
+      { column: 3, values: logs.map(log => log.oldDate) }, { column: 4, values: logs.map(log => log.newDate) },
+      { column: 8, values: logs.map(log => log.rescheduledAt) },
+    ],
   };
   const headers = ["رقم الحجز", "العقار", "اسم العميل", "رقم الجوال", "تاريخ بداية الإقامة", "عدد الأيام", "الفترة",
     "الإيجار (ر.س)", "التحصيلات من الإيجار (ر.س)", "المتبقي (ر.س)", "التأمين المستحق (ر.س)", "حالة التأمين", "خصم التلفيات (ر.س)"];
@@ -36,6 +45,7 @@ export function buildArchiveExportTable(tab: ArchiveTab, bookings: ExportBooking
   headers.push("العربون المسجل (ر.س)", "التأمين المستلم (ر.س)");
   return {
     title, headers, numericColumns: [...(tab === "cancelled" ? [7, 8, 9, 10, 12, 13, 14] : [7, 8, 9, 10, 12]), depositColumn, depositColumn + 1],
+    dateValues: [{ column: 4, values: bookings.map(booking => booking.bookingDate) }],
     summaryNote: "التحصيلات من الإيجار قبل الاستردادات، والتأمين مستقل عنها. العربون جزء من التحصيلات وليس مبلغاً إضافياً."
       + (tab === "cancelled" ? " قيمة الحجوزات الملغاة ليست إيراداً محققاً؛ راجع عمود الدخل المحتفظ به." : ""),
     rows: bookings.map(booking => {
@@ -80,13 +90,23 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-export async function createArchiveWorkbook(table: ArchiveExportTable, context: ArchiveReportContext) {
+export async function createArchiveWorkbook(source: ArchiveExportTable, context: ArchiveReportContext) {
+  const order = archiveAccountingOrder(source.headers, source.numericColumns.length > 0);
+  const table: ArchiveExportTable = {
+    ...source, headers: order.map(index => source.headers[index]),
+    rows: source.rows.map(row => order.map(index => row[index])),
+    numericColumns: order.flatMap((index, position) => source.numericColumns.includes(index) ? [position] : []),
+  };
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.default.Workbook();
   workbook.creator = "منصة تكيّة";
   workbook.created = new Date(context.issuedAt);
   workbook.calcProperties.fullCalcOnLoad = true;
-  const sheet = workbook.addWorksheet("أرشيف الحجوزات", { views: [{ rightToLeft: true, state: "frozen", ySplit: ARCHIVE_EXCEL_HEADER_ROW }] });
+  workbook.views = [{ x: 0, y: 0, width: 16000, height: 10000, visibility: "visible", activeTab: 0, firstSheet: 0 }];
+  const sheet = workbook.addWorksheet("أرشيف الحجوزات", {
+    views: [{ rightToLeft: true, state: "frozen", ySplit: ARCHIVE_EXCEL_HEADER_ROW,
+      topLeftCell: `A${ARCHIVE_EXCEL_HEADER_ROW + 1}`, activeCell: `A${ARCHIVE_EXCEL_HEADER_ROW + 1}` }],
+  });
   const metadata = [
     reportPropertyTitle(context),
     `${table.title} | المالك / النشاط: ${context.ownerName} | الجوال: ${context.ownerPhone || "غير مسجل"}`,
@@ -99,7 +119,7 @@ export async function createArchiveWorkbook(table: ArchiveExportTable, context: 
     const row = sheet.addRow([text]);
     sheet.mergeCells(row.number, 1, row.number, table.headers.length);
     row.height = row.number === 1 ? 40 : 34;
-    row.alignment = { readingOrder: "rtl", wrapText: true, vertical: "middle" };
+    row.alignment = { readingOrder: "rtl", horizontal: "right", wrapText: true, vertical: "middle" };
   });
   sheet.addRow(table.headers);
   // Text is explicitly written as string values, never Excel formula objects.
@@ -137,7 +157,7 @@ export async function createArchiveWorkbook(table: ArchiveExportTable, context: 
     if (monetary) sheet.getColumn(index + 1).numFmt = SAR_ACCOUNTING_FORMAT;
   });
   sheet.eachRow(row => {
-    row.alignment = { ...row.alignment, readingOrder: "rtl", wrapText: true, vertical: "middle" };
+    row.alignment = { ...row.alignment, readingOrder: "rtl", horizontal: "right", wrapText: true, vertical: "middle" };
     if (row.number > ARCHIVE_EXCEL_HEADER_ROW && row.number <= lastDataRow) {
       let lines = 1;
       row.eachCell((cell, column) => {

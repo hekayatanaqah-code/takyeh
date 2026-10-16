@@ -12,7 +12,7 @@ import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE }
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
-import { archiveDateRange, EMPTY_ARCHIVE_FILTERS, getArchiveDateError } from "@/lib/bookingArchive";
+import { archiveDateRange, archiveToday, EMPTY_ARCHIVE_FILTERS, getArchiveDateError } from "@/lib/bookingArchive";
 // useGetMySubmissions replaced by inline apiFetch query (see line ~12593)
 import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
@@ -19553,7 +19553,7 @@ function ReportsTab() {
   const _nowHijri = getHijriYMClient(_nowRep);
   const nowHijriYearNum  = _nowHijri.year;
   const nowHijriMonthNum = _nowHijri.month;
-  const todayLocalDate = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}-${String(_nowRep.getDate()).padStart(2, "0")}`;
+  const todayLocalDate = archiveToday();
   const todayReportLabel = _nowRep.toLocaleDateString("ar-SA", {
     day: "numeric", month: "long", year: "numeric", calendar: "gregory",
   } as Intl.DateTimeFormatOptions);
@@ -20472,6 +20472,7 @@ function ReportsTab() {
                   <DualCalendarPicker
                     value={customFrom}
                     onChange={setCustomFrom}
+                    selectOnOpen={false}
                     placeholder="تاريخ"
                     compact
                     minDate={earliestTransactionDate}
@@ -20489,11 +20490,12 @@ function ReportsTab() {
                   <DualCalendarPicker
                     value={customTo}
                     onChange={setCustomTo}
+                    selectOnOpen={false}
                     placeholder="تاريخ"
                     compact
                     minDate={customFrom || earliestTransactionDate}
                     maxDate={todayLocalDate}
-                    initialDate={customFrom || undefined}
+                    openingDate={customFrom || undefined}
                     mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
                   />
                 </div>

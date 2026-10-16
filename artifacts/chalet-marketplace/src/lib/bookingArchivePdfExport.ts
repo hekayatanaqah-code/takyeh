@@ -1,6 +1,7 @@
 import type { ArchiveCell, ArchiveExportTable } from "./bookingArchiveExport";
 import { buildArchivePdfPage } from "./bookingArchivePdf";
 import { archivePdfColumns } from "./bookingArchivePdfColumns";
+import { rasterizeArchivePage } from "./archivePdfRaster";
 import type { ArchiveReportContext } from "./bookingArchiveReport";
 
 async function imageDataUrl(source: string): Promise<string> {
@@ -21,8 +22,8 @@ async function imageDataUrl(source: string): Promise<string> {
 
 /** Kept separate from saving so a generated PDF can also be inspected or reused. */
 export async function createArchivePdf(table: ArchiveExportTable, context: ArchiveReportContext) {
-  const [{ default: html2canvas }, { jsPDF }, platformLogoUrl, ownerLogoUrl, propertyLogos] = await Promise.all([
-    import("html2canvas"), import("jspdf"), imageDataUrl(context.platformLogoUrl),
+  const [{ jsPDF }, platformLogoUrl, ownerLogoUrl, propertyLogos] = await Promise.all([
+    import("jspdf"), imageDataUrl(context.platformLogoUrl),
     context.ownerLogoUrl ? imageDataUrl(context.ownerLogoUrl) : Promise.resolve(null),
     Promise.all((context.propertyLogos ?? []).map(async logo => ({ ...logo, url: await imageDataUrl(logo.url) }))),
   ]);
@@ -30,10 +31,11 @@ export async function createArchivePdf(table: ArchiveExportTable, context: Archi
   const previousScroll = { left: window.scrollX, top: window.scrollY };
   const host = document.createElement("div");
   // A negative off-screen X position expands RTL scroll bounds and can displace the live dashboard.
-  // The extra cancellation columns use landscape A3 rather than tiny fonts or column splitting.
+  // Horizontal financial fields need A3 to remain readable without tall, stacked cells.
   const wide = archivePdfColumns(table).length > 11;
-  const width = wide ? 1600 : 1200;
-  host.style.cssText = `position:fixed;top:0;left:0;width:${width}px;z-index:-10000;background:white;pointer-events:none`;
+  const width = wide ? (archivePdfColumns(table).length > 15 ? 1900 : 1600) : 1200;
+  // Opacity belongs to the host, not the captured page, so export does not flash behind the dashboard.
+  host.style.cssText = `position:fixed;top:0;left:0;width:${width}px;opacity:0;z-index:-10000;background:white;pointer-events:none`;
   host.dir = "rtl";
   document.body.appendChild(host);
   const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: wide ? "a3" : "a4" });
@@ -94,7 +96,7 @@ export async function createArchivePdf(table: ArchiveExportTable, context: Archi
     pages.push(page);
     for (let index = 0; index < pages.length; index++) {
       const element = await render(pages[index], index + 1, pages.length);
-      const canvas = await html2canvas(element, { scale: 1.75, backgroundColor: "#ffffff", logging: false, windowWidth: width + 80 });
+      const canvas = await rasterizeArchivePage(element, width, maxHeight);
       if (index) pdf.addPage();
       // Constant width and font size across all pages; never scale down a dense page.
       pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 10, 10, printableWidth, canvas.height * printableWidth / canvas.width);
