@@ -1,5 +1,8 @@
+import { reportDualDate, reportDateRange, reportIssuedAt, reportPropertyTitle, type ArchiveReportContext, type ReportCalendar } from "./bookingArchiveReport";
+
 export type ArchiveTab = "cancelled" | "rescheduled" | "completed";
-type Cell = string | number;
+export type ArchiveCell = string | number;
+type Cell = ArchiveCell;
 interface ExportBooking {
   id: number; submissionId?: number | null; clientName: string; clientPhone?: string | null;
   bookingDate: string; durationDays: number; period?: string | null; totalPrice?: string | null;
@@ -11,37 +14,59 @@ interface ExportLog {
   bookingId: number; clientName: string; clientPhone?: string | null; oldDate: string; newDate: string;
   oldDuration: number; newDuration: number; reason: string; rescheduledAt: string;
 }
-export interface ArchiveExportTable { title: string; headers: string[]; rows: Cell[][]; numericColumns: number[] }
+export interface ArchiveExportTable { title: string; headers: string[]; rows: Cell[][]; numericColumns: number[]; summaryNote?: string }
 export const ARCHIVE_TAB_LABELS: Record<ArchiveTab, string> = { cancelled: "الملغاة", rescheduled: "المعاد جدولتها", completed: "المكتملة" };
 const periodLabel = (value?: string | null) => ({ morning: "صباحي", evening: "مسائي", full_day: "يوم كامل" }[value ?? ""] ?? "");
 const money = (value?: string | null): Cell => value == null || value === "" ? "" : Number(value);
 
 export function buildArchiveExportTable(tab: ArchiveTab, bookings: ExportBooking[], logs: ExportLog[],
-  propertyName: (id?: number | null) => string): ArchiveExportTable {
+  propertyName: (id?: number | null) => string, calendarPreference?: ReportCalendar): ArchiveExportTable {
+  const dateLabel = (value: string) => calendarPreference ? reportDualDate(value, calendarPreference) : value;
   const title = `أرشيف الحجوزات — ${ARCHIVE_TAB_LABELS[tab]}`;
   if (tab === "rescheduled") return {
     title, headers: ["رقم الحجز", "اسم العميل", "رقم الجوال", "الموعد السابق", "الموعد الجديد", "المدة السابقة", "المدة الجديدة", "سبب التعديل", "تاريخ التعديل"],
-    rows: logs.map(log => [log.bookingId, log.clientName, log.clientPhone ?? "", log.oldDate, log.newDate,
-      log.oldDuration, log.newDuration, log.reason, new Date(log.rescheduledAt).toLocaleString("ar-SA", { timeZone: "Asia/Riyadh", calendar: "gregory" })]),
+    rows: logs.map(log => [log.bookingId, log.clientName, log.clientPhone ?? "", dateLabel(log.oldDate), dateLabel(log.newDate),
+      log.oldDuration, log.newDuration, log.reason, calendarPreference ? reportDualDate(log.rescheduledAt, calendarPreference) : new Date(log.rescheduledAt).toLocaleString("ar-SA", { timeZone: "Asia/Riyadh", calendar: "gregory" })]),
     numericColumns: [],
   };
   const headers = ["رقم الحجز", "العقار", "اسم العميل", "رقم الجوال", "تاريخ بداية الإقامة", "عدد الأيام", "الفترة",
-    "قيمة الحجز (ر.س)", "المدفوع (ر.س)", "المتبقي (ر.س)", "التأمين (ر.س)", "حالة التأمين", "خصم التلفيات (ر.س)"];
+    "الإيجار (ر.س)", "التحصيلات من الإيجار (ر.س)", "المتبقي (ر.س)", "التأمين المستحق (ر.س)", "حالة التأمين", "خصم التلفيات (ر.س)"];
   if (tab === "cancelled") headers.push("المسترد عند الإلغاء (ر.س)", "الدخل المحتفظ به (ر.س)", "سبب الإلغاء");
+  const depositColumn = headers.length;
+  headers.push("العربون المسجل (ر.س)", "التأمين المستلم (ر.س)");
   return {
-    title, headers, numericColumns: tab === "cancelled" ? [7, 8, 9, 10, 12, 13, 14] : [7, 8, 9, 10, 12],
+    title, headers, numericColumns: [...(tab === "cancelled" ? [7, 8, 9, 10, 12, 13, 14] : [7, 8, 9, 10, 12]), depositColumn, depositColumn + 1],
+    summaryNote: "التحصيلات من الإيجار قبل الاستردادات، والتأمين مستقل عنها. العربون جزء من التحصيلات وليس مبلغاً إضافياً."
+      + (tab === "cancelled" ? " قيمة الحجوزات الملغاة ليست إيراداً محققاً؛ راجع عمود الدخل المحتفظ به." : ""),
     rows: bookings.map(booking => {
       const total = Number(booking.totalPrice ?? 0);
       const paid = booking.balanceCollected ? total : Number(booking.depositPaid ?? 0);
       const insuranceState = !Number(booking.insuranceFee ?? 0) ? "لا يوجد" : booking.insuranceRefunded ? "تمت التسوية"
         : booking.insuranceReceived ? "مستلم" : "لم يستلم";
       const row: Cell[] = [booking.id, propertyName(booking.submissionId), booking.clientName, booking.clientPhone ?? "",
-        booking.bookingDate, booking.durationDays, periodLabel(booking.period), money(booking.totalPrice),
+        dateLabel(booking.bookingDate), booking.durationDays, periodLabel(booking.period), money(booking.totalPrice),
         paid, Math.max(0, total - paid), money(booking.insuranceFee), insuranceState, money(booking.insuranceDeducted)];
       if (tab === "cancelled") row.push(money(booking.cancelRefundAmount), money(booking.cancelIncome), booking.cancelReason ?? "");
+      row.push(money(booking.depositPaid), booking.insuranceReceived ? Number(booking.insuranceFee ?? 0) : 0);
       return row;
     }),
   };
+}
+
+/** Integer minor units avoid binary floating-point drift in financial totals. */
+export function archiveTotals(table: ArchiveExportTable): (number | null)[] {
+  return table.headers.map((_, column) => table.numericColumns.includes(column)
+    ? table.rows.reduce((total, row) => total + (typeof row[column] === "number" ? Math.round(Number(row[column]) * 100) : 0), 0) / 100
+    : null);
+}
+
+export const SAR_ACCOUNTING_FORMAT = '_("ر.س"* #,##0.00_);[Red]_("ر.س"* (#,##0.00);_("ر.س"* "-"??_);_(@_)';
+export const ARCHIVE_EXCEL_HEADER_ROW = 7;
+
+function excelColumnName(column: number): string {
+  let name = "";
+  for (let value = column; value > 0; value = Math.floor((value - 1) / 26)) name = String.fromCharCode(65 + (value - 1) % 26) + name;
+  return name;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -55,74 +80,88 @@ function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
-export async function createArchiveWorkbook(table: ArchiveExportTable, description: string) {
+export async function createArchiveWorkbook(table: ArchiveExportTable, context: ArchiveReportContext) {
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.default.Workbook();
-  workbook.creator = "منصة تكية";
-  const sheet = workbook.addWorksheet("أرشيف الحجوزات", { views: [{ rightToLeft: true, state: "frozen", ySplit: 4 }] });
-  sheet.addRow([table.title]);
-  sheet.mergeCells(1, 1, 1, table.headers.length);
-  sheet.addRow([description]);
-  sheet.mergeCells(2, 1, 2, table.headers.length);
-  sheet.addRow([`عدد السجلات: ${table.rows.length} — المبالغ بالريال السعودي`]);
-  sheet.mergeCells(3, 1, 3, table.headers.length);
+  workbook.creator = "منصة تكيّة";
+  workbook.created = new Date(context.issuedAt);
+  workbook.calcProperties.fullCalcOnLoad = true;
+  const sheet = workbook.addWorksheet("أرشيف الحجوزات", { views: [{ rightToLeft: true, state: "frozen", ySplit: ARCHIVE_EXCEL_HEADER_ROW }] });
+  const metadata = [
+    reportPropertyTitle(context),
+    `${table.title} | المالك / النشاط: ${context.ownerName} | الجوال: ${context.ownerPhone || "غير مسجل"}`,
+    `النطاق الزمني: ${reportDateRange(context)}`,
+    `تاريخ الإصدار: ${reportIssuedAt(context)}`,
+    `${context.search ? `البحث: ${context.search} | ` : ""}عدد السجلات: ${table.rows.length} | العملة: الريال السعودي (ر.س)`,
+    table.summaryNote || "سجل تغييرات المواعيد؛ لا يتضمن قيماً مالية تاريخية.",
+  ];
+  metadata.forEach(text => {
+    const row = sheet.addRow([text]);
+    sheet.mergeCells(row.number, 1, row.number, table.headers.length);
+    row.height = row.number === 1 ? 40 : 34;
+    row.alignment = { readingOrder: "rtl", wrapText: true, vertical: "middle" };
+  });
   sheet.addRow(table.headers);
   // Text is explicitly written as string values, never Excel formula objects.
   sheet.addRows(table.rows);
-  sheet.getRow(1).font = { bold: true, size: 16, color: { argb: "FF087F8C" } };
-  sheet.getRow(2).alignment = { wrapText: true, vertical: "middle" };
-  sheet.getRow(2).height = 32;
-  const header = sheet.getRow(4);
+  const firstDataRow = ARCHIVE_EXCEL_HEADER_ROW + 1;
+  const lastDataRow = ARCHIVE_EXCEL_HEADER_ROW + table.rows.length;
+  const totals = archiveTotals(table);
+  if (table.numericColumns.length) {
+    const totalRow = sheet.addRow(table.headers.map((_, column) => {
+      if (!table.numericColumns.includes(column)) return column === 0 ? "الإجمالي" : "";
+      const letter = excelColumnName(column + 1);
+      return { formula: table.rows.length ? `SUM(${letter}${firstDataRow}:${letter}${lastDataRow})` : "SUM(0)", result: totals[column] ?? 0 };
+    }));
+    totalRow.font = { bold: true, color: { argb: "FF075561" } };
+    totalRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDEFEF" } };
+    totalRow.height = 34;
+  }
+  sheet.getRow(1).font = { name: "Arial", bold: true, size: 17, color: { argb: "FF087F8C" } };
+  const header = sheet.getRow(ARCHIVE_EXCEL_HEADER_ROW);
   header.font = { bold: true, color: { argb: "FFFFFFFF" } };
   header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF087F8C" } };
-  header.height = 34;
+  header.height = 42;
   table.headers.forEach((_, index) => {
-    sheet.getColumn(index + 1).width = index === 2 ? 26 : 22;
-    if (table.numericColumns.includes(index)) sheet.getColumn(index + 1).numFmt = '#,##0.00;[Red](#,##0.00)';
+    const monetary = table.numericColumns.includes(index);
+    const displayValues = [table.headers[index], ...table.rows.map(row => {
+      const value = row[index];
+      return monetary && typeof value === "number"
+        ? `${value.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`
+        : String(value ?? "");
+    }), ...(monetary ? [`${totals[index]?.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`] : [])];
+    // ExcelJS has no native auto-fit operation. Size from ALL data (not metadata/first page).
+    const measuredWidth = displayValues.reduce((longest, value) => value.split("\n").reduce((width, line) =>
+      Math.max(width, Array.from(line).length * (/[ء-ي]/.test(line) ? 1.15 : 1)), longest), 0);
+    sheet.getColumn(index + 1).width = Math.max(monetary ? 24 : 14, Math.min(76, Math.ceil(measuredWidth + 4)));
+    if (monetary) sheet.getColumn(index + 1).numFmt = SAR_ACCOUNTING_FORMAT;
   });
-  sheet.eachRow(row => { row.alignment = { ...row.alignment, readingOrder: "rtl", wrapText: true, vertical: "middle" }; });
-  sheet.autoFilter = { from: { row: 4, column: 1 }, to: { row: Math.max(4, sheet.rowCount), column: table.headers.length } };
-  sheet.pageSetup = { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "1:4" };
+  sheet.eachRow(row => {
+    row.alignment = { ...row.alignment, readingOrder: "rtl", wrapText: true, vertical: "middle" };
+    if (row.number > ARCHIVE_EXCEL_HEADER_ROW && row.number <= lastDataRow) {
+      let lines = 1;
+      row.eachCell((cell, column) => {
+        const value = String(cell.value ?? "");
+        const width = (sheet.getColumn(column).width ?? 20) - 3;
+        lines = Math.max(lines, ...value.split("\n").map(line => Math.ceil(line.length * (/[ء-ي]/.test(line) ? 1.15 : 1) / width)));
+      });
+      row.height = Math.max(28, lines * 18 + 10);
+    }
+  });
+  sheet.autoFilter = { from: { row: ARCHIVE_EXCEL_HEADER_ROW, column: 1 }, to: { row: Math.max(ARCHIVE_EXCEL_HEADER_ROW, lastDataRow), column: table.headers.length } };
+  sheet.pageSetup = { orientation: "landscape", paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: `1:${ARCHIVE_EXCEL_HEADER_ROW}` };
+  sheet.headerFooter.oddFooter = "&Rالصفحة &P من &N&Lجميع الحقوق محفوظة لمنصة تكيّة";
   return workbook.xlsx.writeBuffer();
 }
 
-const escapeHtml = (value: Cell) => String(value).replace(/[&<>"']/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character]!));
-
-export async function exportArchiveFile(format: "xlsx" | "pdf", table: ArchiveExportTable, description: string) {
-  const filename = `أرشيف-الحجوزات-${new Date().toISOString().slice(0, 10)}`;
+export async function exportArchiveFile(format: "xlsx" | "pdf", table: ArchiveExportTable, context: ArchiveReportContext) {
+  const filename = `أرشيف-الحجوزات-${context.issuedAt.slice(0, 10)}`;
   if (format === "xlsx") {
-    const buffer = await createArchiveWorkbook(table, description);
+    const buffer = await createArchiveWorkbook(table, context);
     downloadBlob(new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${filename}.xlsx`);
     return;
   }
-  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
-  await document.fonts.ready;
-  const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  const host = document.createElement("div");
-  host.dir = "rtl";
-  host.style.cssText = "position:fixed;left:-100000px;top:0;width:1400px;background:white;color:#172b32;padding:28px;font-family:Arial,sans-serif;pointer-events:none";
-  document.body.appendChild(host);
-  try {
-    const pageSize = 12;
-    const pages = Math.max(1, Math.ceil(table.rows.length / pageSize));
-    for (let page = 0; page < pages; page++) {
-      host.innerHTML = `<h1 style="font-size:25px;margin:0 0 12px">${escapeHtml(table.title)}</h1>
-        <p style="font-size:14px;margin-bottom:8px">${escapeHtml(description)}</p>
-        <p style="font-size:13px">عدد السجلات: ${table.rows.length} — المبالغ بالريال السعودي — صفحة ${page + 1} من ${pages}</p>
-        <table dir="rtl" style="border-collapse:collapse;width:100%;table-layout:fixed;font-size:13px">
-        <thead><tr>${table.headers.map(header => `<th style="background:#087f8c;color:white;border:1px solid #b8c9cd;padding:10px 5px;overflow-wrap:anywhere">${escapeHtml(header)}</th>`).join("")}</tr></thead>
-        <tbody>${table.rows.slice(page * pageSize, (page + 1) * pageSize).map((row, index) => `<tr style="background:${index % 2 ? "#edf6f6" : "#fff"}">${row.map((value, col) => `<td style="border:1px solid #c8d5d8;padding:9px 5px;overflow-wrap:anywhere;white-space:pre-wrap">${escapeHtml(typeof value === "number" && table.numericColumns.includes(col) ? value.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : value)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
-      const canvas = await html2canvas(host, { scale: 1.5, backgroundColor: "#ffffff", logging: false });
-      if (page) pdf.addPage();
-      const width = 277;
-      const height = canvas.height * width / canvas.width;
-      const scale = Math.min(1, 190 / height);
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 10, 10, width * scale, height * scale);
-      canvas.width = 0;
-      canvas.height = 0;
-    }
-    pdf.save(`${filename}.pdf`);
-  } finally {
-    host.remove();
-  }
+  const { createArchivePdf } = await import("./bookingArchivePdfExport");
+  const pdf = await createArchivePdf(table, context);
+  pdf.save(`${filename}.pdf`);
 }

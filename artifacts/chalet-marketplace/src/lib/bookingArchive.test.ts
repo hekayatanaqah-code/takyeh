@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { archiveDateRange, archivePageNumbers, EMPTY_ARCHIVE_FILTERS } from "./bookingArchive";
-import { buildArchiveExportTable, createArchiveWorkbook } from "./bookingArchiveExport";
+import { ARCHIVE_EXCEL_HEADER_ROW, SAR_ACCOUNTING_FORMAT, buildArchiveExportTable, createArchiveWorkbook } from "./bookingArchiveExport";
+import type { ArchiveReportContext } from "./bookingArchiveReport";
+
+const context: ArchiveReportContext = {
+  propertyNames: ["شاليه الاختبار"], ownerName: "المالك التجريبي", ownerPhone: "0500000000",
+  platformLogoUrl: "/logo.png", calendarPreference: "hijri",
+  from: "2020-01-01", to: "2020-12-31", issuedAt: "2020-12-31T21:30:00Z",
+};
 
 describe("archive periods and numeric pagination", () => {
   it("uses Saudi month boundaries, including New Year and leap-year February", () => {
@@ -33,19 +40,32 @@ describe("archive financial Excel export", () => {
     const table = buildArchiveExportTable("completed", bookings, [], () => "شاليه الاختبار");
     assert.equal(table.rows.length, 12);
     assert.equal(table.rows[0][9], 150.25);
-    const buffer = await createArchiveWorkbook(table, "نتائج البحث");
+    const buffer = await createArchiveWorkbook(table, context);
     const { default: ExcelJS } = await import("exceljs");
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
     const sheet = workbook.getWorksheet(1)!;
     assert.equal(sheet.views[0].rightToLeft, true);
-    assert.equal(sheet.rowCount, 16); // four header rows + all twelve records
-    assert.equal(sheet.getCell("C5").value, '=HYPERLINK("bad")');
-    assert.equal(sheet.getCell("C5").type, ExcelJS.ValueType.String);
-    assert.equal(sheet.getCell("D5").value, "0501234567");
-    assert.equal(sheet.getCell("H5").value, 250.5);
-    assert.equal(sheet.getCell("J5").value, 150.25);
-    assert.equal(sheet.getCell("B6").value, "شاليه الاختبار");
+    assert.equal(sheet.rowCount, ARCHIVE_EXCEL_HEADER_ROW + 12 + 1);
+    const start = ARCHIVE_EXCEL_HEADER_ROW + 1;
+    const end = start + bookings.length - 1;
+    assert.equal(sheet.getCell(`C${start}`).value, '=HYPERLINK("bad")');
+    assert.equal(sheet.getCell(`C${start}`).type, ExcelJS.ValueType.String);
+    assert.equal(sheet.getCell(`D${start}`).value, "0501234567");
+    assert.equal(sheet.getCell(`H${start}`).value, 250.5);
+    assert.equal(sheet.getCell(`J${start}`).value, 150.25);
+    assert.equal(sheet.getCell(`B${start + 1}`).value, "شاليه الاختبار");
+    assert(String(sheet.getCell("A1").value).includes("شاليه الاختبار"));
+    assert(String(sheet.getCell("A2").value).includes("المالك التجريبي"));
+    assert(String(sheet.getCell("A3").value).includes("هـ"));
+    assert(String(sheet.getCell("A3").value).includes(" م"));
+    assert.equal(sheet.getCell(`H${start}`).numFmt, SAR_ACCOUNTING_FORMAT);
+    assert.equal(sheet.getCell(`H${end + 1}`).formula, `SUM(H${start}:H${end})`);
+    assert.equal(sheet.getCell(`H${end + 1}`).result, 3006);
+    assert.equal(sheet.getCell(`I${end + 1}`).result, 1203);
+    assert.equal(sheet.getCell(`K${end + 1}`).result, 6000);
+    // ExcelJS's reader does not deserialize calcPr; formulas and cached results are checked above.
+    assert((sheet.getColumn(3).width ?? 0) > 20);
   });
   it("uses full collected balance correctly and includes cancellation refund/income separately", () => {
     const table = buildArchiveExportTable("cancelled", [{

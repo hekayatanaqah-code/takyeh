@@ -86,7 +86,11 @@ export async function sendBookingArchive(req: Request, res: Response, ownerIds: 
     const page = pageFor(query.page, total);
     const rowsQuery = db.select().from(t).where(where).orderBy(desc(t.rescheduledAt), desc(t.id)).$dynamic();
     const rows = await (exportAll ? rowsQuery : rowsQuery.limit(ARCHIVE_PAGE_SIZE).offset((page - 1) * ARCHIVE_PAGE_SIZE));
-    return res.json({ bookings: [], rescheduleLog: rows, total, page, pageSize: ARCHIVE_PAGE_SIZE,
+    const bookingIds = [...new Set(rows.map(row => row.bookingId))];
+    const linked = bookingIds.length ? await db.select({ id: ownerBookingsTable.id, submissionId: ownerBookingsTable.submissionId })
+      .from(ownerBookingsTable).where(and(inArray(ownerBookingsTable.ownerId, ownerIds), inArray(ownerBookingsTable.id, bookingIds))) : [];
+    const submissionByBooking = new Map(linked.map(row => [row.id, row.submissionId]));
+    return res.json({ bookings: [], rescheduleLog: rows.map(row => ({ ...row, submissionId: submissionByBooking.get(row.bookingId) ?? null })), total, page, pageSize: ARCHIVE_PAGE_SIZE,
       years: yearRows.map(row => row.year).filter(year => /^\d{4}$/.test(year)).sort().reverse() });
   }
 

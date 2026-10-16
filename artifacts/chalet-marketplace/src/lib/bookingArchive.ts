@@ -2,6 +2,11 @@ import type { ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 
 export const EMPTY_ARCHIVE_FILTERS: ArchiveFilters = { search: "", period: "all", year: "", from: "", to: "" };
 
+export function getArchiveDateError(filters: ArchiveFilters): string | null {
+  return filters.period === "custom" && filters.from && filters.to && filters.from > filters.to
+    ? "تاريخ البداية يجب أن يكون قبل تاريخ النهاية أو مساويًا له" : null;
+}
+
 /** Quick periods are Gregorian Saudi calendar periods, regardless of the browser timezone. */
 export function archiveDateRange(filters: ArchiveFilters, now = Date.now()): { from?: string; to?: string } {
   if (filters.period === "all") return {};

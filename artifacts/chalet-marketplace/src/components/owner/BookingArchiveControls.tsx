@@ -2,6 +2,8 @@ import { useId } from "react";
 import { Search, RotateCcw, Download, FileSpreadsheet, FileText, ChevronDown, Loader2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { getArchiveDateError } from "@/lib/bookingArchive";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu,
@@ -31,6 +33,7 @@ export interface BookingArchiveControlsProps {
   loading: boolean;
   exporting: boolean;
   onExport: (format: "xlsx" | "pdf") => void;
+  calendarMode?: "hijri" | "gregorian";
 }
 
 const PERIODS: { value: ArchivePeriod; label: string }[] = [
@@ -43,14 +46,6 @@ const PERIODS: { value: ArchivePeriod; label: string }[] = [
 
 const DEFAULT_FILTERS: ArchiveFilters = { search: "", period: "all", year: "", from: "", to: "" };
 
-export function getArchiveDateError(filters: ArchiveFilters): string | null {
-  if (filters.period !== "custom") return null;
-  if (filters.from && filters.to && filters.from > filters.to) {
-    return "تاريخ البداية يجب أن يكون قبل تاريخ النهاية أو مساويًا له";
-  }
-  return null;
-}
-
 export default function BookingArchiveControls({
   filters,
   onChange,
@@ -59,12 +54,11 @@ export default function BookingArchiveControls({
   loading,
   exporting,
   onExport,
+  calendarMode = "hijri",
 }: BookingArchiveControlsProps) {
   const uid = useId();
   const searchId = `${uid}-search`;
   const yearId = `${uid}-year`;
-  const fromId = `${uid}-from`;
-  const toId = `${uid}-to`;
   const errorId = `${uid}-err`;
 
   const dateError = getArchiveDateError(filters);
@@ -201,36 +195,26 @@ export default function BookingArchiveControls({
         <div className="space-y-1.5">
           <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:max-w-md">
             <div className="space-y-1">
-              <label htmlFor={fromId} className="text-xs font-semibold">
-                من تاريخ (ميلادي)
-              </label>
-              <Input
-                id={fromId}
-                type="date"
+              <DualCalendarPicker
+                label="من تاريخ"
                 value={filters.from}
-                max={filters.to || undefined}
-                onChange={(e) => set({ from: e.target.value })}
-                aria-invalid={!!dateError}
-                aria-describedby={dateError ? errorId : undefined}
+                maxDate={filters.to || undefined}
+                onChange={(from) => set({ from })}
+                mode={calendarMode}
                 className={cn("h-10 rounded-lg text-sm", dateError && "border-destructive")}
-                data-testid="input-archive-from"
               />
+              {filters.from && <Button type="button" size="sm" variant="ghost" className="h-6 text-xs" onClick={() => set({ from: "" })}>مسح تاريخ البداية</Button>}
             </div>
             <div className="space-y-1">
-              <label htmlFor={toId} className="text-xs font-semibold">
-                إلى تاريخ (ميلادي)
-              </label>
-              <Input
-                id={toId}
-                type="date"
+              <DualCalendarPicker
+                label="إلى تاريخ"
                 value={filters.to}
-                min={filters.from || undefined}
-                onChange={(e) => set({ to: e.target.value })}
-                aria-invalid={!!dateError}
-                aria-describedby={dateError ? errorId : undefined}
+                minDate={filters.from || undefined}
+                onChange={(to) => set({ to })}
+                mode={calendarMode}
                 className={cn("h-10 rounded-lg text-sm", dateError && "border-destructive")}
-                data-testid="input-archive-to"
               />
+              {filters.to && <Button type="button" size="sm" variant="ghost" className="h-6 text-xs" onClick={() => set({ to: "" })}>مسح تاريخ النهاية</Button>}
             </div>
           </div>
           {dateError && (

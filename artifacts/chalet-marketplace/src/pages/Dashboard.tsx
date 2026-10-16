@@ -10,9 +10,9 @@ import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
 import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
-import BookingArchiveControls, { getArchiveDateError, type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
+import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
-import { archiveDateRange, EMPTY_ARCHIVE_FILTERS } from "@/lib/bookingArchive";
+import { archiveDateRange, EMPTY_ARCHIVE_FILTERS, getArchiveDateError } from "@/lib/bookingArchive";
 // useGetMySubmissions replaced by inline apiFetch query (see line ~12593)
 import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
@@ -404,6 +404,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
 interface RescheduleLogItem {
   id: number;
   bookingId: number;
+  submissionId?: number | null;
   clientName: string;
   clientPhone?: string | null;
   oldDate: string;
@@ -5031,25 +5032,49 @@ function BookingCalendarTab({
     const params = { ...archiveParams, export: "1" as const };
     const selectedTab = archiveTab;
     try {
-      const data = await getOwnerBookingArchive(params, { credentials: "include" });
+      const [data, profileResponse] = await Promise.all([
+        getOwnerBookingArchive(params, { credentials: "include" }),
+        apiFetch("/owner/profile"),
+      ]);
+      if (!profileResponse.ok) throw new Error("تعذّر تحميل هوية المالك وتفضيل التقويم للتقرير.");
+      const profile = await profileResponse.json();
       if (!data.total) {
         toast({ title: "لا توجد حجوزات مطابقة للتصدير" });
         return;
       }
       const { buildArchiveExportTable, exportArchiveFile } = await import("@/lib/bookingArchiveExport");
+      const exportBookings = data.bookings as unknown as OwnerBooking[];
+      const exportLogs = data.rescheduleLog as unknown as RescheduleLogItem[];
+      const propertyFor = (id?: number | null) => ownerChalets.find((chalet: any) => chalet.submissionId === id)
+        ?? submissions.find((submission: any) => submission.id === id);
+      const propertyName = (id?: number | null) => propertyFor(id)?.nameAr ?? "عقار غير متاح";
+      const exportedRecords = selectedTab === "rescheduled" ? exportLogs : exportBookings;
+      const propertyNames = [...new Set(exportedRecords.map(record => propertyName(record.submissionId)))];
+      const logoUrls = [...new Set(exportedRecords.map(record => propertyFor(record.submissionId)?.logoUrl).filter(Boolean))] as string[];
+      const calendarPreference: "hijri" | "gregorian" = profile.reportsCalPref === "hijri" || profile.reportsCalPref === "gregorian"
+        ? profile.reportsCalPref : profile.bookingsCalPref === "gregorian" ? "gregorian" : dashCalType;
+      const ownerLogo = logoUrls.length === 1 ? logoUrls[0] : null;
+      const logoUrl = (url: string) => url.startsWith("/") && !url.startsWith("//") ? `${BASE}${url}` : url;
+      const context = {
+        propertyNames,
+        ownerName: profile.fullName || profile.businessName || "اسم المالك غير مسجل",
+        ownerPhone: profile.phone || "",
+        ownerLogoUrl: ownerLogo ? logoUrl(ownerLogo) : null,
+        propertyLogos: logoUrls.length > 1 ? logoUrls.map(url => ({
+          name: propertyNames.filter(name => exportedRecords.some(record => propertyName(record.submissionId) === name && propertyFor(record.submissionId)?.logoUrl === url)).join("، "),
+          url: logoUrl(url),
+        })) : [],
+        platformLogoUrl: takyahLogoSrc,
+        calendarPreference,
+        from: params.from, to: params.to, search: params.search,
+        issuedAt: new Date().toISOString(),
+      };
       const table = buildArchiveExportTable(selectedTab,
-        data.bookings as unknown as OwnerBooking[], data.rescheduleLog as unknown as RescheduleLogItem[],
-        id => ownerChalets.find((chalet: any) => chalet.submissionId === id)?.nameAr
-          ?? submissions.find((submission: any) => submission.id === id)?.nameAr ?? "عقار غير متاح");
-      const description = [
-        `تاريخ بداية الإقامة (ميلادي): ${params.from ?? "البداية"} — ${params.to ?? "جميع التواريخ"}`,
-        params.search ? `البحث: ${params.search}` : "",
-        `أُصدر: ${new Date().toLocaleString("ar-SA", { timeZone: "Asia/Riyadh", calendar: "gregory" })} (توقيت السعودية)`,
-      ].filter(Boolean).join(" | ");
-      await exportArchiveFile(format, table, description);
+        exportBookings, exportLogs, propertyName, calendarPreference);
+      await exportArchiveFile(format, table, context);
       toast({ title: "تم تصدير الأرشيف", description: `تم تصدير ${toAr(data.total)} سجل مطابق للفلاتر.` });
-    } catch {
-      toast({ title: "تعذّر تصدير الأرشيف", description: "لم يكتمل تنزيل الملف. حاول مرة أخرى.", variant: "destructive" });
+    } catch (error) {
+      toast({ title: "تعذّر تصدير الأرشيف", description: error instanceof Error ? error.message : "لم يكتمل تنزيل الملف. حاول مرة أخرى.", variant: "destructive" });
     } finally {
       setArchiveExporting(false);
     }
@@ -7911,6 +7936,7 @@ function BookingCalendarTab({
               loading={archiveBusy}
               exporting={archiveExporting}
               onExport={exportArchive}
+              calendarMode={dashCalType}
             />
             <p className="px-5 pt-2 text-[11px] text-muted-foreground">
               الفلترة حسب تاريخ بداية الإقامة، وللحجوزات المعاد جدولتها حسب الموعد الجديد.
