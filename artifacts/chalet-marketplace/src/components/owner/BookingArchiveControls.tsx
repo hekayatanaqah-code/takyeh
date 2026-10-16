@@ -1,9 +1,9 @@
 import { useId } from "react";
-import { Search, RotateCcw, Download, FileSpreadsheet, FileText, ChevronDown, Loader2, AlertCircle } from "lucide-react";
+import { Search, RotateCcw, Download, FileSpreadsheet, FileText, ChevronDown, Loader2, AlertCircle, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
-import { archiveToday, getArchiveDateError } from "@/lib/bookingArchive";
+import { archiveToday, archiveCalendarYear, getArchiveDateError } from "@/lib/bookingArchive";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu,
@@ -34,6 +34,7 @@ export interface BookingArchiveControlsProps {
   exporting: boolean;
   onExport: (format: "xlsx" | "pdf") => void;
   calendarMode?: "hijri" | "gregorian";
+  onCalendarModeChange?: (calendar: "hijri" | "gregorian") => void;
 }
 
 const PERIODS: { value: ArchivePeriod; label: string }[] = [
@@ -41,7 +42,7 @@ const PERIODS: { value: ArchivePeriod; label: string }[] = [
   { value: "this-month", label: "هذا الشهر" },
   { value: "last-month", label: "الشهر الماضي" },
   { value: "year", label: "اختيار سنة" },
-  { value: "custom", label: "نطاق مخصص" },
+  { value: "custom", label: "تحديد فترة" },
 ];
 
 const DEFAULT_FILTERS: ArchiveFilters = { search: "", period: "all", year: "", from: "", to: "" };
@@ -55,6 +56,7 @@ export default function BookingArchiveControls({
   exporting,
   onExport,
   calendarMode = "hijri",
+  onCalendarModeChange,
 }: BookingArchiveControlsProps) {
   const uid = useId();
   const searchId = `${uid}-search`;
@@ -71,7 +73,7 @@ export default function BookingArchiveControls({
 
   const selectPeriod = (period: ArchivePeriod) => {
     if (period === "year") {
-      set({ period, year: filters.year || years[0] || String(new Date().getFullYear()), from: "", to: "" });
+      set({ period, year: filters.year || years[0] || String(archiveCalendarYear(calendarMode)), from: "", to: "" });
     } else if (period === "custom") {
       set({ period, year: "" });
     } else {
@@ -172,19 +174,33 @@ export default function BookingArchiveControls({
         })}
       </div>
 
+      {onCalendarModeChange && (
+        <div className="flex items-center gap-2 text-xs" aria-label="تقويم فلاتر الأرشيف">
+          <span className="text-muted-foreground">تقويم الفلترة</span>
+          <div className="inline-flex overflow-hidden rounded-lg border border-border">
+            {(["hijri", "gregorian"] as const).map(calendar => (
+              <button key={calendar} type="button" aria-pressed={calendarMode === calendar}
+                onClick={() => onCalendarModeChange(calendar)}
+                className={cn("px-3 py-1.5 font-semibold transition-colors", calendarMode === calendar ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted")}>
+                {calendar === "hijri" ? "هجري" : "ميلادي"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {filters.period === "year" && (
         <div className="space-y-1 sm:max-w-[14rem]">
           <label htmlFor={yearId} className="text-xs font-semibold">
-            السنة (ميلادي)
+            السنة ({calendarMode === "hijri" ? "هجري" : "ميلادي"})
           </label>
           <Select value={filters.year} onValueChange={(year) => set({ year })} dir="rtl">
             <SelectTrigger id={yearId} className="h-10 rounded-lg" data-testid="select-archive-year">
-              <SelectValue placeholder="اختر السنة الميلادية" />
+              <SelectValue placeholder={`اختر السنة ${calendarMode === "hijri" ? "الهجرية" : "الميلادية"}`} />
             </SelectTrigger>
             <SelectContent>
-              {(years.length ? years : [String(new Date().getFullYear())]).map((y) => (
+              {(years.length ? years : [String(archiveCalendarYear(calendarMode))]).map((y) => (
                 <SelectItem key={y} value={y} data-testid={`option-year-${y}`}>
-                  {y} م
+                  {Number(y).toLocaleString("ar-SA", { useGrouping: false })} {calendarMode === "hijri" ? "هـ" : "م"}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -195,7 +211,8 @@ export default function BookingArchiveControls({
       {filters.period === "custom" && (
         <div className="space-y-1.5">
           <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:max-w-md">
-            <div className="space-y-1">
+            <div className="relative space-y-1 rounded-xl border border-border bg-background p-3 shadow-sm transition-colors hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+              <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-primary" />
               <DualCalendarPicker
                 label="من تاريخ"
                 value={filters.from}
@@ -203,11 +220,12 @@ export default function BookingArchiveControls({
                 maxDate={filters.to && filters.to < today ? filters.to : today}
                 onChange={(from) => set({ from })}
                 mode={calendarMode}
-                className={cn("h-10 rounded-lg text-sm", dateError && "border-destructive")}
+                className={cn("min-h-12 rounded-lg pl-7 text-sm", dateError && "text-destructive")}
               />
               {filters.from && <Button type="button" size="sm" variant="ghost" className="h-6 text-xs" onClick={() => set({ from: "" })}>مسح تاريخ البداية</Button>}
             </div>
-            <div className="space-y-1">
+            <div className="relative space-y-1 rounded-xl border border-border bg-background p-3 shadow-sm transition-colors hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
+              <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-primary" />
               <DualCalendarPicker
                 label="إلى تاريخ"
                 value={filters.to}
@@ -217,7 +235,7 @@ export default function BookingArchiveControls({
                 selectOnOpen={false}
                 onChange={(to) => set({ to })}
                 mode={calendarMode}
-                className={cn("h-10 rounded-lg text-sm", dateError && "border-destructive")}
+                className={cn("min-h-12 rounded-lg pl-7 text-sm", dateError && "text-destructive")}
               />
               {filters.to && <Button type="button" size="sm" variant="ghost" className="h-6 text-xs" onClick={() => set({ to: "" })}>مسح تاريخ النهاية</Button>}
             </div>

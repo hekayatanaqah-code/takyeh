@@ -128,7 +128,7 @@ export function buildArchivePdfPage({ table, context, rows, includeSummary, page
 </header>
 ${context.propertyLogos?.length ? `<div class="ap-property-logos">${context.propertyLogos.map(logo => `<div class="ap-property-logo"><img src="${reportEscape(logo.url)}" alt="${reportEscape(logo.name)}" /><span>${reportEscape(logo.name)}</span></div>`).join("")}</div>` : ""}
 <div class="ap-meta">
-  <div><b>الفترة:</b>${reportEscape(reportDateRange(context))}</div>
+  <div>${reportEscape(reportDateRange(context, table))}</div>
   <div><b>تاريخ الإصدار:</b>${reportEscape(reportIssuedAt(context))}</div>
   <div><b>عدد السجلات المطابقة:</b>${reportEscape(table.rows.length.toLocaleString("ar-SA"))}</div>
   <div><b>سجلات هذه الصفحة:</b>${reportEscape(rows.length.toLocaleString("ar-SA"))}</div>

@@ -25,7 +25,25 @@ Arabic PDF text must not use nonzero letter spacing. Prefer whole-text browser s
 
 **Why:** The canvas renderer paints individually spaced glyphs separately, breaking Arabic connections. This was especially visible in the rightmost report-header text. Verify actual PDF raster output, not only the source HTML.
 
-**How to apply:** Keep report typography isolated from inherited styles and avoid relying on remote web-font loading. Keep all-period wording as “جميع الفترات (حتى تاريخه)” and omit timezone wording from the issue label while retaining Saudi date calculations.
+**How to apply:** Keep report typography isolated from inherited styles and avoid relying on remote web-font loading. Omit timezone wording from the issue label while retaining Saudi date calculations.
+
+Archive quick filters follow the account's saved reports-calendar preference, falling back to the bookings preference. A local archive calendar switch does not change the saved account setting or operational booking calendar.
+
+**Why:** The owner requested Hijri/Gregorian month and year filters linked to account settings. Accounts have separate booking/report preferences, so changing the operational calendar must not silently redefine a report filter.
+
+**How to apply:** Resolve Hijri boundaries with Umm al-Qura and send Gregorian ISO bounds to the existing archive API. Refresh the account preference after saving settings; keep quick filters, year labels, date pickers and the temporary calendar switch consistent.
+
+Export metadata must print the exact earliest/latest stay dates in the exported matches, including all-period and selected-year reports. Rescheduling uses the new stay date, not its old date or edit timestamp.
+
+**Why:** The owner explicitly requested “الفترة من: … إلى: …” with both calendars instead of broad filter labels or whole-year boundaries.
+
+**How to apply:** Derive the bounds from all exported records, not the currently displayed page, and retain the saved calendar first. Use “تحديد فترة” for the custom-range action.
+
+Excel exports use separate calendar columns: native Gregorian date values and zero-padded Umm al-Qura year/month/day text for Hijri.
+
+**Why:** The owner requested independent sorting/filtering for each calendar. Excel's built-in Hijri date rendering can use a different calendar from the platform's Umm al-Qura dates.
+
+**How to apply:** Keep the two columns adjacent with the preferred calendar first, preserve worksheet RTL and numeric accounting values, and reindex formulas when inserting date columns.
 
 Rasterize a self-contained report at its own local origin, not a cloned RTL dashboard document.
 

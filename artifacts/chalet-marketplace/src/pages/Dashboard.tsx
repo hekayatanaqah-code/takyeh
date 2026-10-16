@@ -12,7 +12,7 @@ import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE }
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
-import { archiveDateRange, archiveToday, EMPTY_ARCHIVE_FILTERS, getArchiveDateError } from "@/lib/bookingArchive";
+import { archiveDateRange, archiveToday, archiveCalendarYear, archiveCalendarYears, EMPTY_ARCHIVE_FILTERS, getArchiveDateError } from "@/lib/bookingArchive";
 // useGetMySubmissions replaced by inline apiFetch query (see line ~12593)
 import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
@@ -4504,14 +4504,24 @@ function BookingCalendarTab({
   submissionsLoading = false,
   ownerChalets,
   chaletsLoading = false,
+  preferredReportCalendar = "hijri",
 }: {
   submissions: any[];
   submissionsLoading?: boolean;
   ownerChalets: any[];
   chaletsLoading?: boolean;
+  preferredReportCalendar?: "hijri" | "gregorian";
 }) {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
+  const [archiveCalendar, setArchiveCalendar] = useState<"hijri" | "gregorian">(preferredReportCalendar);
+  useEffect(() => {
+    setArchiveCalendar(preferredReportCalendar);
+    setArchiveFilters(previous => ({
+      ...previous, year: previous.period === "year" ? String(archiveCalendarYear(preferredReportCalendar)) : previous.year,
+    }));
+    setArchivePage(1);
+  }, [preferredReportCalendar]);
   const [addOpen, setAddOpen] = useState(false);
   const [stayClock, setStayClock] = useState(Date.now);
   useEffect(() => {
@@ -4993,7 +5003,7 @@ function BookingCalendarTab({
     });
   };
 
-  const archiveRange = archiveDateRange(archiveFilters, stayClock);
+  const archiveRange = archiveDateRange(archiveFilters, stayClock, archiveCalendar);
   const archiveInvalid = !!getArchiveDateError(archiveFilters);
   const archiveParams = {
     tab: archiveTab, search: archiveSearch.trim() || undefined,
@@ -7931,12 +7941,17 @@ function BookingCalendarTab({
             <BookingArchiveControls
               filters={archiveFilters}
               onChange={updateArchiveFilters}
-              years={Array.from(new Set([...(archiveData?.years ?? []), ...(archiveFilters.year ? [archiveFilters.year] : [])])).sort().reverse()}
+              years={archiveCalendarYears(archiveData?.years ?? [], archiveCalendar, stayClock)}
               total={archiveData?.total ?? 0}
               loading={archiveBusy}
               exporting={archiveExporting}
               onExport={exportArchive}
-              calendarMode={dashCalType}
+              calendarMode={archiveCalendar}
+              onCalendarModeChange={calendar => {
+                setArchiveCalendar(calendar);
+                setArchiveFilters(previous => ({ ...previous, year: previous.period === "year" ? String(archiveCalendarYear(calendar)) : "" }));
+                setArchivePage(1);
+              }}
             />
             <p className="px-5 pt-2 text-[11px] text-muted-foreground">
               الفلترة حسب تاريخ بداية الإقامة، وللحجوزات المعاد جدولتها حسب الموعد الجديد.
@@ -27045,6 +27060,9 @@ export default function Dashboard() {
             submissionsLoading={submissionsLoading}
             ownerChalets={ownerChalets}
             chaletsLoading={ownerChaletsLoading}
+            preferredReportCalendar={ownerProfile?.reportsCalPref === "gregorian" ? "gregorian"
+              : ownerProfile?.reportsCalPref === "hijri" ? "hijri"
+              : ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"}
           />
         )}
         {visiblePropertyTab === "deposits" && (
@@ -29062,7 +29080,8 @@ function OwnerProfileTab() {
                     onClick={() => {
                       setBookingsCalPrefLocal(v);
                       localStorage.setItem("dashCalDefaultType", v);
-                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ bookingsCalPref: v }) });
+                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ bookingsCalPref: v }) })
+                        .then(response => { if (response.ok) profileQueryClient.invalidateQueries({ queryKey: ["owner", "profile-btype"] }); });
                     }}
                     className={`px-4 py-2 font-semibold transition-colors ${bookingsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >{v === "hijri" ? "هجري" : "ميلادي"}</button>
@@ -29081,7 +29100,8 @@ function OwnerProfileTab() {
                     onClick={() => {
                       setReportsCalPrefLocal(v);
                       localStorage.setItem("revCalType", v);
-                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ reportsCalPref: v }) });
+                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ reportsCalPref: v }) })
+                        .then(response => { if (response.ok) profileQueryClient.invalidateQueries({ queryKey: ["owner", "profile-btype"] }); });
                     }}
                     className={`px-4 py-2 font-semibold transition-colors ${reportsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >{v === "hijri" ? "هجري" : "ميلادي"}</button>

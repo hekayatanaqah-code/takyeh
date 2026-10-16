@@ -92,8 +92,8 @@ describe("formal archive report", () => {
     assert.equal(sheet.getCell("A1").alignment.horizontal, "right");
     assert.equal(sheet.getCell("A1").alignment.readingOrder, "rtl");
     assert.equal(sheet.getCell("A7").value, "رقم الحجز");
-    assert.equal(sheet.getCell("I7").value, "العربون المسجل (ر.س)");
-    assert.equal(sheet.getCell("J7").value, "التحصيلات من الإيجار (ر.س)");
+    assert.equal(sheet.getCell("J7").value, "العربون المسجل (ر.س)");
+    assert.equal(sheet.getCell("K7").value, "التحصيلات من الإيجار (ر.س)");
     assert((sheet.getRow(21).height ?? 0) > 28);
     assert(String(sheet.getCell("A3").value).indexOf(" م") < String(sheet.getCell("A3").value).indexOf("هـ"));
     for (const column of longTable.numericColumns) {
@@ -122,6 +122,41 @@ describe("formal archive report", () => {
     assert.equal(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "custom", from: "2026-10-17", to: "2026-10-17" }, now), null);
     for (const boundary of ["from", "to"] as const) {
       assert(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "custom", [boundary]: "2026-10-18" }, now));
+    }
+  });
+  it("prints the actual first and last matched stay dates rather than all/year filter boundaries", () => {
+    const records = [bookings[0], { ...bookings[1], bookingDate: "2026-09-14" }, { ...bookings[2], bookingDate: "2025-12-15" }];
+    const actualTable = buildArchiveExportTable("completed", records, [], () => "عقار", "hijri");
+    const label = reportDateRange({ ...context, from: "2025-01-01", to: "2026-12-31" }, actualTable);
+    assert(label.startsWith("الفترة من:"));
+    assert(label.includes(reportDualDate("2025-12-15", "hijri")));
+    assert(label.includes(reportDualDate("2026-09-14", "hijri")));
+    assert(!label.includes(reportDualDate("2025-01-01", "hijri")));
+    const rescheduled = buildArchiveExportTable("rescheduled", [], [{
+      bookingId: 1, clientName: "عميل", oldDate: "2020-01-01", newDate: "2026-05-06",
+      oldDuration: 1, newDuration: 1, reason: "", rescheduledAt: "2026-01-01T12:00:00Z",
+    }], () => "");
+    assert(reportDateRange(context, rescheduled).includes(reportDualDate("2026-05-06", "hijri")));
+    assert(!reportDateRange(context, rescheduled).includes(reportDualDate("2020-01-01", "hijri")));
+  });
+  it("exports separate sortable date columns for every recorded date, with preferred calendar first", async () => {
+    const { default: ExcelJS } = await import("exceljs");
+    for (const calendarPreference of ["hijri", "gregorian"] as const) {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await createArchiveWorkbook(table, { ...context, calendarPreference }));
+      const sheet = workbook.getWorksheet(1)!;
+      const headers = sheet.getRow(7).values as string[];
+      const hijri = headers.indexOf("تاريخ بداية الإقامة (هجري)");
+      const gregorian = headers.indexOf("تاريخ بداية الإقامة (ميلادي)");
+      assert(hijri > 0 && gregorian > 0);
+      assert.equal(calendarPreference === "hijri" ? hijri < gregorian : gregorian < hijri, true);
+      assert.match(String(sheet.getRow(8).getCell(hijri).value), /^\d{4}\/\d{2}\/\d{2}$/);
+      assert(sheet.getRow(8).getCell(gregorian).value instanceof Date);
+      assert.equal((sheet.getRow(8).getCell(gregorian).value as Date).toISOString().slice(0, 10), "2026-01-01");
+      assert.equal(sheet.getRow(8).getCell(gregorian).numFmt, "yyyy/mm/dd");
+      assert(sheet.autoFilter);
+      assert.equal(sheet.views[0].rightToLeft, true);
+      assert(String(sheet.getCell("A3").value).startsWith("الفترة من:"));
     }
   });
 });

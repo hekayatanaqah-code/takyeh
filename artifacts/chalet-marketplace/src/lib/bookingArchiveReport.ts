@@ -1,3 +1,6 @@
+import type { ArchiveExportTable } from "./bookingArchiveExport";
+import { toHijriComponents } from "./hijri";
+
 export type ReportCalendar = "hijri" | "gregorian";
 
 export interface ArchiveReportContext {
@@ -27,9 +30,31 @@ export function reportDualDate(value: string, preference: ReportCalendar): strin
   return preference === "hijri" ? `${hijri} — ${gregorian}` : `${gregorian} — ${hijri}`;
 }
 
-export function reportDateRange(context: ArchiveReportContext): string {
+export function reportDateRange(context: ArchiveReportContext, table?: ArchiveExportTable): string {
+  if (table) {
+    // Column 4 is the stay start/new rescheduled start, never the edit timestamp or old date.
+    const values = table.dateValues?.find(column => column.column === 4)?.values ?? [];
+    const dates = values.filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)).sort();
+    if (dates.length) return `الفترة من: ${reportDualDate(dates[0], context.calendarPreference)} إلى: ${reportDualDate(dates[dates.length - 1], context.calendarPreference)}`;
+    if (!table.rows.length) return "لا توجد حجوزات لتحديد الفترة";
+  }
   if (!context.from && !context.to) return "جميع الفترات (حتى تاريخه)";
   return `${context.from ? reportDualDate(context.from, context.calendarPreference) : "من بداية السجلات"} إلى ${context.to ? reportDualDate(context.to, context.calendarPreference) : "نهاية السجلات"}`;
+}
+
+/** Fixed-width Hijri text sorts chronologically, without relying on Excel's different Hijri calendar. */
+export function reportHijriSortDate(value: string): string {
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value
+    : new Date(new Date(value).getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const h = toHijriComponents(new Date(`${dateOnly}T12:00:00`));
+  return `${h.year}/${String(h.month).padStart(2, "0")}/${String(h.day).padStart(2, "0")}`;
+}
+
+/** Excel stores Gregorian dates as genuine date values; both columns refer to the same Saudi day. */
+export function reportExcelDate(value: string): Date {
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value
+    : new Date(new Date(value).getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return new Date(`${dateOnly}T00:00:00Z`);
 }
 
 export function reportPropertyTitle(context: ArchiveReportContext): string {

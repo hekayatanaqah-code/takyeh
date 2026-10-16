@@ -1,4 +1,4 @@
-import { reportDualDate, reportDateRange, reportIssuedAt, reportPropertyTitle, type ArchiveReportContext, type ReportCalendar } from "./bookingArchiveReport";
+import { reportDualDate, reportDateRange, reportIssuedAt, reportPropertyTitle, reportHijriSortDate, reportExcelDate, type ArchiveReportContext, type ReportCalendar } from "./bookingArchiveReport";
 import { archiveAccountingOrder } from "./archiveAccountingOrder";
 
 export type ArchiveTab = "cancelled" | "rescheduled" | "completed";
@@ -64,7 +64,7 @@ export function buildArchiveExportTable(tab: ArchiveTab, bookings: ExportBooking
 }
 
 /** Integer minor units avoid binary floating-point drift in financial totals. */
-export function archiveTotals(table: ArchiveExportTable): (number | null)[] {
+export function archiveTotals(table: { headers: string[]; numericColumns: number[]; rows: readonly (readonly unknown[])[] }): (number | null)[] {
   return table.headers.map((_, column) => table.numericColumns.includes(column)
     ? table.rows.reduce((total, row) => total + (typeof row[column] === "number" ? Math.round(Number(row[column]) * 100) : 0), 0) / 100
     : null);
@@ -91,11 +91,19 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export async function createArchiveWorkbook(source: ArchiveExportTable, context: ArchiveReportContext) {
-  const order = archiveAccountingOrder(source.headers, source.numericColumns.length > 0);
-  const table: ArchiveExportTable = {
-    ...source, headers: order.map(index => source.headers[index]),
-    rows: source.rows.map(row => order.map(index => row[index])),
-    numericColumns: order.flatMap((index, position) => source.numericColumns.includes(index) ? [position] : []),
+  const dates = new Map(source.dateValues?.map(column => [column.column, column.values]));
+  const calendars: ReportCalendar[] = context.calendarPreference === "hijri" ? ["hijri", "gregorian"] : ["gregorian", "hijri"];
+  const columns = archiveAccountingOrder(source.headers, source.numericColumns.length > 0).flatMap((index): { index: number; calendar: ReportCalendar | undefined }[] =>
+    dates.has(index) ? calendars.map(calendar => ({ index, calendar })) : [{ index, calendar: undefined }]);
+  const table = {
+    ...source, headers: columns.map(({ index, calendar }) =>
+      calendar ? `${source.headers[index]} (${calendar === "hijri" ? "هجري" : "ميلادي"})` : source.headers[index]),
+    rows: source.rows.map((row, position) => columns.map(({ index, calendar }): ArchiveCell | Date => {
+      const date = dates.get(index)?.[position];
+      if (!calendar || !date) return calendar ? "" : row[index];
+      return calendar === "hijri" ? reportHijriSortDate(date) : reportExcelDate(date);
+    })),
+    numericColumns: columns.flatMap(({ index }, position) => source.numericColumns.includes(index) ? [position] : []),
   };
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.default.Workbook();
@@ -110,7 +118,7 @@ export async function createArchiveWorkbook(source: ArchiveExportTable, context:
   const metadata = [
     reportPropertyTitle(context),
     `${table.title} | المالك / النشاط: ${context.ownerName} | الجوال: ${context.ownerPhone || "غير مسجل"}`,
-    `النطاق الزمني: ${reportDateRange(context)}`,
+    reportDateRange(context, source),
     `تاريخ الإصدار: ${reportIssuedAt(context)}`,
     `${context.search ? `البحث: ${context.search} | ` : ""}عدد السجلات: ${table.rows.length} | العملة: الريال السعودي (ر.س)`,
     table.summaryNote || "سجل تغييرات المواعيد؛ لا يتضمن قيماً مالية تاريخية.",
@@ -155,13 +163,20 @@ export async function createArchiveWorkbook(source: ArchiveExportTable, context:
       Math.max(width, Array.from(line).length * (/[ء-ي]/.test(line) ? 1.15 : 1)), longest), 0);
     sheet.getColumn(index + 1).width = Math.max(monetary ? 24 : 14, Math.min(76, Math.ceil(measuredWidth + 4)));
     if (monetary) sheet.getColumn(index + 1).numFmt = SAR_ACCOUNTING_FORMAT;
+    else if (columns[index].calendar === "gregorian") {
+      sheet.getColumn(index + 1).numFmt = "yyyy/mm/dd";
+      sheet.getColumn(index + 1).width = 22;
+    } else if (columns[index].calendar === "hijri") {
+      sheet.getColumn(index + 1).numFmt = "@";
+      sheet.getColumn(index + 1).width = 22;
+    }
   });
   sheet.eachRow(row => {
     row.alignment = { ...row.alignment, readingOrder: "rtl", horizontal: "right", wrapText: true, vertical: "middle" };
     if (row.number > ARCHIVE_EXCEL_HEADER_ROW && row.number <= lastDataRow) {
       let lines = 1;
       row.eachCell((cell, column) => {
-        const value = String(cell.value ?? "");
+        const value = cell.value instanceof Date ? cell.value.toISOString().slice(0, 10) : String(cell.value ?? "");
         const width = (sheet.getColumn(column).width ?? 20) - 3;
         lines = Math.max(lines, ...value.split("\n").map(line => Math.ceil(line.length * (/[ء-ي]/.test(line) ? 1.15 : 1) / width)));
       });
