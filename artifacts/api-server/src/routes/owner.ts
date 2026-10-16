@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { propertyStayComplete } from "../lib/booking-completion";
+import { sendBookingArchive } from "../lib/booking-archive";
 import { INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import multer from "multer";
 import sharp from "sharp";
@@ -1555,6 +1556,10 @@ router.get("/bookings", async (req, res) => {
   }));
 
   return res.json(enriched.reverse());
+});
+
+router.get("/bookings/archive", async (req, res) => {
+  return sendBookingArchive(req, res, await getOwnerIds(req));
 });
 
 router.get("/bookings/cancelled", async (req, res) => {

@@ -896,6 +896,53 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type GetOwnerBookingArchiveParams = {
+tab?: GetOwnerBookingArchiveTab;
+/**
+ * @maxLength 150
+ */
+search?: string;
+from?: string;
+to?: string;
+/**
+ * @minimum 1
+ */
+page?: number;
+/**
+ * Return all matching records for an explicitly requested export
+ */
+export?: GetOwnerBookingArchiveExport;
+};
+
+export type GetOwnerBookingArchiveTab = typeof GetOwnerBookingArchiveTab[keyof typeof GetOwnerBookingArchiveTab];
+
+
+export const GetOwnerBookingArchiveTab = {
+  cancelled: 'cancelled',
+  rescheduled: 'rescheduled',
+  completed: 'completed',
+} as const;
+
+export type GetOwnerBookingArchiveExport = typeof GetOwnerBookingArchiveExport[keyof typeof GetOwnerBookingArchiveExport];
+
+
+export const GetOwnerBookingArchiveExport = {
+  NUMBER_1: '1',
+} as const;
+
+export type GetOwnerBookingArchive200BookingsItem = { [key: string]: unknown };
+
+export type GetOwnerBookingArchive200RescheduleLogItem = { [key: string]: unknown };
+
+export type GetOwnerBookingArchive200 = {
+  bookings: GetOwnerBookingArchive200BookingsItem[];
+  rescheduleLog: GetOwnerBookingArchive200RescheduleLogItem[];
+  total: number;
+  page: number;
+  pageSize: 10;
+  years: string[];
+};
+
 export type AdminListPartnerPhotographers200Item = {
   id: number;
   name: string;

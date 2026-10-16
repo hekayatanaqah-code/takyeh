@@ -9,6 +9,35 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Owner-scoped booking archive, filtered by stay start date, with ten records per page
+ */
+export const getOwnerBookingArchiveQueryTabDefault = `cancelled`;
+export const getOwnerBookingArchiveQuerySearchMax = 150;
+
+export const getOwnerBookingArchiveQueryPageDefault = 1;
+
+
+
+export const GetOwnerBookingArchiveQueryParams = zod.object({
+  "tab": zod.enum(['cancelled', 'rescheduled', 'completed']).default(getOwnerBookingArchiveQueryTabDefault),
+  "search": zod.coerce.string().max(getOwnerBookingArchiveQuerySearchMax).optional(),
+  "from": zod.date().optional(),
+  "to": zod.date().optional(),
+  "page": zod.coerce.number().int().min(1).default(getOwnerBookingArchiveQueryPageDefault),
+  "export": zod.enum(['1']).optional().describe('Return all matching records for an explicitly requested export')
+})
+
+export const GetOwnerBookingArchiveResponse = zod.object({
+  "bookings": zod.array(zod.record(zod.string(), zod.unknown())),
+  "rescheduleLog": zod.array(zod.record(zod.string(), zod.unknown())),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.literal(10),
+  "years": zod.array(zod.string())
+})
+
+
+/**
  * @summary List photographer login accounts for authorized user managers
  */
 export const AdminListPartnerPhotographersResponseItem = zod.object({

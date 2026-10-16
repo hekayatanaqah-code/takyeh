@@ -14,3 +14,9 @@ If no usable departure schedule exists, use the end of the last occupied Saudi c
 **Why:** Legacy records can lack period schedules; guessing an earlier departure could permit settlement while the guest is still staying.
 
 **How to apply:** Keep this conservative fallback consistent across server and browser. Unlinked general review invitations retain their existing behavior because they have no booking from which to establish a departure.
+
+Archive exports include every record matching the chosen archive tab and filters, not just the displayed page. Rescheduling exports describe the recorded change; they must not present today's booking price or balance as a historical financial snapshot.
+
+**Why:** The owner requested external financial archiving, but rescheduling history does not establish what the booking's finances were at the time of each change.
+
+**How to apply:** Keep the distinction explicit when expanding export columns or joining change logs to current bookings. Archive time filters refer to stay-start dates (the new start date for rescheduled records), not the time the cancellation or edit was recorded.

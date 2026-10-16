@@ -52,6 +52,8 @@ import type {
   ErrorResponse,
   GetAdminBroadcastRecipientsParams,
   GetChaletsParams,
+  GetOwnerBookingArchive200,
+  GetOwnerBookingArchiveParams,
   GetOwnerWallet200,
   GetPhotographerStatement200,
   GetPhotographerStatementParams,
@@ -163,6 +165,114 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetOwnerBookingArchiveUrl = (params?: GetOwnerBookingArchiveParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/owner/bookings/archive?${stringifiedParams}` : `/api/owner/bookings/archive`
+}
+
+/**
+ * @summary Owner-scoped booking archive, filtered by stay start date, with ten records per page
+ */
+export const getOwnerBookingArchive = async (params?: GetOwnerBookingArchiveParams, options?: Parameters<typeof customFetch>[1]): Promise<GetOwnerBookingArchive200> => {
+
+  return customFetch<GetOwnerBookingArchive200>(getGetOwnerBookingArchiveUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOwnerBookingArchiveQueryKey = (params?: GetOwnerBookingArchiveParams,) => {
+    return [
+    `/api/owner/bookings/archive`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetOwnerBookingArchiveQueryOptions = <TData = Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError = ErrorType<void>>(params?: GetOwnerBookingArchiveParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOwnerBookingArchiveQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOwnerBookingArchive>>> = ({ signal }) => getOwnerBookingArchive(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOwnerBookingArchiveQueryResult = NonNullable<Awaited<ReturnType<typeof getOwnerBookingArchive>>>
+export type GetOwnerBookingArchiveQueryError = ErrorType<void>
+
+
+export function useGetOwnerBookingArchive<TData = Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError = ErrorType<void>>(
+ params: undefined |  GetOwnerBookingArchiveParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerBookingArchive>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerBookingArchive>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerBookingArchive<TData = Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError = ErrorType<void>>(
+ params?: GetOwnerBookingArchiveParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerBookingArchive>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerBookingArchive>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerBookingArchive<TData = Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError = ErrorType<void>>(
+ params?: GetOwnerBookingArchiveParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Owner-scoped booking archive, filtered by stay start date, with ten records per page
+ */
+
+export function useGetOwnerBookingArchive<TData = Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError = ErrorType<void>>(
+ params?: GetOwnerBookingArchiveParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerBookingArchive>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOwnerBookingArchiveQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getAdminListPartnerPhotographersUrl = () => {
 

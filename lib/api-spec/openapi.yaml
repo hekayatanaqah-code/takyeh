@@ -21,6 +21,39 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/bookings/archive:
+    get:
+      operationId: getOwnerBookingArchive
+      tags: [owner]
+      summary: Owner-scoped booking archive, filtered by stay start date, with ten records per page
+      parameters:
+        - { name: tab, in: query, schema: { type: string, enum: [cancelled, rescheduled, completed], default: cancelled } }
+        - { name: search, in: query, schema: { type: string, maxLength: 150 } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: export, in: query, description: Return all matching records for an explicitly requested export, schema: { type: string, enum: ["1"] } }
+      responses:
+        "200":
+          description: Filtered archive; bookings and log records retain the existing owner booking shapes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bookings, rescheduleLog, total, page, pageSize, years]
+                properties:
+                  bookings: { type: array, items: { type: object, additionalProperties: true } }
+                  rescheduleLog: { type: array, items: { type: object, additionalProperties: true } }
+                  total: { type: integer }
+                  page: { type: integer }
+                  pageSize: { type: integer, const: 10 }
+                  years: { type: array, items: { type: string } }
+        "400":
+          description: Invalid dates, range, or page
+        "401":
+          description: Authentication required
+        "403":
+          description: Owner or delegated booking access required
   /admin/partner-accounts/photographers:
     get:
       operationId: adminListPartnerPhotographers

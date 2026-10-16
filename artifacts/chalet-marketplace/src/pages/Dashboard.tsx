@@ -9,6 +9,10 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
 import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
+import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
+import BookingArchiveControls, { getArchiveDateError, type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
+import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
+import { archiveDateRange, EMPTY_ARCHIVE_FILTERS } from "@/lib/bookingArchive";
 // useGetMySubmissions replaced by inline apiFetch query (see line ~12593)
 import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
@@ -4568,6 +4572,15 @@ function BookingCalendarTab({
   const [rescheduleBooking, setRescheduleBooking] = useState<OwnerBooking | null>(null);
   const [showArchive, setShowArchive] = useState(false);
   const [archiveTab, setArchiveTab] = useState<"cancelled" | "rescheduled" | "completed">("cancelled");
+  const [archiveFilters, setArchiveFilters] = useState<ArchiveFilters>({ ...EMPTY_ARCHIVE_FILTERS });
+  const [archiveSearch, setArchiveSearch] = useState("");
+  const [archivePage, setArchivePage] = useState(1);
+  const [archiveExporting, setArchiveExporting] = useState(false);
+  const archiveRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setArchiveSearch(archiveFilters.search), 300);
+    return () => window.clearTimeout(timer);
+  }, [archiveFilters.search]);
   const [bookingPage, setBookingPage] = useState(0);
   const [bookingCalView, setBookingCalView] = useState<"hijri" | "gregorian">("hijri");
   const [bookingMonthFilter, setBookingMonthFilter] = useState<string>("all");
@@ -4979,25 +4992,68 @@ function BookingCalendarTab({
     });
   };
 
-  const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
-    queryKey: ["owner", "bookings", "cancelled"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/bookings/cancelled");
-      if (!r.ok) return [];
-      return r.json();
+  const archiveRange = archiveDateRange(archiveFilters, stayClock);
+  const archiveInvalid = !!getArchiveDateError(archiveFilters);
+  const archiveParams = {
+    tab: archiveTab, search: archiveSearch.trim() || undefined,
+    ...archiveRange, page: archivePage,
+  };
+  const archiveQuery = useGetOwnerBookingArchive(archiveParams, {
+    query: {
+      queryKey: ["owner", "bookings", "archive", archiveParams],
+      enabled: showArchive && !archiveInvalid,
+      refetchInterval: 30_000,
+      staleTime: 0,
     },
-    enabled: showArchive && archiveTab === "cancelled",
+    request: { credentials: "include" },
   });
-
-  const { data: rescheduleLog = [] } = useQuery<RescheduleLogItem[]>({
-    queryKey: ["owner", "bookings", "reschedule-log"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/bookings/reschedule-log");
-      if (!r.ok) return [];
-      return r.json();
-    },
-    enabled: showArchive && archiveTab === "rescheduled",
-  });
+  const archiveBusy = archiveQuery.isFetching || archiveFilters.search !== archiveSearch;
+  const archiveData = !archiveInvalid && !archiveQuery.isError ? archiveQuery.data : undefined;
+  const cancelledBookings = (archiveTab === "cancelled" ? archiveData?.bookings ?? [] : []) as unknown as OwnerBooking[];
+  const completedBookings = (archiveTab === "completed" ? archiveData?.bookings ?? [] : []) as unknown as OwnerBooking[];
+  const rescheduleLog = (archiveData?.rescheduleLog ?? []) as unknown as RescheduleLogItem[];
+  const visibleArchivePage = archiveData?.page ?? archivePage;
+  useEffect(() => {
+    if (archiveData && archiveData.page !== archivePage) setArchivePage(archiveData.page);
+  }, [archiveData?.page, archivePage]);
+  const updateArchiveFilters = (filters: ArchiveFilters) => {
+    setArchiveFilters(filters);
+    setArchivePage(1);
+  };
+  const selectArchiveTab = (tab: "cancelled" | "rescheduled" | "completed") => {
+    setArchiveTab(tab);
+    setArchivePage(1);
+  };
+  async function exportArchive(format: "xlsx" | "pdf") {
+    if (archiveExporting || archiveBusy || archiveInvalid) return;
+    setArchiveExporting(true);
+    // Snapshot the active filters before the async export starts.
+    const params = { ...archiveParams, export: "1" as const };
+    const selectedTab = archiveTab;
+    try {
+      const data = await getOwnerBookingArchive(params, { credentials: "include" });
+      if (!data.total) {
+        toast({ title: "لا توجد حجوزات مطابقة للتصدير" });
+        return;
+      }
+      const { buildArchiveExportTable, exportArchiveFile } = await import("@/lib/bookingArchiveExport");
+      const table = buildArchiveExportTable(selectedTab,
+        data.bookings as unknown as OwnerBooking[], data.rescheduleLog as unknown as RescheduleLogItem[],
+        id => ownerChalets.find((chalet: any) => chalet.submissionId === id)?.nameAr
+          ?? submissions.find((submission: any) => submission.id === id)?.nameAr ?? "عقار غير متاح");
+      const description = [
+        `تاريخ بداية الإقامة (ميلادي): ${params.from ?? "البداية"} — ${params.to ?? "جميع التواريخ"}`,
+        params.search ? `البحث: ${params.search}` : "",
+        `أُصدر: ${new Date().toLocaleString("ar-SA", { timeZone: "Asia/Riyadh", calendar: "gregory" })} (توقيت السعودية)`,
+      ].filter(Boolean).join(" | ");
+      await exportArchiveFile(format, table, description);
+      toast({ title: "تم تصدير الأرشيف", description: `تم تصدير ${toAr(data.total)} سجل مطابق للفلاتر.` });
+    } catch {
+      toast({ title: "تعذّر تصدير الأرشيف", description: "لم يكتمل تنزيل الملف. حاول مرة أخرى.", variant: "destructive" });
+    } finally {
+      setArchiveExporting(false);
+    }
+  }
 
   const deleteBooking = useMutation({
     mutationFn: async ({ id, reason, reasonCode, refundAmount }: { id: number; reason: string; reasonCode?: string; refundAmount?: number }) => {
@@ -5130,22 +5186,6 @@ function BookingCalendarTab({
       return true;
     }).sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
   }, [bookings, filterFrom, filterTo, searchQuery, ownerChalets, stayClock]);
-
-  const completedBookings = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return bookings.filter((b) => {
-      if (!bookingIsComplete(b)) return false;
-      if (q) {
-        const nameMatch = b.clientName?.toLowerCase().includes(q);
-        const phoneMatch = b.clientPhone?.toLowerCase().includes(q);
-        const chaletMatch = getBookingChaletName(b).toLowerCase().includes(q);
-        const hijriMatch = formatDualDate(b.bookingDate).hijri.toLowerCase().includes(q);
-        const gregMatch  = formatDualDate(b.bookingDate).gregorian.toLowerCase().includes(q);
-        if (!nameMatch && !phoneMatch && !chaletMatch && !hijriMatch && !gregMatch) return false;
-      }
-      return true;
-    }).sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
-  }, [bookings, searchQuery, ownerChalets, stayClock]);
 
   const bookingYearOptions = useMemo(() => {
     const years = new Set<string>();
@@ -6549,15 +6589,19 @@ function BookingCalendarTab({
                   {agendaRows.map((row) => {
                     const dual = formatDualDate(row.dateStr);
                     return (
-                      <div key={row.dateStr} className="grid grid-cols-1 md:grid-cols-[170px_1fr] border-b border-border last:border-b-0">
-                        <div className="bg-muted/40 px-3 py-3 text-xs font-bold text-foreground">
-                          <p>{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</p>
-                          <p className="text-muted-foreground font-medium mt-0.5">{dual.gregorian}</p>
+                      <div key={row.dateStr} className="border-b border-border last:border-b-0">
+                        <div className="bg-muted/40 px-3 py-2 text-xs font-bold text-foreground flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span>{new Date(`${row.dateStr}T12:00:00+03:00`).toLocaleDateString("ar-SA", { weekday: "long", timeZone: "Asia/Riyadh" })}</span>
+                            <span>{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
+                            <span className="text-muted-foreground font-medium">{dual.gregorian}</span>
+                          </div>
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="mt-2 h-7 gap-1 text-xs"
+                            className="h-7 gap-1 px-2 text-xs shrink-0"
+                            aria-label={`إضافة حجز بتاريخ ${row.dateStr}`}
                             disabled={isReadOnly}
                             onClick={() => {
                               setPrefilledDate(row.dateStr);
@@ -7824,7 +7868,7 @@ function BookingCalendarTab({
       </div>
 
       {/* Archive Section */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
+      <div ref={archiveRef} className="bg-card border border-border rounded-2xl overflow-hidden scroll-mt-24" data-testid="booking-archive">
         <button
           onClick={() => setShowArchive((v) => !v)}
           className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-semibold text-muted-foreground hover:bg-muted/40 transition-colors"
@@ -7840,38 +7884,56 @@ function BookingCalendarTab({
             {/* Archive Tab Switcher */}
             <div className="flex gap-1 px-5 pt-4 pb-0">
               <button
-                onClick={() => setArchiveTab("cancelled")}
+                onClick={() => selectArchiveTab("cancelled")}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${archiveTab === "cancelled" ? "bg-destructive/10 text-destructive" : "text-muted-foreground hover:bg-muted/40"}`}
               >
                 الملغاة
               </button>
               <button
-                onClick={() => setArchiveTab("rescheduled")}
+                onClick={() => selectArchiveTab("rescheduled")}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${archiveTab === "rescheduled" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/40"}`}
               >
                 إعادة الجدولة
               </button>
               <button
-                onClick={() => setArchiveTab("completed")}
+                onClick={() => selectArchiveTab("completed")}
                 className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-colors ${archiveTab === "completed" ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400" : "text-muted-foreground hover:bg-muted/40"}`}
               >
                 المكتملة
               </button>
             </div>
 
+            <BookingArchiveControls
+              filters={archiveFilters}
+              onChange={updateArchiveFilters}
+              years={Array.from(new Set([...(archiveData?.years ?? []), ...(archiveFilters.year ? [archiveFilters.year] : [])])).sort().reverse()}
+              total={archiveData?.total ?? 0}
+              loading={archiveBusy}
+              exporting={archiveExporting}
+              onExport={exportArchive}
+            />
+            <p className="px-5 pt-2 text-[11px] text-muted-foreground">
+              الفلترة حسب تاريخ بداية الإقامة، وللحجوزات المعاد جدولتها حسب الموعد الجديد.
+            </p>
+            {!archiveInvalid && archiveQuery.isPending && (
+              <p role="status" className="px-5 py-6 text-sm text-center text-muted-foreground">جارٍ تحميل الأرشيف...</p>
+            )}
+            {!archiveInvalid && archiveQuery.isError && (
+              <div role="alert" className="p-5 text-center space-y-2">
+                <p className="text-sm text-destructive">تعذّر تحميل الأرشيف. لم يتم عرض نتائج غير مكتملة.</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => archiveQuery.refetch()}>إعادة المحاولة</Button>
+              </div>
+            )}
+            {!archiveInvalid && !archiveQuery.isPending && !archiveQuery.isError && (<>
             {/* Cancelled Tab */}
             {archiveTab === "cancelled" && (
               <div className="px-5 pb-5 pt-3 space-y-3">
                 {(() => {
-                  const q = searchQuery.trim().toLowerCase();
-                  const filtered = (q
-                    ? cancelledBookings.filter((b) =>
-                        b.clientName?.toLowerCase().includes(q) || b.clientPhone?.toLowerCase().includes(q)
-                      )
-                    : [...cancelledBookings]).sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
+                  const q = archiveFilters.search.trim();
+                  const filtered = cancelledBookings;
                   if (filtered.length === 0) return (
                     <p className="text-sm text-muted-foreground py-4 text-center">
-                      {q ? "لا توجد نتائج مطابقة" : "لا توجد حجوزات ملغاة"}
+                      {q || archiveFilters.period !== "all" ? "لا توجد نتائج مطابقة للفلاتر" : "لا توجد حجوزات ملغاة"}
                     </p>
                   );
                   let _cPmk = "";
@@ -7908,6 +7970,7 @@ function BookingCalendarTab({
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0 space-y-1">
                           <p className="text-sm font-semibold text-foreground line-through decoration-destructive/50">{b.clientName}</p>
+                          <p className="text-[11px] text-muted-foreground">رقم الحجز: <bdi>{toAr(b.id)}</bdi></p>
                           {dur === 1 ? (
                             <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium">
                               {startHijri} هـ <span className="opacity-75">({startGreg})</span>{periodLabel ? ` · ${periodLabel}` : ""}
@@ -7965,15 +8028,11 @@ function BookingCalendarTab({
             {archiveTab === "rescheduled" && (
               <div className="px-5 pb-5 pt-3 space-y-3">
                 {(() => {
-                  const q = searchQuery.trim().toLowerCase();
-                  const filteredLog = (q
-                    ? rescheduleLog.filter((log) =>
-                        log.clientName?.toLowerCase().includes(q) || log.clientPhone?.toLowerCase().includes(q)
-                      )
-                    : [...rescheduleLog]).sort((a, b) => new Date(b.rescheduledAt).getTime() - new Date(a.rescheduledAt).getTime());
+                  const q = archiveFilters.search.trim();
+                  const filteredLog = rescheduleLog;
                   if (filteredLog.length === 0) return (
                     <p className="text-sm text-muted-foreground py-4 text-center">
-                      {q ? "لا توجد نتائج مطابقة" : "لا توجد سجلات إعادة جدولة"}
+                      {q || archiveFilters.period !== "all" ? "لا توجد نتائج مطابقة للفلاتر" : "لا توجد سجلات إعادة جدولة"}
                     </p>
                   );
                   let _rPmk = "";
@@ -8007,6 +8066,7 @@ function BookingCalendarTab({
                       <div className="flex items-start justify-between gap-2">
                         <div className="space-y-0.5 flex-1 min-w-0">
                           <p className="text-sm font-semibold text-foreground">{log.clientName}</p>
+                          <p className="text-[11px] text-muted-foreground">رقم الحجز: <bdi>{toAr(log.bookingId)}</bdi></p>
                           <div className="flex items-center gap-2 flex-wrap">
                             {log.clientPhone && (
                               <p className="text-xs text-zinc-700 dark:text-zinc-300 font-medium" dir="ltr">📞 {toAr(log.clientPhone)}</p>
@@ -8073,7 +8133,7 @@ function BookingCalendarTab({
               <div className="px-5 pb-5 pt-3 space-y-3">
                 {completedBookings.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-4 text-center">
-                    {searchQuery ? "لا توجد نتائج مطابقة" : "لا توجد حجوزات مكتملة بعد"}
+                    {archiveFilters.search || archiveFilters.period !== "all" ? "لا توجد نتائج مطابقة للفلاتر" : "لا توجد حجوزات مكتملة بعد"}
                   </p>
                 ) : (() => { let _comPmk = ""; return completedBookings.map((b) => {
                   const _comMk = getBookingMonthKey(b.bookingDate, bookingCalView);
@@ -8096,6 +8156,7 @@ function BookingCalendarTab({
                       {/* Name + badges row */}
                       <div className="flex flex-wrap items-center gap-1.5">
                         <p className="text-sm font-semibold text-foreground">{b.clientName}</p>
+                        <span className="text-[10px] text-muted-foreground">رقم الحجز: <bdi>{toAr(b.id)}</bdi></span>
                         <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-bold shrink-0">
                           <Home className="w-2.5 h-2.5" />
                           {bookingChaletName}
@@ -8158,6 +8219,16 @@ function BookingCalendarTab({
                   }); })()}
               </div>
             )}
+            <BookingArchivePagination
+              page={visibleArchivePage}
+              total={archiveData?.total ?? 0}
+              loading={archiveBusy}
+              onChange={page => {
+                setArchivePage(page);
+                archiveRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            />
+            </>)}
           </div>
         )}
       </div>
