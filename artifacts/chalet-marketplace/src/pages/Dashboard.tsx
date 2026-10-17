@@ -8806,6 +8806,7 @@ export function ChaletServicesTab() {
   }
 
   const selectedChalet = chalets.find((c) => c.id === selectedId) ?? null;
+  const serviceFieldLabelCls = "text-sm font-semibold text-foreground";
   const inputCls = (field: string) =>
     `w-full h-10 px-3 rounded-lg border ${fieldErrors[field] ? "border-destructive ring-1 ring-destructive" : "border-border"} bg-background text-base text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-primary`;
 
@@ -8878,7 +8879,7 @@ export function ChaletServicesTab() {
             {/* Row 1: name + category */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">اسم الخدمة <span className="text-destructive">*</span></label>
+                <label className={serviceFieldLabelCls}>اسم الخدمة <span className="text-destructive">*</span></label>
                 <input
                   type="text"
                   placeholder="مثال: ضيافة، تنظيف، أثاث إضافي"
@@ -8890,7 +8891,7 @@ export function ChaletServicesTab() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">الفئة</label>
+                <label className={serviceFieldLabelCls}>الفئة</label>
                 <select
                   value={form.category}
                   onChange={(e) => setForm((f) => ({ ...f, category: e.target.value, categoryCustom: "" }))}
@@ -8904,7 +8905,7 @@ export function ChaletServicesTab() {
               {/* Custom category input — only when "أخرى" is selected */}
               {form.category === "أخرى" && (
                 <div className="space-y-2 sm:col-span-2">
-                  <label className="text-xs font-medium text-muted-foreground">اسم الفئة المخصصة <span className="text-destructive">*</span></label>
+                  <label className={serviceFieldLabelCls}>اسم الفئة المخصصة <span className="text-destructive">*</span></label>
                   <input
                     type="text"
                     placeholder="اكتب اسم الفئة..."
@@ -8921,7 +8922,7 @@ export function ChaletServicesTab() {
             {/* Row 2: price + unit */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <label className={`${serviceFieldLabelCls} flex flex-wrap items-center gap-x-1.5 gap-y-0.5`}>
                   <span>السعر (ر.س) <span className="text-destructive">*</span></span>
                   {form.unit === "خدمة مجانية" && <span className="text-green-600">(صفر للخدمات المجانية)</span>}
                 </label>
@@ -8942,7 +8943,7 @@ export function ChaletServicesTab() {
                 {fieldErrors.price && <p className="text-[11px] text-destructive">{fieldErrors.price}</p>}
               </div>
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">نوع الرسوم</label>
+                <label className={serviceFieldLabelCls}>نوع الرسوم</label>
                 <select
                   value={form.unit}
                   onChange={(e) => setForm((f) => ({
@@ -8958,7 +8959,7 @@ export function ChaletServicesTab() {
             </div>
 
             <div className="space-y-2">
-              <label htmlFor="service-max-quantity" className="text-sm font-semibold text-foreground">الكمية المتاحة لكل حجز <span className="font-medium">(اختياري)</span></label>
+              <label htmlFor="service-max-quantity" className={serviceFieldLabelCls}>الكمية المتاحة لكل حجز (اختياري)</label>
               <input id="service-max-quantity" inputMode="numeric" placeholder="اتركه فارغاً إن لم يوجد حد"
                 value={toAr(form.maxQuantity)} className={inputCls("maxQuantity")}
                 onChange={event => setForm(previous => ({ ...previous, maxQuantity: fromAr(event.target.value).replace(/[^\d]/g, "") }))} />
@@ -8970,7 +8971,7 @@ export function ChaletServicesTab() {
             {form.unit === "لكل شخص" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground">الحد الأدنى للأشخاص <span className="text-muted-foreground/60">(اختياري)</span></label>
+                  <label className={serviceFieldLabelCls}>الحد الأدنى للأشخاص (اختياري)</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -8982,7 +8983,7 @@ export function ChaletServicesTab() {
                   {fieldErrors.minPersons && <p className="text-[11px] text-destructive">{fieldErrors.minPersons}</p>}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-medium text-muted-foreground">الحد الأقصى للأشخاص <span className="text-muted-foreground/60">(اختياري)</span></label>
+                  <label className={serviceFieldLabelCls}>الحد الأقصى للأشخاص (اختياري)</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -8998,7 +8999,7 @@ export function ChaletServicesTab() {
 
             {/* Row 3: description */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">وصف الخدمة (اختياري)</label>
+              <label className={serviceFieldLabelCls}>وصف الخدمة (اختياري)</label>
               <input
                 type="text"
                 placeholder="تفاصيل إضافية أو شروط الخدمة..."
@@ -9010,7 +9011,7 @@ export function ChaletServicesTab() {
 
             {/* Row 4: Main image */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <label className={`${serviceFieldLabelCls} flex items-center gap-1`}>
                 <ImageIcon className="w-3.5 h-3.5" />
                 الصورة الرئيسية للخدمة
               </label>
@@ -9036,7 +9037,7 @@ export function ChaletServicesTab() {
             <p className="text-sm font-medium text-foreground">الحد الأقصى لكل صورة: ٢ ميجابايت (2MB). حتى ٥ صور إضافية؛ استخدم الأسهم لتغيير ترتيب عرضها.</p>
             {/* Row 5: Gallery images with captions */}
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <label className={`${serviceFieldLabelCls} flex items-center gap-1`}>
                 <ImageIcon className="w-3.5 h-3.5" />
                 صور إضافية مع وصف (اختياري)
               </label>
