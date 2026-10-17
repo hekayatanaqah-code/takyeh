@@ -9,6 +9,86 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Customer summary without loading booking history
+ */
+export const getOwnerCrmProfileQueryPhoneMax = 30;
+
+
+
+
+export const GetOwnerCrmProfileQueryParams = zod.object({
+  "phone": zod.coerce.string().min(1).max(getOwnerCrmProfileQueryPhoneMax),
+  "providerId": zod.coerce.number().int().min(1).optional()
+})
+
+export const GetOwnerCrmProfileResponse = zod.object({
+  "clientName": zod.string(),
+  "clientPhone": zod.string(),
+  "clientIdNumber": zod.string().nullable(),
+  "totalBookings": zod.number().int(),
+  "totalRevenue": zod.number(),
+  "lastBookingDate": zod.string(),
+  "contractCount": zod.number().int(),
+  "insuranceCount": zod.number().int(),
+  "note": zod.string()
+})
+
+
+/**
+ * @summary Paginated customer history, newest first with active bookings pinned
+ */
+export const getOwnerCrmHistoryQueryPhoneMax = 30;
+
+
+export const getOwnerCrmHistoryQueryTabDefault = `bookings`;
+export const getOwnerCrmHistoryQueryStatusDefault = `all`;
+export const getOwnerCrmHistoryQuerySearchMax = 100;
+
+export const getOwnerCrmHistoryQueryFromRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getOwnerCrmHistoryQueryToRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getOwnerCrmHistoryQueryPageDefault = 1;
+export const getOwnerCrmHistoryQueryPageMax = 1000000;
+
+
+
+export const GetOwnerCrmHistoryQueryParams = zod.object({
+  "phone": zod.coerce.string().min(1).max(getOwnerCrmHistoryQueryPhoneMax),
+  "providerId": zod.coerce.number().int().min(1).optional(),
+  "tab": zod.enum(['bookings', 'contracts', 'insurance']).default(getOwnerCrmHistoryQueryTabDefault),
+  "status": zod.enum(['all', 'active', 'completed', 'cancelled']).default(getOwnerCrmHistoryQueryStatusDefault),
+  "search": zod.coerce.string().max(getOwnerCrmHistoryQuerySearchMax).optional(),
+  "from": zod.coerce.string().regex(getOwnerCrmHistoryQueryFromRegExp).optional(),
+  "to": zod.coerce.string().regex(getOwnerCrmHistoryQueryToRegExp).optional(),
+  "page": zod.coerce.number().int().min(1).max(getOwnerCrmHistoryQueryPageMax).default(getOwnerCrmHistoryQueryPageDefault)
+})
+
+export const GetOwnerCrmHistoryResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "booking_date": zod.string(),
+  "duration_days": zod.number().int().nullable(),
+  "period": zod.string().nullable(),
+  "total_price": zod.string(),
+  "chalet_name": zod.string().nullable(),
+  "cancelled_at": zod.string().nullable(),
+  "cancelled": zod.boolean(),
+  "contract_signed": zod.boolean(),
+  "insurance_fee": zod.string().nullable(),
+  "insurance_received": zod.boolean().nullable(),
+  "insurance_refunded": zod.boolean().nullable(),
+  "insurance_deducted": zod.string().nullable(),
+  "original_date": zod.string().nullable(),
+  "rescheduled_at": zod.string().nullable(),
+  "is_active": zod.boolean()
+})),
+  "total": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+  "totalPages": zod.number().int()
+})
+
+
+/**
  * @summary Owner property insurance entries with authoritative Saudi checkout instants
  */
 export const GetOwnerDepositsResponseItem = zod.object({

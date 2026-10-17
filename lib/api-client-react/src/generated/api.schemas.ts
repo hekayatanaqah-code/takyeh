@@ -5,6 +5,56 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface CrmCustomerSummary {
+  clientName: string;
+  clientPhone: string;
+  /** @nullable */
+  clientIdNumber: string | null;
+  totalBookings: number;
+  totalRevenue: number;
+  lastBookingDate: string;
+  contractCount: number;
+  insuranceCount: number;
+  note: string;
+}
+
+export interface CrmHistoryRecord {
+  id: number;
+  booking_date: string;
+  /** @nullable */
+  duration_days: number | null;
+  /** @nullable */
+  period: string | null;
+  total_price: string;
+  /** @nullable */
+  chalet_name: string | null;
+  /** @nullable */
+  cancelled_at: string | null;
+  cancelled: boolean;
+  contract_signed: boolean;
+  /** @nullable */
+  insurance_fee: string | null;
+  /** @nullable */
+  insurance_received: boolean | null;
+  /** @nullable */
+  insurance_refunded: boolean | null;
+  /** @nullable */
+  insurance_deducted: string | null;
+  /** @nullable */
+  original_date: string | null;
+  /** @nullable */
+  rescheduled_at: string | null;
+  is_active: boolean;
+}
+
+export interface CrmHistoryPage {
+  items: CrmHistoryRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export type PhotographyReservationInput = (unknown & {
   /** @minimum 1 */
   propertyId?: number;
@@ -895,6 +945,68 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type GetOwnerCrmProfileParams = {
+/**
+ * @minLength 1
+ * @maxLength 30
+ */
+phone: string;
+/**
+ * @minimum 1
+ */
+providerId?: number;
+};
+
+export type GetOwnerCrmHistoryParams = {
+/**
+ * @minLength 1
+ * @maxLength 30
+ */
+phone: string;
+/**
+ * @minimum 1
+ */
+providerId?: number;
+tab?: GetOwnerCrmHistoryTab;
+status?: GetOwnerCrmHistoryStatus;
+/**
+ * @maxLength 100
+ */
+search?: string;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+from?: string;
+/**
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+to?: string;
+/**
+ * @minimum 1
+ * @maximum 1000000
+ */
+page?: number;
+};
+
+export type GetOwnerCrmHistoryTab = typeof GetOwnerCrmHistoryTab[keyof typeof GetOwnerCrmHistoryTab];
+
+
+export const GetOwnerCrmHistoryTab = {
+  bookings: 'bookings',
+  contracts: 'contracts',
+  insurance: 'insurance',
+} as const;
+
+export type GetOwnerCrmHistoryStatus = typeof GetOwnerCrmHistoryStatus[keyof typeof GetOwnerCrmHistoryStatus];
+
+
+export const GetOwnerCrmHistoryStatus = {
+  all: 'all',
+  active: 'active',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
 
 export type GetOwnerDeposits200Item = {
   id: number;

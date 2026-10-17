@@ -292,6 +292,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
 }, (table) => ({
   bookingDateIdx: index("owner_bookings_booking_date_idx").on(table.bookingDate),
   cancelledAtIdx: index("owner_bookings_cancelled_at_idx").on(table.cancelledAt),
+  customerHistoryIdx: index("owner_bookings_customer_history_idx").on(table.ownerId, table.clientPhone, table.bookingDate.desc(), table.id.desc()),
 }));
 export type OwnerBooking = typeof ownerBookingsTable.$inferSelect;
 
@@ -334,7 +335,9 @@ export const ownerRescheduleLogsTable = pgTable("owner_reschedule_logs", {
   newPeriod: text("new_period"),
   reason: text("reason").notNull().default(""),
   rescheduledAt: timestamp("rescheduled_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  customerHistoryIdx: index("owner_reschedule_logs_customer_history_idx").on(table.ownerId, table.bookingId, table.rescheduledAt.desc(), table.id.desc()),
+}));
 export type OwnerRescheduleLog = typeof ownerRescheduleLogsTable.$inferSelect;
 
 /* ── Site Settings ─────────────────────────────────────────── */
@@ -1191,7 +1194,9 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   previousDuration: text("previous_duration"),
   previousDurationUnit: text("previous_duration_unit"),
   lastEditedAt: timestamp("last_edited_at", { withTimezone: true }),
-});
+}, (table) => ({
+  customerHistoryIdx: index("service_appointments_customer_history_idx").on(table.ownerId, table.providerId, table.clientPhone, table.dateStr.desc(), table.id.desc()),
+}));
 export type ServiceAppointment = typeof serviceAppointmentsTable.$inferSelect;
 
 /* ── Service Review Invitations (one-time tokens) ───────────── */

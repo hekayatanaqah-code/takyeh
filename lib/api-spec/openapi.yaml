@@ -21,6 +21,43 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/crm/profile:
+    get:
+      operationId: getOwnerCrmProfile
+      tags: [owner]
+      summary: Customer summary without loading booking history
+      parameters:
+        - { name: phone, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 30 } }
+        - { name: providerId, in: query, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Owner-scoped customer summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CrmCustomerSummary" }
+        "404": { description: Customer or service not found }
+  /owner/crm/history:
+    get:
+      operationId: getOwnerCrmHistory
+      tags: [owner]
+      summary: Paginated customer history, newest first with active bookings pinned
+      parameters:
+        - { name: phone, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 30 } }
+        - { name: providerId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: tab, in: query, schema: { type: string, enum: [bookings, contracts, insurance], default: bookings } }
+        - { name: status, in: query, schema: { type: string, enum: [all, active, completed, cancelled], default: all } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: from, in: query, schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
+        - { name: to, in: query, schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 } }
+      responses:
+        "200":
+          description: At most ten matching records and bounded pagination metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CrmHistoryPage" }
+        "400": { description: Invalid filters }
+        "404": { description: Service not found }
   /owner/deposits:
     get:
       operationId: getOwnerDeposits
@@ -916,6 +953,50 @@ components:
       schema:
         type: string
   schemas:
+    CrmCustomerSummary:
+      type: object
+      required: [clientName, clientPhone, clientIdNumber, totalBookings, totalRevenue, lastBookingDate, contractCount, insuranceCount, note]
+      properties:
+        clientName: { type: string }
+        clientPhone: { type: string }
+        clientIdNumber: { type: [string, "null"] }
+        totalBookings: { type: integer }
+        totalRevenue: { type: number }
+        lastBookingDate: { type: string }
+        contractCount: { type: integer }
+        insuranceCount: { type: integer }
+        note: { type: string }
+    CrmHistoryRecord:
+      type: object
+      required: [id, booking_date, duration_days, period, total_price, chalet_name, cancelled_at, cancelled, contract_signed, insurance_fee, insurance_received, insurance_refunded, insurance_deducted, original_date, rescheduled_at, is_active]
+      properties:
+        id: { type: integer }
+        booking_date: { type: string }
+        duration_days: { type: [integer, "null"] }
+        period: { type: [string, "null"] }
+        total_price: { type: string }
+        chalet_name: { type: [string, "null"] }
+        cancelled_at: { type: [string, "null"] }
+        cancelled: { type: boolean }
+        contract_signed: { type: boolean }
+        insurance_fee: { type: [string, "null"] }
+        insurance_received: { type: [boolean, "null"] }
+        insurance_refunded: { type: [boolean, "null"] }
+        insurance_deducted: { type: [string, "null"] }
+        original_date: { type: [string, "null"] }
+        rescheduled_at: { type: [string, "null"] }
+        is_active: { type: boolean }
+    CrmHistoryPage:
+      type: object
+      required: [items, total, page, pageSize, totalPages]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CrmHistoryRecord" }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalPages: { type: integer }
     PhotographyReservationInput:
       type: object
       additionalProperties: false

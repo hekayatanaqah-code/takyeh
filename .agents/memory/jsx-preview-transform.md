@@ -13,3 +13,9 @@ Vite's server-side module transformation also injects preview metadata attribute
 **Why:** Server-rendered widget checks exercise the same metadata transform; their HTML is not identical to a plain React rendering without Vite.
 
 **How to apply:** Compare rendered text or semantic attributes rather than exact raw HTML, and ignore injected metadata attributes in rendering assertions.
+
+Temporary standalone fixtures that import app components must use the same versioned Vite dependency URLs as those components, particularly for React Query providers.
+
+**Why:** Importing an unversioned provider alongside a versioned application hook created distinct context instances; the fixture crashed even though the application and types were valid.
+
+**How to apply:** Inspect a transformed component's imports for the current dependency URLs instead of hardcoding a version or using an unversioned optimized-module URL.

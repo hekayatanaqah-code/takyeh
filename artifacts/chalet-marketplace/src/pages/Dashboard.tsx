@@ -9,7 +9,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
 import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
-import { getOwnerDeposits } from "@workspace/api-client-react";
+import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary } from "@workspace/api-client-react";
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { Download } from "lucide-react";
@@ -52,6 +52,7 @@ import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMo
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import { CustomerDate } from "@/components/owner/CustomerDate";
 import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
+import { CustomerHistory } from "@/components/owner/CustomerHistory";
 import {
   getServiceClientIdField,
   getServiceReceiptFinancialSummary,
@@ -24081,42 +24082,6 @@ interface CustomerRow {
   last_booking_date: string;
 }
 
-interface BookingRow {
-  id: number;
-  booking_date: string;
-  duration_days: number;
-  period: string;
-  total_price: string;
-  chalet_name: string | null;
-  cancelled_at: string | null;
-  submission_id: number | null;
-  contract_signed: boolean;
-  contract_signer_id: string | null;
-  insurance_fee: string | null;
-  insurance_received: boolean | null;
-  insurance_refunded: boolean | null;
-  original_date: string | null;
-  rescheduled_at: string | null;
-}
-
-interface CustomerProfile {
-  clientName: string;
-  clientPhone: string;
-  clientIdNumber: string | null;
-  totalBookings: number;
-  totalRevenue: number;
-  lastBookingDate: string;
-  bookings: BookingRow[];
-  note: string;
-}
-
-const PERIOD_LABEL: Record<string, string> = {
-  morning:  "صباحي",
-  evening:  "مسائي",
-  full_day: "يومي كامل",
-  fullday:  "يومي كامل",
-};
-
 function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "hijri" | "gregorian" }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -24130,19 +24095,14 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
   const [search, setSearch]           = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "chalet" | "service">("all");
   const [selected, setSelected]       = useState<string | null>(null);
-  const [profile, setProfile]         = useState<CustomerProfile | null>(null);
+  const [profile, setProfile]         = useState<CrmCustomerSummary | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError]     = useState(false);
-  const [profileTab, setProfileTab]   = useState<"bookings" | "contracts" | "insurance">("bookings");
   const [profileCalView, setProfileCalView]           = useState<"hijri" | "gregorian">(calendarPreference);
-  const [profileBookingMonth, setProfileBookingMonth] = useState<string>("all");
-  const [profileBookingPage, setProfileBookingPage]   = useState(1);
   const notesRef = useRef<CustomerNotesHandle>(null);
   const profileRequest = useRef(0);
   useEffect(() => {
     setProfileCalView(calendarPreference);
-    setProfileBookingMonth("all");
-    setProfileBookingPage(1);
   }, [calendarPreference]);
 
   /* ── Edit modal state ── */
@@ -24252,18 +24212,10 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
     setProfileError(false);
     setProfileLoading(true);
     setProfileCalView(calendarPreference);
-    setProfileBookingMonth("all");
-    setProfileBookingPage(1);
     try {
-      const r = await apiFetch(customerApiPath(phone));
+      const data = await getOwnerCrmProfile({ phone, providerId: scopedProviderId ?? undefined }, { credentials: "include" });
       if (request !== profileRequest.current) return;
-      if (r.ok) {
-        const data: CustomerProfile = await r.json();
-        if (request !== profileRequest.current) return;
-        setProfile(data);
-      } else {
-        setProfileError(true);
-      }
+      setProfile(data);
     } catch {
       if (request === profileRequest.current) setProfileError(true);
     }
@@ -24458,7 +24410,7 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
 
                 {/* ── Section A: Basic Info Stats ── */}
                 <div className="grid grid-cols-2 gap-3 mt-1">
-                  {statCard("إجمالي الحجوزات", (() => { const n = profile.bookings.length; return `${toAr(n)} ${n >= 3 && n <= 10 ? "حجوزات" : "حجز"}`; })())}
+                  {statCard("إجمالي الحجوزات", (() => { const n = profile.totalBookings; return `${toAr(n)} ${n >= 3 && n <= 10 ? "حجوزات" : "حجز"}`; })())}
                   {statCard("إجمالي الإيراد",  `${toAr(Math.round(profile.totalRevenue))} ر.س`)}
                 </div>
                 {/* ID number + last booking */}
@@ -24477,344 +24429,9 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
               </div>
 
               {/* ── Tabbed Sections: Bookings / Contracts / Insurance ── */}
-              {(() => {
-                const contractBookings  = profile.bookings.filter(b => b.contract_signed);
-                const insuranceBookings = profile.bookings.filter(b => b.insurance_fee && Number(b.insurance_fee) > 0);
-                const insStatus = (b: BookingRow): { label: string; cls: string } => {
-                  if (!b.insurance_received) return { label: "⚠️ غير مستلم",   cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400" };
-                  if (b.insurance_refunded)  return { label: "مسترد بالكامل",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400" };
-                  if (b.cancelled_at)        return { label: "مُعاد (إلغاء)",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400" };
-                  return                            { label: "بحوزة المالك",    cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400" };
-                };
-                const bookingStatus = (b: BookingRow): { label: string; cls: string } => {
-                  if (b.cancelled_at)  return { label: "ملغى",           cls: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800" };
-                  if (b.original_date) return { label: "معاد جدولته",    cls: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800" };
-                  return                      { label: "نشط",             cls: "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" };
-                };
-                const durationLabel = (days: number) => {
-                  if (days === 1) return "يوم واحد";
-                  if (days === 2) return "يومان";
-                  if (days <= 10) return `${toArN(days)} أيام`;
-                  return `${toArN(days)} يوم`;
-                };
-                const tabs = [
-                  { id: "bookings",  label: "سجل الحجوزات",  count: profile.bookings.length },
-                  { id: "contracts", label: "العقود الرقمية", count: contractBookings.length },
-                  { id: "insurance", label: "سجل التأمينات", count: insuranceBookings.length },
-                ] as const;
-                return (
-                  <div className="bg-card border border-border rounded-2xl overflow-hidden">
-                    {/* Tab bar */}
-                    <div className="flex border-b border-border bg-muted/20">
-                      {tabs.map(t => (
-                        <button
-                          key={t.id}
-                          onClick={() => setProfileTab(t.id)}
-                          className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                            profileTab === t.id
-                              ? "border-b-2 border-primary text-primary bg-background"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                          }`}
-                        >
-                          {t.label}
-                          <span className={`text-[10px] rounded-full px-1.5 py-0.5 font-bold ${
-                            profileTab === t.id ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
-                          }`}>{toArN(t.count)}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="p-4">
-                      {/* ── Tab: Bookings ── */}
-                      {profileTab === "bookings" && (() => {
-                        if (profile.bookings.length === 0)
-                          return <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات لهذا العميل</p>;
-
-                        /* ── build month options (start-date key, same as main bookings) ── */
-                        const monthKeySet = new Set<string>();
-                        profile.bookings.forEach(b => {
-                          if (b.booking_date) monthKeySet.add(getBookingMonthKey(b.booking_date, profileCalView));
-                        });
-                        const monthOptions = [...monthKeySet].sort((a, b) => a.localeCompare(b)); // ascending: oldest first
-
-                        /* ── filter by selected month ── */
-                        const filteredBkgs = profileBookingMonth === "all"
-                          ? profile.bookings
-                          : profile.bookings.filter(b =>
-                              b.booking_date && getBookingMonthKey(b.booking_date, profileCalView) === profileBookingMonth
-                            );
-
-                        /* ── pluralization ── */
-                        const bkgCountLabel = (n: number) =>
-                          n >= 3 && n <= 10 ? `${toArN(n)} حجوزات` : `${toArN(n)} حجز`;
-
-                        /* ── pagination ── */
-                        const PAGE_SIZE = 10;
-                        const totalPages = Math.max(1, Math.ceil(filteredBkgs.length / PAGE_SIZE));
-                        const safePage   = Math.min(profileBookingPage, totalPages);
-                        const pagedBkgs  = filteredBkgs.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-                        const toRiyadhDate = (ts: string) => new Date(ts).toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
-
-                        return (
-                          <div className="flex flex-col gap-3">
-                            {/* ── Filter bar: identical to main bookings component ── */}
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {/* هجري / ميلادي toggle */}
-                              <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
-                                {(["hijri", "gregorian"] as const).map((mode) => (
-                                  <button
-                                    key={mode}
-                                    onClick={() => { setProfileCalView(mode); setProfileBookingMonth("all"); setProfileBookingPage(1); }}
-                                    className={`text-xs px-3 py-1.5 h-9 font-medium transition-colors ${
-                                      profileCalView === mode
-                                        ? "bg-primary text-primary-foreground"
-                                        : "bg-background text-muted-foreground hover:bg-muted"
-                                    }`}
-                                  >
-                                    {mode === "hijri" ? "هجري" : "ميلادي"}
-                                  </button>
-                                ))}
-                              </div>
-                              {/* Month dropdown */}
-                              <Select value={profileBookingMonth} onValueChange={v => { setProfileBookingMonth(v); setProfileBookingPage(1); }}>
-                                <SelectTrigger className="h-9 text-xs font-semibold rounded-xl border-border min-w-[160px] max-w-[220px] shrink-0" dir="rtl">
-                                  {profileBookingMonth !== "all" ? (() => {
-                                    const [ys, ms] = profileBookingMonth.split("-").map(Number);
-                                    return profileCalView === "hijri"
-                                      ? <span>{HIJRI_MONTHS_AR[ms - 1]} {toArN(ys)} هـ</span>
-                                      : <span>{GREGORIAN_MONTHS_AR[ms - 1]} {toArN(ys)} م</span>;
-                                  })() : <span className="text-muted-foreground">كل الشهور</span>}
-                                </SelectTrigger>
-                                <SelectContent dir="rtl" align="end" className="z-[100]">
-                                  <SelectItem value="all"><span className="text-sm">كل الشهور</span></SelectItem>
-                                  {monthOptions.map(key => {
-                                    const [ys, ms] = key.split("-").map(Number);
-                                    const gName = (gy: number, gm: number) =>
-                                      new Date(gy, gm, 15).toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
-                                    let primary = "", secondary = "";
-                                    if (profileCalView === "hijri") {
-                                      primary = `${HIJRI_MONTHS_AR[ms - 1]} ${toArN(ys)} هـ`;
-                                      const { start, end } = getHijriMonthGregorianRange(ys, ms);
-                                      if (start && end) {
-                                        const s = new Date(start + "T00:00:00"), e = new Date(end + "T00:00:00");
-                                        const [sY, sM, eY, eM] = [s.getFullYear(), s.getMonth(), e.getFullYear(), e.getMonth()];
-                                        if (sY === eY && sM === eM) secondary = `${gName(sY, sM)} ${toArN(sY)} م`;
-                                        else if (sY === eY) secondary = `${gName(sY, sM)} / ${gName(eY, eM)} ${toArN(sY)} م`;
-                                        else secondary = `${gName(sY, sM)} ${toArN(sY)} م / ${gName(eY, eM)} ${toArN(eY)} م`;
-                                      }
-                                    } else {
-                                      primary = `${GREGORIAN_MONTHS_AR[ms - 1]} ${toArN(ys)} م`;
-                                      const h1 = toHijriComponents(new Date(ys, ms - 1, 1));
-                                      const h2 = toHijriComponents(new Date(ys, ms, 0));
-                                      if (h1.year === h2.year && h1.month === h2.month)
-                                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} هـ`;
-                                      else if (h1.year === h2.year)
-                                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h1.year)} هـ`;
-                                      else
-                                        secondary = `${HIJRI_MONTHS_AR[h1.month - 1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month - 1]} ${toArN(h2.year)} هـ`;
-                                    }
-                                    return (
-                                      <SelectItem key={key} value={key}>
-                                        <div className="flex flex-col items-end gap-0.5 py-0.5">
-                                          <span className="font-semibold text-sm leading-tight">{primary}</span>
-                                          {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
-                                        </div>
-                                      </SelectItem>
-                                    );
-                                  })}
-                                </SelectContent>
-                              </Select>
-                              {/* Count */}
-                              <span className="text-xs text-muted-foreground">
-                                {filteredBkgs.length === profile.bookings.length
-                                  ? bkgCountLabel(profile.bookings.length)
-                                  : `${bkgCountLabel(filteredBkgs.length)} من ${bkgCountLabel(profile.bookings.length)}`}
-                              </span>
-                            </div>
-
-                            {/* ── Table ── */}
-                            {filteredBkgs.length === 0 ? (
-                              <p className="text-sm text-muted-foreground text-center py-6">لا توجد حجوزات في هذا الشهر</p>
-                            ) : (
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-sm table-fixed">
-                                  <colgroup>
-                                    <col className="w-[52px]" />
-                                    <col className="w-[160px]" />
-                                    <col />
-                                    <col className="w-[64px]" />
-                                    <col className="w-[72px]" />
-                                  </colgroup>
-                                  <thead>
-                                    <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
-                                      <th className="px-2 py-2 font-medium">رقم الحجز</th>
-                                      <th className="px-2 py-2 font-medium">التاريخ والمدة</th>
-                                      <th className="px-2 py-2 font-medium">العقار</th>
-                                      <th className="px-2 py-2 font-medium text-center">الحالة</th>
-                                      <th className="px-2 py-2 font-medium text-left whitespace-nowrap">الإجمالي</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-border">
-                                    {pagedBkgs.map((b) => {
-                                      const st         = bookingStatus(b);
-                                      return (
-                                        <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                                          <td className="px-2 py-2.5 font-mono text-xs font-bold text-primary align-top">#{toArN(b.id)}</td>
-                                          <td className="px-2 py-2.5 text-xs align-top">
-                                            {b.booking_date ? (
-                                              <div className="flex flex-col gap-0.5">
-                                                <CustomerDate value={b.booking_date} preference={profileCalView} />
-                                                <span className="text-muted-foreground/70">{durationLabel(b.duration_days)} · {PERIOD_LABEL[b.period] ?? b.period}</span>
-                                                {b.cancelled_at && (
-                                                  <div className="flex flex-col mt-0.5 gap-0 whitespace-nowrap">
-                                                    <span className="font-semibold text-red-700">تم الإلغاء:</span>
-                                                    <CustomerDate value={toRiyadhDate(b.cancelled_at)} preference={profileCalView} />
-                                                  </div>
-                                                )}
-                                                {b.original_date && (
-                                                  <div className="flex flex-col mt-0.5 gap-0 whitespace-nowrap">
-                                                    <span className="font-semibold text-blue-700">الموعد السابق:</span>
-                                                    <CustomerDate value={b.original_date.slice(0, 10)} preference={profileCalView} />
-                                                    {b.rescheduled_at && (
-                                                      <>
-                                                        <span className="font-semibold text-blue-700">تاريخ التعديل:</span>
-                                                        <CustomerDate value={toRiyadhDate(b.rescheduled_at)} preference={profileCalView} />
-                                                      </>
-                                                    )}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            ) : <span className="text-muted-foreground">—</span>}
-                                          </td>
-                                          <td className="px-2 py-2.5 text-xs text-foreground align-top truncate">{b.chalet_name ?? "—"}</td>
-                                          <td className="px-2 py-2.5 text-center align-top">
-                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
-                                              {st.label}
-                                            </span>
-                                          </td>
-                                          <td className="px-2 py-2.5 text-xs font-semibold text-foreground text-left align-top whitespace-nowrap">
-                                            {toArN(Math.round(Number(b.total_price)))} ر.س
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-
-                            {/* ── Pagination ── */}
-                            {totalPages > 1 && (
-                              <div className="flex items-center justify-center gap-1 pt-1 flex-wrap">
-                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs"
-                                  disabled={safePage <= 1}
-                                  onClick={() => setProfileBookingPage(safePage - 1)}>
-                                  السابق
-                                </Button>
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                                  <Button key={p} size="sm"
-                                    variant={p === safePage ? "default" : "outline"}
-                                    className="h-7 w-7 p-0 text-xs"
-                                    onClick={() => setProfileBookingPage(p)}>
-                                    {toArN(p)}
-                                  </Button>
-                                ))}
-                                <Button variant="outline" size="sm" className="h-7 px-2 text-xs"
-                                  disabled={safePage >= totalPages}
-                                  onClick={() => setProfileBookingPage(safePage + 1)}>
-                                  التالي
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* ── Tab: Contracts ── */}
-                      {profileTab === "contracts" && (
-                        contractBookings.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-center py-6">لا توجد عقود موقّعة لهذا العميل</p>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
-                                  <th className="px-3 py-2 font-medium">رقم الحجز</th>
-                                  <th className="px-3 py-2 font-medium">التاريخ</th>
-                                  <th className="px-3 py-2 font-medium">العقار</th>
-                                  <th className="px-3 py-2 font-medium text-center">العقد</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-border">
-                                {contractBookings.map((b) => (
-                                  <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                                    <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toArN(b.id)}</td>
-                                    <td className="px-3 py-2.5 text-xs">
-                                      <CustomerDate value={b.booking_date} preference={profileCalView} />
-                                    </td>
-                                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{b.chalet_name ?? "—"}</td>
-                                    <td className="px-3 py-2.5 text-center">
-                                      <a
-                                        href={`${window.location.origin}${BASE}/contract/${b.id}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 transition-colors"
-                                      >
-                                        📄 عرض العقد
-                                      </a>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )
-                      )}
-
-                      {/* ── Tab: Insurance ── */}
-                      {profileTab === "insurance" && (
-                        insuranceBookings.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-center py-6">لا توجد تأمينات مسجّلة لهذا العميل</p>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="border-b border-border bg-muted/30 text-right text-xs text-muted-foreground">
-                                  <th className="px-3 py-2 font-medium">رقم الحجز</th>
-                                  <th className="px-3 py-2 font-medium">التاريخ</th>
-                                  <th className="px-3 py-2 font-medium">مبلغ التأمين</th>
-                                  <th className="px-3 py-2 font-medium">الحالة</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-border">
-                                {insuranceBookings.map((b) => {
-                                  const st = insStatus(b);
-                                  return (
-                                    <tr key={b.id} className="hover:bg-muted/20 transition-colors">
-                                      <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toArN(b.id)}</td>
-                                      <td className="px-3 py-2.5 text-xs">
-                                        <CustomerDate value={b.booking_date} preference={profileCalView} />
-                                      </td>
-                                      <td className="px-3 py-2.5 text-foreground font-semibold text-xs">
-                                        {toArN(Math.round(Number(b.insurance_fee)))} ر.س
-                                      </td>
-                                      <td className="px-3 py-2.5">
-                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${st.cls}`}>
-                                          {st.label}
-                                        </span>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        )
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
+              <CustomerHistory key={`${scopedProviderId ?? "chalet"}:${profile.clientPhone}`}
+                profile={profile} providerId={scopedProviderId ?? undefined}
+                calendar={profileCalView} onCalendarChange={setProfileCalView} />
               {/* ── Private Notes ── */}
               <CustomerNotes key={`${serviceScope ? scopedProviderId : "chalet"}:${profile.clientPhone}`}
                 ref={notesRef} initialValue={profile.note ?? ""}

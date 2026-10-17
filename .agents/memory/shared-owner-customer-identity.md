@@ -14,3 +14,9 @@ In the customer database, display mobile numbers with Eastern Arabic digits, inc
 **Why:** The owner explicitly requested consistent platform identity and preference-aware dual dates, not a change to stored phone identities or booking dates.
 
 **How to apply:** Convert digits only at the display/input boundary. Customer notes should save smoothly with visible, truthful status; do not report success before the server accepts a write or mix pending drafts between customers.
+
+Customer history must scale without downloading every booking into the browser. Bookings, signed contracts and insurance histories use ten-record server pages, with search and filters applied before pagination. Booking history pins active/upcoming bookings, then orders each group newest first; contracts and insurance use chronological descending order without pinning. Equal dates require a deterministic tie-breaker.
+
+**Why:** The owner explicitly requested scalable customer profiles, newest-first histories, pinned active/future stays, internal booking/date search and pages of 10–15 records.
+
+**How to apply:** Keep full-customer summary totals separate from the current page. Property activity uses the authoritative Saudi checkout boundary, not merely a missing cancellation timestamp. Keep notes mounted when switching history pages or filters.
