@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { propertyStayComplete } from "../lib/booking-completion";
 import { sendCrmHistory, sendCrmProfile } from "../lib/customer-history";
+import { sendCrmCustomers } from "../lib/customer-directory";
 import { sendBookingArchive } from "../lib/booking-archive";
 import { bookingCheckoutAt, INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import multer from "multer";
@@ -4643,6 +4644,7 @@ async function verifyOwnerServiceProvider(ownerId: string, providerId: number) {
 }
 
 router.get("/crm/profile", sendCrmProfile);
+router.get("/crm/customers", sendCrmCustomers);
 router.get("/crm/history", sendCrmHistory);
 
 router.get("/service-clients/:phone", async (req, res) => {

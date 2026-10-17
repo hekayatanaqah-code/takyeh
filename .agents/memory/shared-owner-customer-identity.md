@@ -20,3 +20,9 @@ Customer history must scale without downloading every booking into the browser. 
 **Why:** The owner explicitly requested scalable customer profiles, newest-first histories, pinned active/future stays, internal booking/date search and pages of 10–15 records.
 
 **How to apply:** Keep full-customer summary totals separate from the current page. Property activity uses the authoritative Saudi checkout boundary, not merely a missing cancellation timestamp. Keep notes mounted when switching history pages or filters.
+
+The owner approved the existing customer-profile histories. The main right-hand customer directory should use traditional numbered pages of 15–20 customers, not infinite scrolling; twenty was selected. Default order prioritizes active/upcoming customers, then their latest booking date. Offer highest booking count and highest revenue as alternative sorts, with name/mobile search across all pages.
+
+**Why:** The owner explicitly approved the prior profile changes and requested these rules for the main directory only.
+
+**How to apply:** Search and sort the entire authorized directory before paging, reset to page one when criteria change, and preserve the selected profile and note draft while paging or filtering.

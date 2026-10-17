@@ -21,6 +21,26 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/crm/customers:
+    get:
+      operationId: getOwnerCrmCustomers
+      tags: [owner]
+      summary: Search and sort the owner customer directory before server pagination
+      parameters:
+        - { name: scope, in: query, schema: { type: string, enum: [all, chalet, service], default: all } }
+        - { name: source, in: query, schema: { type: string, enum: [all, chalet, service], default: all } }
+        - { name: providerId, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: search, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: sort, in: query, schema: { type: string, enum: [activity, bookings, revenue], default: activity } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, maximum: 1000000, default: 1 } }
+      responses:
+        "200":
+          description: At most twenty customers, full filtered count and pagination metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CrmCustomerPage" }
+        "400": { description: Invalid directory filters }
+        "404": { description: Service not found }
   /owner/crm/profile:
     get:
       operationId: getOwnerCrmProfile
@@ -953,6 +973,28 @@ components:
       schema:
         type: string
   schemas:
+    CrmDirectoryCustomer:
+      type: object
+      required: [client_name, client_phone, total_bookings, total_revenue, last_booking_date, source, providers, has_active]
+      properties:
+        client_name: { type: string }
+        client_phone: { type: string }
+        total_bookings: { type: integer }
+        total_revenue: { type: number }
+        last_booking_date: { type: string }
+        source: { type: string, enum: [chalet, service, both] }
+        providers: { type: array, items: { type: string } }
+        has_active: { type: boolean }
+    CrmCustomerPage:
+      type: object
+      required: [items, total, totalCustomers, page, pageSize, totalPages]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CrmDirectoryCustomer" } }
+        total: { type: integer }
+        totalCustomers: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalPages: { type: integer }
     CrmCustomerSummary:
       type: object
       required: [clientName, clientPhone, clientIdNumber, totalBookings, totalRevenue, lastBookingDate, contractCount, insuranceCount, note]

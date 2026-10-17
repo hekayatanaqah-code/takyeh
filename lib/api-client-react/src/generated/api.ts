@@ -45,6 +45,7 @@ import type {
   CreatePhotographyPackageBody,
   CreateServiceSeasonInput,
   CreateSubmissionRequest,
+  CrmCustomerPage,
   CrmCustomerSummary,
   CrmHistoryPage,
   DeclinePhotographySession200,
@@ -56,6 +57,7 @@ import type {
   GetChaletsParams,
   GetOwnerBookingArchive200,
   GetOwnerBookingArchiveParams,
+  GetOwnerCrmCustomersParams,
   GetOwnerCrmHistoryParams,
   GetOwnerCrmProfileParams,
   GetOwnerDeposits200Item,
@@ -170,6 +172,114 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetOwnerCrmCustomersUrl = (params?: GetOwnerCrmCustomersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/owner/crm/customers?${stringifiedParams}` : `/api/owner/crm/customers`
+}
+
+/**
+ * @summary Search and sort the owner customer directory before server pagination
+ */
+export const getOwnerCrmCustomers = async (params?: GetOwnerCrmCustomersParams, options?: Parameters<typeof customFetch>[1]): Promise<CrmCustomerPage> => {
+
+  return customFetch<CrmCustomerPage>(getGetOwnerCrmCustomersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOwnerCrmCustomersQueryKey = (params?: GetOwnerCrmCustomersParams,) => {
+    return [
+    `/api/owner/crm/customers`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetOwnerCrmCustomersQueryOptions = <TData = Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError = ErrorType<void>>(params?: GetOwnerCrmCustomersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOwnerCrmCustomersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOwnerCrmCustomers>>> = ({ signal }) => getOwnerCrmCustomers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOwnerCrmCustomersQueryResult = NonNullable<Awaited<ReturnType<typeof getOwnerCrmCustomers>>>
+export type GetOwnerCrmCustomersQueryError = ErrorType<void>
+
+
+export function useGetOwnerCrmCustomers<TData = Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError = ErrorType<void>>(
+ params: undefined |  GetOwnerCrmCustomersParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerCrmCustomers>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerCrmCustomers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerCrmCustomers<TData = Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError = ErrorType<void>>(
+ params?: GetOwnerCrmCustomersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerCrmCustomers>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerCrmCustomers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerCrmCustomers<TData = Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError = ErrorType<void>>(
+ params?: GetOwnerCrmCustomersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Search and sort the owner customer directory before server pagination
+ */
+
+export function useGetOwnerCrmCustomers<TData = Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError = ErrorType<void>>(
+ params?: GetOwnerCrmCustomersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerCrmCustomers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOwnerCrmCustomersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetOwnerCrmProfileUrl = (params: GetOwnerCrmProfileParams,) => {
   const normalizedParams = new URLSearchParams();

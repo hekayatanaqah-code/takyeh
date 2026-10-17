@@ -5,6 +5,35 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type CrmDirectoryCustomerSource = typeof CrmDirectoryCustomerSource[keyof typeof CrmDirectoryCustomerSource];
+
+
+export const CrmDirectoryCustomerSource = {
+  chalet: 'chalet',
+  service: 'service',
+  both: 'both',
+} as const;
+
+export interface CrmDirectoryCustomer {
+  client_name: string;
+  client_phone: string;
+  total_bookings: number;
+  total_revenue: number;
+  last_booking_date: string;
+  source: CrmDirectoryCustomerSource;
+  providers: string[];
+  has_active: boolean;
+}
+
+export interface CrmCustomerPage {
+  items: CrmDirectoryCustomer[];
+  total: number;
+  totalCustomers: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface CrmCustomerSummary {
   clientName: string;
   clientPhone: string;
@@ -945,6 +974,52 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type GetOwnerCrmCustomersParams = {
+scope?: GetOwnerCrmCustomersScope;
+source?: GetOwnerCrmCustomersSource;
+/**
+ * @minimum 1
+ */
+providerId?: number;
+/**
+ * @maxLength 100
+ */
+search?: string;
+sort?: GetOwnerCrmCustomersSort;
+/**
+ * @minimum 1
+ * @maximum 1000000
+ */
+page?: number;
+};
+
+export type GetOwnerCrmCustomersScope = typeof GetOwnerCrmCustomersScope[keyof typeof GetOwnerCrmCustomersScope];
+
+
+export const GetOwnerCrmCustomersScope = {
+  all: 'all',
+  chalet: 'chalet',
+  service: 'service',
+} as const;
+
+export type GetOwnerCrmCustomersSource = typeof GetOwnerCrmCustomersSource[keyof typeof GetOwnerCrmCustomersSource];
+
+
+export const GetOwnerCrmCustomersSource = {
+  all: 'all',
+  chalet: 'chalet',
+  service: 'service',
+} as const;
+
+export type GetOwnerCrmCustomersSort = typeof GetOwnerCrmCustomersSort[keyof typeof GetOwnerCrmCustomersSort];
+
+
+export const GetOwnerCrmCustomersSort = {
+  activity: 'activity',
+  bookings: 'bookings',
+  revenue: 'revenue',
+} as const;
 
 export type GetOwnerCrmProfileParams = {
 /**

@@ -5,10 +5,13 @@ import type { Request, Response } from "express";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db, pool, ownerBookingsTable, serviceAppointmentsTable, serviceProvidersTable } from "@workspace/db";
 import { timeMinutes, bookingCheckoutAt } from "@workspace/booking-time";
-import { GetOwnerCrmHistoryResponse, GetOwnerCrmProfileResponse } from "@workspace/api-zod";
+import { GetOwnerCrmHistoryResponse, GetOwnerCrmProfileResponse, GetOwnerCrmCustomersResponse } from "@workspace/api-zod";
 import { crmTimeMinutes, crmPropertyCheckout, sendCrmHistory, sendCrmProfile } from "./customer-history";
+import { sendCrmCustomers } from "./customer-directory";
 
 const ownerId = `crm-page-${randomUUID()}`;
+const directoryOwner = `${ownerId}-directory`;
+const directoryPhone = (index: number) => `050${String(index).padStart(7, "0")}`;
 const phone = "0500000000";
 const ids: number[] = [];
 const providerIds: number[] = [];
@@ -44,12 +47,103 @@ before(async () => {
     dateStr: index < 2 ? "2099-01-01" : "2020-01-01", amount: "100", contractSigned: true,
     insuranceAmount: "50", status: index === 0 ? "cancelled" : "confirmed",
   })));
+  await db.insert(ownerBookingsTable).values([
+    ...Array.from({ length: 47 }, (_, index) => ({
+      ownerId: directoryOwner, clientName: `عميل قائمة ${index}`, clientPhone: directoryPhone(index),
+      bookingDate: index >= 1 && index <= 3 ? "2099-01-01" : `2020-01-${String(1 + index % 20).padStart(2, "0")}`,
+      totalPrice: index === 0 ? "5000" : String(100 + index), period: "morning", durationDays: 1,
+      cancelledAt: index === 3 ? new Date() : null,
+    })),
+    ...Array.from({ length: 3 }, () => ({
+      ownerId: directoryOwner, clientName: "عميل قائمة 0", clientPhone: directoryPhone(0),
+      bookingDate: "2019-01-01", totalPrice: "100", period: "morning", durationDays: 1, cancelledAt: null,
+    })),
+  ]);
+  const directoryProviders = await db.insert(serviceProvidersTable).values([
+    { ownerId: directoryOwner, businessName: "CRM directory A", category: "test", city: "test", whatsappNumber: phone },
+    { ownerId: directoryOwner, businessName: "CRM directory B", category: "test", city: "test", whatsappNumber: phone },
+  ]).returning({ id: serviceProvidersTable.id });
+  providerIds.push(...directoryProviders.map(row => row.id));
+  await db.insert(serviceAppointmentsTable).values([
+    { ownerId: directoryOwner, providerId: providerIds[2], clientName: "عميل قائمة 1", clientPhone: directoryPhone(1), dateStr: "2098-01-01", amount: "600", status: "confirmed" },
+    { ownerId: directoryOwner, providerId: providerIds[2], clientName: "عميل خدمة 99", clientPhone: directoryPhone(99), dateStr: "2020-01-01", amount: "400", status: "completed" },
+    { ownerId: directoryOwner, providerId: providerIds[3], clientName: "عميل خدمة 98", clientPhone: directoryPhone(98), dateStr: "2099-12-31", amount: "800", status: "confirmed" },
+  ]);
 });
 after(async () => {
-  await db.delete(ownerBookingsTable).where(eq(ownerBookingsTable.ownerId, ownerId));
-  await db.delete(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.ownerId, ownerId));
+  await db.delete(ownerBookingsTable).where(inArray(ownerBookingsTable.ownerId, [ownerId, directoryOwner]));
+  await db.delete(serviceAppointmentsTable).where(inArray(serviceAppointmentsTable.ownerId, [ownerId, directoryOwner]));
   if (providerIds.length) await db.delete(serviceProvidersTable).where(inArray(serviceProvidersTable.id, providerIds));
   await pool.end();
+});
+
+const directory = (query: Record<string, unknown> = {}, user = directoryOwner) => request(sendCrmCustomers, query, user);
+
+test("directory returns twenty customers per page with no duplicates and globally ordered activity", async () => {
+  const all: any[] = [];
+  for (let page = 1; page <= 3; page++) {
+    const { status, body } = await directory({ page: String(page) });
+    assert.equal(status, 200);
+    assert.equal(GetOwnerCrmCustomersResponse.safeParse(body).success, true);
+    assert.equal(body.pageSize, 20);
+    assert.equal(body.total, 48);
+    assert.equal(body.totalCustomers, 48);
+    assert.equal(body.totalPages, 3);
+    assert.equal(body.items.length, page === 3 ? 8 : 20);
+    all.push(...body.items);
+  }
+  assert.equal(new Set(all.map(row => row.client_phone)).size, 48);
+  const sorted = [...all].sort((a, b) => Number(b.has_active) - Number(a.has_active)
+    || b.last_booking_date.localeCompare(a.last_booking_date) || a.client_phone.localeCompare(b.client_phone));
+  assert.deepEqual(all, sorted);
+  assert.equal(all[0].client_phone, directoryPhone(98));
+  assert.equal(all.filter(row => row.has_active).length, 3);
+  assert(!all.some(row => row.client_phone === directoryPhone(3)), "cancelled property bookings do not introduce directory customers");
+});
+test("directory applies numeric booking/revenue sorts globally and combines shared customers only once", async () => {
+  for (const sort of ["bookings", "revenue"]) {
+    const { body } = await directory({ sort });
+    assert.equal(body.items[0].client_phone, directoryPhone(0));
+    assert.equal(body.items[0].total_bookings, 4);
+    assert.equal(body.items[0].total_revenue, 5300);
+  }
+  const shared = await directory({ search: directoryPhone(1) });
+  assert.equal(shared.body.total, 1);
+  assert.equal(shared.body.items[0].source, "both");
+  assert.equal(shared.body.items[0].total_bookings, 2);
+  assert.equal(shared.body.items[0].total_revenue, 701);
+  assert.deepEqual(shared.body.items[0].providers, ["CRM directory A"]);
+});
+test("directory searches across all pages by name and formatted Arabic phone, not SQL wildcard patterns", async () => {
+  const arabic = directoryPhone(46).replace(/\d/g, digit => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
+  for (const search of ["عميل قائمة 46", arabic, `${arabic.slice(0, 3)} ${arabic.slice(3)}`]) {
+    const { body } = await directory({ search });
+    assert.equal(body.total, 1);
+    assert.equal(body.items[0].client_phone, directoryPhone(46));
+  }
+  const empty = await directory({ search: "%", page: "100" });
+  assert.equal(empty.body.total, 0);
+  assert.equal(empty.body.page, 1);
+  assert.equal(empty.body.totalCustomers, 48);
+  assert.deepEqual(empty.body.items, []);
+  assert.equal((await directory({ page: "99999" })).body.page, 3);
+});
+test("directory source, product and provider isolation happen before aggregation and paging", async () => {
+  assert.equal((await directory({ scope: "chalet" })).body.total, 46);
+  assert.equal((await directory({ scope: "service" })).body.total, 3);
+  assert.equal((await directory({ source: "service" })).body.total, 3);
+  assert.equal((await directory({ source: "chalet" })).body.total, 46);
+  const scoped = await directory({ scope: "service", providerId: String(providerIds[3]) });
+  assert.equal(scoped.body.total, 1);
+  assert.equal(scoped.body.items[0].client_phone, directoryPhone(98));
+  assert.equal((await directory({ scope: "service", providerId: String(providerIds[1]) })).status, 404);
+  assert.equal((await directory({}, `${directoryOwner}-unrelated`)).body.total, 0);
+});
+test("directory rejects malformed filters without exposing another product's customer list", async () => {
+  for (const query of [{ page: "0" }, { sort: "bad" }, { scope: "bad" }, { source: "bad" },
+    { scope: "service", providerId: "-1" }, { providerId: String(providerIds[2]) }, { search: "a".repeat(101) }]) {
+    assert.equal((await directory(query)).status, 400);
+  }
 });
 
 test("summary contains full totals but never an unbounded bookings array", async () => {

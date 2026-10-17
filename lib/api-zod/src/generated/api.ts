@@ -9,6 +9,47 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Search and sort the owner customer directory before server pagination
+ */
+export const getOwnerCrmCustomersQueryScopeDefault = `all`;
+export const getOwnerCrmCustomersQuerySourceDefault = `all`;
+export const getOwnerCrmCustomersQuerySearchMax = 100;
+
+export const getOwnerCrmCustomersQuerySortDefault = `activity`;
+export const getOwnerCrmCustomersQueryPageDefault = 1;
+export const getOwnerCrmCustomersQueryPageMax = 1000000;
+
+
+
+export const GetOwnerCrmCustomersQueryParams = zod.object({
+  "scope": zod.enum(['all', 'chalet', 'service']).default(getOwnerCrmCustomersQueryScopeDefault),
+  "source": zod.enum(['all', 'chalet', 'service']).default(getOwnerCrmCustomersQuerySourceDefault),
+  "providerId": zod.coerce.number().int().min(1).optional(),
+  "search": zod.coerce.string().max(getOwnerCrmCustomersQuerySearchMax).optional(),
+  "sort": zod.enum(['activity', 'bookings', 'revenue']).default(getOwnerCrmCustomersQuerySortDefault),
+  "page": zod.coerce.number().int().min(1).max(getOwnerCrmCustomersQueryPageMax).default(getOwnerCrmCustomersQueryPageDefault)
+})
+
+export const GetOwnerCrmCustomersResponse = zod.object({
+  "items": zod.array(zod.object({
+  "client_name": zod.string(),
+  "client_phone": zod.string(),
+  "total_bookings": zod.number().int(),
+  "total_revenue": zod.number(),
+  "last_booking_date": zod.string(),
+  "source": zod.enum(['chalet', 'service', 'both']),
+  "providers": zod.array(zod.string()),
+  "has_active": zod.boolean()
+})),
+  "total": zod.number().int(),
+  "totalCustomers": zod.number().int(),
+  "page": zod.number().int(),
+  "pageSize": zod.number().int(),
+  "totalPages": zod.number().int()
+})
+
+
+/**
  * @summary Customer summary without loading booking history
  */
 export const getOwnerCrmProfileQueryPhoneMax = 30;

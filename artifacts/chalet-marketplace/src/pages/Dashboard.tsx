@@ -53,6 +53,7 @@ import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import { CustomerDate } from "@/components/owner/CustomerDate";
 import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
 import { CustomerHistory } from "@/components/owner/CustomerHistory";
+import { CustomerDirectory } from "@/components/owner/CustomerDirectory";
 import {
   getServiceClientIdField,
   getServiceReceiptFinancialSummary,
@@ -24074,14 +24075,6 @@ function SeasonsTab({ ownerChalets }: { ownerChalets: any[] }) {
 /* ════════════════════════════════════════════════════════════════
    CRM — Customers Tab
    ════════════════════════════════════════════════════════════════ */
-interface CustomerRow {
-  client_name: string;
-  client_phone: string;
-  total_bookings: string;
-  total_revenue: string;
-  last_booking_date: string;
-}
-
 function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "hijri" | "gregorian" }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -24092,8 +24085,6 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
     serviceScope
       ? `/owner/service-clients/${encodeURIComponent(phone)}${suffix}?providerId=${scopedProviderId}`
       : `/owner/customers/${encodeURIComponent(phone)}${suffix}`;
-  const [search, setSearch]           = useState("");
-  const [sourceFilter, setSourceFilter] = useState<"all" | "chalet" | "service">("all");
   const [selected, setSelected]       = useState<string | null>(null);
   const [profile, setProfile]         = useState<CrmCustomerSummary | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -24126,6 +24117,7 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["owner", "customers"] });
       qc.invalidateQueries({ queryKey: ["owner", "service-clients", scopedProviderId] });
+      qc.invalidateQueries({ queryKey: ["owner", "crm-customers"] });
       const newPhone = data.newPhone ?? selected!;
       setSelected(newPhone);
       loadProfile(newPhone);
@@ -24144,63 +24136,13 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "customers"] });
       qc.invalidateQueries({ queryKey: ["owner", "service-clients", scopedProviderId] });
+      qc.invalidateQueries({ queryKey: ["owner", "crm-customers"] });
       setSelected(null);
       setProfile(null);
       setDeleteOpen(false);
       toast({ title: "تم حذف العميل وسجلّ حجوزاته" });
     },
     onError: () => toast({ title: "حدث خطأ أثناء الحذف", variant: "destructive" }),
-  });
-
-  const showChalets = repUnit.type !== "service";
-  const showServices = repUnit.type !== "chalet";
-
-  const { data: customers = [], isLoading } = useQuery<CustomerRow[]>({
-    queryKey: ["owner", "customers", showChalets],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/customers");
-      if (!r.ok) return [];
-      const data = await r.json();
-      return Array.isArray(data) ? data : [];
-    },
-    enabled: showChalets,
-  });
-
-  const { data: svcClients = [], isLoading: svcLoading } = useQuery<(CustomerRow & { providers: string[] })[]>({
-    queryKey: ["owner", "service-clients", scopedProviderId],
-    queryFn: async () => {
-      const r = await apiFetch(`/owner/service-clients${scopedProviderId ? `?providerId=${scopedProviderId}` : ""}`);
-      return r.ok ? r.json() : [];
-    },
-    enabled: showServices,
-  });
-
-  // Build a merged + tagged list
-  const mergedCustomers = useMemo(() => {
-    type TaggedRow = CustomerRow & { source: "chalet" | "service" | "both"; providers?: string[] };
-    const result: TaggedRow[] = [];
-    const chaletPhones = new Set(customers.map(c => c.client_phone));
-    const svcPhones = new Set(svcClients.map(c => c.client_phone));
-
-    for (const c of showChalets ? customers : []) {
-      result.push({ ...c, source: svcPhones.has(c.client_phone) ? "both" : "chalet" });
-    }
-    for (const c of showServices ? svcClients : []) {
-      if (!chaletPhones.has(c.client_phone)) {
-        result.push({ ...c, source: "service", providers: c.providers });
-      } else {
-        const existing = result.find(r => r.client_phone === c.client_phone);
-        if (existing) (existing as any).providers = c.providers;
-      }
-    }
-    return result;
-  }, [customers, svcClients, showChalets, showServices]);
-
-  const filtered = mergedCustomers.filter((c) => {
-    const normalizedSearch = search.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
-    const matchSearch = c.client_name.includes(normalizedSearch) || c.client_phone.includes(normalizedSearch);
-    const matchSource = !showServices || sourceFilter === "all" || c.source === sourceFilter || (sourceFilter === "chalet" && c.source === "both") || (sourceFilter === "service" && c.source === "both");
-    return matchSearch && matchSource;
   });
 
   async function loadProfile(phone: string) {
@@ -24240,103 +24182,13 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
 
   return (
     <div className="flex gap-4 min-h-[520px]" dir="rtl">
-      {/* ── Left panel: customer list ── */}
+      {/* ── Right panel in RTL: paginated customer directory ── */}
       <div className={`flex flex-col gap-3 ${selected ? "hidden lg:flex lg:w-72 shrink-0" : "w-full"}`}>
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-foreground">عملائي</h2>
-            <SectionGuideButton sectionKey="customers" />
-          </div>
-          <span className="text-xs text-muted-foreground">{toAr(mergedCustomers.length)} عميل</span>
-        </div>
-
-        {/* Source filter — only when services are enabled */}
-        {showServices && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {([
-              { key: "all", label: "الكل" },
-              { key: "chalet", label: "عقارات" },
-              { key: "service", label: "خدمات" },
-            ] as const).map(({ key, label }) => (
-              <button key={key} type="button" onClick={() => setSourceFilter(key)}
-                className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-colors ${sourceFilter === key
-                  ? key === "service" ? "bg-amber-500 text-white border-amber-500"
-                    : key === "chalet" ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-foreground text-background border-foreground"
-                  : "border-border text-muted-foreground hover:border-foreground"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="relative">
-          <Search className="absolute end-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث بالاسم أو الجوال…"
-            className="pe-9 text-sm"
-            dir="rtl"
-          />
-        </div>
-
-        {(showChalets && isLoading) || (showServices && svcLoading) ? (
-          <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary w-6 h-6" /></div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground text-sm">
-            {search ? "لا توجد نتائج" : "لا يوجد عملاء بعد — أضف أول حجز لعميلك"}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {filtered.map((c) => {
-              const src = (c as any).source as "chalet" | "service" | "both" | undefined;
-              const providers = (c as any).providers as string[] | undefined;
-              return (
-              <button
-                key={c.client_phone || c.client_name}
-                onClick={() => c.client_phone ? loadProfile(c.client_phone) : null}
-                className={`w-full text-start rounded-xl border px-4 py-3 transition-colors hover:border-primary/50 hover:bg-accent/30 ${
-                  selected === c.client_phone
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-card"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-semibold text-sm text-foreground truncate">{c.client_name}</p>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {showServices && src && (
-                      <span className={`text-xs font-bold rounded-full px-1.5 py-0.5 ${
-                        src === "both" ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400"
-                        : src === "service" ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-                        : "bg-primary/10 text-primary"
-                      }`}>
-                        {src === "both" ? "عقار + خدمة" : src === "service" ? "خدمة" : "عقار"}
-                      </span>
-                    )}
-                    <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
-                      {(() => {
-                        const n = Number(c.total_bookings);
-                        if (src === "service") return `${toAr(n)} موعد`;
-                        return `${toAr(n)} ${n >= 3 && n <= 10 ? "حجوزات" : "حجز"}`;
-                      })()}
-                    </span>
-                  </div>
-                </div>
-                <p dir="ltr" className="text-xs text-muted-foreground mt-0.5 text-right">{toAr(c.client_phone)}</p>
-                {providers && providers.length > 0 && (
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 truncate">{providers.join("، ")}</p>
-                )}
-                {c.last_booking_date && (
-                    <div className="mt-1 flex flex-col gap-0">
-                      <p className="text-xs text-muted-foreground">{src === "service" ? "آخر موعد:" : "آخر حجز:"}</p>
-                      <span className="text-xs leading-snug"><CustomerDate value={c.last_booking_date} preference={profileCalView} /></span>
-                    </div>
-                )}
-              </button>
-            )})}
-          </div>
-        )}
+        <CustomerDirectory key={`${repUnit.type}:${scopedProviderId ?? "all"}`}
+          scope={repUnit.type === "service" ? "service" : repUnit.type === "chalet" ? "chalet" : "all"}
+          providerId={scopedProviderId ?? undefined} selected={selected}
+          onSelect={phone => { void loadProfile(phone); }} calendar={profileCalView}
+          guide={<SectionGuideButton sectionKey="customers" />} />
       </div>
 
       {/* ── Right panel: profile ── */}
