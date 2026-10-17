@@ -3881,12 +3881,12 @@ router.get("/financial-summary", async (req, res) => {
   const cashOnHand = Math.round(legacyBookingCash + installmentCashSum);
 
   // Build breakdown list for the clickable liquidity box
-  const cashBreakdown: { clientName: string; date: string; amount: number; source: string }[] = [
+  const cashBreakdown: { clientName: string; date: string; amount: number; source: string; bookingId: number; paymentId?: number }[] = [
     ...legacyCashEntries.map(b => {
       const dep = Number(b.depositPaid ?? 0);
       const bal = (!bookingIdsWithInstallmentsPre.has(b.id) && b.balanceCollected)
         ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
-      return { clientName: b.clientName, date: b.bookingDate, amount: dep + bal, source: "booking" };
+      return { clientName: b.clientName, date: b.bookingDate, amount: dep + bal, source: "booking", bookingId: b.id };
     }).filter(x => x.amount > 0),
     ...installmentCashRows.map(p => ({
       clientName: p.clientName,

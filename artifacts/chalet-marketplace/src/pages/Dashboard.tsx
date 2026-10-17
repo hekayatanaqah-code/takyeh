@@ -14503,8 +14503,8 @@ function RevenueTab() {
                   {serviceMonthsForYear.map((month) => {
                     const label = serviceMonthLabel(month, calType);
                     return (
-                      <SelectItem key={month} value={month}>
-                        <div className="flex flex-col items-end gap-0.5 py-0.5">
+                      <SelectItem key={month} value={month} className="text-right [&>span:last-child]:flex-1 [&>span:last-child]:min-w-0">
+                        <div dir="rtl" className="flex w-full flex-col items-start text-right gap-0.5 py-0.5">
                           <span className="font-semibold text-sm leading-tight">{label.primary}</span>
                           {label.secondary && <span className="text-xs text-muted-foreground leading-tight">{label.secondary}</span>}
                         </div>
@@ -14736,8 +14736,8 @@ function RevenueTab() {
                           ? `${HIJRI_MONTHS_AR[h1.month-1]} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h1.year)} هـ`
                           : `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h2.year)} هـ`;
                       return (
-                        <SelectItem key={ym} value={ym}>
-                          <div className="flex flex-col items-end gap-0.5 py-0.5">
+                        <SelectItem key={ym} value={ym} className="text-right [&>span:last-child]:flex-1 [&>span:last-child]:min-w-0">
+                          <div dir="rtl" className="flex w-full flex-col items-start text-right gap-0.5 py-0.5">
                             <span className="font-semibold text-sm leading-tight">{gregPrimary}</span>
                             {hijriSec && <span className="text-xs text-muted-foreground leading-tight">{hijriSec}</span>}
                           </div>
@@ -14759,8 +14759,8 @@ function RevenueTab() {
                       let gregSec = "";
                       if (gregYm) { const [gy,gm] = gregYm.split("-").map(Number); gregSec = new Date(gy,gm-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"}); }
                       return (
-                        <SelectItem key={key} value={key}>
-                          <div className="flex flex-col items-end gap-0.5 py-0.5">
+                        <SelectItem key={key} value={key} className="text-right [&>span:last-child]:flex-1 [&>span:last-child]:min-w-0">
+                          <div dir="rtl" className="flex w-full flex-col items-start text-right gap-0.5 py-0.5">
                             <span className="font-semibold text-sm leading-tight">{key}</span>
                             {gregSec && <span className="text-xs text-muted-foreground leading-tight">{gregSec}</span>}
                           </div>
@@ -15063,7 +15063,7 @@ function RevenueTab() {
 
       {/* Cash Breakdown Dialog */}
       <Dialog open={cashBreakdownOpen} onOpenChange={setCashBreakdownOpen}>
-        <DialogContent className="max-w-sm" dir="rtl">
+        <DialogContent className="max-w-lg px-3 sm:px-6" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-amber-700 dark:text-amber-400 flex items-center gap-2">
               <Banknote className="w-5 h-5" />
@@ -15074,21 +15074,36 @@ function RevenueTab() {
             {(financial?.cashBreakdown ?? []).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-6">لا توجد بنود</p>
             ) : (
-              <table className="w-full text-sm" dir="rtl">
+              <table className="w-full table-fixed text-sm" dir="rtl">
+                <colgroup>
+                  <col />
+                  <col className="w-[30%]" />
+                  <col className="w-[28%]" />
+                  <col className="w-8" />
+                </colgroup>
                 <thead className="text-xs font-bold text-muted-foreground border-b border-border">
                   <tr>
-                    <th className="py-2 text-right">العميل</th>
-                    <th className="py-2 text-center">التاريخ</th>
-                    <th className="py-2 text-left">المبلغ</th>
-                    <th className="py-2"></th>
+                    <th scope="col" className="px-1 py-2 text-right">العميل</th>
+                    <th scope="col" className="px-1 py-2 text-right">التاريخ</th>
+                    <th scope="col" className="px-1 py-2 text-left">المبلغ</th>
+                    <th scope="col" className="py-2"><span className="sr-only">الإجراءات</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {(financial?.cashBreakdown ?? []).map((row, i) => (
                     <tr key={i} className="hover:bg-muted/30">
-                      <td className="py-2 font-medium text-foreground">{row.clientName}</td>
-                      <td className="py-2 text-center text-muted-foreground text-xs leading-tight">{fmtDualDate(row.date)}</td>
-                      <td className="py-2 text-left font-bold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
+                      <td className="px-1 py-2 font-medium text-right text-foreground">
+                        <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                          <span className="break-words min-w-0">{row.clientName}</span>
+                          {row.bookingId != null && (
+                            <bdi dir="ltr" className="text-xs font-semibold tabular-nums text-muted-foreground whitespace-nowrap" aria-label={`رقم الحجز ${row.bookingId}`}>
+                              #{toArN(row.bookingId)}
+                            </bdi>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-1 py-2 text-right text-muted-foreground text-xs leading-relaxed tabular-nums">{fmtDualDate(row.date)}</td>
+                      <td className="px-1 py-2 text-left font-bold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
                         {fmtN(row.amount)} <span className="text-[10px] font-normal">ر.س</span>
                       </td>
                       <td className="py-2 text-center">
@@ -15114,10 +15129,11 @@ function RevenueTab() {
                 </tbody>
                 <tfoot className="border-t-2 border-amber-300">
                   <tr>
-                    <td colSpan={3} className="pt-2 font-bold text-amber-700 dark:text-amber-400">الإجمالي</td>
-                    <td className="pt-2 text-left font-extrabold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
+                    <td colSpan={2} className="px-1 pt-2 text-right font-bold text-amber-700 dark:text-amber-400">الإجمالي</td>
+                    <td className="px-1 pt-2 text-left font-extrabold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
                       {fmtN(financial?.cashOnHand ?? 0)} <span className="text-[10px] font-normal">ر.س</span>
                     </td>
+                    <td />
                   </tr>
                 </tfoot>
               </table>
@@ -26277,6 +26293,7 @@ export default function Dashboard() {
                     <BarChart2 className="w-3.5 h-3.5" />عرض التقارير المالية لـ:
                   </p>
                   <Select
+                    dir="rtl"
                     value={
                       selectedFinanceUnit.type === "all"
                         ? "all"
@@ -26299,9 +26316,19 @@ export default function Dashboard() {
                     }}
                   >
                     <SelectTrigger className="w-full rounded-xl border-border bg-background h-10 text-sm">
-                      <SelectValue placeholder="اختر الوحدة المالية" />
+                      <SelectValue placeholder="اختر الوحدة المالية">
+                        <span className="flex items-center gap-2">
+                          {selectedFinanceUnit.type === "all" ? (
+                            <><Briefcase className="w-3.5 h-3.5 shrink-0" />الميزانية الرئيسية</>
+                          ) : selectedFinanceUnit.type === "chalet" ? (
+                            <><Home className="w-3.5 h-3.5 shrink-0" />{selectedFinanceUnit.name}</>
+                          ) : (
+                            <><Activity className="w-3.5 h-3.5 shrink-0" />{selectedFinanceUnit.name}</>
+                          )}
+                        </span>
+                      </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent dir="rtl">
                       <SelectItem value="all">
                         <span className="flex items-center gap-2">
                           <Briefcase className="w-3.5 h-3.5 shrink-0" />الميزانية الرئيسية
