@@ -35,11 +35,14 @@ import type {
   AuthUserEnvelope,
   BeginBrowserLoginParams,
   Chalet,
+  ChaletFacility,
+  ChaletFacilityInput,
   ChaletSubmission,
   CheckoutPhotographyBooking200,
   CheckoutPhotographyBookingBody,
   CompletePhotographyReceipt200,
   ConfirmPhotographyBooking200,
+  CreateChaletFacilityBody,
   CreatePhotographyBooking200,
   CreatePhotographyPackage200,
   CreatePhotographyPackageBody,
@@ -172,6 +175,339 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetChaletFacilitiesUrl = (chaletId: number,) => {
+
+
+
+
+  return `/api/owner/chalets/${chaletId}/services`
+}
+
+export const getChaletFacilities = async (chaletId: number, options?: Parameters<typeof customFetch>[1]): Promise<ChaletFacility[]> => {
+
+  return customFetch<ChaletFacility[]>(getGetChaletFacilitiesUrl(chaletId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetChaletFacilitiesQueryKey = (chaletId: number,) => {
+    return [
+    `/api/owner/chalets/${chaletId}/services`
+    ] as const;
+    }
+
+
+export const getGetChaletFacilitiesQueryOptions = <TData = Awaited<ReturnType<typeof getChaletFacilities>>, TError = ErrorType<unknown>>(chaletId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChaletFacilities>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetChaletFacilitiesQueryKey(chaletId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChaletFacilities>>> = ({ signal }) => getChaletFacilities(chaletId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: chaletId !== null && chaletId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getChaletFacilities>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetChaletFacilitiesQueryResult = NonNullable<Awaited<ReturnType<typeof getChaletFacilities>>>
+export type GetChaletFacilitiesQueryError = ErrorType<unknown>
+
+
+export function useGetChaletFacilities<TData = Awaited<ReturnType<typeof getChaletFacilities>>, TError = ErrorType<unknown>>(
+ chaletId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChaletFacilities>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getChaletFacilities>>,
+          TError,
+          Awaited<ReturnType<typeof getChaletFacilities>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetChaletFacilities<TData = Awaited<ReturnType<typeof getChaletFacilities>>, TError = ErrorType<unknown>>(
+ chaletId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChaletFacilities>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getChaletFacilities>>,
+          TError,
+          Awaited<ReturnType<typeof getChaletFacilities>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetChaletFacilities<TData = Awaited<ReturnType<typeof getChaletFacilities>>, TError = ErrorType<unknown>>(
+ chaletId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChaletFacilities>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetChaletFacilities<TData = Awaited<ReturnType<typeof getChaletFacilities>>, TError = ErrorType<unknown>>(
+ chaletId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getChaletFacilities>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetChaletFacilitiesQueryOptions(chaletId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateChaletFacilityUrl = (chaletId: number,) => {
+
+
+
+
+  return `/api/owner/chalets/${chaletId}/services`
+}
+
+export const createChaletFacility = async (chaletId: number,
+    createChaletFacilityBody: CreateChaletFacilityBody, options?: Parameters<typeof customFetch>[1]): Promise<ChaletFacility> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ChaletFacility>(getCreateChaletFacilityUrl(chaletId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createChaletFacilityBody)
+  }
+);}
+
+
+
+
+
+export const getCreateChaletFacilityMutationKey = () => ['createChaletFacility'] as const;
+
+export const getCreateChaletFacilityMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createChaletFacility>>, TError,CreateChaletFacilityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createChaletFacility>>, TError,CreateChaletFacilityMutationVariables, TContext> => {
+
+const mutationKey = getCreateChaletFacilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createChaletFacility>>, CreateChaletFacilityMutationVariables> = (props) => {
+          const {chaletId,data} = props ?? {};
+
+          return  createChaletFacility(chaletId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateChaletFacilityMutationResult = NonNullable<Awaited<ReturnType<typeof createChaletFacility>>>
+    export type CreateChaletFacilityMutationBody = BodyType<CreateChaletFacilityBody>
+    export type CreateChaletFacilityMutationError = ErrorType<unknown>
+    export type CreateChaletFacilityMutationVariables = {chaletId: number;data: BodyType<CreateChaletFacilityBody>}
+
+    export const useCreateChaletFacility = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createChaletFacility>>, TError,CreateChaletFacilityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createChaletFacility>>,
+        TError,
+        CreateChaletFacilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateChaletFacilityMutationOptions(options), queryClient);
+    }
+
+export const getUpdateChaletFacilityUrl = (chaletId: number,
+    serviceId: number,) => {
+
+
+
+
+  return `/api/owner/chalets/${chaletId}/services/${serviceId}`
+}
+
+export const updateChaletFacility = async (chaletId: number,
+    serviceId: number,
+    chaletFacilityInput: ChaletFacilityInput, options?: Parameters<typeof customFetch>[1]): Promise<ChaletFacility> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ChaletFacility>(getUpdateChaletFacilityUrl(chaletId,serviceId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(chaletFacilityInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateChaletFacilityMutationKey = () => ['updateChaletFacility'] as const;
+
+export const getUpdateChaletFacilityMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateChaletFacility>>, TError,UpdateChaletFacilityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateChaletFacility>>, TError,UpdateChaletFacilityMutationVariables, TContext> => {
+
+const mutationKey = getUpdateChaletFacilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateChaletFacility>>, UpdateChaletFacilityMutationVariables> = (props) => {
+          const {chaletId,serviceId,data} = props ?? {};
+
+          return  updateChaletFacility(chaletId,serviceId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateChaletFacilityMutationResult = NonNullable<Awaited<ReturnType<typeof updateChaletFacility>>>
+    export type UpdateChaletFacilityMutationBody = BodyType<ChaletFacilityInput>
+    export type UpdateChaletFacilityMutationError = ErrorType<unknown>
+    export type UpdateChaletFacilityMutationVariables = {chaletId: number;serviceId: number;data: BodyType<ChaletFacilityInput>}
+
+    export const useUpdateChaletFacility = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateChaletFacility>>, TError,UpdateChaletFacilityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateChaletFacility>>,
+        TError,
+        UpdateChaletFacilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateChaletFacilityMutationOptions(options), queryClient);
+    }
+
+export const getDeleteChaletFacilityUrl = (chaletId: number,
+    serviceId: number,) => {
+
+
+
+
+  return `/api/owner/chalets/${chaletId}/services/${serviceId}`
+}
+
+export const deleteChaletFacility = async (chaletId: number,
+    serviceId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteChaletFacilityUrl(chaletId,serviceId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteChaletFacilityMutationKey = () => ['deleteChaletFacility'] as const;
+
+export const getDeleteChaletFacilityMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteChaletFacility>>, TError,DeleteChaletFacilityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteChaletFacility>>, TError,DeleteChaletFacilityMutationVariables, TContext> => {
+
+const mutationKey = getDeleteChaletFacilityMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteChaletFacility>>, DeleteChaletFacilityMutationVariables> = (props) => {
+          const {chaletId,serviceId} = props ?? {};
+
+          return  deleteChaletFacility(chaletId,serviceId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteChaletFacilityMutationResult = NonNullable<Awaited<ReturnType<typeof deleteChaletFacility>>>
+
+    export type DeleteChaletFacilityMutationError = ErrorType<unknown>
+    export type DeleteChaletFacilityMutationVariables = {chaletId: number;serviceId: number}
+
+    export const useDeleteChaletFacility = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteChaletFacility>>, TError,DeleteChaletFacilityMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteChaletFacility>>,
+        TError,
+        DeleteChaletFacilityMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteChaletFacilityMutationOptions(options), queryClient);
+    }
 
 export const getGetOwnerCrmCustomersUrl = (params?: GetOwnerCrmCustomersParams,) => {
   const normalizedParams = new URLSearchParams();

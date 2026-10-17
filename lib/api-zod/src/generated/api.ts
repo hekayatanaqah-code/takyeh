@@ -8,6 +8,189 @@
 import * as zod from 'zod';
 
 
+
+
+
+export const GetChaletFacilitiesParams = zod.object({
+  "chaletId": zod.coerce.number().int().min(1)
+})
+
+export const GetChaletFacilitiesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "chaletId": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string().nullable(),
+  "description": zod.string().nullable(),
+  "price": zod.string(),
+  "unit": zod.string(),
+  "imageUrl": zod.string().nullable(),
+  "galleryPhotos": zod.array(zod.object({
+  "url": zod.string(),
+  "caption": zod.string()
+})).nullable(),
+  "isActive": zod.boolean(),
+  "minPersons": zod.number().int().nullable(),
+  "maxPersons": zod.number().int().nullable(),
+  "maxQuantity": zod.number().int().nullable(),
+  "createdAt": zod.string()
+})
+export const GetChaletFacilitiesResponse = zod.array(GetChaletFacilitiesResponseItem)
+
+
+
+
+
+export const CreateChaletFacilityParams = zod.object({
+  "chaletId": zod.coerce.number().int().min(1)
+})
+
+export const createChaletFacilityBodyOneNameMax = 200;
+
+export const createChaletFacilityBodyOneCategoryMax = 100;
+
+export const createChaletFacilityBodyOneDescriptionMax = 500;
+
+export const createChaletFacilityBodyOnePriceMin = 0;
+
+export const createChaletFacilityBodyOneUnitMax = 100;
+
+
+export const createChaletFacilityBodyOneGalleryPhotosItemCaptionMax = 200;
+
+export const createChaletFacilityBodyOneGalleryPhotosMax = 10;
+
+export const createChaletFacilityBodyOneMinPersonsMin = 0;
+
+export const createChaletFacilityBodyOneMaxPersonsMin = 0;
+
+export const createChaletFacilityBodyOneMaxQuantityMin = 0;
+export const createChaletFacilityBodyOneMaxQuantityMax = 1000000;
+
+
+
+export const CreateChaletFacilityBody = zod.object({
+  "name": zod.string().min(1).max(createChaletFacilityBodyOneNameMax),
+  "category": zod.string().max(createChaletFacilityBodyOneCategoryMax).nullish(),
+  "description": zod.string().max(createChaletFacilityBodyOneDescriptionMax).nullish(),
+  "price": zod.number().min(createChaletFacilityBodyOnePriceMin),
+  "unit": zod.string().max(createChaletFacilityBodyOneUnitMax).optional(),
+  "imageUrl": zod.string().nullish(),
+  "galleryPhotos": zod.array(zod.object({
+  "url": zod.string().min(1),
+  "caption": zod.string().max(createChaletFacilityBodyOneGalleryPhotosItemCaptionMax)
+})).max(createChaletFacilityBodyOneGalleryPhotosMax).nullish(),
+  "minPersons": zod.number().int().min(createChaletFacilityBodyOneMinPersonsMin).nullish(),
+  "maxPersons": zod.number().int().min(createChaletFacilityBodyOneMaxPersonsMin).nullish(),
+  "maxQuantity": zod.number().int().min(createChaletFacilityBodyOneMaxQuantityMin).max(createChaletFacilityBodyOneMaxQuantityMax).nullish().describe('Per-booking quantity cap; null is unlimited, zero is unavailable.'),
+  "isActive": zod.boolean().optional()
+}).and(zod.object({
+
+}).passthrough())
+
+export const CreateChaletFacilityResponse = zod.object({
+  "id": zod.number().int(),
+  "chaletId": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string().nullable(),
+  "description": zod.string().nullable(),
+  "price": zod.string(),
+  "unit": zod.string(),
+  "imageUrl": zod.string().nullable(),
+  "galleryPhotos": zod.array(zod.object({
+  "url": zod.string(),
+  "caption": zod.string()
+})).nullable(),
+  "isActive": zod.boolean(),
+  "minPersons": zod.number().int().nullable(),
+  "maxPersons": zod.number().int().nullable(),
+  "maxQuantity": zod.number().int().nullable(),
+  "createdAt": zod.string()
+})
+
+
+
+
+
+
+export const UpdateChaletFacilityParams = zod.object({
+  "chaletId": zod.coerce.number().int().min(1),
+  "serviceId": zod.coerce.number().int().min(1)
+})
+
+export const updateChaletFacilityBodyNameMax = 200;
+
+export const updateChaletFacilityBodyCategoryMax = 100;
+
+export const updateChaletFacilityBodyDescriptionMax = 500;
+
+export const updateChaletFacilityBodyPriceMin = 0;
+
+export const updateChaletFacilityBodyUnitMax = 100;
+
+
+export const updateChaletFacilityBodyGalleryPhotosItemCaptionMax = 200;
+
+export const updateChaletFacilityBodyGalleryPhotosMax = 10;
+
+export const updateChaletFacilityBodyMinPersonsMin = 0;
+
+export const updateChaletFacilityBodyMaxPersonsMin = 0;
+
+export const updateChaletFacilityBodyMaxQuantityMin = 0;
+export const updateChaletFacilityBodyMaxQuantityMax = 1000000;
+
+
+
+export const UpdateChaletFacilityBody = zod.object({
+  "name": zod.string().min(1).max(updateChaletFacilityBodyNameMax).optional(),
+  "category": zod.string().max(updateChaletFacilityBodyCategoryMax).nullish(),
+  "description": zod.string().max(updateChaletFacilityBodyDescriptionMax).nullish(),
+  "price": zod.number().min(updateChaletFacilityBodyPriceMin).optional(),
+  "unit": zod.string().max(updateChaletFacilityBodyUnitMax).optional(),
+  "imageUrl": zod.string().nullish(),
+  "galleryPhotos": zod.array(zod.object({
+  "url": zod.string().min(1),
+  "caption": zod.string().max(updateChaletFacilityBodyGalleryPhotosItemCaptionMax)
+})).max(updateChaletFacilityBodyGalleryPhotosMax).nullish(),
+  "minPersons": zod.number().int().min(updateChaletFacilityBodyMinPersonsMin).nullish(),
+  "maxPersons": zod.number().int().min(updateChaletFacilityBodyMaxPersonsMin).nullish(),
+  "maxQuantity": zod.number().int().min(updateChaletFacilityBodyMaxQuantityMin).max(updateChaletFacilityBodyMaxQuantityMax).nullish().describe('Per-booking quantity cap; null is unlimited, zero is unavailable.'),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateChaletFacilityResponse = zod.object({
+  "id": zod.number().int(),
+  "chaletId": zod.number().int(),
+  "name": zod.string(),
+  "category": zod.string().nullable(),
+  "description": zod.string().nullable(),
+  "price": zod.string(),
+  "unit": zod.string(),
+  "imageUrl": zod.string().nullable(),
+  "galleryPhotos": zod.array(zod.object({
+  "url": zod.string(),
+  "caption": zod.string()
+})).nullable(),
+  "isActive": zod.boolean(),
+  "minPersons": zod.number().int().nullable(),
+  "maxPersons": zod.number().int().nullable(),
+  "maxQuantity": zod.number().int().nullable(),
+  "createdAt": zod.string()
+})
+
+
+
+
+
+
+export const DeleteChaletFacilityParams = zod.object({
+  "chaletId": zod.coerce.number().int().min(1),
+  "serviceId": zod.coerce.number().int().min(1)
+})
+
+export const DeleteChaletFacilityResponse = zod.unknown()
+
+
 /**
  * @summary Search and sort the owner customer directory before server pagination
  */

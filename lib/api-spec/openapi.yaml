@@ -21,6 +21,59 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/chalets/{chaletId}/services:
+    parameters:
+      - { name: chaletId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: getChaletFacilities
+      tags: [owner]
+      responses:
+        "200":
+          description: Property facilities, including inactive items and per-booking quantity caps
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ChaletFacility" } }
+    post:
+      operationId: createChaletFacility
+      tags: [owner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - { $ref: "#/components/schemas/ChaletFacilityInput" }
+                - { type: object, required: [name, price] }
+      responses:
+        "201":
+          description: Created facility
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChaletFacility" }
+  /owner/chalets/{chaletId}/services/{serviceId}:
+    parameters:
+      - { name: chaletId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      - { name: serviceId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    patch:
+      operationId: updateChaletFacility
+      tags: [owner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChaletFacilityInput" }
+      responses:
+        "200":
+          description: Updated facility
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChaletFacility" }
+    delete:
+      operationId: deleteChaletFacility
+      tags: [owner]
+      responses:
+        "200":
+          description: Deleted facility; historical booking snapshots are preserved
   /owner/crm/customers:
     get:
       operationId: getOwnerCrmCustomers
@@ -973,6 +1026,46 @@ components:
       schema:
         type: string
   schemas:
+    ChaletFacilityInput:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        category: { type: [string, "null"], maxLength: 100 }
+        description: { type: [string, "null"], maxLength: 500 }
+        price: { type: number, minimum: 0 }
+        unit: { type: string, maxLength: 100 }
+        imageUrl: { type: [string, "null"] }
+        galleryPhotos:
+          type: [array, "null"]
+          maxItems: 10
+          items:
+            type: object
+            required: [url, caption]
+            properties:
+              url: { type: string, minLength: 1 }
+              caption: { type: string, maxLength: 200 }
+        minPersons: { type: [integer, "null"], minimum: 0 }
+        maxPersons: { type: [integer, "null"], minimum: 0 }
+        maxQuantity: { type: [integer, "null"], minimum: 0, maximum: 1000000, description: "Per-booking quantity cap; null is unlimited, zero is unavailable." }
+        isActive: { type: boolean }
+    ChaletFacility:
+      type: object
+      required: [id, chaletId, name, category, description, price, unit, imageUrl, galleryPhotos, isActive, minPersons, maxPersons, maxQuantity, createdAt]
+      properties:
+        id: { type: integer }
+        chaletId: { type: integer }
+        name: { type: string }
+        category: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        price: { type: string }
+        unit: { type: string }
+        imageUrl: { type: [string, "null"] }
+        galleryPhotos: { type: [array, "null"], items: { type: object, required: [url, caption], properties: { url: { type: string }, caption: { type: string } } } }
+        isActive: { type: boolean }
+        minPersons: { type: [integer, "null"] }
+        maxPersons: { type: [integer, "null"] }
+        maxQuantity: { type: [integer, "null"] }
+        createdAt: { type: string }
     CrmDirectoryCustomer:
       type: object
       required: [client_name, client_phone, total_bookings, total_revenue, last_booking_date, source, providers, has_active]

@@ -647,6 +647,7 @@ router.get("/:id/services", async (req, res) => {
     galleryPhotos: chaletServicesTable.galleryPhotos,
     minPersons: chaletServicesTable.minPersons,
     maxPersons: chaletServicesTable.maxPersons,
+    maxQuantity: chaletServicesTable.maxQuantity,
   }).from(chaletServicesTable)
     .where(and(eq(chaletServicesTable.chaletId, chaletId), eq(chaletServicesTable.isActive, true)))
     .orderBy(chaletServicesTable.createdAt);

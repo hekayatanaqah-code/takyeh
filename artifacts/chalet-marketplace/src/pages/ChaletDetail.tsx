@@ -204,7 +204,7 @@ export default function ChaletDetail() {
     staleTime: 60 * 1000,
   });
 
-  interface ChaletAddon { id: number; name: string; category: string | null; description: string | null; price: string; unit: string; imageUrl: string | null; galleryPhotos: Array<{ url: string; caption: string }> | null; minPersons: number | null; maxPersons: number | null; }
+  interface ChaletAddon { id: number; name: string; category: string | null; description: string | null; price: string; unit: string; imageUrl: string | null; galleryPhotos: Array<{ url: string; caption: string }> | null; minPersons: number | null; maxPersons: number | null; maxQuantity: number | null; }
   const { data: chaletAddons = [] } = useQuery<ChaletAddon[]>({
     queryKey: ["chalet-addons", id],
     queryFn: async () => {
@@ -582,7 +582,7 @@ export default function ChaletDetail() {
                         {/* Body */}
                         <div style={{ padding: "13px 15px", display: "flex", flexDirection: "column", gap: 7, flex: 1 }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                            <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: "#111827", lineHeight: 1.4 }}>{svc.name}</p>
+                            <p style={{ margin: 0, fontWeight: 600, fontSize: 16, color: "#111827", lineHeight: 1.5 }}>{svc.name}</p>
                             <span style={{
                               background: isFree ? "#f0fdf4" : "#fefce8",
                               color: isFree ? "#15803d" : "#92400e",
@@ -593,8 +593,11 @@ export default function ChaletDetail() {
                             </span>
                           </div>
                           {svc.description && (
-                            <p style={{ margin: 0, fontSize: 13, color: "#6b7280", lineHeight: 1.6 }}>{svc.description}</p>
+                            <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: "#374151", lineHeight: 1.7 }}>{svc.description}</p>
                           )}
+                          {svc.maxQuantity != null && <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1f2937" }}>
+                            {svc.maxQuantity === 0 ? "غير متاحة حالياً" : `الكمية المتاحة لكل حجز: ${toAr(svc.maxQuantity)}`}
+                          </p>}
                         </div>
                       </div>
                     );

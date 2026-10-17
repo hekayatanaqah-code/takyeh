@@ -2,6 +2,7 @@ import { Router } from "express";
 import { propertyStayComplete } from "../lib/booking-completion";
 import { sendCrmHistory, sendCrmProfile } from "../lib/customer-history";
 import { sendCrmCustomers } from "../lib/customer-directory";
+import { resolveAddonQuantities } from "../lib/chalet-addon-quantity";
 import { sendBookingArchive } from "../lib/booking-archive";
 import { bookingCheckoutAt, INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import multer from "multer";
@@ -1605,6 +1606,7 @@ router.post("/bookings", async (req, res) => {
     insurancePaymentMethod: z.enum(["cash", "transfer"]).default("transfer"),
     paymentReceiptUrl: z.string().nullable().optional(),
     addonIds: z.array(z.number().int().positive()).optional(),
+    addonQuantities: z.array(z.object({ id: z.number().int().positive(), quantity: z.number().int().min(1).max(1000000) })).max(100).optional(),
   }).safeParse(req.body);
 
   if (!body.success) {
@@ -1649,15 +1651,22 @@ router.post("/bookings", async (req, res) => {
 
   /* Resolve selected addon details for denormalized storage */
   let resolvedAddons: Array<{ id: number; name: string; price: string; unit: string }> | null = null;
+  if (body.data.addonQuantities?.length && !body.data.addonIds?.length) {
+    return res.status(400).json({ error: "حدّد الخدمات المطلوبة قبل إدخال الكميات." });
+  }
   if (body.data.addonIds && body.data.addonIds.length > 0) {
+    if (!body.data.submissionId) return res.status(400).json({ error: "يجب تحديد العقار لطلب الخدمات." });
     const services = await db
-      .select({ id: chaletServicesTable.id, name: chaletServicesTable.name, price: chaletServicesTable.price, unit: chaletServicesTable.unit })
+      .select({ id: chaletServicesTable.id, name: chaletServicesTable.name, price: chaletServicesTable.price, unit: chaletServicesTable.unit, maxQuantity: chaletServicesTable.maxQuantity })
       .from(chaletServicesTable)
-      .where(inArray(chaletServicesTable.id, body.data.addonIds));
-    resolvedAddons = services.map(s => ({ id: s.id, name: s.name, price: String(s.price), unit: s.unit }));
+      .innerJoin(chaletsTable, eq(chaletsTable.id, chaletServicesTable.chaletId))
+      .where(and(inArray(chaletServicesTable.id, body.data.addonIds),
+        eq(chaletsTable.submissionId, body.data.submissionId), eq(chaletServicesTable.isActive, true)));
+    try { resolvedAddons = resolveAddonQuantities(services, body.data.addonIds, body.data.addonQuantities); }
+    catch (error) { return res.status(400).json({ error: (error as Error).message }); }
   }
 
-  const { revenueAmount, totalPrice, depositPaid, insuranceFee, addonIds: _addonIds, ...restBooking } = body.data;
+  const { revenueAmount, totalPrice, depositPaid, insuranceFee, addonIds: _addonIds, addonQuantities: _addonQuantities, ...restBooking } = body.data;
   const customerName = restBooking.clientName?.trim() || "عميل مؤقت";
   const phoneNormalized = normalizeCustomerPhone(restBooking.clientPhone);
   const booking = await db.transaction(async (tx) => {
@@ -5721,13 +5730,14 @@ router.post("/chalets/:chaletId/services", async (req, res) => {
   const schema = z.object({
     name: z.string().min(1, "اسم الخدمة مطلوب").max(200),
     category: z.string().max(100).optional(),
-    description: z.string().max(500).optional(),
+    description: z.string().max(500).nullable().optional(),
     price: z.number({ invalid_type_error: "السعر يجب أن يكون رقمًا" }).nonnegative("السعر لا يمكن أن يكون سالبًا"),
     unit: z.string().max(100).optional(),
-    imageUrl: z.string().optional().or(z.literal("")),
+    imageUrl: z.string().nullable().optional().or(z.literal("")),
     galleryPhotos: galleryPhotoSchema,
     minPersons: z.number().int().nonnegative().nullable().optional(),
     maxPersons: z.number().int().nonnegative().nullable().optional(),
+    maxQuantity: z.number().int().min(0).max(1000000).nullable().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
@@ -5749,6 +5759,7 @@ router.post("/chalets/:chaletId/services", async (req, res) => {
     galleryPhotos: body.galleryPhotos ?? null,
     minPersons: body.minPersons ?? null,
     maxPersons: body.maxPersons ?? null,
+    maxQuantity: body.maxQuantity ?? null,
   }).returning();
   return res.status(201).json(service);
 });
@@ -5770,6 +5781,7 @@ router.patch("/chalets/:chaletId/services/:serviceId", async (req, res) => {
     isActive: z.boolean().optional(),
     minPersons: z.number().int().nonnegative().nullable().optional(),
     maxPersons: z.number().int().nonnegative().nullable().optional(),
+    maxQuantity: z.number().int().min(0).max(1000000).nullable().optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
@@ -5791,6 +5803,7 @@ router.patch("/chalets/:chaletId/services/:serviceId", async (req, res) => {
   if (body.isActive !== undefined) patch.isActive = body.isActive;
   if (body.minPersons !== undefined) patch.minPersons = body.minPersons;
   if (body.maxPersons !== undefined) patch.maxPersons = body.maxPersons;
+  if (body.maxQuantity !== undefined) patch.maxQuantity = body.maxQuantity;
   const [updated] = await db.update(chaletServicesTable).set(patch).where(and(eq(chaletServicesTable.id, serviceId), eq(chaletServicesTable.chaletId, chaletId))).returning();
   if (!updated) return res.status(404).json({ error: "not found" });
   return res.json(updated);

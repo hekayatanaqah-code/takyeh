@@ -22,6 +22,7 @@ import { useStaffAuth } from "@/lib/useStaffAuth";
 import { TAB_PERMISSION, ALL_PERM_KEYS, PERM_LABELS } from "@/lib/staffPermissions";
 import type { PermKey, StaffPermissions } from "@/lib/staffPermissions";
 import { Switch } from "@/components/ui/switch";
+import { serviceImageError, moveServicePhoto } from "@/lib/chaletServiceMedia";
 import { Label } from "@/components/ui/label";
 import { normalizeIdentifier } from "@/lib/authLabels";
 import { employeeDigits, EMPTY_NEW_STAFF_FORM, STAFF_JOB_TITLES } from "@/lib/employeeForm";
@@ -1891,7 +1892,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon, list
 }
 
 /* ── Add Booking Dialog ──────────────────────── */
-function AddBookingDialog({
+export function AddBookingDialog({
   open, onClose, submissions, onAdded, existingBookings, prefilledDate, prefilledChaletId, availabilityBlocks, prefilledPeriod, onBack,
 }: {
   open: boolean;
@@ -1905,6 +1906,7 @@ function AddBookingDialog({
   prefilledPeriod?: string | null;
   onBack?: (() => void) | null;
 }) {
+  const { toast } = useToast();
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
   const [phoneLoading, setPhoneLoading] = useState(false);
@@ -1927,6 +1929,7 @@ function AddBookingDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [selectedAddonIds, setSelectedAddonIds] = useState<number[]>([]);
+  const [addonQuantities, setAddonQuantities] = useState<Record<number, number>>({});
   const prevAddonsTotalRef = useRef(0);
 
   /* ── Seasonal pricing hint ── */
@@ -1976,8 +1979,8 @@ function AddBookingDialog({
   const addonsTotalPrice = useMemo(() =>
     dialogAddons
       .filter(a => selectedAddonIds.includes(a.id) && a.unit !== "خدمة مجانية" && Number(a.price) > 0)
-      .reduce((sum, a) => sum + Math.round(Number(a.price)), 0),
-  [dialogAddons, selectedAddonIds]);
+      .reduce((sum, a) => sum + Number(a.price) * (addonQuantities[a.id] ?? 1), 0),
+  [dialogAddons, selectedAddonIds, addonQuantities]);
 
   /* ── Track addons total (no longer mutates totalPrice — base rent stays separate) ── */
   useEffect(() => {
@@ -2142,7 +2145,7 @@ function AddBookingDialog({
     setPeriod(""); setSource("external"); setSubmissionId(""); setNotes("");
     setTotalPrice(""); setDepositPaid(""); setInsuranceFee(""); setInsuranceReceived(false);
     setPaymentMethod("cash"); setCashDeposited(false); setPaymentReceiptUrl(null);
-    setIsReturningCustomer(null); setSelectedAddonIds([]);
+    setIsReturningCustomer(null); setSelectedAddonIds([]); setAddonQuantities({});
     prevAddonsTotalRef.current = 0;
   };
 
@@ -2165,6 +2168,13 @@ function AddBookingDialog({
     const snapCashDeposited = cashDeposited;
     const snapReceiptUrl = paymentReceiptUrl;
     const snapAddonIds = selectedAddonIds;
+    const snapAddonQuantities = snapAddonIds.map(id => ({ id, quantity: addonQuantities[id] ?? 1 }));
+    if (snapAddonQuantities.some(item => !Number.isSafeInteger(item.quantity) || item.quantity < 1 ||
+      item.quantity > 1000000 || (dialogAddons.find(addon => addon.id === item.id)?.maxQuantity != null &&
+        item.quantity > dialogAddons.find(addon => addon.id === item.id)!.maxQuantity!))) {
+      toast({ title: "راجع كميات الخدمات؛ لا يمكن تجاوز المتاح لكل حجز.", variant: "destructive" });
+      return;
+    }
     const snapAddonTotal = addonsTotalPrice;
 
     if (!snapPhone) { setError("يرجى إدخال رقم الجوال"); return; }
@@ -2199,6 +2209,7 @@ function AddBookingDialog({
         cashDeposited: snapPayMethod === "cash" ? snapCashDeposited : true,
         paymentReceiptUrl: snapReceiptUrl || undefined,
         addonIds: snapAddonIds.length > 0 ? snapAddonIds : undefined,
+        addonQuantities: snapAddonQuantities.length > 0 ? snapAddonQuantities : undefined,
       };
       console.log("[AddBooking] submitting body:", JSON.stringify(body));
       const r = await apiFetch("/owner/bookings", {
@@ -2437,17 +2448,31 @@ function AddBookingDialog({
                     const checked = selectedAddonIds.includes(addon.id);
                     const isFree = addon.unit === "خدمة مجانية" || Number(addon.price) === 0;
                     return (
-                      <label key={addon.id} className="flex items-start gap-3 cursor-pointer select-none">
+                      <div key={addon.id} className="flex items-start gap-3 select-none">
                         <input
                           type="checkbox"
                           checked={checked}
+                          id={`addon-select-${addon.id}`}
+                          disabled={addon.maxQuantity === 0 && !checked}
+                          aria-label={`اختيار خدمة ${addon.name}`}
                           onChange={(e) => setSelectedAddonIds(ids =>
                             e.target.checked ? [...ids, addon.id] : ids.filter(i => i !== addon.id)
                           )}
                           className="mt-0.5 w-4 h-4 accent-primary shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold leading-tight">{addon.name}</p>
+                          <label htmlFor={`addon-select-${addon.id}`} className="text-sm font-semibold leading-tight cursor-pointer">{addon.name}</label>
+                          {addon.maxQuantity != null && <p className="text-sm text-foreground mt-1">
+                            {addon.maxQuantity === 0 ? "غير متاحة حالياً" : `المتاح لكل حجز: ${toAr(addon.maxQuantity)}`}
+                          </p>}
+                          {checked && <div className="mt-2 space-y-1">
+                            <label className="text-sm font-medium" htmlFor={`addon-quantity-${addon.id}`}>الكمية المطلوبة</label>
+                            <Input id={`addon-quantity-${addon.id}`} aria-label={`كمية خدمة ${addon.name}`}
+                              inputMode="numeric" className="w-24 h-9" value={toAr(addonQuantities[addon.id] ?? 1)}
+                              onChange={event => setAddonQuantities(old => ({ ...old, [addon.id]: Number(fromAr(event.target.value).replace(/[^\d]/g, "")) }))} />
+                            {(addonQuantities[addon.id] === 0 || (addon.maxQuantity != null && (addonQuantities[addon.id] ?? 1) > addon.maxQuantity)) &&
+                              <p role="alert" className="text-sm text-destructive">أدخل كمية صحيحة لا تتجاوز المتاح.</p>}
+                          </div>}
                           {addon.description && (
                             <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{addon.description}</p>
                           )}
@@ -2455,7 +2480,7 @@ function AddBookingDialog({
                         <span className={`text-xs font-bold whitespace-nowrap shrink-0 ${isFree ? "text-green-600 dark:text-green-400" : "text-primary"}`}>
                           {isFree ? "🎁 خدمة مجانية" : `${toAr(Math.round(Number(addon.price)))} ر.س / ${addon.unit}`}
                         </span>
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
@@ -8539,6 +8564,7 @@ interface ChaletServiceRow {
   createdAt: string;
   minPersons: number | null;
   maxPersons: number | null;
+  maxQuantity: number | null;
 }
 
 const SERVICE_CATEGORY_OPTIONS = [
@@ -8567,12 +8593,14 @@ const SERVICE_UNIT_OPTIONS = [
 const BLANK_SVC_FORM = {
   name: "", category: "", categoryCustom: "", description: "",
   price: "", unit: "رسوم ثابتة", imageUrl: "",
-  gallery: [] as Array<{ url: string; caption: string; uploading?: boolean }>,
-  minPersons: "", maxPersons: "",
+  gallery: [] as Array<{ localId: string; url: string; caption: string; uploading?: boolean }>,
+  minPersons: "", maxPersons: "", maxQuantity: "",
 };
 
-function ChaletServicesTab() {
+export function ChaletServicesTab() {
   const qc = useQueryClient();
+  const { toast } = useToast();
+  const uploadEpoch = useRef(0);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -8606,6 +8634,8 @@ function ChaletServicesTab() {
   });
 
   function resetForm() {
+    ++uploadEpoch.current;
+    setConfirmDeleteId(null);
     setForm({ ...BLANK_SVC_FORM });
     setFieldErrors({});
     setEditingId(null);
@@ -8614,6 +8644,8 @@ function ChaletServicesTab() {
   }
 
   function openEdit(svc: ChaletServiceRow) {
+    ++uploadEpoch.current;
+    setMainImgUploading(false);
     const isCustom = svc.category ? !SERVICE_CATEGORY_OPTIONS.some((o) => o.value === svc.category && o.value !== "أخرى") && svc.category !== "أخرى" : false;
     setForm({
       name: svc.name,
@@ -8623,9 +8655,10 @@ function ChaletServicesTab() {
       price: svc.price,
       unit: svc.unit,
       imageUrl: svc.imageUrl ?? "",
-      gallery: svc.galleryPhotos ?? [],
+      gallery: (svc.galleryPhotos ?? []).map(photo => ({ ...photo, localId: crypto.randomUUID() })),
       minPersons: svc.minPersons != null ? String(svc.minPersons) : "",
       maxPersons: svc.maxPersons != null ? String(svc.maxPersons) : "",
+      maxQuantity: svc.maxQuantity != null ? String(svc.maxQuantity) : "",
     });
     setFieldErrors({});
     setEditingId(svc.id);
@@ -8639,13 +8672,14 @@ function ChaletServicesTab() {
     return {
       name: form.name.trim(),
       category: finalCategory,
-      description: form.description.trim() || undefined,
+      description: form.description.trim() || null,
       price: Number(form.price),
       unit: form.unit,
-      imageUrl: form.imageUrl || undefined,
+      imageUrl: form.imageUrl || null,
       galleryPhotos: form.gallery.filter((g) => g.url).map(({ url, caption }) => ({ url, caption })),
       minPersons: form.unit === "لكل شخص" && form.minPersons !== "" ? Number(form.minPersons) : null,
       maxPersons: form.unit === "لكل شخص" && form.maxPersons !== "" ? Number(form.maxPersons) : null,
+      maxQuantity: form.maxQuantity === "" ? null : Number(form.maxQuantity),
     };
   }
 
@@ -8658,6 +8692,9 @@ function ChaletServicesTab() {
       if (!form.name.trim()) errs.name = "اسم الخدمة مطلوب";
       if (form.price === "" || isNaN(Number(form.price)) || Number(form.price) < 0) errs.price = "أدخل سعرًا صحيحًا (يمكن أن يكون صفرًا للخدمات المجانية)";
       if (form.category === "أخرى" && !form.categoryCustom.trim()) errs.categoryCustom = "يرجى كتابة اسم الفئة";
+      if (form.maxQuantity !== "" && (!Number.isSafeInteger(Number(form.maxQuantity)) || Number(form.maxQuantity) < 0 || Number(form.maxQuantity) > 1000000)) {
+        errs.maxQuantity = "أدخل عدداً صحيحاً من ٠ إلى ١٬٠٠٠٬٠٠٠ أو اتركه فارغاً.";
+      }
       if (Object.keys(errs).length > 0) { setFieldErrors(errs); throw new Error("validation"); }
 
       const url = editingId
@@ -8676,6 +8713,8 @@ function ChaletServicesTab() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] });
+      qc.invalidateQueries({ queryKey: ["owner", "submission-addons"] });
+      qc.invalidateQueries({ queryKey: ["chalet-addons"] });
       resetForm();
     },
   });
@@ -8683,43 +8722,73 @@ function ChaletServicesTab() {
   const deleteService = useMutation({
     mutationFn: async (serviceId: number) => {
       if (!selectedId) throw new Error("no chalet");
-      await apiFetch(`/owner/chalets/${selectedId}/services/${serviceId}`, { method: "DELETE" });
+      const response = await apiFetch(`/owner/chalets/${selectedId}/services/${serviceId}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("تعذّر حذف الخدمة؛ لم تتغير بياناتها.");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] });
+      qc.invalidateQueries({ queryKey: ["owner", "submission-addons"] });
+      qc.invalidateQueries({ queryKey: ["chalet-addons"] });
       setConfirmDeleteId(null);
     },
+    onError: (error: Error) => toast({ title: error.message, variant: "destructive" }),
   });
 
   const toggleActive = useMutation({
     mutationFn: async ({ serviceId, isActive }: { serviceId: number; isActive: boolean }) => {
       if (!selectedId) throw new Error("no chalet");
-      await apiFetch(`/owner/chalets/${selectedId}/services/${serviceId}`, {
+      const response = await apiFetch(`/owner/chalets/${selectedId}/services/${serviceId}`, {
         method: "PATCH",
         body: JSON.stringify({ isActive }),
       });
+      if (!response.ok) throw new Error("تعذّر تغيير حالة الخدمة.");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "chalet-services", selectedId] }),
+    onMutate: async ({ serviceId, isActive }) => {
+      const key = ["owner", "chalet-services", selectedId];
+      await qc.cancelQueries({ queryKey: key });
+      const previous = qc.getQueryData<ChaletServiceRow[]>(key);
+      qc.setQueryData<ChaletServiceRow[]>(key, old => old?.map(service => service.id === serviceId ? { ...service, isActive } : service));
+      return { previous, key };
+    },
+    onError: (error: Error, _variables, context) => {
+      if (context?.previous) qc.setQueryData(context.key, context.previous);
+      toast({ title: error.message, variant: "destructive" });
+    },
+    onSettled: (_data, _error, _variables, context) => {
+      qc.invalidateQueries({ queryKey: context?.key ?? ["owner", "chalet-services", selectedId] });
+      qc.invalidateQueries({ queryKey: ["owner", "submission-addons"] });
+      qc.invalidateQueries({ queryKey: ["chalet-addons"] });
+    },
   });
 
   async function handleMainImageUpload(file: File) {
+    const error = serviceImageError(file);
+    if (error) { toast({ title: error, variant: "destructive" }); return; }
+    const epoch = uploadEpoch.current;
     setMainImgUploading(true);
     try {
       const url = await uploadFile(file);
+      if (epoch !== uploadEpoch.current) return;
       if (url) setForm((f) => ({ ...f, imageUrl: url }));
+      else toast({ title: "تعذّر رفع الصورة؛ أعد المحاولة.", variant: "destructive" });
     } finally {
-      setMainImgUploading(false);
+      if (epoch === uploadEpoch.current) setMainImgUploading(false);
     }
   }
 
   async function handleGalleryAdd(file: File) {
-    const idx = form.gallery.length;
-    setForm((f) => ({ ...f, gallery: [...f.gallery, { url: "", caption: "", uploading: true }] }));
+    const error = serviceImageError(file);
+    if (error) { toast({ title: error, variant: "destructive" }); return; }
+    if (form.gallery.length >= 5) return;
+    const localId = crypto.randomUUID();
+    const epoch = uploadEpoch.current;
+    setForm((f) => ({ ...f, gallery: [...f.gallery, { localId, url: "", caption: "", uploading: true }] }));
     const url = await uploadFile(file);
+    if (epoch !== uploadEpoch.current) return;
+    if (!url) toast({ title: "تعذّر رفع الصورة؛ أعد المحاولة.", variant: "destructive" });
     setForm((f) => {
-      const g = [...f.gallery];
-      if (url) g[idx] = { url, caption: g[idx]?.caption ?? "", uploading: false };
-      else g.splice(idx, 1);
+      const g = url ? f.gallery.map(photo => photo.localId === localId ? { ...photo, url, uploading: false } : photo)
+        : f.gallery.filter(photo => photo.localId !== localId);
       return { ...f, gallery: g };
     });
   }
@@ -8738,7 +8807,7 @@ function ChaletServicesTab() {
 
   const selectedChalet = chalets.find((c) => c.id === selectedId) ?? null;
   const inputCls = (field: string) =>
-    `w-full h-9 px-3 rounded-lg border ${fieldErrors[field] ? "border-destructive ring-1 ring-destructive" : "border-border"} bg-background text-sm focus:outline-none focus:ring-1 focus:ring-primary`;
+    `w-full h-10 px-3 rounded-lg border ${fieldErrors[field] ? "border-destructive ring-1 ring-destructive" : "border-border"} bg-background text-base text-foreground font-medium focus:outline-none focus:ring-1 focus:ring-primary`;
 
   if (chaletsLoading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
 
@@ -8771,6 +8840,7 @@ function ChaletServicesTab() {
           {chalets.map((c) => (
             <button
               key={c.id}
+              disabled={saveService.isPending || deleteService.isPending || toggleActive.isPending}
               onClick={() => { setSelectedId(c.id); resetForm(); }}
               className={`shrink-0 px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
                 selectedId === c.id ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border text-muted-foreground hover:text-foreground"
@@ -8803,7 +8873,7 @@ function ChaletServicesTab() {
         {/* Add / Edit form */}
         {showForm && (
           <div className="px-5 py-5 border-b border-border bg-muted/20 space-y-4">
-            <p className="text-sm font-semibold text-foreground">{editingId ? "تعديل الخدمة" : "خدمة جديدة"}</p>
+            <p className="text-base font-semibold text-foreground">{editingId ? "تعديل الخدمة" : "خدمة جديدة"}</p>
 
             {/* Row 1: name + category */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -8887,6 +8957,15 @@ function ChaletServicesTab() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label htmlFor="service-max-quantity" className="text-sm font-semibold text-foreground">الكمية المتاحة لكل حجز <span className="font-medium">(اختياري)</span></label>
+              <input id="service-max-quantity" inputMode="numeric" placeholder="اتركه فارغاً إن لم يوجد حد"
+                value={toAr(form.maxQuantity)} className={inputCls("maxQuantity")}
+                onChange={event => setForm(previous => ({ ...previous, maxQuantity: fromAr(event.target.value).replace(/[^\d]/g, "") }))} />
+              <p className="text-sm text-foreground/80">حد مستقل لكل حجز، وليس مخزوناً يومياً مشتركاً. الصفر يعني عدم توفر الخدمة حالياً.</p>
+              {fieldErrors.maxQuantity && <p role="alert" className="text-sm text-destructive">{fieldErrors.maxQuantity}</p>}
+            </div>
+
             {/* Row 2b: min/max persons — only for "لكل شخص" */}
             {form.unit === "لكل شخص" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -8954,6 +9033,7 @@ function ChaletServicesTab() {
               )}
             </div>
 
+            <p className="text-sm font-medium text-foreground">الحد الأقصى لكل صورة: ٢ ميجابايت (2MB). حتى ٥ صور إضافية؛ استخدم الأسهم لتغيير ترتيب عرضها.</p>
             {/* Row 5: Gallery images with captions */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
@@ -8962,25 +9042,36 @@ function ChaletServicesTab() {
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {form.gallery.map((item, idx) => (
-                  <div key={idx} className="border border-border rounded-lg overflow-hidden bg-background">
+                  <div key={item.localId} className="border border-border rounded-lg overflow-hidden bg-background">
                     {item.uploading ? (
                       <div className="h-20 flex items-center justify-center bg-muted/30"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
                     ) : (
                       <div className="relative">
                         <img src={item.url} alt="" className="w-full h-20 object-cover" />
                         <button
+                          type="button" aria-label={`حذف الصورة ${toAr(idx + 1)}`}
                           onClick={() => removeGalleryItem(idx)}
-                          className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full text-xs flex items-center justify-center hover:bg-destructive transition-colors"
+                          className="absolute top-1 right-1 w-8 h-8 bg-black/80 text-white rounded-full text-base flex items-center justify-center hover:bg-destructive transition-colors"
                         >×</button>
                       </div>
                     )}
                     <input
                       type="text"
+                      aria-label={`وصف الصورة ${toAr(idx + 1)}`}
                       placeholder="وصف الصورة..."
                       value={item.caption}
                       onChange={(e) => updateGalleryCaption(idx, e.target.value)}
                       className="w-full px-2 py-1.5 text-xs border-t border-border bg-transparent focus:outline-none focus:bg-muted/20"
                     />
+                    <div className="flex items-center justify-between gap-1 px-2 py-1.5 border-t border-border">
+                      <button type="button" aria-label={`تقديم الصورة ${toAr(idx + 1)}`} disabled={idx === 0}
+                        className="px-2 py-1 text-sm font-semibold text-foreground disabled:opacity-40"
+                        onClick={() => setForm(previous => ({ ...previous, gallery: moveServicePhoto(previous.gallery, idx, idx - 1) }))}>↑</button>
+                      <span className="text-sm font-medium">{toAr(idx + 1)}</span>
+                      <button type="button" aria-label={`تأخير الصورة ${toAr(idx + 1)}`} disabled={idx === form.gallery.length - 1}
+                        className="px-2 py-1 text-sm font-semibold text-foreground disabled:opacity-40"
+                        onClick={() => setForm(previous => ({ ...previous, gallery: moveServicePhoto(previous.gallery, idx, idx + 1) }))}>↓</button>
+                    </div>
                   </div>
                 ))}
                 {form.gallery.length < 5 && (
@@ -8995,10 +9086,10 @@ function ChaletServicesTab() {
 
             {/* Actions */}
             <div className="flex gap-2 justify-end pt-1">
-              <button onClick={resetForm} className="text-sm text-muted-foreground px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">إلغاء</button>
+              <button onClick={resetForm} disabled={saveService.isPending} className="text-sm text-foreground font-medium px-3 py-1.5 rounded-lg hover:bg-muted transition-colors">إلغاء</button>
               <button
                 onClick={() => saveService.mutate()}
-                disabled={saveService.isPending}
+                disabled={saveService.isPending || mainImgUploading || form.gallery.some(photo => photo.uploading)}
                 className="flex items-center gap-1.5 text-sm font-medium bg-primary text-primary-foreground px-4 py-1.5 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {saveService.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
@@ -9026,7 +9117,7 @@ function ChaletServicesTab() {
         ) : (
           <div className="divide-y divide-border">
             {services.map((svc) => (
-              <div key={svc.id} className={`flex items-start gap-3 px-5 py-4 transition-colors ${!svc.isActive ? "opacity-60 bg-muted/10" : ""}`}>
+              <div key={svc.id} className={`flex flex-wrap sm:flex-nowrap items-start gap-3 px-4 sm:px-5 py-5 transition-colors ${!svc.isActive ? "bg-muted/20" : ""}`}>
                 {/* Thumbnail */}
                 {svc.imageUrl
                   ? <img src={svc.imageUrl} alt={svc.name} className="w-14 h-14 rounded-xl object-cover shrink-0 border border-border" />
@@ -9034,7 +9125,7 @@ function ChaletServicesTab() {
                 }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-foreground text-sm">{svc.name}</p>
+                    <p className="font-semibold text-foreground text-base sm:text-lg">{svc.name}</p>
                     {svc.category && (
                       <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{svc.category}</span>
                     )}
@@ -9043,59 +9134,61 @@ function ChaletServicesTab() {
                       <span className="text-[10px] text-muted-foreground">{toAr(svc.galleryPhotos!.length)} صور</span>
                     )}
                   </div>
-                  {svc.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{svc.description}</p>}
-                  <p className="text-sm font-bold mt-1 flex items-center gap-1">
+                  {svc.description && <p className="text-sm sm:text-base font-medium text-foreground/90 mt-1 leading-relaxed break-words">{svc.description}</p>}
+                  {svc.maxQuantity != null && <p className="text-sm font-medium text-foreground mt-1">{svc.maxQuantity === 0 ? "لا توجد كمية متاحة حالياً" : `المتاح لكل حجز: ${toAr(svc.maxQuantity)}`}</p>}
+                  <p className="text-base sm:text-lg font-semibold text-foreground mt-2 flex flex-wrap items-center gap-1">
                     {svc.unit === "خدمة مجانية" || Number(svc.price) === 0
-                      ? <span className="text-green-600">🎁 خدمة مجانية</span>
-                      : <><span className="text-primary">{toAr(Math.round(Number(svc.price)))} ر.س</span><span className="text-xs text-muted-foreground font-normal"> / {svc.unit}</span></>
+                      ? <span className="text-green-800 dark:text-green-300">🎁 خدمة مجانية</span>
+                      : <><span className="text-foreground">{toAr(Math.round(Number(svc.price)))} ر.س</span><span className="text-sm text-foreground/90 font-medium"> / {svc.unit}</span></>
                     }
                   </p>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex flex-wrap items-center justify-end gap-2 shrink-0 w-full sm:w-auto">
                   {/* Edit */}
                   <button
                     onClick={() => openEdit(svc)}
+                    disabled={saveService.isPending}
                     title="تعديل"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground bg-muted/60 hover:bg-primary/10 hover:text-primary transition-colors"
+                    className="w-10 h-10 rounded-lg flex items-center justify-center text-foreground bg-muted/60 hover:bg-primary/10 hover:text-primary transition-colors"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                   </button>
                   {/* Toggle active */}
-                  <button
-                    onClick={() => toggleActive.mutate({ serviceId: svc.id, isActive: !svc.isActive })}
-                    disabled={toggleActive.isPending}
-                    title={svc.isActive ? "تعطيل" : "تفعيل"}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${svc.isActive ? "text-green-600 bg-green-50 dark:bg-green-900/20 hover:bg-green-100" : "text-muted-foreground bg-muted hover:bg-muted/70"}`}
-                  >
-                    {svc.isActive ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                  </button>
+                  <div className="flex items-center gap-2 px-2">
+                    <Switch aria-label={`تفعيل خدمة ${svc.name}`} checked={svc.isActive} disabled={toggleActive.isPending}
+                      onCheckedChange={isActive => toggleActive.mutate({ serviceId: svc.id, isActive })} />
+                    <span className="text-sm font-semibold text-foreground">{svc.isActive ? "مفعلة" : "معطلة"}</span>
+                  </div>
                   {/* Delete */}
-                  {confirmDeleteId === svc.id ? (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => deleteService.mutate(svc.id)}
-                        disabled={deleteService.isPending}
-                        className="text-[11px] bg-destructive text-white px-2 py-1 rounded-lg hover:bg-destructive/90 transition-colors"
-                      >
-                        {deleteService.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "تأكيد"}
-                      </button>
-                      <button onClick={() => setConfirmDeleteId(null)} className="text-[11px] px-2 py-1 rounded-lg bg-muted hover:bg-muted/70 transition-colors">لا</button>
-                    </div>
-                  ) : (
-                    <button
+                  <button
                       onClick={() => setConfirmDeleteId(svc.id)}
                       title="حذف"
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive bg-red-50 dark:bg-red-900/20 hover:bg-red-100 transition-colors"
+                      className="w-10 h-10 rounded-lg flex items-center justify-center text-destructive bg-red-50 dark:bg-red-900/20 hover:bg-red-100 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
-                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+      <Dialog open={confirmDeleteId !== null} onOpenChange={open => { if (!open && !deleteService.isPending) setConfirmDeleteId(null); }}>
+        <DialogContent dir="rtl" className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>تأكيد حذف الخدمة</DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed text-foreground">
+              هل تريد حذف «{services.find(service => service.id === confirmDeleteId)?.name}»؟ ستُزال من قائمة الخدمات المتاحة، ولن تتأثر تفاصيل الحجوزات السابقة. لا يمكن التراجع عن الحذف.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" disabled={deleteService.isPending} onClick={() => setConfirmDeleteId(null)}>إلغاء</Button>
+            <Button variant="destructive" disabled={deleteService.isPending} onClick={() => { if (confirmDeleteId !== null) deleteService.mutate(confirmDeleteId); }}>
+              {deleteService.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حذف الخدمة نهائياً"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }

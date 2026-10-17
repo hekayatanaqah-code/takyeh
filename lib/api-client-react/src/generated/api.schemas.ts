@@ -5,6 +5,89 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type ChaletFacilityInputGalleryPhotosItem = {
+  /** @minLength 1 */
+  url: string;
+  /** @maxLength 200 */
+  caption: string;
+};
+
+export interface ChaletFacilityInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name?: string;
+  /**
+     * @maxLength 100
+     * @nullable
+     */
+  category?: string | null;
+  /**
+     * @maxLength 500
+     * @nullable
+     */
+  description?: string | null;
+  /** @minimum 0 */
+  price?: number;
+  /** @maxLength 100 */
+  unit?: string;
+  /** @nullable */
+  imageUrl?: string | null;
+  /**
+     * @maxItems 10
+     * @nullable
+     */
+  galleryPhotos?: ChaletFacilityInputGalleryPhotosItem[] | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  minPersons?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  maxPersons?: number | null;
+  /**
+     * Per-booking quantity cap; null is unlimited, zero is unavailable.
+     * @minimum 0
+     * @maximum 1000000
+     * @nullable
+     */
+  maxQuantity?: number | null;
+  isActive?: boolean;
+}
+
+export type ChaletFacilityGalleryPhotosItem = {
+  url: string;
+  caption: string;
+};
+
+export interface ChaletFacility {
+  id: number;
+  chaletId: number;
+  name: string;
+  /** @nullable */
+  category: string | null;
+  /** @nullable */
+  description: string | null;
+  price: string;
+  unit: string;
+  /** @nullable */
+  imageUrl: string | null;
+  /** @nullable */
+  galleryPhotos: ChaletFacilityGalleryPhotosItem[] | null;
+  isActive: boolean;
+  /** @nullable */
+  minPersons: number | null;
+  /** @nullable */
+  maxPersons: number | null;
+  /** @nullable */
+  maxQuantity: number | null;
+  createdAt: string;
+}
+
 export type CrmDirectoryCustomerSource = typeof CrmDirectoryCustomerSource[keyof typeof CrmDirectoryCustomerSource];
 
 
@@ -974,6 +1057,8 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type CreateChaletFacilityBody = ChaletFacilityInput & { [key: string]: unknown } & Required<Pick<ChaletFacilityInput & { [key: string]: unknown }, 'name' | 'price'>>;
 
 export type GetOwnerCrmCustomersParams = {
 scope?: GetOwnerCrmCustomersScope;

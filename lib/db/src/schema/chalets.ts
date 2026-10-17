@@ -1099,6 +1099,7 @@ export const chaletServicesTable = pgTable("chalet_services", {
   isActive: boolean("is_active").notNull().default(true),
   minPersons: integer("min_persons"),
   maxPersons: integer("max_persons"),
+  maxQuantity: integer("max_quantity"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 export type ChaletService = typeof chaletServicesTable.$inferSelect;
