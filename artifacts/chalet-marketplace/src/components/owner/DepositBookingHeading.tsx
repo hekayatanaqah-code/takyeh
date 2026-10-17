@@ -11,7 +11,7 @@ export function DepositBookingHeading({ id, checkoutAt, ready, settled }: {
     <p className="flex items-start gap-1.5 text-xs leading-relaxed text-muted-foreground">
       <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
       <span><strong>موعد الخروج:</strong> {hasCheckout ? <>
-        {reportDualDate(checkoutAt!, "hijri")} — الساعة <strong className="text-foreground">{insuranceCheckoutTime(checkoutAt)}</strong> (بتوقيت السعودية)
+        {reportDualDate(checkoutAt!, "hijri")} — الساعة <strong className="text-foreground">{insuranceCheckoutTime(checkoutAt)}</strong>
       </> : "غير متاح — اتخاذ القرار مقفل حتى التحقق من الموعد"}</span>
     </p>
     {!settled && <p className={`flex items-start gap-1.5 text-xs font-medium ${ready ? "text-green-700 dark:text-green-400" : "text-amber-700 dark:text-amber-400"}`}>

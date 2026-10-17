@@ -113,7 +113,7 @@ export function buildArchivePdfPage({ table, context, rows, includeSummary, page
   const money = table.numericColumns.filter(c => c >= 0 && c < table.headers.length);
   const financial = money.length > 0;
   const totals = includeSummary && financial ? archiveTotals(table) : null;
-  const sections = renderTable(table.kind === "insurance" ? "كشف التأمينات للتدقيق المحاسبي — المبالغ بالريال السعودي" : financial ? "سجل الحجوزات والبيانات المالية — المبالغ بالريال السعودي" : "تفاصيل إعادة الجدولة",
+  const sections = renderTable(table.kind === "insurance" ? "المبالغ بالريال السعودي (ر.س)" : financial ? "سجل الحجوزات والبيانات المالية — المبالغ بالريال السعودي" : "تفاصيل إعادة الجدولة",
     archivePdfColumns(table), table, rows, totals, context);
 
   const ownerLogo = context.ownerLogoUrl
@@ -123,9 +123,9 @@ export function buildArchivePdfPage({ table, context, rows, includeSummary, page
   <div class="ap-brand">
     <img class="ap-logo" src="${reportEscape(context.platformLogoUrl)}" alt="منصة تكيّة" />
     <div>
-      <div class="ap-platform">منصة تكيّة — تقرير رسمي</div>
+      <div class="ap-platform">${table.kind === "insurance" ? "منصة تكيّة" : "منصة تكيّة — تقرير رسمي"}</div>
       <h1 class="ap-title">${reportEscape(reportPropertyTitle(context, table.kind === "insurance" ? "تقرير التأمينات" : undefined))}</h1>
-      <div class="ap-status">${reportEscape(table.title)}</div>
+      ${table.kind === "insurance" ? "" : `<div class="ap-status">${reportEscape(table.title)}</div>`}
     </div>
   </div>
   <div class="ap-owner">
@@ -141,7 +141,7 @@ ${context.propertyLogos?.length ? `<div class="ap-property-logos">${context.prop
   <div>${reportEscape(reportDateRange(context, table))}</div>
   <div><b>تاريخ الإصدار:</b>${reportEscape(reportIssuedAt(context))}</div>
   <div><b>عدد السجلات المطابقة:</b>${reportEscape(table.rows.length.toLocaleString("ar-SA"))}</div>
-  ${context.search ? `<div class="ap-wide"><b>بحث:</b>${reportEscape(context.search)}</div>` : ""}
+  ${context.search ? `<div class="ap-wide"><b>${table.kind === "insurance" ? "الفلاتر:" : "بحث:"}</b>${reportEscape(context.search)}</div>` : ""}
 </div>
 ${sections}
 ${includeSummary && table.summaryNote ? `<p class="ap-summary-note">${reportEscape(table.summaryNote)}</p>` : ""}

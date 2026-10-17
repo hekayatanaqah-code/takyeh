@@ -27,6 +27,12 @@ Property insurance management must show the booking number and complete Saudi ch
 
 **How to apply:** Use the server-calculated departure instant and recheck the current booking on save. This is timed stay completion, not a newly introduced manual check-out event.
 
+Omit “بتوقيت السعودية” and equivalent timezone suffixes from insurance checkout displays and PDF/Excel headings. Keep the actual time calculations in Saudi time, with a clear Arabic 12-hour display. Keep insurance report headers concise, without repeated titles, “تقرير رسمي”, or descriptions of default all-period/all-status filters.
+
+**Why:** The owner explicitly requested these final presentation changes, not a change to the governing timezone or settlement rules.
+
+**How to apply:** Preserve report identity, owner details, actual date bounds, issue date, record count, and any genuinely active filters.
+
 Insurance audit exports cover every matching record across pages and distinguish required, actually received, held, deducted and registered returned amounts, with deduction reasons and documentation status.
 
 **Why:** The owner requested Excel/PDF insurance statements for accounting review. An insurance fee is a receivable, not proof that money was received or remains held.

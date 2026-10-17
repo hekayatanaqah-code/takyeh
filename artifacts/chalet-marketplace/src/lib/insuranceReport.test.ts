@@ -68,8 +68,20 @@ describe("insurance report and checkout governance", () => {
     }
     assert.equal(sheet.views[0].rightToLeft, true);
     assert(headers.includes("تاريخ الخروج (هجري)") && headers.includes("تاريخ الخروج (ميلادي)"));
+    const timeColumn = headers.indexOf("وقت الخروج");
+    assert(timeColumn > 0);
+    assert.equal(sheet.getRow(8).getCell(timeColumn).value, "٠٦:٠٠ ص");
+    assert(!headers.some(header => typeof header === "string" && header.includes("السعودية")));
+    assert(!String(sheet.getCell("A2").value).includes(table.title));
+    assert(String(sheet.getCell("A2").value).includes(context.ownerName));
     const html = buildArchivePdfPage({ table, context, rows: table.rows, includeSummary: true, pageNumber: 1, totalPages: 1, width: 1900 });
     assert(html.includes("تقرير التأمينات: عقار"));
+    assert(!html.includes("بتوقيت السعودية"));
+    assert(!html.includes("وقت الخروج (السعودية)"));
+    assert(!html.includes("تقرير رسمي"));
+    assert(!html.includes('class="ap-status"'));
+    assert(html.includes("تاريخ الإصدار:"));
+    assert(html.includes("عدد السجلات المطابقة:"));
     assert(html.includes("كسر الباب &lt;script&gt;bad&lt;/script&gt;"));
     assert(html.includes("2 صورة"));
     assert.equal((html.match(/data-booking-row=/g) ?? []).length, 3);

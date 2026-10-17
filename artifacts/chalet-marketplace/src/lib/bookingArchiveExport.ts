@@ -126,10 +126,10 @@ export async function createArchiveWorkbook(source: ArchiveExportTable, context:
   });
   const metadata = [
     reportPropertyTitle(context, source.kind === "insurance" ? "تقرير التأمينات" : undefined),
-    `${table.title} | المالك / النشاط: ${context.ownerName} | الجوال: ${context.ownerPhone || "غير مسجل"}`,
+    `${source.kind === "insurance" ? "" : `${table.title} | `}المالك / النشاط: ${context.ownerName} | الجوال: ${context.ownerPhone || "غير مسجل"}`,
     reportDateRange(context, source),
     `تاريخ الإصدار: ${reportIssuedAt(context)}`,
-    `${context.search ? `البحث: ${context.search} | ` : ""}عدد السجلات: ${table.rows.length} | العملة: الريال السعودي (ر.س)`,
+    `${context.search ? `${source.kind === "insurance" ? "الفلاتر" : "البحث"}: ${context.search} | ` : ""}عدد السجلات: ${table.rows.length} | العملة: الريال السعودي (ر.س)`,
     table.summaryNote || "سجل تغييرات المواعيد؛ لا يتضمن قيماً مالية تاريخية.",
   ];
   metadata.forEach(text => {

@@ -61,14 +61,14 @@ export function insuranceCheckoutTime(value?: string | null): string {
 
 export function buildInsuranceReport(entries: InsuranceEntry[], preference: "hijri" | "gregorian"): ArchiveExportTable {
   return {
-    kind: "insurance", title: "كشف التأمينات والمبالغ المحتجزة والخصومات",
-    headers: ["رقم الحجز", "العقار", "اسم العميل", "رقم الجوال", "تاريخ بداية الإقامة", "تاريخ الخروج", "وقت الخروج (السعودية)",
+    kind: "insurance", title: "كشف التأمينات",
+    headers: ["رقم الحجز", "العقار", "اسم العميل", "رقم الجوال", "تاريخ بداية الإقامة", "تاريخ الخروج", "وقت الخروج",
       "التأمين المطلوب (ر.س)", "التأمين المستلم (ر.س)", "المحتجز (ر.س)", "المخصوم (ر.س)", "المعاد (ر.س)",
       "حالة الاستلام", "حالة التسوية", "سبب الخصم", "توثيق الضرر"],
     numericColumns: [7, 8, 9, 10, 11],
     dateValues: [{ column: 4, values: entries.map(entry => entry.bookingDate) },
       { column: 5, values: entries.map(entry => entry.checkoutAt ?? "") }],
-    summaryNote: "المحتجز من التأمين المستلم فقط، ولا يُحتسب التأمين غير المستلم كمبلغ محتجز. المعاد والمخصوم وفق التسوية المسجلة؛ حالة الاستلام معروضة مستقلة للتدقيق.",
+    summaryNote: "المحتجز من التأمين المستلم غير المسوّى فقط؛ المعاد والمخصوم وفق التسوية المسجلة.",
     rows: entries.map(entry => {
       const amounts = insuranceAmounts(entry);
       let proof = "لا توجد صور";

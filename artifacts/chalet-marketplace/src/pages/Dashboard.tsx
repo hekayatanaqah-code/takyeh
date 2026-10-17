@@ -22815,9 +22815,10 @@ function DepositsTab() {
         propertyNames: [...new Set(entries.map(entry => entry.chaletTitle || "عقار غير متاح"))],
         issuedAt: new Date().toISOString(),
         search: [
-          filters.status === "pending" ? "بانتظار القرار" : filters.status === "resolved" ? "تمت التسوية" : "جميع الحالات",
-          filters.month ? `الشهر: ${filters.month}` : filters.year ? `السنة: ${filters.year}` : "جميع الفترات",
-          `التقويم: ${filters.calendar === "hijri" ? "هجري" : "ميلادي"}`, filters.search ? `البحث: ${filters.search}` : "",
+          filters.status === "pending" ? "بانتظار القرار" : filters.status === "resolved" ? "تمت التسوية" : "",
+          filters.month ? `الشهر: ${filters.month} (${filters.calendar === "hijri" ? "هجري" : "ميلادي"})`
+            : filters.year ? `السنة: ${filters.year} (${filters.calendar === "hijri" ? "هجري" : "ميلادي"})` : "",
+          filters.search ? `البحث: ${filters.search}` : "",
         ].filter(Boolean).join(" | "),
       });
     } catch (error) {
