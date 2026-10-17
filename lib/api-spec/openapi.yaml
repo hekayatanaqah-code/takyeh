@@ -21,6 +21,32 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/message-settings:
+    get:
+      operationId: getOwnerWhatsAppSettings
+      tags: [owner]
+      responses:
+        "200":
+          description: Owner-scoped message templates. A null receipt template uses the canonical default.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerWhatsAppSettings" }
+    put:
+      operationId: saveOwnerWhatsAppSettings
+      tags: [owner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OwnerWhatsAppSettingsInput" }
+      responses:
+        "200":
+          description: Saved owner-scoped message settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerWhatsAppSettings" }
+        "400":
+          description: Invalid message settings
   /owner/chalets/{chaletId}/services:
     parameters:
       - { name: chaletId, in: path, required: true, schema: { type: integer, minimum: 1 } }
@@ -1026,6 +1052,36 @@ components:
       schema:
         type: string
   schemas:
+    OwnerWhatsAppTemplate:
+      type: object
+      required: [id, title, body]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        body: { type: string }
+    OwnerWhatsAppSettingsInput:
+      type: object
+      properties:
+        waEnabled: { type: boolean }
+        waPhone: { type: string }
+        bookingConfirmationEnabled: { type: boolean }
+        bookingConfirmationTemplate: { type: string }
+        changeNoticeEnabled: { type: boolean }
+        cancellationTemplate: { type: string }
+        modificationTemplate: { type: string }
+        detailedReceiptTemplate: { type: [string, "null"] }
+        customTemplates:
+          type: array
+          items: { $ref: "#/components/schemas/OwnerWhatsAppTemplate" }
+        attachmentNote: { type: string }
+    OwnerWhatsAppSettings:
+      allOf:
+        - { $ref: "#/components/schemas/OwnerWhatsAppSettingsInput" }
+        - type: object
+          required: [ownerId, waEnabled, waPhone, bookingConfirmationEnabled, bookingConfirmationTemplate, changeNoticeEnabled, cancellationTemplate, modificationTemplate, detailedReceiptTemplate, customTemplates, attachmentNote, updatedAt]
+          properties:
+            ownerId: { type: string }
+            updatedAt: { type: [string, "null"], format: date-time }
     ChaletFacilityInput:
       type: object
       properties:

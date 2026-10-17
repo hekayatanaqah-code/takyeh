@@ -8,6 +8,65 @@
 import * as zod from 'zod';
 
 
+export const GetOwnerWhatsAppSettingsResponse = zod.object({
+  "waEnabled": zod.boolean(),
+  "waPhone": zod.string(),
+  "bookingConfirmationEnabled": zod.boolean(),
+  "bookingConfirmationTemplate": zod.string(),
+  "changeNoticeEnabled": zod.boolean(),
+  "cancellationTemplate": zod.string(),
+  "modificationTemplate": zod.string(),
+  "detailedReceiptTemplate": zod.string().nullable(),
+  "customTemplates": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string()
+})),
+  "attachmentNote": zod.string()
+}).and(zod.object({
+  "ownerId": zod.string(),
+  "updatedAt": zod.date().nullable()
+}))
+
+
+export const SaveOwnerWhatsAppSettingsBody = zod.object({
+  "waEnabled": zod.boolean().optional(),
+  "waPhone": zod.string().optional(),
+  "bookingConfirmationEnabled": zod.boolean().optional(),
+  "bookingConfirmationTemplate": zod.string().optional(),
+  "changeNoticeEnabled": zod.boolean().optional(),
+  "cancellationTemplate": zod.string().optional(),
+  "modificationTemplate": zod.string().optional(),
+  "detailedReceiptTemplate": zod.string().nullish(),
+  "customTemplates": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string()
+})).optional(),
+  "attachmentNote": zod.string().optional()
+})
+
+export const SaveOwnerWhatsAppSettingsResponse = zod.object({
+  "waEnabled": zod.boolean(),
+  "waPhone": zod.string(),
+  "bookingConfirmationEnabled": zod.boolean(),
+  "bookingConfirmationTemplate": zod.string(),
+  "changeNoticeEnabled": zod.boolean(),
+  "cancellationTemplate": zod.string(),
+  "modificationTemplate": zod.string(),
+  "detailedReceiptTemplate": zod.string().nullable(),
+  "customTemplates": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "body": zod.string()
+})),
+  "attachmentNote": zod.string()
+}).and(zod.object({
+  "ownerId": zod.string(),
+  "updatedAt": zod.date().nullable()
+}))
+
+
 
 
 

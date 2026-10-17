@@ -5,6 +5,36 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface OwnerWhatsAppTemplate {
+  id: string;
+  title: string;
+  body: string;
+}
+
+export interface OwnerWhatsAppSettingsInput {
+  waEnabled?: boolean;
+  waPhone?: string;
+  bookingConfirmationEnabled?: boolean;
+  bookingConfirmationTemplate?: string;
+  changeNoticeEnabled?: boolean;
+  cancellationTemplate?: string;
+  modificationTemplate?: string;
+  /** @nullable */
+  detailedReceiptTemplate?: string | null;
+  customTemplates?: OwnerWhatsAppTemplate[];
+  attachmentNote?: string;
+}
+
+export type OwnerWhatsAppSettings = OwnerWhatsAppSettingsInput & ({
+  ownerId: string;
+  /** @nullable */
+  updatedAt: string | null;
+}) & Required<Pick<OwnerWhatsAppSettingsInput & ({
+  ownerId: string;
+  /** @nullable */
+  updatedAt: string | null;
+}), 'waEnabled' | 'waPhone' | 'bookingConfirmationEnabled' | 'bookingConfirmationTemplate' | 'changeNoticeEnabled' | 'cancellationTemplate' | 'modificationTemplate' | 'detailedReceiptTemplate' | 'customTemplates' | 'attachmentNote'>>;
+
 export type ChaletFacilityInputGalleryPhotosItem = {
   /** @minLength 1 */
   url: string;

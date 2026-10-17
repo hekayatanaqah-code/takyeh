@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
+import { SaveOwnerWhatsAppSettingsBody } from "@workspace/api-zod";
 import { propertyStayComplete } from "../lib/booking-completion";
 import { sendCrmHistory, sendCrmProfile } from "../lib/customer-history";
 import { sendCrmCustomers } from "../lib/customer-directory";
@@ -1401,12 +1403,7 @@ function bookingRangeOverlapsPause(bookingDate: string, durationDays: number, ch
 }
 
 function normalizeMessageSettings(row: typeof ownerNotificationSettingsTable.$inferSelect | undefined, ownerId: string) {
-  let customTemplates: Array<{ id: string; title: string; body: string }> = [];
-  try {
-    customTemplates = row?.waToken ? JSON.parse(row.waToken) : [];
-  } catch (_) {
-    customTemplates = [];
-  }
+  const templates = readOwnerMessageTemplates(row?.waToken);
   return {
     ownerId,
     waEnabled: row?.waEnabled ?? false,
@@ -1414,15 +1411,15 @@ function normalizeMessageSettings(row: typeof ownerNotificationSettingsTable.$in
     bookingConfirmationEnabled: row?.bookingConfirmationEnabled ?? false,
     bookingConfirmationTemplate: (() => {
       const t = row?.bookingConfirmationTemplate;
-      return normalizeRemainingLabel((t && t.includes("{الإجمالي_الكلي}")) ? t : DEFAULT_BOOKING_CONFIRMATION_TEMPLATE);
+      return normalizeRemainingLabel(t ?? DEFAULT_BOOKING_CONFIRMATION_TEMPLATE);
     })(),
     changeNoticeEnabled: row?.changeNoticeEnabled ?? false,
     cancellationTemplate: row?.arrivalReminderTemplate || DEFAULT_CANCELLATION_TEMPLATE,
     modificationTemplate: (() => {
       const t = row?.changeNoticeTemplate;
-      return normalizeRemainingLabel((t && t.includes("{الإيجار}")) ? t : DEFAULT_MODIFICATION_TEMPLATE);
+      return normalizeRemainingLabel(t ?? DEFAULT_MODIFICATION_TEMPLATE);
     })(),
-    customTemplates: Array.isArray(customTemplates) ? customTemplates : [],
+    ...templates,
     attachmentNote: row?.waInstanceId ?? "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
     updatedAt: row?.updatedAt ?? null,
   };
@@ -1442,20 +1439,13 @@ router.get("/message-settings", async (req, res) => {
 
 router.put("/message-settings", async (req, res) => {
   const ownerId = req.user!.id;
-  const body = z.object({
-    waEnabled: z.boolean().optional(),
-    waPhone: z.string().optional(),
-    bookingConfirmationEnabled: z.boolean().optional(),
-    bookingConfirmationTemplate: z.string().optional(),
-    changeNoticeEnabled: z.boolean().optional(),
-    cancellationTemplate: z.string().optional(),
-    modificationTemplate: z.string().optional(),
-    customTemplates: z.array(z.object({ id: z.string(), title: z.string(), body: z.string() })).optional(),
-    attachmentNote: z.string().optional(),
-  }).safeParse(req.body);
+  const body = SaveOwnerWhatsAppSettingsBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
-  const sanitizedCustomTemplates = (body.data.customTemplates ?? []).map((tpl) => ({
+  const [existing] = await db.select().from(ownerNotificationSettingsTable)
+    .where(eq(ownerNotificationSettingsTable.ownerId, ownerId)).limit(1);
+  const existingTemplates = readOwnerMessageTemplates(existing?.waToken);
+  const sanitizedCustomTemplates = (body.data.customTemplates ?? existingTemplates.customTemplates).map((tpl) => ({
     id: tpl.id || randomBytes(8).toString("hex"),
     title: tpl.title.trim() || "رسالة إضافية",
     body: tpl.body.trim(),
@@ -1473,7 +1463,11 @@ router.put("/message-settings", async (req, res) => {
     changeNoticeEnabled: body.data.changeNoticeEnabled ?? false,
     changeNoticeTemplate: normalizeRemainingLabel(body.data.modificationTemplate?.trim() || DEFAULT_MODIFICATION_TEMPLATE),
     waInstanceId: body.data.attachmentNote?.trim() || null,
-    waToken: JSON.stringify(sanitizedCustomTemplates),
+    waToken: JSON.stringify({
+      customTemplates: sanitizedCustomTemplates,
+      detailedReceiptTemplate: body.data.detailedReceiptTemplate === undefined
+        ? existingTemplates.detailedReceiptTemplate : body.data.detailedReceiptTemplate,
+    }),
     updatedAt: new Date(),
   };
 

@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, createContext, useCo
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { MessageTemplateEditor } from "@/components/messages/MessageTemplateEditor";
+import { DEFAULT_DETAILED_RECEIPT_TEMPLATE, DETAILED_RECEIPT_VARIABLES, detailedReceiptValues, renderDetailedReceipt } from "@/lib/detailedWhatsAppReceipt";
 import { saudiMoneyMessage } from "@/lib/saudiCurrency";
 import { saudiCurrencyHtml } from "@/lib/saudiCurrencyFont";
 import { useLocation, useSearch } from "wouter";
@@ -12,7 +13,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
 import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
-import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary } from "@workspace/api-client-react";
+import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type OwnerWhatsAppSettingsInput } from "@workspace/api-client-react";
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { Download } from "lucide-react";
@@ -316,16 +317,8 @@ function groupBlockedDatesIntoRanges(
   return ranges;
 }
 
-interface OwnerMessageSettings {
-  waEnabled: boolean;
-  waPhone: string;
-  bookingConfirmationEnabled: boolean;
-  bookingConfirmationTemplate: string;
-  changeNoticeEnabled: boolean;
-  cancellationTemplate: string;
-  modificationTemplate: string;
-  customTemplates: Array<{ id: string; title: string; body: string }>;
-  attachmentNote: string;
+interface OwnerMessageSettings extends Required<Omit<OwnerWhatsAppSettingsInput, "detailedReceiptTemplate">> {
+  detailedReceiptTemplate: string;
 }
 
 const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{اسم_الخدمة}", "{رقم_الحجز}", "{اسم_اليوم_من}", "{التاريخ}", "{التاريخ_م}", "{تاريخ_الخدمة}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{اسم_اليوم_إلى}", "{المدة}", "{الفترة}", "{الفترة_الجديدة}", "{الفترة_القديمة}", "{طريقة_تقديم_الخدمة}", "{عنوان_الخدمة}", "{تفاصيل_الخدمة}", "{رابط_العقد_الرقمي}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
@@ -409,6 +402,7 @@ const DEFAULT_OWNER_MESSAGE_SETTINGS: OwnerMessageSettings = {
   changeNoticeEnabled: true,
   cancellationTemplate: "مرحباً {اسم_العميل}\nنود إشعارك بأنه تم إلغاء حجزك في {اسم_العقار} بتاريخ {التاريخ} هـ الموافق {التاريخ_م} م.\n\nالسبب : {سبب_الإلغاء}\n\nالمبلغ المُسترد : {المبلغ_المسترد} ريال\n\nنعتذر عن الإزعاج، ونتمنى أن نراكم في أيام قادمة",
   modificationTemplate: DEFAULT_MODIFICATION_TEMPLATE_BODY,
+  detailedReceiptTemplate: DEFAULT_DETAILED_RECEIPT_TEMPLATE,
   customTemplates: [],
   attachmentNote: "إذا احتجت إرسال صورة أو ملف، افتح واتساب من الزر ثم أرفق الصورة يدوياً قبل الإرسال.",
 };
@@ -5514,84 +5508,15 @@ function BookingCalendarTab({
 
   const openReceiptWhatsApp = (b: OwnerBooking) => {
     const phone = normalizeGuestPhone(b);
-    const bChaletName = getBookingChaletName(b);
-    const tp   = b.totalPrice    ? Number(b.totalPrice)    : null;
-    const dp   = b.depositPaid   ? Number(b.depositPaid)   : null;
-    const ins  = b.insuranceFee  ? Number(b.insuranceFee)  : null;
-    const rem  = tp !== null && dp !== null ? Math.max(0, tp - dp) : null;
-    const fmtR = (n: number) => n.toLocaleString("ar-SA", { maximumFractionDigits: 2 });
-    const periodLabel = b.period
-      ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period as string] ?? b.period)
-      : "";
-    const { hijri: hijriDate, gregorian: gregDate } = formatDualDate(b.bookingDate);
-    const dualDate = hijriDate && gregDate ? `${hijriDate} | ${gregDate}` : b.bookingDate;
-    const lines: string[] = [
-      `🏡 إيصال حجز – حكاية أناقة`,
-      ``,
-      `🏠 العقار: ${bChaletName}`,
-      `👤 العميل: ${b.clientName}`,
-      `📅 التاريخ: ${dualDate}`,
-      `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
-    ];
-    const _receiptAddons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-    const _receiptAddonsTotal = _receiptAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
-    if (tp !== null) {
-      lines.push(``, `💰 تفاصيل المبالغ:`);
-      if (_receiptAddons.length > 0) {
-        const baseRent = tp - _receiptAddonsTotal;
-        lines.push(`• قيمة الإيجار الأساسية: ${fmtR(baseRent)} ر.س`);
-        lines.push(``, `🛎 الخدمات الإضافية:`);
-        _receiptAddons.forEach(a => {
-          const _ps = (a.unit === "خدمة مجانية" || Number(a.price) === 0) ? "مجاني" : `${fmtR(Math.round(Number(a.price)))} ر.س`;
-          lines.push(`  • ${a.name}: ${_ps}`);
-        });
-        if (_receiptAddonsTotal > 0) lines.push(`  إجمالي الخدمات: ${fmtR(_receiptAddonsTotal)} ر.س`);
-        lines.push(``, `• الإجمالي الكلي: ${fmtR(tp)} ر.س`);
-      } else {
-        lines.push(`• الإجمالي: ${fmtR(tp)} ر.س`);
-      }
-      lines.push(`• العربون: ${fmtR(dp ?? 0)} ر.س`);
-      lines.push(`• المتبقي: ${fmtR(rem ?? 0)} ر.س${b.balanceCollected ? " ✓" : ""}`);
-    }
-    if (ins) {
-      if (!b.insuranceRefunded) {
-        lines.push(`• التأمين: ${fmtR(ins)} ر.س 🔒 (محتجز)`);
-      } else if (b.insuranceDeducted && Number(b.insuranceDeducted) > 0) {
-        const deducted = Number(b.insuranceDeducted);
-        const refunded = Math.max(0, ins - deducted);
-        const proofImgs: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
-        lines.push(``, `✂️ تم خصم مبلغ ${fmtR(deducted)} ر.س من التأمين`);
-        if (b.insuranceDeductReason) lines.push(`📋 بسبب: ${b.insuranceDeductReason}`);
-        if (refunded > 0) lines.push(`💚 المبلغ المتبقي المُرجَع إليك: ${fmtR(refunded)} ر.س`);
-        else lines.push(`💚 المبلغ المُرجَع: ٠ ر.س`);
-        if (proofImgs.length > 0) {
-          const base2 = import.meta.env.BASE_URL.replace(/\/$/, "");
-          const firstUrl = proofImgs[0].startsWith("http") ? proofImgs[0] : `${window.location.origin}${base2}${proofImgs[0]}`;
-          lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
-          lines.push(``, `📸 صور التوثيق الإضافية:`, firstUrl);
-          const msgP = lines.join("\n");
-          const a2 = document.createElement("a");
-          a2.href = phone ? `https://wa.me/${phone}?text=${encodeWhatsAppText(msgP)}` : `https://wa.me/?text=${encodeWhatsAppText(msgP)}`;
-          a2.target = "_blank"; a2.rel = "noopener noreferrer";
-          document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
-          setOpenMessageMenuId(null);
-          return;
-        }
-      } else {
-        lines.push(`• التأمين: ${fmtR(ins)} ر.س ↩ تم الإرجاع بالكامل`);
-      }
-    }
-    const bChalet = ownerChalets.find((c: any) => c.submissionId === b.submissionId) ?? ownerChalets.find((c: any) => c.id === activeChaletId);
-    const terms: string = bChalet?.termsAndConditions ?? "";
-    if (terms.trim()) {
-      const termLines = terms.split("\n").map((l: string) => l.trim()).filter(Boolean);
-      if (termLines.length > 0) {
-        lines.push(``, `📋 الشروط والأحكام:`);
-        termLines.forEach((t: string) => lines.push(`• ${t}`));
-      }
-    }
-    lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
-    const msgFull = lines.join("\n");
+    const bChalet = ownerChalets.find((c: any) => c.submissionId === b.submissionId);
+    const values = detailedReceiptValues(b, {
+      propertyName: getBookingChaletName(b),
+      platformName: siteSettings.site_display_name || siteSettings.site_title,
+      terms: bChalet?.termsAndConditions,
+      ...formatDualDate(b.bookingDate),
+      assetBaseUrl: `${window.location.origin}${BASE}`,
+    });
+    const msgFull = renderDetailedReceipt(messageSettings.detailedReceiptTemplate ?? DEFAULT_DETAILED_RECEIPT_TEMPLATE, values);
     const a3 = document.createElement("a");
     a3.href = phone ? `https://wa.me/${phone}?text=${encodeWhatsAppText(msgFull)}` : `https://wa.me/?text=${encodeWhatsAppText(msgFull)}`;
     a3.target = "_blank"; a3.rel = "noopener noreferrer";
@@ -7243,106 +7168,7 @@ function BookingCalendarTab({
               const bookingChaletName = getBookingChaletName(b);
 
               const sendReceiptWhatsApp = () => {
-                // Normalize Saudi phone: strip non-digits, add 966 if starts with 0
-                let rawPhone = b.clientPhone?.replace(/\D/g, "") ?? "";
-                if (rawPhone.startsWith("00")) rawPhone = rawPhone.slice(2);
-                if (rawPhone.startsWith("0")) rawPhone = "966" + rawPhone.slice(1);
-                const phone = rawPhone;
-
-                const periodLabel = b.period ? ({ morning: "🌅 صباحي", evening: "🌙 مسائي", full_day: "☀️ يوم كامل" }[b.period] ?? b.period) : "";
-
-                // Build compact message (keep well under WhatsApp's ~4000 char limit)
-                const { hijri: hijriDate, gregorian: gregDate } = formatDualDate(b.bookingDate);
-                const dualDate = hijriDate && gregDate ? `${hijriDate} | ${gregDate}` : b.bookingDate;
-                const lines: string[] = [
-                  `🏡 إيصال حجز – حكاية أناقة`,
-                  ``,
-                  `🏠 العقار: ${bookingChaletName}`,
-                  `👤 العميل: ${b.clientName}`,
-                  `📅 التاريخ: ${dualDate}`,
-                  `⏱ المدة: ${b.durationDays} ${b.durationDays === 1 ? "يوم" : "أيام"}${periodLabel ? ` · ${periodLabel}` : ""}`,
-                ];
-
-                const _lstAddons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-                const _lstAddonsTotal = _lstAddons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0).reduce((sum, a) => sum + Math.round(Number(a.price)), 0);
-                if (tp !== null) {
-                  lines.push(``, `💰 تفاصيل المبالغ:`);
-                  if (_lstAddons.length > 0) {
-                    const _lstBaseRent = tp - _lstAddonsTotal;
-                    lines.push(`• قيمة الإيجار الأساسية: ${fmtAR(_lstBaseRent)} ر.س`);
-                    lines.push(``, `🛎 الخدمات الإضافية:`);
-                    _lstAddons.forEach(a => {
-                      const _ps = (a.unit === "خدمة مجانية" || Number(a.price) === 0) ? "مجاني" : `${fmtAR(Math.round(Number(a.price)))} ر.س`;
-                      lines.push(`  • ${a.name}: ${_ps}`);
-                    });
-                    if (_lstAddonsTotal > 0) lines.push(`  إجمالي الخدمات: ${fmtAR(_lstAddonsTotal)} ر.س`);
-                    lines.push(``, `• الإجمالي الكلي: ${fmtAR(tp)} ر.س`);
-                  } else {
-                    lines.push(`• الإجمالي: ${fmtAR(tp)} ر.س`);
-                  }
-                  lines.push(`• العربون: ${fmtAR(dp ?? 0)} ر.س`);
-                  lines.push(`• المتبقي: ${fmtAR(remaining ?? 0)} ر.س${b.balanceCollected ? " ✓" : ""}`);
-                }
-
-                if (ins) {
-                  if (!b.insuranceRefunded) {
-                    lines.push(`• التأمين: ${fmtAR(ins)} ر.س 🔒 (محتجز)`);
-                  } else if (b.insuranceDeducted && Number(b.insuranceDeducted) > 0) {
-                    const deducted = Number(b.insuranceDeducted);
-                    const refunded = Math.max(0, ins - deducted);
-                    const proofImgs2: string[] = (() => { try { return JSON.parse(b.insuranceProofImages ?? "[]"); } catch { return []; } })();
-                    lines.push(``, `✂️ تم خصم مبلغ ${fmtAR(deducted)} ر.س من التأمين`);
-                    if (b.insuranceDeductReason) lines.push(`📋 بسبب: ${b.insuranceDeductReason}`);
-                    if (refunded > 0) lines.push(`💚 المبلغ المتبقي المُرجَع إليك: ${fmtAR(refunded)} ر.س`);
-                    else lines.push(`💚 المبلغ المُرجَع: ٠ ر.س`);
-                    // Proof link goes at the very end — assembled after pushing footer
-                    if (proofImgs2.length > 0) {
-                      const base2 = import.meta.env.BASE_URL.replace(/\/$/, "");
-                      const firstUrl = proofImgs2[0].startsWith("http")
-                        ? proofImgs2[0]
-                        : `${window.location.origin}${base2}${proofImgs2[0]}`;
-                      lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
-                      lines.push(``, `📸 صور التوثيق الإضافية:`, firstUrl);
-                      // Skip the shared footer below since we already pushed it
-                      const msg = lines.join("\n");
-                      const encoded = encodeWhatsAppText(msg);
-                      const waUrl = phone ? `https://wa.me/${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
-                      const a = document.createElement("a");
-                      a.href = waUrl; a.target = "_blank"; a.rel = "noopener noreferrer";
-                      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                      return;
-                    }
-                  } else {
-                    lines.push(`• التأمين: ${fmtAR(ins)} ر.س ↩ تم الإرجاع بالكامل`);
-                  }
-                }
-
-                // Include chalet terms if available
-                const activeChalet = ownerChalets.find((c: any) => c.id === activeChaletId);
-                const terms: string = activeChalet?.termsAndConditions ?? "";
-                if (terms.trim()) {
-                  const termLines = terms.split("\n").map((l: string) => l.trim()).filter(Boolean);
-                  if (termLines.length > 0) {
-                    lines.push(``, `📋 الشروط والأحكام:`);
-                    termLines.forEach((t: string) => lines.push(`• ${t}`));
-                  }
-                }
-
-                lines.push(``, `✨ منصة حكاية أناقة – شاليهات القصيم`);
-                const msg = lines.join("\n");
-
-                // Use <a> click — works reliably inside iframes unlike window.open
-                const encoded = encodeWhatsAppText(msg);
-                const waUrl = phone
-                  ? `https://wa.me/${phone}?text=${encoded}`
-                  : `https://wa.me/?text=${encoded}`;
-                const a = document.createElement("a");
-                a.href = waUrl;
-                a.target = "_blank";
-                a.rel = "noopener noreferrer";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                openReceiptWhatsApp(b);
               };
 
               const messageTemplates = getManualWhatsAppTemplates(b);
@@ -24548,7 +24374,7 @@ function WhatsAppPreview({
       className="mt-3 rounded-2xl p-3 pb-4 overflow-hidden"
       style={{ backgroundColor: "#efeae2", backgroundImage: "radial-gradient(rgba(17,27,33,.045) 1px, transparent 1px)", backgroundSize: "12px 12px" }}
     >
-      <p className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 mb-2.5 flex items-center gap-1.5">
+      <p className="text-[11px] font-semibold text-zinc-800 mb-2.5 flex items-center gap-1.5">
         <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
         معاينة الرسالة في واتساب
       </p>
@@ -24577,15 +24403,27 @@ export function OwnerMessageSettingsTab({
   establishmentName,
   providerId,
   chaletNamesBySubmissionId = {},
+  chaletTermsBySubmissionId = {},
 }: {
   establishmentName?: string;
   providerId?: number | null;
   chaletNamesBySubmissionId?: Record<number, string>;
+  chaletTermsBySubmissionId?: Record<number, string>;
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const [form, setForm] = useState<OwnerMessageSettings>(DEFAULT_OWNER_MESSAGE_SETTINGS);
+  const { data: platformSettings = {} } = useQuery<Record<string, string>>({
+    queryKey: ["siteSettings"],
+    queryFn: async () => {
+      const response = await apiFetch("/page-content");
+      if (!response.ok) throw new Error("تعذر تحميل اسم المنصة");
+      const rows: Array<{ key: string; value: string }> = await response.json();
+      return Object.fromEntries(rows.map(row => [row.key, row.value]));
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const { data: propertyBookings = [] } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings"],
@@ -24670,7 +24508,27 @@ export function OwnerMessageSettingsTab({
     };
   }, [latestBooking, providerId]);
 
-  const { data, isLoading } = useQuery<OwnerMessageSettings>({
+  const receiptPreviewData = useMemo(() => {
+    const platformName = platformSettings.site_display_name || platformSettings.site_title || "";
+    if (latestBooking && !providerId) {
+      return detailedReceiptValues(latestBooking, {
+        propertyName: previewEstablishmentName || "العقار",
+        platformName,
+        terms: chaletTermsBySubmissionId[Number(latestBooking.submissionId)],
+        ...formatDualDate(latestBooking.bookingDate),
+        assetBaseUrl: `${window.location.origin}${BASE}`,
+      });
+    }
+    return {
+      ...PREVIEW_SAMPLE_DATA,
+      "{اسم_المنصة}": platformName,
+      "{الشروط_والأحكام}": Object.values(chaletTermsBySubmissionId)[0]?.trim() || "لا توجد شروط وأحكام مضافة للعقار.",
+      "{حالة_التأمين}": "التأمين محتجز",
+      "{صور_التوثيق}": "",
+    };
+  }, [latestBooking, providerId, previewEstablishmentName, platformSettings, chaletTermsBySubmissionId]);
+
+  const { data, isLoading, isError } = useQuery<OwnerMessageSettings>({
     queryKey: ["owner", "message-settings"],
     queryFn: async () => {
       const r = await apiFetch("/owner/message-settings");
@@ -24682,6 +24540,7 @@ export function OwnerMessageSettingsTab({
   useEffect(() => {
     if (data) {
       const base = { ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...data };
+      base.detailedReceiptTemplate = data.detailedReceiptTemplate ?? DEFAULT_DETAILED_RECEIPT_TEMPLATE;
       if (providerId) {
         base.bookingConfirmationTemplate = prepareServiceMessageTemplate(base.bookingConfirmationTemplate);
       }
@@ -24713,7 +24572,7 @@ export function OwnerMessageSettingsTab({
       return r.json();
     },
     onSuccess: (saved) => {
-      setForm({ ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...saved });
+      setForm({ ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...saved, detailedReceiptTemplate: saved.detailedReceiptTemplate ?? DEFAULT_DETAILED_RECEIPT_TEMPLATE });
       qc.invalidateQueries({ queryKey: ["owner", "message-settings"] });
       toast({ title: "تم حفظ إعدادات الرسائل", description: "يمكنك الآن اختيار القالب من بطاقة الحجز وفتحه في واتساب يدوياً." });
     },
@@ -24731,7 +24590,7 @@ export function OwnerMessageSettingsTab({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function resetToDefault(key: "bookingConfirmationTemplate" | "cancellationTemplate" | "modificationTemplate") {
+  function resetToDefault(key: "bookingConfirmationTemplate" | "cancellationTemplate" | "modificationTemplate" | "detailedReceiptTemplate") {
     setField(key, DEFAULT_OWNER_MESSAGE_SETTINGS[key] as string);
   }
 
@@ -24761,6 +24620,10 @@ export function OwnerMessageSettingsTab({
     );
   }
 
+  if (isError) {
+    return <div role="alert" className="rounded-2xl border border-destructive p-4 text-destructive">تعذر تحميل إعدادات الرسائل. أعد المحاولة قبل تعديل القوالب أو حفظها.</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
@@ -24773,7 +24636,7 @@ export function OwnerMessageSettingsTab({
               <h2 className="text-xl font-extrabold text-foreground">إعدادات رسائل واتساب المجانية</h2>
               <SectionGuideButton sectionKey="messageSettings" />
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-slate-800 dark:text-slate-200">
               جهّز قوالبك هنا، ثم اختر الرسالة من بطاقة الحجز لفتحها في واتساب ومراجعتها قبل الإرسال.
             </p>
           </div>
@@ -24787,7 +24650,7 @@ export function OwnerMessageSettingsTab({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-base font-bold text-foreground">تشغيل قوالب الرسائل</h3>
-            <p className="text-xs text-muted-foreground mt-1">عند التشغيل تظهر القوالب في قائمة “إرسال عبر الواتساب” داخل كل حجز.</p>
+            <p className="text-xs text-slate-800 dark:text-slate-200 mt-1">عند التشغيل تظهر القوالب في قائمة “إرسال عبر الواتساب” داخل كل حجز.</p>
           </div>
           <Switch checked={form.waEnabled} onCheckedChange={(v) => setField("waEnabled", v)} disabled={isReadOnly} />
         </div>
@@ -24811,8 +24674,8 @@ export function OwnerMessageSettingsTab({
             disabled={isReadOnly}
           />
           <div className="flex flex-wrap gap-3 items-center">
-            <button type="button" onClick={() => resetToDefault("bookingConfirmationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-              ↺ استعادة الافتراضي
+            <button type="button" onClick={() => resetToDefault("bookingConfirmationTemplate")} disabled={isReadOnly} className="ms-auto rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 transition-colors hover:border-slate-400 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+              استعادة القالب الافتراضي
             </button>
           </div>
           <WhatsAppPreview text={form.bookingConfirmationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
@@ -24832,8 +24695,8 @@ export function OwnerMessageSettingsTab({
             disabled={isReadOnly}
           />
           <div className="flex flex-wrap gap-3 items-center">
-            <button type="button" onClick={() => resetToDefault("cancellationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-              ↺ استعادة الافتراضي
+            <button type="button" onClick={() => resetToDefault("cancellationTemplate")} disabled={isReadOnly} className="ms-auto rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 transition-colors hover:border-slate-400 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+              استعادة القالب الافتراضي
             </button>
           </div>
           <WhatsAppPreview text={form.cancellationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
@@ -24855,12 +24718,39 @@ export function OwnerMessageSettingsTab({
             disabled={isReadOnly}
           />
           <div className="flex flex-wrap gap-3 items-center">
-            <button type="button" onClick={() => resetToDefault("modificationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-              ↺ استعادة الافتراضي
+            <button type="button" onClick={() => resetToDefault("modificationTemplate")} disabled={isReadOnly} className="ms-auto rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 transition-colors hover:border-slate-400 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+              استعادة القالب الافتراضي
             </button>
           </div>
           <WhatsAppPreview text={form.modificationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
         </div>
+
+        {!providerId && (
+          <div className="space-y-3 rounded-2xl border border-border p-4" data-testid="detailed-receipt-template-settings">
+            <h4 className="font-bold text-foreground">إيصال واتساب مفصل</h4>
+            <MessageTemplateEditor
+              label="نص إيصال واتساب المفصل"
+              value={form.detailedReceiptTemplate}
+              onChange={(value) => setField("detailedReceiptTemplate", value)}
+              variables={DETAILED_RECEIPT_VARIABLES}
+              rows={16}
+              disabled={isReadOnly}
+            />
+            <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium leading-7 text-sky-950 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-100">
+              يُستخدم هذا القالب عند اختيار «إيصال واتساب مفصل» من بطاقة الحجز.
+              {" "}<span data-currency-raw>{"{اسم_العقار}"}</span> من العقار المرتبط بالحجز،
+              {" "}<span data-currency-raw>{"{اسم_المنصة}"}</span> من إعدادات المنصة،
+              {" "}<span data-currency-raw>{"{الشروط_والأحكام}"}</span> من شروط العقار المعتمدة.
+              {" "}تعديل القالب لا يغيّر شروط العقار الأصلية.
+            </div>
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" onClick={() => resetToDefault("detailedReceiptTemplate")} disabled={isReadOnly} className="rounded-xl border-slate-300 bg-slate-50 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                استعادة القالب الافتراضي
+              </Button>
+            </div>
+            <WhatsAppPreview text={form.detailedReceiptTemplate} establishmentName={previewEstablishmentName} bookingData={receiptPreviewData} />
+          </div>
+        )}
 
         <div className="space-y-3 rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between gap-3">
@@ -24922,7 +24812,7 @@ export function OwnerMessageSettingsTab({
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
-          <p className="text-xs text-muted-foreground">
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold leading-6 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
             المتغيرات تُستبدل ببيانات الحجز عند فتح واتساب، والإرسال يتم يدوياً بعد مراجعة الرسالة.
           </p>
           <Button
@@ -26571,6 +26461,7 @@ export default function Dashboard() {
           <OwnerMessageSettingsTab
             establishmentName={ownerChalets[0]?.nameAr}
             chaletNamesBySubmissionId={Object.fromEntries(ownerChalets.map((chalet: any) => [Number(chalet.submissionId), chalet.nameAr]))}
+            chaletTermsBySubmissionId={Object.fromEntries(ownerChalets.map((chalet: any) => [Number(chalet.submissionId), chalet.termsAndConditions ?? ""]))}
           />
         )}
         {visiblePropertyTab === "customers" && (

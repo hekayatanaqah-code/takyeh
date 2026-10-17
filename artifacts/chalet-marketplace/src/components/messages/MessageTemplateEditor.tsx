@@ -161,9 +161,12 @@ export function MessageTemplateEditor({ value, onChange, variables, disabled = f
         />
       </div>
       <p className="sr-only" aria-live="polite">{announce}</p>
-      <p className="text-[11px] text-muted-foreground">
-        المتغيرات المعروفة تظهر بالأزرق، والمتغيرات غير المعروفة بالبرتقالي.
-      </p>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium leading-6 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+        <span className="font-bold text-sky-900 dark:text-sky-200">الأزرق: متغير معروف يُستبدل ببيانات الحجز.</span>
+        {" "}
+        <span className="font-bold text-amber-950 dark:text-amber-200">البرتقالي: متغير غير معروف؛ راجع كتابته قبل الحفظ.</span>
+        <p>استخدم الأزرار أعلاه للإدراج في موضع المؤشر. تُجهَّز الرسالة تلقائياً، وتراجعها وترسلها يدوياً في واتساب.</p>
+      </div>
     </div>
   );
 }
