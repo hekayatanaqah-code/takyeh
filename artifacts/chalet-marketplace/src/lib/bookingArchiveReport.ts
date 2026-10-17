@@ -66,7 +66,7 @@ export function reportIssuedAt(context: ArchiveReportContext): string {
   return `${reportDualDate(context.issuedAt, context.calendarPreference)}، ${time}`;
 }
 
-/** Compact table date; both calendars remain in the report's range and issue metadata. */
+/** Compact date for an individual calendar, including the PDF's dual-calendar stay cell. */
 export function reportShortDate(value: string, preference: ReportCalendar): string {
   const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00+03:00` : value);
   return new Intl.DateTimeFormat("ar-SA", {

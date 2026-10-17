@@ -7,7 +7,13 @@ Keep each booking's identity and financial information together in one compact h
 
 **Why:** The owner explicitly rejected both column-group pagination and the tall cells that limited reports to about two bookings per page. They requested compact single-line rows with multiple bookings per page.
 
-**How to apply:** Keep amounts/statuses in horizontal columns with compact preferred-calendar dates in the body; range/issue metadata retains both calendars. Break pages only between complete rows and allow necessary wrapping for unusually long names without truncating data. Use wider landscape paper rather than shrinking text excessively. Keep branch headings as plain text without badges/frames. Insurance stays separate from rental collections; the deposit is not added to collections a second time.
+**How to apply:** Keep amounts/statuses in horizontal columns. The owner explicitly requested both dates inside the PDF stay column: Hijri first, with Gregorian below in smaller text, even when the account prefers Gregorian. This is a limited exception to compact single-line cells; other dates and range/issue metadata retain their calendar preference. Break pages only between complete rows and allow necessary wrapping for unusually long names without truncating data. Use wider landscape paper rather than shrinking text excessively. Keep branch headings as plain text without badges/frames. Insurance stays separate from rental collections; the deposit is not added to collections a second time.
+
+Keep only one report-header count, “عدد السجلات المطابقة: X”; omit the redundant count of records on the current page without removing range/issue metadata.
+
+**Why:** The owner requested final header cleanup and complete dual-calendar documentation within the stay column.
+
+**How to apply:** The header count covers all exported matches and remains the same across PDF pages. Keep page numbering in the footer.
 
 In custom archive ranges, the end-date picker opens on the start date's month/year in the active calendar, including when an end date was already selected. Opening a range picker must not silently choose a date.
 

@@ -91,6 +91,13 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export async function createArchiveWorkbook(source: ArchiveExportTable, context: ArchiveReportContext) {
+  source.rows.forEach((row, rowIndex) => {
+    for (const column of source.numericColumns) {
+      if (typeof row[column] !== "number" || !Number.isFinite(row[column])) {
+        throw new Error(`قيمة مالية غير رقمية في السجل ${rowIndex + 1}: ${source.headers[column]}`);
+      }
+    }
+  });
   const dates = new Map(source.dateValues?.map(column => [column.column, column.values]));
   const calendars: ReportCalendar[] = context.calendarPreference === "hijri" ? ["hijri", "gregorian"] : ["gregorian", "hijri"];
   const columns = archiveAccountingOrder(source.headers, source.numericColumns.length > 0).flatMap((index): { index: number; calendar: ReportCalendar | undefined }[] =>

@@ -42,6 +42,7 @@ const STYLES = `
 .archive-pdf-page .ap-money{display:inline-block;white-space:nowrap;font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
 .archive-pdf-page .ap-phone{direction:ltr;unicode-bidi:isolate;display:inline-block;white-space:nowrap}
 .archive-pdf-page .ap-date{white-space:nowrap;unicode-bidi:isolate}
+.archive-pdf-page .ap-date-secondary{display:block;font-size:.8em;line-height:1.3;color:#536267;font-weight:400}
 .archive-pdf-page .ap-negative{color:#b42318;font-weight:700}
 .archive-pdf-page tbody tr:nth-child(even) td{background:#eef6f6}
 .archive-pdf-page tbody tr:nth-child(odd) td{background:#ffffff}
@@ -56,14 +57,17 @@ const STYLES = `
 
 const isNum = (v: ArchiveCell): v is number => typeof v === "number" && Number.isFinite(v);
 
-function cell(column: ArchivePdfColumn, row: ArchiveCell[], table: ArchiveExportTable, summary = false, dates?: Map<number, string>): string {
+type PdfDate = { primary: string; secondary?: string };
+
+function cell(column: ArchivePdfColumn, row: ArchiveCell[], table: ArchiveExportTable, summary = false, dates?: Map<number, PdfDate>): string {
   const values = column.fields.filter(field => !summary || table.numericColumns.includes(field.index)).map(field => {
     const value = row[field.index] ?? "";
     const monetary = table.numericColumns.includes(field.index);
-    const text = monetary && isNum(value) ? reportAmount(value).replace(" ر.س", "") : dates?.get(field.index) ?? String(value);
+    const date = dates?.get(field.index);
+    const text = monetary && isNum(value) ? reportAmount(value).replace(" ر.س", "") : date?.primary ?? String(value);
     const classes = monetary ? `ap-money${isNum(value) && value < 0 ? " ap-negative" : ""}`
       : table.headers[field.index] === "رقم الجوال" ? "ap-phone" : dates?.has(field.index) ? "ap-date" : "";
-    return `<span class="ap-value" data-field="${field.index}"><span class="${classes}">${reportEscape(text)}</span></span>`;
+    return `<span class="ap-value" data-field="${field.index}"><span class="${classes}">${reportEscape(text)}</span>${date?.secondary ? `<span class="ap-date ap-date-secondary">${reportEscape(date.secondary)}</span>` : ""}</span>`;
   }).join("");
   return `<td${column.fields[0].index === 0 ? ' class="ap-key"' : ""}>${values}</td>`;
 }
@@ -80,8 +84,14 @@ function renderTable(
   const body = rows.length
     ? rows.map(r => {
       const position = positions.get(r);
-      const dates = new Map((table.dateValues ?? []).flatMap(({ column, values }) =>
-        position != null && values[position] ? [[column, reportShortDate(values[position], context.calendarPreference)] as [number, string]] : []));
+      const dates = new Map((table.dateValues ?? []).flatMap(({ column, values }): [number, PdfDate][] => {
+        if (position == null || !values[position]) return [];
+        const stayDate = table.headers[column] === "تاريخ بداية الإقامة";
+        return [[column, {
+          primary: reportShortDate(values[position], stayDate ? "hijri" : context.calendarPreference),
+          secondary: stayDate ? reportShortDate(values[position], "gregorian") : undefined,
+        }]];
+      }));
       return `<tr data-booking-row="true">${columns.map(column => cell(column, r, table, false, dates)).join("")}</tr>`;
     }).join("")
     : `<tr><td class="ap-empty" colspan="${columns.length}">${totals ? "ملخص جميع السجلات المطابقة" : "لا توجد سجلات مطابقة"}</td></tr>`;
@@ -131,7 +141,6 @@ ${context.propertyLogos?.length ? `<div class="ap-property-logos">${context.prop
   <div>${reportEscape(reportDateRange(context, table))}</div>
   <div><b>تاريخ الإصدار:</b>${reportEscape(reportIssuedAt(context))}</div>
   <div><b>عدد السجلات المطابقة:</b>${reportEscape(table.rows.length.toLocaleString("ar-SA"))}</div>
-  <div><b>سجلات هذه الصفحة:</b>${reportEscape(rows.length.toLocaleString("ar-SA"))}</div>
   ${context.search ? `<div class="ap-wide"><b>بحث:</b>${reportEscape(context.search)}</div>` : ""}
 </div>
 ${sections}

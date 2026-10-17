@@ -106,6 +106,61 @@ describe("formal archive report", () => {
     }
     assert.equal(sheet.getRow(sheet.rowCount).getCell(1).value, "الإجمالي");
   });
+  it("shows Hijri stay dates with smaller Gregorian dates and only one matching-record count", () => {
+    for (const calendarPreference of ["hijri", "gregorian"] as const) {
+      const html = buildArchivePdfPage({ table, context: { ...context, calendarPreference },
+        rows: table.rows.slice(0, 2), includeSummary: false, pageNumber: 1, totalPages: 3 });
+      const stayCells = [...html.matchAll(/data-field="4">([\s\S]*?)<\/td>/g)];
+      assert.equal(stayCells.length, 2);
+      for (const [, content] of stayCells) {
+        assert(content.includes(reportShortDate(bookings[0].bookingDate, "hijri")));
+        assert(content.includes(`class="ap-date ap-date-secondary">${reportShortDate(bookings[0].bookingDate, "gregorian")}`));
+        assert(content.indexOf(" هـ") < content.indexOf(" م"));
+      }
+      assert.equal((html.match(/عدد السجلات المطابقة:/g) ?? []).length, 1);
+      assert(html.includes(`<b>عدد السجلات المطابقة:</b>${table.rows.length.toLocaleString("ar-SA")}`));
+      assert(!html.includes("سجلات هذه الصفحة"));
+    }
+  });
+  it("preserves Number cells and SUM totals for every financial field in completed and cancelled exports", async () => {
+    const { default: ExcelJS } = await import("exceljs");
+    for (const tab of ["completed", "cancelled"] as const) {
+      const source = buildArchiveExportTable(tab, [
+        { ...bookings[0], totalPrice: "1250.75", depositPaid: "250.25", insuranceDeducted: "12.50",
+          cancelRefundAmount: "100.10", cancelIncome: "150.15" },
+        { ...bookings[1], totalPrice: "0", depositPaid: null, insuranceFee: null,
+          insuranceDeducted: null, cancelRefundAmount: null, cancelIncome: null },
+        { ...bookings[2], balanceCollected: true, insuranceDeducted: "-5.25" },
+      ], [], () => "عقار", "hijri");
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await createArchiveWorkbook(source, context));
+      const sheet = workbook.getWorksheet(1)!;
+      const headers = sheet.getRow(7).values as string[];
+      for (const originalColumn of source.numericColumns) {
+        const column = headers.indexOf(source.headers[originalColumn]);
+        let sum = 0;
+        source.rows.forEach((row, index) => {
+          const cell = sheet.getRow(8 + index).getCell(column);
+          assert.equal(cell.type, ExcelJS.ValueType.Number);
+          assert.equal(typeof cell.value, "number");
+          assert(Number.isFinite(cell.value));
+          assert.equal(cell.value, row[originalColumn]);
+          assert.equal(cell.numFmt, SAR_ACCOUNTING_FORMAT);
+          sum += Math.round(Number(cell.value) * 100);
+        });
+        const total = sheet.getRow(sheet.rowCount).getCell(column);
+        assert(total.formula.startsWith("SUM("));
+        assert.equal(total.result, sum / 100);
+      }
+    }
+  });
+  it("refuses to export text, NaN or infinite financial amounts instead of creating unusable money cells", async () => {
+    for (const invalid of ["100.25", NaN, Infinity]) {
+      const source = { ...table, rows: table.rows.map((row, index) =>
+        index ? row : row.map((value, column) => column === table.numericColumns[0] ? invalid : value)) };
+      await assert.rejects(createArchiveWorkbook(source, context), /قيمة مالية غير رقمية/);
+    }
+  });
   it("keeps date-range validation independent of the picker calendar", () => {
     assert(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "custom", from: "2026-01-02", to: "2026-01-01" }));
     assert.equal(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "custom", from: "2026-01-01", to: "2026-01-01" }), null);
