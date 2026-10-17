@@ -1,4 +1,5 @@
 import { archiveTotals, type ArchiveCell, type ArchiveExportTable } from "./bookingArchiveExport";
+import { SAUDI_RIYAL_FONT_CSS } from "./saudiCurrencyFont";
 import { archivePdfColumns, type ArchivePdfColumn } from "./bookingArchivePdfColumns";
 import {
   reportAmount, reportDateRange, reportEscape, reportIssuedAt, reportPropertyTitle, reportShortDate,
@@ -10,8 +11,8 @@ const TEAL_DARK = "#0b5560";
 const BROWN = "#8c6246";
 const INK = "#1d2a2e";
 
-const STYLES = `
-.archive-pdf-page{box-sizing:border-box;width:1200px;background:#ffffff;color:${INK};padding:20px 22px;direction:rtl;text-align:right;font-family:Arial,Tahoma,"Noto Sans Arabic",sans-serif;font-size:16px;line-height:1.4}
+const STYLES = `${SAUDI_RIYAL_FONT_CSS}
+.archive-pdf-page{box-sizing:border-box;width:1200px;background:#ffffff;color:${INK};padding:20px 22px;direction:rtl;text-align:right;font-family:'Saudi Riyal Symbol',Arial,Tahoma,"Noto Sans Arabic",sans-serif;font-size:16px;line-height:1.4}
 .archive-pdf-page *{box-sizing:border-box;letter-spacing:0!important;font-kerning:normal}
 .archive-pdf-page .ap-head{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-bottom:10px;border-bottom:2px solid ${TEAL}}
 .archive-pdf-page .ap-brand{display:flex;align-items:center;gap:14px}
@@ -64,7 +65,7 @@ function cell(column: ArchivePdfColumn, row: ArchiveCell[], table: ArchiveExport
     const value = row[field.index] ?? "";
     const monetary = table.numericColumns.includes(field.index);
     const date = dates?.get(field.index);
-    const text = monetary && isNum(value) ? reportAmount(value).replace(" ر.س", "") : date?.primary ?? String(value);
+    const text = monetary && isNum(value) ? reportAmount(value).replace(" ⃁", "") : date?.primary ?? String(value);
     const classes = monetary ? `ap-money${isNum(value) && value < 0 ? " ap-negative" : ""}`
       : table.headers[field.index] === "رقم الجوال" ? "ap-phone" : dates?.has(field.index) ? "ap-date" : "";
     return `<span class="ap-value" data-field="${field.index}"><span class="${classes}">${reportEscape(text)}</span>${date?.secondary ? `<span class="ap-date ap-date-secondary">${reportEscape(date.secondary)}</span>` : ""}</span>`;
@@ -113,7 +114,7 @@ export function buildArchivePdfPage({ table, context, rows, includeSummary, page
   const money = table.numericColumns.filter(c => c >= 0 && c < table.headers.length);
   const financial = money.length > 0;
   const totals = includeSummary && financial ? archiveTotals(table) : null;
-  const sections = renderTable(table.kind === "insurance" ? "المبالغ بالريال السعودي (ر.س)" : financial ? "سجل الحجوزات والبيانات المالية — المبالغ بالريال السعودي" : "تفاصيل إعادة الجدولة",
+  const sections = renderTable(table.kind === "insurance" ? "المبالغ بالريال السعودي (⃁)" : financial ? "سجل الحجوزات والبيانات المالية — المبالغ بالريال السعودي" : "تفاصيل إعادة الجدولة",
     archivePdfColumns(table), table, rows, totals, context);
 
   const ownerLogo = context.ownerLogoUrl

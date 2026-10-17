@@ -1,4 +1,4 @@
-import riyalSymbol from "@/assets/riyal-symbol.png";
+import riyalSymbol from "@/assets/saudi-riyal.svg";
 
 interface RiyalIconProps {
   className?: string;

@@ -51,3 +51,5 @@ Thumbs.db
 .cache/
 /generated-artifacts/
 .local/
+.pythonlibs/
+__pycache__/

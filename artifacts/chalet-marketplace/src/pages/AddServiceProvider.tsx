@@ -640,7 +640,7 @@ export default function AddServiceProvider() {
                 {!planLimits.active
                   ? "جدّد الاشتراك لاستعادة صلاحية إضافة الخدمات."
                   : planLimits.extraServicePrice != null
-                    ? `يمكنك شراء مساحة خدمة إضافية لمرة واحدة مقابل ${toAr(Number(planLimits.extraServicePrice))} ر.س.`
+                    ? `يمكنك شراء مساحة خدمة إضافية لمرة واحدة مقابل ${toAr(Number(planLimits.extraServicePrice))} ⃁`
                     : "تحقق من توفر أسعار الإضافات في خطتك الحالية."}
               </p>
               <Button
@@ -911,7 +911,7 @@ export default function AddServiceProvider() {
 
                 {form.requiresInsurance && (
                   <div className="max-w-sm space-y-1.5">
-                    <Label htmlFor="insuranceAmount">قيمة التأمين المسترد (ر.س) <span className="text-red-500">*</span></Label>
+                    <Label htmlFor="insuranceAmount">قيمة التأمين المسترد (⃁) <span className="text-red-500">*</span></Label>
                     <Input
                       id="insuranceAmount"
                       type="text"

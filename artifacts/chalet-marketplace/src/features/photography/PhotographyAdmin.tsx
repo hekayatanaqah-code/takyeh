@@ -45,7 +45,7 @@ function PackageForm({ pkg, onDone }: { pkg?: Pkg; onDone: () => void }) {
     <form className={`${cardCls} space-y-3`} onSubmit={(e) => { e.preventDefault(); m.mutate(); }}>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="اسم الباقة"><input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} data-testid="input-package-name" /></Field>
-        <Field label="السعر (ر.س)"><input type="number" min="0" step="0.01" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} data-testid="input-package-price" /></Field>
+        <Field label="السعر (⃁)"><input type="number" min="0" step="0.01" className={inputCls} value={price} onChange={(e) => setPrice(e.target.value)} data-testid="input-package-price" /></Field>
         <Field label="نسبة المنصة %"><input type="number" min="0" max="100" step="0.1" className={inputCls} value={pct} onChange={(e) => setPct(e.target.value)} data-testid="input-package-percent" /></Field>
       </div>
       <fieldset className="space-y-1.5"><legend className="text-sm font-semibold">أنواع العقارات والخدمات المشمولة (مطلوب)</legend>

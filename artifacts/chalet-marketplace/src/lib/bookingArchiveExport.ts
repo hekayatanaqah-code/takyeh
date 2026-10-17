@@ -40,10 +40,10 @@ export function buildArchiveExportTable(tab: ArchiveTab, bookings: ExportBooking
     ],
   };
   const headers = ["رقم الحجز", "العقار", "اسم العميل", "رقم الجوال", "تاريخ بداية الإقامة", "عدد الأيام", "الفترة",
-    "الإيجار (ر.س)", "التحصيلات من الإيجار (ر.س)", "المتبقي (ر.س)", "التأمين المستحق (ر.س)", "حالة التأمين", "خصم التلفيات (ر.س)"];
-  if (tab === "cancelled") headers.push("المسترد عند الإلغاء (ر.س)", "الدخل المحتفظ به (ر.س)", "سبب الإلغاء");
+    "الإيجار (⃁)", "التحصيلات من الإيجار (⃁)", "المتبقي (⃁)", "التأمين المستحق (⃁)", "حالة التأمين", "خصم التلفيات (⃁)"];
+  if (tab === "cancelled") headers.push("المسترد عند الإلغاء (⃁)", "الدخل المحتفظ به (⃁)", "سبب الإلغاء");
   const depositColumn = headers.length;
-  headers.push("العربون المسجل (ر.س)", "التأمين المستلم (ر.س)");
+  headers.push("العربون المسجل (⃁)", "التأمين المستلم (⃁)");
   return {
     title, headers, numericColumns: [...(tab === "cancelled" ? [7, 8, 9, 10, 12, 13, 14] : [7, 8, 9, 10, 12]), depositColumn, depositColumn + 1],
     dateValues: [{ column: 4, values: bookings.map(booking => booking.bookingDate) }],
@@ -71,7 +71,7 @@ export function archiveTotals(table: { headers: string[]; numericColumns: number
     : null);
 }
 
-export const SAR_ACCOUNTING_FORMAT = '_("ر.س"* #,##0.00_);[Red]_("ر.س"* (#,##0.00);_("ر.س"* "-"??_);_(@_)';
+export const SAR_ACCOUNTING_FORMAT = '_("⃁"* #,##0.00_);[Red]_("⃁"* (#,##0.00);_("⃁"* "-"??_);_(@_)';
 export const ARCHIVE_EXCEL_HEADER_ROW = 7;
 
 function excelColumnName(column: number): string {
@@ -129,7 +129,7 @@ export async function createArchiveWorkbook(source: ArchiveExportTable, context:
     `${source.kind === "insurance" ? "" : `${table.title} | `}المالك / النشاط: ${context.ownerName} | الجوال: ${context.ownerPhone || "غير مسجل"}`,
     reportDateRange(context, source),
     `تاريخ الإصدار: ${reportIssuedAt(context)}`,
-    `${context.search ? `${source.kind === "insurance" ? "الفلاتر" : "البحث"}: ${context.search} | ` : ""}عدد السجلات: ${table.rows.length} | العملة: الريال السعودي (ر.س)`,
+    `${context.search ? `${source.kind === "insurance" ? "الفلاتر" : "البحث"}: ${context.search} | ` : ""}عدد السجلات: ${table.rows.length} | العملة: الريال السعودي (⃁)`,
     table.summaryNote || "سجل تغييرات المواعيد؛ لا يتضمن قيماً مالية تاريخية.",
   ];
   metadata.forEach(text => {
@@ -164,9 +164,9 @@ export async function createArchiveWorkbook(source: ArchiveExportTable, context:
     const displayValues = [table.headers[index], ...table.rows.map(row => {
       const value = row[index];
       return monetary && typeof value === "number"
-        ? `${value.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`
+        ? `${value.toLocaleString("en-US", { minimumFractionDigits: 2 })} ⃁`
         : String(value ?? "");
-    }), ...(monetary ? [`${totals[index]?.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س`] : [])];
+    }), ...(monetary ? [`${totals[index]?.toLocaleString("en-US", { minimumFractionDigits: 2 })} ⃁`] : [])];
     // ExcelJS has no native auto-fit operation. Size from ALL data (not metadata/first page).
     const measuredWidth = displayValues.reduce((longest, value) => value.split("\n").reduce((width, line) =>
       Math.max(width, Array.from(line).length * (/[ء-ي]/.test(line) ? 1.15 : 1)), longest), 0);

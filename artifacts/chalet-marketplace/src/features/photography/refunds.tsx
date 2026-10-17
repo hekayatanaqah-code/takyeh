@@ -173,7 +173,7 @@ export function RefundAction({ b, actor }: { b: Booking; actor: string | null })
                 <div className="flex gap-2" role="radiogroup" aria-label="نوع الاسترداد">
                   {(["full", "partial"] as const).map((k) => <button key={k} type="button" role="radio" aria-checked={d.mode === k} onClick={() => setD({ ...d, mode: k })} className={`flex-1 rounded-xl border px-3 py-2 text-sm font-bold ${d.mode === k ? "border-[#8C6246] bg-[#8C6246] text-white" : "border-border"}`} data-testid={`radio-refund-${k}`}>{k === "full" ? `كامل المتاح (${sar(max)})` : "مبلغ جزئي"}</button>)}
                 </div>
-                {d.mode === "partial" && <Field label="المبلغ (ر.س)" hint={`حتى ${sar(max)}`}><input type="number" min="0.01" step="0.01" max={max / 100} className={inputCls} value={d.amount} onChange={(e) => setD({ ...d, amount: e.target.value })} data-testid="input-refund-amount" /></Field>}
+                {d.mode === "partial" && <Field label="المبلغ (⃁)" hint={`حتى ${sar(max)}`}><input type="number" min="0.01" step="0.01" max={max / 100} className={inputCls} value={d.amount} onChange={(e) => setD({ ...d, amount: e.target.value })} data-testid="input-refund-amount" /></Field>}
                 <div className="space-y-1.5">
                   <p className="text-sm font-semibold">وجهة الاسترداد</p>
                   {(["card", "wallet"] as const).map((k) => {

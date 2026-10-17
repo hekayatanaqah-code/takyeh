@@ -34,7 +34,7 @@ describe("service receipt contract", () => {
       remaining: 950,
       paymentMethodLabel: "حوالة بنكية",
     });
-    assert.equal(serviceReceiptMoney(summary.total), "١٬٢٥٠ ر.س");
+    assert.equal(serviceReceiptMoney(summary.total), "١٬٢٥٠ ⃁");
     assert.equal(servicePaymentMethodLabel("pos"), "شبكة / نقاط بيع");
   });
 

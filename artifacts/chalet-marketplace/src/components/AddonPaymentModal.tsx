@@ -576,7 +576,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                                   setError(null);
                                 }}>
                                <span>{type === "chalet" ? "عقارات إضافية" : "خدمات إضافية"}</span>
-                                 <span>{isPriceLoading && !currentLimits ? "جارٍ تحميل السعر..." : typePrice == null ? currentLimits?.plan === "trial" ? "لم يُحدّد سعر التجربة بعد" : "غير متاح في خطتك" : `${Number(typePrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س للوحدة / 30 يوماً`}</span>
+                                 <span>{isPriceLoading && !currentLimits ? "جارٍ تحميل السعر..." : typePrice == null ? currentLimits?.plan === "trial" ? "لم يُحدّد سعر التجربة بعد" : "غير متاح في خطتك" : `${Number(typePrice).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ⃁ للوحدة / 30 يوماً`}</span>
                              </Button>
                            );
                          })}
@@ -612,14 +612,14 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                        )}
                        {previewValid && preview && (
                        <div className="mt-3 rounded-lg border border-primary/20 bg-background p-3 text-foreground">
-                             <p>السعر المرجعي للوحدة لكل 30 يوماً: {(preview.monthlyUnitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
-                             <p className="mt-2 font-bold">المستحق الآن للفترة المتبقية: {(preview.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
+                             <p>السعر المرجعي للوحدة لكل 30 يوماً: {(preview.monthlyUnitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ⃁</p>
+                             <p className="mt-2 font-bold">المستحق الآن للفترة المتبقية: {(preview.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ⃁</p>
                              <p className="mt-1 text-xs text-muted-foreground">
                                محسوباً عن {preview.remainingDays} من {preview.billingDays} يوماً حتى نهاية الفترة {new Date(preview.periodEndAt).toLocaleDateString("ar-SA")}.
                              </p>
                              {preview.nextChargeHalala != null && (
                                <p className="mt-2 font-semibold">
-                                 {currentLimits?.plan === "trial" ? "رسوم الإضافات المتوقعة للدورة التالية" : `إجمالي الفاتورة الكاملة التالية ${preview.billingDays === 30 ? "شهرياً" : `لكل دورة (${preview.billingDays} يوم)`}`}: {(preview.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س
+                                 {currentLimits?.plan === "trial" ? "رسوم الإضافات المتوقعة للدورة التالية" : `إجمالي الفاتورة الكاملة التالية ${preview.billingDays === 30 ? "شهرياً" : `لكل دورة (${preview.billingDays} يوم)`}`}: {(preview.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ⃁
                                </p>
                              )}
                              {preview.nextBillingAt && (
@@ -628,7 +628,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                              {currentLimits?.plan === "trial" ? (
                                <p className="mt-1 text-xs text-muted-foreground">لا تُخصم رسوم تجديد عند نهاية التجربة تلقائياً. اختر باقة مدفوعة أولاً؛ سيضاف سعرها إلى رسوم الإضافات في فاتورة واحدة قبل الدفع.</p>
                              ) : (
-                               <p className="mt-1 text-xs text-muted-foreground">الاشتراك الأساسي المرجعي لكل 30 يوماً: {(preview.baseMonthlyHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</p>
+                               <p className="mt-1 text-xs text-muted-foreground">الاشتراك الأساسي المرجعي لكل 30 يوماً: {(preview.baseMonthlyHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ⃁</p>
                              )}
                            {preview.amountHalala > 0 && recurringPreviewValid && (
                             <label className="mt-3 flex items-start gap-2 text-sm">
@@ -642,8 +642,8 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                               />
                               <span>
                                  {currentLimits?.plan === "trial"
-                                   ? `أوافق على حفظ وسيلة الدفع لتجديد الإضافات بمبلغ ${(preview.nextChargeHalala! / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س لكل دورة بعد اختياري باقة مدفوعة؛ سيُعرض سعر الباقة والإجمالي قبل الدفع، ولن يُخصم تجديد عند نهاية التجربة تلقائياً.`
-                                   : `أوافق صراحةً على حفظ وسيلة الدفع وتجديد الإضافة مع الاشتراك الأساسي بإجمالي ${(preview.nextChargeHalala! / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س ${preview.billingDays === 30 ? "شهرياً" : `لكل دورة (${preview.billingDays} يوم)`} في موعد التجديد الموضح أعلاه.`}
+                                   ? `أوافق على حفظ وسيلة الدفع لتجديد الإضافات بمبلغ ${(preview.nextChargeHalala! / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ⃁ لكل دورة بعد اختياري باقة مدفوعة؛ سيُعرض سعر الباقة والإجمالي قبل الدفع، ولن يُخصم تجديد عند نهاية التجربة تلقائياً.`
+                                   : `أوافق صراحةً على حفظ وسيلة الدفع وتجديد الإضافة مع الاشتراك الأساسي بإجمالي ${(preview.nextChargeHalala! / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ⃁ ${preview.billingDays === 30 ? "شهرياً" : `لكل دورة (${preview.billingDays} يوم)`} في موعد التجديد الموضح أعلاه.`}
                               </span>
                             </label>
                           )}

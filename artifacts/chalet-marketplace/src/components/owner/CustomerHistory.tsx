@@ -142,7 +142,7 @@ export function CustomerHistory({ profile, providerId, calendar, onCalendarChang
                     <td className="p-2 align-top whitespace-nowrap">
                       {tab === "contracts" ? <a href={`${BASE}/${providerId ? "service-contract" : "contract"}/${row.id}`} target="_blank" rel="noopener noreferrer"
                         className="inline-flex border border-primary/30 rounded-lg px-2.5 py-1 text-primary hover:bg-primary/10">عرض العقد</a>
-                        : <span className="font-semibold">{toAr(Math.round(Number(tab === "insurance" ? row.insurance_fee : row.total_price)))} ر.س</span>}
+                        : <span className="font-semibold">{toAr(Math.round(Number(tab === "insurance" ? row.insurance_fee : row.total_price)))} ⃁</span>}
                     </td>
                     {tab === "insurance" && <td className="p-2 align-top">{insuranceStatus(row)}</td>}
                   </tr>;

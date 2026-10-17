@@ -117,7 +117,7 @@ const halToSar = (h: number) => (h / 100).toFixed(2);
 export function StatementView({ statement, month, onMonthChange, title, id, loading, extra }: { statement?: Statement; month: string; onMonthChange: (m: string) => void; title: string; id: string; loading?: boolean; extra?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const s = statement;
-  const csv = () => s && downloadCsv(`statement-${id}-${month}.csv`, ["رقم الحجز", "التاريخ", "النشاط", "الباقة", "المبلغ (ر.س)", "العمولة (ر.س)", "الصافي (ر.س)", "المسترد (ر.س)", "الحالة"],
+  const csv = () => s && downloadCsv(`statement-${id}-${month}.csv`, ["رقم الحجز", "التاريخ", "النشاط", "الباقة", "المبلغ (⃁)", "العمولة (⃁)", "الصافي (⃁)", "المسترد (⃁)", "الحالة"],
     s.bookings.map((b) => [b.id, fmtDT(b.startAt), b.propertyName, b.packageName, halToSar(b.priceHalalas), halToSar(b.commissionHalalas), halToSar(b.photographerEarningsHalalas), halToSar(b.refundedHalalas ?? 0), b.deliveredAt ? "تم التسليم" : b.status]));
   const kpis: [string, ReactNode, string][] = s ? [
     ["عدد الجلسات", s.count.toLocaleString("ar-SA"), "count"],

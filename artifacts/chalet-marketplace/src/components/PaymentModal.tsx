@@ -759,7 +759,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
   }
 
   const formatPrice = (halala: number) =>
-    `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
+    `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ⃁`;
   const cycleLabel = (days: number) => days === 30 ? "شهرياً" : `لكل دورة (${days} يوم)`;
   const selectedRecurringReady = !!planQuote && planQuote.recurringPreview === true &&
     planQuote.recurringConfigured === true && planQuote.canSavePaymentMethod === true &&
@@ -792,7 +792,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
       <DialogContent
         className="max-w-lg rounded-3xl p-0 flex flex-col overflow-hidden"
         dir="rtl"
-        style={{ fontFamily: "inherit", top: '50px', transform: 'translateX(-50%)', maxHeight: 'calc(100dvh - 70px)' }}
+        style={{ fontFamily: "'Saudi Riyal Symbol', inherit", top: '50px', transform: 'translateX(-50%)', maxHeight: 'calc(100dvh - 70px)' }}
       >
 
         {/* ── Step: Plan Selection ── */}
@@ -915,7 +915,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                     </div>
                     <div className="text-end shrink-0">
                         <p className="font-black text-lg text-foreground">{p.price.toLocaleString("ar-SA")}</p>
-                      <p className="text-xs text-muted-foreground">ر.س</p>
+                      <p className="text-xs text-muted-foreground">⃁</p>
                     </div>
                   </button>
                 );
@@ -1077,7 +1077,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                       {initiateData.lines.map((line, index) => (
                         <div key={`${line.label ?? line.description ?? "line"}-${index}`} className="flex justify-between gap-3">
                           <span>{line.quantity && line.quantity > 1 ? `${line.quantity} × ` : ""}{line.label ?? line.description ?? "بند الاشتراك"}</span>
-                          <span>{line.amountHalala != null ? formatPrice(line.amountHalala) : line.amount != null ? `${line.amount.toLocaleString("ar-SA")} ر.س` : "—"}</span>
+                          <span>{line.amountHalala != null ? formatPrice(line.amountHalala) : line.amount != null ? `${line.amount.toLocaleString("ar-SA")} ⃁` : "—"}</span>
                         </div>
                       ))}
                     </div>

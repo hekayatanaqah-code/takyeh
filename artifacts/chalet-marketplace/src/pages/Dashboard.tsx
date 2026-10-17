@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo, useRef, useCallback, createContext, useContext, Fragment, type ReactElement, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
+import { MessageTemplateEditor } from "@/components/messages/MessageTemplateEditor";
+import { saudiMoneyMessage } from "@/lib/saudiCurrency";
+import { saudiCurrencyHtml } from "@/lib/saudiCurrencyFont";
 import { useLocation, useSearch } from "wouter";
 import OwnerServicesOwner from "@/features/owner-services/OwnerServicesOwner";
 import QRCode from "qrcode";
@@ -336,7 +339,7 @@ function stripEmoji(text: string): string {
 }
 
 function encodeWhatsAppText(text: string): string {
-  const utf8SafeText = stripEmoji(text)
+  const utf8SafeText = saudiMoneyMessage(stripEmoji(text))
     .normalize("NFC")
     .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "\uFFFD");
   return encodeURIComponent(utf8SafeText);
@@ -17078,7 +17081,7 @@ function fmtDateForPrint(iso: string, calMode: "hijri" | "gregorian"): string {
 function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"): string {
   const monthStr = fmtMonthForPrint(v.month, calMode);
   const dateStr  = fmtDateForPrint(v.paidAt, calMode);
-  return `<!DOCTYPE html>
+  return saudiCurrencyHtml(`<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8"/>
@@ -17179,7 +17182,7 @@ function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"):
     تم إصدار هذا المسيّر إلكترونياً عبر منصة تكية · ${toArN(toHijriComponents(new Date()).year)} هـ - ${toArN(new Date().getFullYear())} م
   </div>
 </div>
-</body></html>`;
+</body></html>`);
 }
 
 
@@ -17248,7 +17251,7 @@ function buildBulkVouchersHtml(logs: any[], ownerName: string, calMode: "hijri" 
   <div class="sigs"><div class="sig"><div class="sig-line"></div><p>توقيع صاحب العمل</p></div><div class="sig"><div class="sig-line"></div><p>توقيع الموظف</p></div></div>
 </div>`);
   }
-  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return saudiCurrencyHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111; }
@@ -17272,7 +17275,7 @@ body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111
 .sigs { display:grid; grid-template-columns:1fr 1fr; gap:40px; margin-top:30px; }
 .sig { text-align:center; } .sig-line { height:1px; background:#ccc; margin-bottom:8px; } .sig p { font-size:11px; color:#888; }
 @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
-</style></head><body>${pages.join("")}</body></html>`;
+</style></head><body>${pages.join("")}</body></html>`);
 }
 
 
@@ -17290,7 +17293,7 @@ function buildMasterPayrollHtml(filterMonth: string, logs: any[], ownerName: str
   }
   if (filtered.length === 0) {
     const monthStr = filterMonth ? fmtMonthForPrint(filterMonth, calMode) : "";
-    return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+    return saudiCurrencyHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <style>body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;direction:rtl;margin:0;padding:0;background:#fff;}
 .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:12px;color:#888;}
 .icon{font-size:48px;opacity:.4;}
@@ -17302,7 +17305,7 @@ function buildMasterPayrollHtml(filterMonth: string, logs: any[], ownerName: str
   <div class="msg">لا توجد رواتب مسجلة للفترة المحددة</div>
   ${monthStr ? `<div class="sub">${monthStr}</div>` : ""}
 </div>
-</body></html>`;
+</body></html>`);
   }
   const total = filtered.reduce((s: number, l: any) => {
     const base = Number(l.baseSalary ?? 0);
@@ -17324,7 +17327,7 @@ function buildMasterPayrollHtml(filterMonth: string, logs: any[], ownerName: str
       <td style="font-weight:700;color:#b8860b">${net.toLocaleString("ar-SA")}</td>
     </tr>`;
   }).join("");
-  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return saudiCurrencyHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
 <style>
 * { box-sizing:border-box; margin:0; padding:0; }
 body { font-family:'Segoe UI',Tahoma,Arial,sans-serif; direction:rtl; color:#111; padding:40px 48px; }
@@ -17355,7 +17358,7 @@ tfoot { background:#fff9ed; font-weight:700; }
   <div class="sig"><div class="sig-line"></div><p>توقيع صاحب العمل</p></div>
   <div class="sig"><div class="sig-line"></div><p>المدير المالي / المراجع</p></div>
 </div>
-</body></html>`;
+</body></html>`);
 }
 
 
@@ -19318,7 +19321,7 @@ function buildMonthlyReportHtml(
     slots.unspecified > 0 ? `<div class="slot-chip">غير محدد: ${toAr(slots.unspecified)} حجز (${toAr(slotPct(slots.unspecified))}٪)</div>` : "",
   ].filter(Boolean).join("") : "";
 
-  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return saudiCurrencyHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
  <title>${fileName}</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page print-container">
@@ -19352,7 +19355,7 @@ ${slotHtml ? `<div class="slot-row" style="margin-top:14px">${slotHtml}</div>` :
 ${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
 
 <div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYear} هـ / ${gregYear} م</div>
-</div>${scriptTag}</body></html>`;
+</div>${scriptTag}</body></html>`);
 }
 
 function buildYearlyReportHtml(
@@ -19434,7 +19437,7 @@ function buildYearlyReportHtml(
     ? `@page{size:A4 portrait;margin:0!important;}@media print{html,body{max-height:277mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
     : `@page{size:A4 portrait;margin:0!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;border-top:18px solid transparent!important;background-clip:padding-box!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
-  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return saudiCurrencyHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
  <title>${fileName}</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page print-container">
@@ -19467,7 +19470,7 @@ ${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;g
 </table></div>
 
 <div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYearY} هـ / ${gregYearY} م</div>
-</div>${scriptTag}</body></html>`;
+</div>${scriptTag}</body></html>`);
 }
 
 /* ── Fresh PDF from the currently visible service receipt DOM ── */
@@ -24535,7 +24538,7 @@ function WhatsAppPreview({
     Object.entries(replacements).forEach(([key, val]) => {
       result = result.split(key).join(val);
     });
-    return result;
+    return saudiMoneyMessage(result);
   }, [text, establishmentName, bookingData, hidePeriodLines]);
 
   if (!preview.trim()) return null;
@@ -24556,7 +24559,7 @@ function WhatsAppPreview({
           style={{
             background: "#d9fdd3",
             color: "#111b21",
-            fontFamily: "'Segoe UI', Tahoma, sans-serif",
+            fontFamily: "'Saudi Riyal Symbol', 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif",
             wordBreak: "break-word",
           }}
         >
@@ -24570,24 +24573,7 @@ function WhatsAppPreview({
   );
 }
 
-function MessageVariableSelect({ onInsert, disabled = false }: { onInsert: (variable: string) => void; disabled?: boolean }) {
-  return (
-    <Select value="" onValueChange={onInsert} disabled={disabled}>
-      <SelectTrigger className="w-44 h-9 rounded-xl bg-background">
-        <SelectValue placeholder="إدراج متغير" />
-      </SelectTrigger>
-      <SelectContent className="max-h-72">
-        {MESSAGE_VARIABLES.map(variable => (
-          <SelectItem key={variable} value={variable}>
-            <span className="font-mono text-xs" dir="ltr">{variable}</span>
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function OwnerMessageSettingsTab({
+export function OwnerMessageSettingsTab({
   establishmentName,
   providerId,
   chaletNamesBySubmissionId = {},
@@ -24696,15 +24682,6 @@ function OwnerMessageSettingsTab({
   useEffect(() => {
     if (data) {
       const base = { ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...data };
-      if (!data.bookingConfirmationTemplate?.includes("أمنياتنا لكم")) {
-        base.bookingConfirmationTemplate = DEFAULT_CONFIRMATION_TEMPLATE_BODY;
-      }
-      if (!data.cancellationTemplate?.includes("نراكم في أيام قادمة")) {
-        base.cancellationTemplate = DEFAULT_OWNER_MESSAGE_SETTINGS.cancellationTemplate;
-      }
-      if (!data.modificationTemplate?.includes("الحجز السابق: يوم")) {
-        base.modificationTemplate = DEFAULT_MODIFICATION_TEMPLATE_BODY;
-      }
       if (providerId) {
         base.bookingConfirmationTemplate = prepareServiceMessageTemplate(base.bookingConfirmationTemplate);
       }
@@ -24754,10 +24731,6 @@ function OwnerMessageSettingsTab({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  function insertVariable(key: "bookingConfirmationTemplate" | "cancellationTemplate" | "modificationTemplate", variable: string) {
-    setForm((prev) => ({ ...prev, [key]: `${prev[key] || ""} ${variable}`.trim() }));
-  }
-
   function resetToDefault(key: "bookingConfirmationTemplate" | "cancellationTemplate" | "modificationTemplate") {
     setField(key, DEFAULT_OWNER_MESSAGE_SETTINGS[key] as string);
   }
@@ -24801,7 +24774,7 @@ function OwnerMessageSettingsTab({
               <SectionGuideButton sectionKey="messageSettings" />
             </div>
             <p className="text-sm text-muted-foreground">
-              عدّل القوالب ثم اخترها من بطاقة الحجز لفتح واتساب برسالة جاهزة عبر رابط wa.me بدون أي خدمة مدفوعة.
+              جهّز قوالبك هنا، ثم اختر الرسالة من بطاقة الحجز لفتحها في واتساب ومراجعتها قبل الإرسال.
             </p>
           </div>
           <div className="px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
@@ -24819,7 +24792,7 @@ function OwnerMessageSettingsTab({
           <Switch checked={form.waEnabled} onCheckedChange={(v) => setField("waEnabled", v)} disabled={isReadOnly} />
         </div>
         <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 p-4 text-sm text-emerald-800 dark:text-emerald-200 leading-relaxed">
-          لا توجد حقول ربط خارجي أو مفاتيح خدمة. عند اختيار قالب من بطاقة الحجز يفتح واتساب مباشرة برسالة جاهزة، ويمكنك مراجعتها وإرفاق الصور يدوياً قبل الإرسال.
+          تُملأ المتغيرات ببيانات الحجز تلقائياً. أنت تراجع الرسالة وتضغط إرسال في واتساب؛ لا تُرسل المنصة رسائل دون تدخلك.
         </div>
       </div>
 
@@ -24829,16 +24802,15 @@ function OwnerMessageSettingsTab({
             <h4 className="font-bold text-foreground">تأكيد الحجز الفوري</h4>
             <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لتأكيد الحجز من بطاقة الحجز.</p>
           </div>
-          <Textarea
+          <MessageTemplateEditor
+            label="نص رسالة تأكيد الحجز"
             value={form.bookingConfirmationTemplate}
-            onChange={(e) => setField("bookingConfirmationTemplate", e.target.value)}
+            onChange={(value) => setField("bookingConfirmationTemplate", value)}
+            variables={MESSAGE_VARIABLES}
             rows={10}
-            dir="rtl"
             disabled={isReadOnly}
-            className="resize-none"
           />
           <div className="flex flex-wrap gap-3 items-center">
-            <MessageVariableSelect disabled={isReadOnly} onInsert={v => insertVariable("bookingConfirmationTemplate", v)} />
             <button type="button" onClick={() => resetToDefault("bookingConfirmationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
@@ -24846,21 +24818,20 @@ function OwnerMessageSettingsTab({
           <WhatsAppPreview text={form.bookingConfirmationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
         </div>
 
-        <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
+        <div className="space-y-3 rounded-2xl border border-border p-4">
           <div>
             <h4 className="font-bold text-foreground">إلغاء الحجز</h4>
             <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لإشعار العميل بالإلغاء وسبب الإلغاء.</p>
           </div>
-          <Textarea
+          <MessageTemplateEditor
+            label="نص رسالة إلغاء الحجز"
             value={form.cancellationTemplate}
-            onChange={(e) => setField("cancellationTemplate", e.target.value)}
+            onChange={(value) => setField("cancellationTemplate", value)}
+            variables={MESSAGE_VARIABLES}
             rows={8}
-            dir="rtl"
             disabled={isReadOnly}
-            className="resize-none"
           />
           <div className="flex flex-wrap gap-3 items-center">
-            <MessageVariableSelect disabled={isReadOnly} onInsert={v => insertVariable("cancellationTemplate", v)} />
             <button type="button" onClick={() => resetToDefault("cancellationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
@@ -24868,23 +24839,22 @@ function OwnerMessageSettingsTab({
           <WhatsAppPreview text={form.cancellationTemplate} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
         </div>
 
-        <div className="space-y-3 rounded-2xl border border-border p-4 opacity-90">
+        <div className="space-y-3 rounded-2xl border border-border p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-foreground">تعديل الحجز</h4>
               <p className="text-xs text-muted-foreground mt-0.5">قالب يدوي لإشعار العميل بتعديل التاريخ أو تفاصيل الحجز.</p>
             </div>
           </div>
-          <Textarea
+          <MessageTemplateEditor
+            label="نص رسالة تعديل الحجز"
             value={form.modificationTemplate}
-            onChange={(e) => setField("modificationTemplate", e.target.value)}
+            onChange={(value) => setField("modificationTemplate", value)}
+            variables={MESSAGE_VARIABLES}
             rows={12}
-            dir="rtl"
             disabled={isReadOnly}
-            className="resize-none"
           />
           <div className="flex flex-wrap gap-3 items-center">
-            <MessageVariableSelect disabled={isReadOnly} onInsert={v => insertVariable("modificationTemplate", v)} />
             <button type="button" onClick={() => resetToDefault("modificationTemplate")} disabled={isReadOnly} className="ms-auto px-2.5 py-1.5 rounded-full border border-dashed border-muted-foreground/40 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors">
               ↺ استعادة الافتراضي
             </button>
@@ -24924,15 +24894,14 @@ function OwnerMessageSettingsTab({
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  <Textarea
+                  <MessageTemplateEditor
+                    label={`نص ${tpl.title || "الرسالة الإضافية"}`}
                     value={tpl.body}
-                    onChange={(e) => updateCustomTemplate(tpl.id, { body: e.target.value })}
+                    onChange={(value) => updateCustomTemplate(tpl.id, { body: value })}
+                    variables={MESSAGE_VARIABLES}
                     rows={5}
-                    dir="rtl"
                     disabled={isReadOnly}
-                    className="resize-none"
                   />
-                  <MessageVariableSelect disabled={isReadOnly} onInsert={v => updateCustomTemplate(tpl.id, { body: `${tpl.body} ${v}`.trim() })} />
                   <WhatsAppPreview text={tpl.body} establishmentName={previewEstablishmentName} bookingData={previewBookingData} hidePeriodLines={!!providerId} />
                 </div>
               ))}
@@ -24948,6 +24917,7 @@ function OwnerMessageSettingsTab({
             rows={3}
             dir="rtl"
             disabled={isReadOnly}
+            className="text-base font-medium text-foreground"
           />
         </div>
 

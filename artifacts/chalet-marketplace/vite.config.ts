@@ -51,7 +51,7 @@ const BOT_AGENTS = ["facebookexternalhit", "facebot", "twitterbot", "whatsapp", 
 export default defineConfig({
   base: basePath,
   plugins: [
-    react(),
+    react({ jsxImportSource: "@/lib/currency-jsx" }),
     tailwindcss(),
     runtimeErrorOverlay(),
     {
@@ -89,6 +89,9 @@ export default defineConfig({
         ]
       : []),
   ],
+  optimizeDeps: {
+    exclude: ["@/lib/currency-jsx/jsx-runtime", "@/lib/currency-jsx/jsx-dev-runtime"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),

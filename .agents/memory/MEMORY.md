@@ -12,11 +12,13 @@
 - [Safe Drizzle schema sync](safe-drizzle-schema-sync.md) — never force a push that proposes unrelated legacy-table/column drops; apply only reviewed additive dev changes and reconcile drift separately.
 - [Service capacity atomicity](service-capacity-atomicity.md) — every capacity-consuming service booking write must lock provider+date before count-and-write.
 - [Property add-on quantities](property-addon-quantities.md) — property facilities have per-booking caps, not shared daily stock; historical prices are quoted line totals.
+- [Saudi currency presentation](saudi-currency-presentation.md) — use the supplied riyal artwork, Eastern digits and plain Unicode in WhatsApp; keep rendering separate from payment values.
 - [Mixed-owner data scoping](mixed-owner-data-scoping.md) — service tabs must never reuse chalet-only data sources; scope every query and action to the selected product.
 - [Print-flow verification](print-flow-verification.md) — service receipts must print and export from the same visible DOM; never retain a parallel receipt template or report-renderer fallback.
 - [Database declaration refresh](database-declaration-refresh.md) — after shared DB schema edits, regenerate its declarations before API typechecking or stale table types can report false errors.
 - [Shared cancellation dialog](shared-cancellation-dialog.md) — reuse the approved property-cancellation flow for service bookings so refund validation and “other reason” details stay consistent.
 - [Dashboard preview verification](dashboard-preview-verification.md) — authenticated dashboard screenshots may hit an external proxy block; verify app health with the dev-domain response, workflow logs, and public route preview.
+- [Component fixture bootstrap](component-fixture-bootstrap.md) — use Vite-resolved TSX imports and a React Refresh preamble, not guessed optimized dependency URLs.
 - [Booking edit audit snapshots](booking-edit-audit-snapshots.md) — never infer edits from created_at; badges and messages require an actual persisted before/after snapshot.
 - [Shared owner customer identity](shared-owner-customer-identity.md) — property and service bookings share one owner-scoped customer identity while retaining booking snapshots.
 - [Long-form video uploads](long-form-video-uploads.md) — section guides must use direct object uploads; the media processor intentionally truncates videos to 30 seconds.

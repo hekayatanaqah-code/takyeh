@@ -11,10 +11,10 @@ export interface ArchivePdfColumn {
 export function archivePdfColumns(table: ArchiveExportTable): ArchivePdfColumn[] {
   const compactLabels: Record<string, string> = {
     "اسم العميل": "العميل", "رقم الجوال": "الجوال", "تاريخ بداية الإقامة": "الإقامة",
-    "عدد الأيام": "الأيام", "التحصيلات من الإيجار (ر.س)": "التحصيلات",
-    "العربون المسجل (ر.س)": "العربون", "التأمين المستحق (ر.س)": "التأمين المستحق",
-    "التأمين المستلم (ر.س)": "التأمين المستلم", "خصم التلفيات (ر.س)": "التلفيات",
-    "المسترد عند الإلغاء (ر.س)": "المسترد", "الدخل المحتفظ به (ر.س)": "دخل الإلغاء",
+    "عدد الأيام": "الأيام", "التحصيلات من الإيجار (⃁)": "التحصيلات",
+    "العربون المسجل (⃁)": "العربون", "التأمين المستحق (⃁)": "التأمين المستحق",
+    "التأمين المستلم (⃁)": "التأمين المستلم", "خصم التلفيات (⃁)": "التلفيات",
+    "المسترد عند الإلغاء (⃁)": "المسترد", "الدخل المحتفظ به (⃁)": "دخل الإلغاء",
   };
   const widths: Record<string, number> = {
     "رقم الحجز": 60, "العقار": 145, "اسم العميل": 145, "رقم الجوال": 118,
@@ -26,7 +26,7 @@ export function archivePdfColumns(table: ArchiveExportTable): ArchivePdfColumn[]
   };
   const order = table.kind === "insurance" ? table.headers.map((_, index) => index) : archiveAccountingOrder(table.headers, table.numericColumns.length > 0);
   return order.map(index => ({
-    title: compactLabels[table.headers[index]] ?? table.headers[index].replace(" (ر.س)", ""),
+    title: compactLabels[table.headers[index]] ?? table.headers[index].replace(" (⃁)", ""),
     width: widths[table.headers[index]] ?? 99, fields: [{ index }],
   }));
 }

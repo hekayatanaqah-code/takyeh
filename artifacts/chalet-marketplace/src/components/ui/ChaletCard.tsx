@@ -131,7 +131,7 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
                   <span className="text-muted-foreground shrink-0">📅 وسط الأسبوع</span>
                   <span className="font-bold text-foreground whitespace-nowrap">
                     <span className="text-primary">{weekdayPrice}</span>
-                    <span className="text-xs font-normal text-muted-foreground"> ر.س</span>
+                    <span className="text-xs font-normal text-muted-foreground"> ⃁</span>
                   </span>
                 </div>
               )}
@@ -140,7 +140,7 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
                   <span className="text-muted-foreground shrink-0">🎉 نهاية الأسبوع</span>
                   <span className="font-bold text-foreground whitespace-nowrap">
                     <span className="text-primary">{weekendPrice}</span>
-                    <span className="text-xs font-normal text-muted-foreground"> ر.س</span>
+                    <span className="text-xs font-normal text-muted-foreground"> ⃁</span>
                   </span>
                 </div>
               )}
@@ -148,7 +148,7 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
               {selectedPeriod && periodPrice && (
                 <div className="flex items-center justify-between text-sm pt-1 border-t border-primary/10 mt-1">
                   <span className="text-muted-foreground">{PERIOD_LABEL[selectedPeriod]}</span>
-                  <span className="font-bold text-primary">{periodPrice} ر.س</span>
+                  <span className="font-bold text-primary">{periodPrice} ⃁</span>
                 </div>
               )}
               {/* Seasonal disclaimer */}

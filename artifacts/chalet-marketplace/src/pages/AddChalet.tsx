@@ -976,7 +976,7 @@ export default function AddChalet() {
               <div className="mt-6 flex flex-col items-center gap-3">
                 {planLimits?.extraChaletPrice != null && (
                   <p className="text-sm text-muted-foreground">
-                    سعر إضافة عقار واحد: {toAr(Number(planLimits.extraChaletPrice))} ر.س — دفعة واحدة
+                    سعر إضافة عقار واحد: {toAr(Number(planLimits.extraChaletPrice))} ⃁ — دفعة واحدة
                   </p>
                 )}
                 <Button onClick={() => setShowAddonPayment(true)} className="gap-2">
@@ -1046,7 +1046,7 @@ export default function AddChalet() {
                     </div>
                     {planLimits.extraChaletPrice != null && (
                       <p className="text-xs text-muted-foreground">
-                        رسوم الإضافة {toAr(Number(planLimits.extraChaletPrice))} ر.س لمرة واحدة؛ تُضاف إلى اشتراكك الحالي بعد تأكيد الدفع.
+                        رسوم الإضافة {toAr(Number(planLimits.extraChaletPrice))} ⃁ لمرة واحدة؛ تُضاف إلى اشتراكك الحالي بعد تأكيد الدفع.
                       </p>
                     )}
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -1609,7 +1609,7 @@ export default function AddChalet() {
                                         }}
                                       />
                                       {dailyPriceGrid[idx][period] && (
-                                        <span style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", fontSize: 9, color: "#9ca3af", pointerEvents: "none" }}>ر.س</span>
+                                        <span style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", fontSize: 9, color: "#9ca3af", pointerEvents: "none" }}>⃁</span>
                                       )}
                                     </div>
                                   </td>

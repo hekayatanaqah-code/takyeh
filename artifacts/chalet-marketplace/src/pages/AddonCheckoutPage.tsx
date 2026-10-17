@@ -181,9 +181,9 @@ export default function AddonCheckoutPage() {
                     <p className="font-semibold">{pending.quantity?.toLocaleString("ar-SA")} × {label}</p>
                     {quote && (
                       <>
-                        <p className="mt-1 text-sm text-muted-foreground">السعر المرجعي الكامل للوحدة لكل 30 يوماً: {(quote.unitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س</p>
+                        <p className="mt-1 text-sm text-muted-foreground">السعر المرجعي الكامل للوحدة لكل 30 يوماً: {(quote.unitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ⃁</p>
                         <p className="mt-2 text-xl font-bold text-primary" data-testid="text-addon-checkout-total">
-                          المستحق الآن للفترة المتبقية: {(quote.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س
+                          المستحق الآن للفترة المتبقية: {(quote.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ⃁
                         </p>
                         {quote.remainingDays != null && quote.billingDays != null && (
                           <p className="mt-1 text-xs text-muted-foreground">
@@ -192,7 +192,7 @@ export default function AddonCheckoutPage() {
                         )}
                         {pending.consentToRecurring === true && quote.nextChargeHalala != null && (
                           <>
-                            <p className="mt-2 font-semibold">إجمالي الفاتورة الموحدة {quote.billingDays === 30 ? "عند التجديد الشهري" : `لدورة التجديد (${quote.billingDays} يوم)`}: {(quote.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ر.س</p>
+                            <p className="mt-2 font-semibold">إجمالي الفاتورة الموحدة {quote.billingDays === 30 ? "عند التجديد الشهري" : `لدورة التجديد (${quote.billingDays} يوم)`}: {(quote.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ⃁</p>
                             {quote.nextBillingAt && <p className="mt-1 text-xs text-muted-foreground">موعد التجديد التالي: {new Date(quote.nextBillingAt).toLocaleDateString("ar-SA")}</p>}
                           </>
                         )}

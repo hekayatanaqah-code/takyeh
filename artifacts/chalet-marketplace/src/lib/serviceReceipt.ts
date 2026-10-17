@@ -32,7 +32,7 @@ export function serviceReceiptMoney(value?: number | string | null) {
     maximumFractionDigits: 2,
     useGrouping: true,
   });
-  return `${toArabicDigits(formatted)} ر.س`;
+  return `${toArabicDigits(formatted)} ⃁`;
 }
 
 export function getServiceReceiptFinancialSummary(

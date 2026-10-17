@@ -80,5 +80,5 @@ export const reportEscape = (value: string | number): string => String(value).re
 
 export function reportAmount(value: number): string {
   const digits = Math.abs(value).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${value < 0 ? `(${digits})` : digits} ر.س`;
+  return `${value < 0 ? `(${digits})` : digits} ⃁`;
 }

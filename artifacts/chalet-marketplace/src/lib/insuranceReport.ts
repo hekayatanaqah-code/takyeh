@@ -63,7 +63,7 @@ export function buildInsuranceReport(entries: InsuranceEntry[], preference: "hij
   return {
     kind: "insurance", title: "كشف التأمينات",
     headers: ["رقم الحجز", "العقار", "اسم العميل", "رقم الجوال", "تاريخ بداية الإقامة", "تاريخ الخروج", "وقت الخروج",
-      "التأمين المطلوب (ر.س)", "التأمين المستلم (ر.س)", "المحتجز (ر.س)", "المخصوم (ر.س)", "المعاد (ر.س)",
+      "التأمين المطلوب (⃁)", "التأمين المستلم (⃁)", "المحتجز (⃁)", "المخصوم (⃁)", "المعاد (⃁)",
       "حالة الاستلام", "حالة التسوية", "سبب الخصم", "توثيق الضرر"],
     numericColumns: [7, 8, 9, 10, 11],
     dateValues: [{ column: 4, values: entries.map(entry => entry.bookingDate) },

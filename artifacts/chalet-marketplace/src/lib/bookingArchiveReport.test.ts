@@ -36,11 +36,11 @@ describe("formal archive report", () => {
     const totals = archiveTotals(table);
     assert.equal(totals[7], 1.4);
     assert.equal(totals[8], 1.4);
-    const received = table.headers.indexOf("التأمين المستلم (ر.س)");
+    const received = table.headers.indexOf("التأمين المستلم (⃁)");
     assert.equal(totals[received], 3501.4);
     assert.equal(reportAmount(-12.5).includes("-"), false);
     assert(reportAmount(-12.5).includes("("));
-    assert(reportAmount(-12.5).includes("ر.س"));
+    assert(reportAmount(-12.5).includes("⃁"));
   });
   it("keeps every booking field in a single horizontal row, including cancellation extras", () => {
     for (const tab of ["completed", "cancelled", "rescheduled"] as const) {
@@ -70,7 +70,7 @@ describe("formal archive report", () => {
     assert(html.includes("0500000000"));
     assert(html.includes("جميع الحقوق محفوظة لمنصة تكيّة"));
     assert(html.includes("الإجمالي (كل السجلات المطابقة)"));
-    assert(html.includes(reportAmount(1.4).replace(" ر.س", "")));
+    assert(html.includes(reportAmount(1.4).replace(" ⃁", "")));
     assert(html.includes(reportShortDate(bookings[0].bookingDate, context.calendarPreference)));
     assert(html.includes("letter-spacing:0!important"));
     assert(!html.includes('class="ap-field-label"'));
@@ -92,8 +92,8 @@ describe("formal archive report", () => {
     assert.equal(sheet.getCell("A1").alignment.horizontal, "right");
     assert.equal(sheet.getCell("A1").alignment.readingOrder, "rtl");
     assert.equal(sheet.getCell("A7").value, "رقم الحجز");
-    assert.equal(sheet.getCell("J7").value, "العربون المسجل (ر.س)");
-    assert.equal(sheet.getCell("K7").value, "التحصيلات من الإيجار (ر.س)");
+    assert.equal(sheet.getCell("J7").value, "العربون المسجل (⃁)");
+    assert.equal(sheet.getCell("K7").value, "التحصيلات من الإيجار (⃁)");
     assert((sheet.getRow(21).height ?? 0) > 28);
     assert(String(sheet.getCell("A3").value).indexOf(" م") < String(sheet.getCell("A3").value).indexOf("هـ"));
     for (const column of longTable.numericColumns) {

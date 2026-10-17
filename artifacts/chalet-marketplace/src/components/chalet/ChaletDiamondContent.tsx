@@ -29,7 +29,7 @@ function toHijri(date: Date) {
 
 function fmt(v: string | number | null | undefined) {
   if (v == null || v === "") return null;
-  return `${Number(v).toLocaleString("ar-SA")} ر.س`;
+  return `${Number(v).toLocaleString("ar-SA")} ⃁`;
 }
 
 function extractCoords(url?: string | null) {
@@ -234,7 +234,7 @@ function BookingPanel({ data }: { data: DiamondData }) {
             <div className="rounded-xl overflow-hidden border border-stone-700">
               <div className="bg-stone-700/60 px-3 py-2 flex items-center gap-2">
                 <span className="text-[11px] font-bold text-amber-400">جدول الأسعار اليومية</span>
-                <span className="text-[10px] text-stone-400 mr-auto">(ر.س)</span>
+                <span className="text-[10px] text-stone-400 mr-auto">(⃁)</span>
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>

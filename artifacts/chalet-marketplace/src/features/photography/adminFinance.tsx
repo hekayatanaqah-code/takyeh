@@ -81,7 +81,7 @@ function SettleModal({ p, onClose }: { p: FinPhotographer; onClose: () => void }
         </div>
         <fieldset disabled={frozen} className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="المبلغ المحول (ر.س)"><input type="number" min="0.01" step="0.01" max={p.availableHalalas / 100} className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="input-settle-amount" /></Field>
+            <Field label="المبلغ المحول (⃁)"><input type="number" min="0.01" step="0.01" max={p.availableHalalas / 100} className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="input-settle-amount" /></Field>
             <Field label="مرجع حوالة مصرف الإنماء"><input dir="ltr" className={`${inputCls} font-mono`} value={ref} onChange={(e) => setRef(e.target.value)} data-testid="input-settle-reference" /></Field>
           </div>
           <Field label="تاريخ ووقت التحويل الفعلي"><input type="datetime-local" max={localNow()} className={inputCls} value={date} onChange={(e) => setDate(e.target.value)} data-testid="input-settle-date" /></Field>

@@ -53,7 +53,7 @@ export const STATUS_AR: Record<string, string> = {
   awaiting_payment: "بانتظار الدفع", payment_review: "قيد مراجعة الدفع", held: "محجوز مؤقتا", pending_payment: "بانتظار الدفع", confirmed: "مؤكد", cancelled: "ملغي", expired: "منتهي", completed: "تم التسليم", needs_review: "بانتظار مصور بديل",
 };
 export const WEEKDAYS = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-export const sar = (h: number) => `${(h / 100).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ر.س`;
+export const sar = (h: number) => `${(h / 100).toLocaleString("ar-SA", { maximumFractionDigits: 2 })} ⃁`;
 export const fmtDT = (s: string) =>
   new Intl.DateTimeFormat("ar-SA", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(s));
 export const fmtT = (s: string) =>

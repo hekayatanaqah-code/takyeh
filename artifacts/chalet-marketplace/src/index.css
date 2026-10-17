@@ -1,4 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap');
+@font-face {
+  font-family: "Saudi Riyal Symbol";
+  src: url("./assets/saudi-riyal.woff2") format("woff2");
+  font-display: swap;
+  font-weight: 100 900;
+  unicode-range: U+20C1;
+}
 /* ── Global Arabic-Indic digit rendering ─────────────────────
    Noto Sans Arabic ships an OpenType "locl" feature that
    substitutes Western digits (0-9) with Arabic-Indic glyphs
@@ -14,7 +21,7 @@ html, :lang(ar), [lang="ar"] {
 /* Form controls don't inherit font-feature-settings in all browsers.
    Force Arabic-Indic digit rendering in every input / textarea / select. */
 input, textarea, select, [contenteditable] {
-  font-family: "Noto Sans Arabic", "Segoe UI", sans-serif;
+  font-family: "Saudi Riyal Symbol", "Noto Sans Arabic", "Segoe UI", sans-serif;
   font-feature-settings: "locl" 1, "tnum" 0, "onum" 0;
 }
 @import "tailwindcss";
@@ -58,9 +65,9 @@ input, textarea, select, [contenteditable] {
   --color-destructive-foreground: hsl(var(--destructive-foreground));
   --color-destructive-border: var(--destructive-border);
 
-  --font-sans: 'Noto Sans Arabic', sans-serif;
-  --font-serif: Georgia, serif;
-  --font-mono: Menlo, monospace;
+  --font-sans: 'Saudi Riyal Symbol', 'Noto Sans Arabic', sans-serif;
+  --font-serif: 'Saudi Riyal Symbol', Georgia, serif;
+  --font-mono: 'Saudi Riyal Symbol', Menlo, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -324,7 +331,7 @@ input, textarea, select, [contenteditable] {
     /* Inner breathing room replaces the removed @page margins */
     padding: 7mm 9mm !important;
     background: #ffffff !important;
-    font-family: "Noto Sans Arabic", sans-serif !important;
+    font-family: "Saudi Riyal Symbol", "Noto Sans Arabic", sans-serif !important;
     direction: rtl !important;
     /* Slightly larger base so text is sharp — zoom compensates for A4 fit */
     font-size: 12px !important;
