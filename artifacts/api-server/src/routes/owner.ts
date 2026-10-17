@@ -5333,7 +5333,7 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
   const requiredMediaAndTerms = z.object({
     photos: z.array(z.string().trim().min(1).refine(value => value !== "error"))
       .min(1, "أضف صورة رئيسية واحدة على الأقل").max(15).optional(),
-    termsAndConditions: z.string().trim().min(1, "الشروط والأحكام الخاصة مطلوبة").optional(),
+    termsAndConditions: z.string().trim().min(1, "الشروط والأحكام الخاصة مطلوبة").nullable().optional(),
   }).safeParse(body);
   if (!requiredMediaAndTerms.success) {
     return res.status(400).json({ error: "تحقق من الصورة الرئيسية والشروط الخاصة", details: requiredMediaAndTerms.error.flatten().fieldErrors });

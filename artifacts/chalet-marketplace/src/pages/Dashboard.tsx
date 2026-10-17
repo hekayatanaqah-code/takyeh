@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, createContext, useCo
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { MessageTemplateEditor } from "@/components/messages/MessageTemplateEditor";
+import { publicContractUrl, contractInvitationText, propertyContractClauses, contractTermsText, contractMoney, CONTRACT_STATUS_STYLES } from "@/lib/digitalContracts";
 import { DEFAULT_DETAILED_RECEIPT_TEMPLATE, DETAILED_RECEIPT_VARIABLES, detailedReceiptValues, renderDetailedReceipt } from "@/lib/detailedWhatsAppReceipt";
 import { saudiMoneyMessage } from "@/lib/saudiCurrency";
 import { saudiCurrencyHtml } from "@/lib/saudiCurrencyFont";
@@ -376,7 +377,7 @@ const PREVIEW_SAMPLE_DATA: Record<string, string> = {
   "{طريقة_تقديم_الخدمة}": "توصيل وتركيب بموقع العميل",
   "{عنوان_الخدمة}": "حي الملقا، شارع الأمير محمد",
   "{تفاصيل_الخدمة}": "تجهيز وتركيب كامل قبل موعد المناسبة",
-  "{رابط_العقد_الرقمي}": "https://takyah.sa/service-contract/1245",
+  "{رابط_العقد_الرقمي}": publicContractUrl(1245, "service"),
   "{الإيجار}": "٨٠٠",
   "{قيمة_الإيجار}": "٨٠٠",
   "{إجمالي_الخدمات}": "١٥٠",
@@ -6021,12 +6022,12 @@ function BookingCalendarTab({
                             <button
                               type="button"
                               onClick={() => { setSummaryDate(null); setContractPreviewBooking(b); }}
-                              className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700 hover:opacity-80 transition-opacity"
+                              className={`text-xs font-bold whitespace-nowrap px-2.5 py-1 rounded-full border ${CONTRACT_STATUS_STYLES.signed} hover:opacity-90 transition-opacity`}
                             >
                               ✅ تم التوقيع
                             </button>
                           ) : (
-                            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 border border-violet-300 dark:border-violet-700">
+                            <span className={`text-xs font-bold whitespace-nowrap px-2.5 py-1 rounded-full border ${CONTRACT_STATUS_STYLES.pending}`}>
                               ⏳ بانتظار توقيع المستأجر
                             </span>
                           )}
@@ -6034,7 +6035,7 @@ function BookingCalendarTab({
                       )}
                       {/* Contract quick actions — shown when signature pending and booking is upcoming */}
                       {!b.cancelledAt && !b.contractSigned && !isPastBooking && (() => {
-                        const _cu = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
+                        const _cu = publicContractUrl(b.id, "property", BASE);
                         const _dg = (b.clientPhone ?? "").replace(/\D/g, "");
                         const _wp = _dg.startsWith("966") ? _dg : _dg.startsWith("0") ? "966" + _dg.slice(1) : _dg ? "966" + _dg : "";
                         const _wm = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cu, b.period, returningPhonesSet.has(b.clientPhone ?? ""), b.clientName);
@@ -7530,13 +7531,13 @@ function BookingCalendarTab({
                         </button>
                       </>
                     ) : !b.cancelledAt && (() => {
-                      const _cuB = `${window.location.origin}${import.meta.env.BASE_URL.replace(/\/$/, "")}/contract/${b.id}`;
+                      const _cuB = publicContractUrl(b.id, "property", BASE);
                       const _dgB = (b.clientPhone ?? "").replace(/\D/g, "");
                       const _wpB = _dgB.startsWith("966") ? _dgB : _dgB.startsWith("0") ? "966" + _dgB.slice(1) : _dgB ? "966" + _dgB : "";
                       const _wmB = buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, _cuB, b.period, returningPhonesSet.has(b.clientPhone ?? ""), b.clientName);
                       return (
                         <>
-                          <span className="flex items-center text-xs font-bold px-2.5 py-1 rounded-lg bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-800">
+                          <span className={`flex items-center whitespace-nowrap text-xs font-bold px-2.5 py-1 rounded-lg border ${CONTRACT_STATUS_STYLES.pending}`}>
                             ⏳ بانتظار التوقيع
                           </span>
                           <a
@@ -9985,7 +9986,7 @@ function ServiceDigitalContractsTab() {
   }), [appointments]);
 
   function serviceContractUrl(id: number) {
-    return `${window.location.origin}${BASE}/service-contract/${id}`;
+    return publicContractUrl(id, "service", BASE);
   }
 
   function serviceDeliveryMethodLabel(value: string | null | undefined) {
@@ -10036,21 +10037,20 @@ function ServiceDigitalContractsTab() {
     const phone = String(a.clientPhone ?? "").replace(/\D/g, "").replace(/^0/, "966");
     const dual = formatDualDate(a.dateStr);
     const msg = encodeWhatsAppText(
-      `السلام عليكم ${a.clientName ?? ""}،\nنرفق لكم عقد الخدمة الخاص بـ ${provider?.businessName ?? "الخدمة"}.\n`
-      + `تاريخ الحجز: ${dual.gregorian} (${dual.hijri})\n${serviceContractUrl(a.id)}`,
+      `مرحباً ${a.clientName ?? "بكم"}،\n\nبخصوص حجزكم لدى ${provider?.businessName ?? "مقدم الخدمة"} بتاريخ ${dual.gregorian} (${dual.hijri}).\n\n`
+      + `يرجى مراجعة بيانات العقد والشروط والأحكام والتوقيع إلكترونياً عبر الرابط التالي:\n${serviceContractUrl(a.id)}\n\nشكراً لاختياركم.`,
     );
     window.open(`https://wa.me/${phone}?text=${msg}`, "_blank", "noopener,noreferrer");
   }
 
   function printContract(a: any) {
-    window.open(`${serviceContractUrl(a.id)}?print=1`, "_blank", "noopener,noreferrer");
+    window.open(`${window.location.origin}${BASE}/service-contract/${a.id}?print=1`, "_blank", "noopener,noreferrer");
   }
 
   function statusBadge(a: any) {
     const key = contractStatus(a);
-    if (key === "signed") return <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">موقّع ✓</span>;
-    if (key === "cancelled") return <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600">ملغى</span>;
-    return <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700">قيد الانتظار</span>;
+    const label = key === "signed" ? "موقّع" : key === "cancelled" ? "ملغى" : "قيد الانتظار";
+    return <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-bold ${CONTRACT_STATUS_STYLES[key]}`}>{label}</span>;
   }
 
   if (providerLoading || appointmentsLoading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -10089,9 +10089,9 @@ function ServiceDigitalContractsTab() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          ["موقّعة", stats.signed, "border-emerald-200 bg-emerald-50 text-emerald-700"],
-          ["معلقة", stats.pending, "border-amber-200 bg-amber-50 text-amber-700"],
-          ["ملغاة", stats.cancelled, "border-red-200 bg-red-50 text-red-600"],
+          ["موقّعة", stats.signed, CONTRACT_STATUS_STYLES.signed],
+          ["قيد الانتظار", stats.pending, CONTRACT_STATUS_STYLES.pending],
+          ["ملغاة", stats.cancelled, CONTRACT_STATUS_STYLES.cancelled],
         ].map(([label, value, cls]) => <div key={String(label)} className={`rounded-xl border p-4 text-center ${cls}`}><p className="text-2xl font-extrabold">{toArN(String(value))}</p><p className="text-xs mt-1">عقود {label}</p></div>)}
       </div>
 
@@ -10778,7 +10778,7 @@ function ServiceCalendarBookingsTab() {
       .replace(/\{طريقة_تقديم_الخدمة\}/g, appointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : appointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—")
       .replace(/\{عنوان_الخدمة\}/g, ar(appointment.serviceAddress || "—"))
       .replace(/\{تفاصيل_الخدمة\}/g, ar(appointment.notes || "—"))
-      .replace(/\{رابط_العقد_الرقمي\}/g, `${window.location.origin}${BASE}/service-contract/${appointment.id}`)
+      .replace(/\{رابط_العقد_الرقمي\}/g, publicContractUrl(appointment.id, "service", BASE))
       .replace(/\{إجمالي_الخدمات\}|\{تفاصيل_الخدمات\}/g, "—")
       .replace(/\{[^}]+\}/g, "—");
   }
@@ -11391,7 +11391,7 @@ function ServiceCalendarBookingsTab() {
                     const sendContractWhatsApp = () => {
                       if (!whatsappPhone) return;
                       const dual = formatDualDate(appointment.dateStr);
-                      const contractUrl = `${window.location.origin}${BASE}/service-contract/${appointment.id}`;
+                      const contractUrl = publicContractUrl(appointment.id, "service", BASE);
                       const message = [
                         `مرحباً ${appointment.clientName}،`,
                         `نرفق لك عقد تقديم الخدمة للحجز بتاريخ ${dual.gregorian}.`,
@@ -24493,8 +24493,8 @@ export function OwnerMessageSettingsTab({
       "{عنوان_الخدمة}": latestBooking.serviceAddress || "—",
       "{تفاصيل_الخدمة}": latestBooking.notes || "—",
       "{رابط_العقد_الرقمي}": providerId
-        ? `${window.location.origin}${BASE}/service-contract/${latestBooking.id}`
-        : `${window.location.origin}${BASE}/contract/${latestBooking.id}`,
+        ? publicContractUrl(latestBooking.id, "service", BASE)
+        : publicContractUrl(latestBooking.id, "property", BASE),
       "{سبب_الإلغاء}": latestBooking.cancelReason || "حسب الاتفاق",
       "{سبب_التعديل}": latestBooking.rescheduleReason || "—",
       "{الإيجار}": amountText(total),
@@ -26483,16 +26483,9 @@ export default function Dashboard() {
 
 /* ── Contract Settings Tab ────────────────────────────────── */
 
-const CONTRACT_DEFAULT_CLAUSES = [
-  { id: "insurance",    emoji: "🔒", label: "بند التأمين والتلفيات",          defaultText: "يُلزَم المستأجر بسداد تأمين ضد الأضرار يُستردّ كاملاً عند التسليم دون أي تلفيات. يُحق للمؤجِّر خصم قيمة أي أضرار مادية من مبلغ التأمين." },
-  { id: "cancellation", emoji: "📋", label: "بند إلغاء الحجز والعربون",       defaultText: "في حالة الإلغاء قبل ٤٨ ساعة من موعد الدخول يُستردّ العربون كاملاً. الإلغاء خلال أقل من ٤٨ ساعة يُعدّ العربون حقاً مكتسباً للمؤجِّر." },
-  { id: "checkinout",   emoji: "🕐", label: "بند أوقات الدخول والخروج",       defaultText: "يُحدَّد وقت الدخول الساعة الثانية ظهراً ووقت الخروج الساعة الثانية عشرة ظهراً. أي تأخير في الإخلاء يستوجب رسوماً إضافية بالاتفاق مع المؤجِّر." },
-  { id: "liability",    emoji: "⚠️", label: "بند إخلاء المسؤولية والسلامة",  defaultText: "المستأجر مسؤول مسؤولية كاملة عن سلامة المرافق والمسبح وأجهزة الترفيه. يُمنع إقامة حفلات مقلقة للراحة أو التدخين داخل المبنى." },
-] as const;
-
 interface ContractClause { id: string; text: string; enabled: boolean; isCustom?: boolean; }
 
-function ContractSettingsTab() {
+export function ContractSettingsTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -26509,9 +26502,7 @@ function ContractSettingsTab() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [logoUrl, setLogoUrl]         = useState("");
   const [logoUploading, setLogoUploading] = useState(false);
-  const [clauses, setClauses]         = useState<ContractClause[]>(
-    CONTRACT_DEFAULT_CLAUSES.map((c) => ({ id: c.id, text: c.defaultText, enabled: true })),
-  );
+  const [clauses, setClauses]         = useState<ContractClause[]>([]);
   const [saving, setSaving]           = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
@@ -26527,13 +26518,7 @@ function ContractSettingsTab() {
   useEffect(() => {
     if (!selected) return;
     setLogoUrl(selected.logoUrl ?? "");
-    const existing = (selected.termsAndConditions ?? "").trim();
-    const defaults: ContractClause[] = CONTRACT_DEFAULT_CLAUSES.map((c) => ({ id: c.id, text: c.defaultText, enabled: true }));
-    if (existing) {
-      const matchesADefault = CONTRACT_DEFAULT_CLAUSES.some((c) => existing.includes(c.defaultText.slice(0, 15)));
-      if (!matchesADefault) defaults.push({ id: "custom-existing", text: existing, enabled: true, isCustom: true });
-    }
-    setClauses(defaults);
+    setClauses(propertyContractClauses(selected.termsAndConditions));
   }, [selected]);
 
   const computedTerms = useMemo(
@@ -26572,6 +26557,8 @@ function ContractSettingsTab() {
       if (!r.ok) throw new Error("save-failed");
       qc.invalidateQueries({ queryKey: ["contractSettings-submissions"] });
       qc.invalidateQueries({ queryKey: ["/api/submissions"] });
+      qc.invalidateQueries({ queryKey: ["owner", "chalets"] });
+      qc.invalidateQueries({ queryKey: ["contractsArchive-chalets"] });
       toast({ title: "تم الحفظ ✓", description: "تم تحديث إعدادات العقد الرقمي بنجاح" });
     } catch {
       toast({ title: "خطأ", description: "تعذّر الحفظ، يرجى المحاولة مجدداً", variant: "destructive" });
@@ -26665,14 +26652,12 @@ function ContractSettingsTab() {
           <h3 className="font-semibold text-foreground">بنود عقد الإيجار</h3>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
-          فعِّل البنود التي تريد إدراجها وعدِّل نصها — البنود المفعَّلة تُطبع في العقد الموقَّع
+          هذه شروط العقار المحفوظة فقط. عدّلها أو أضف بنوداً خاصة بك؛ لا تُضاف شروط تلقائية إلى العقد.
         </p>
 
         <div className="space-y-3">
           {clauses.map((clause, idx) => {
-            const meta = CONTRACT_DEFAULT_CLAUSES.find((c) => c.id === clause.id);
-            const label = meta?.label ?? `بند مخصص ${idx + 1}`;
-            const emoji = meta?.emoji ?? "✏️";
+            const label = `شروط العقار ${toArN(idx + 1)}`;
             return (
               <div key={clause.id}
                 className={`rounded-xl border transition-all duration-150 ${clause.enabled ? "border-primary/30 bg-primary/5" : "border-border bg-muted/20 opacity-70"}`}>
@@ -26681,7 +26666,6 @@ function ContractSettingsTab() {
                   <input type="checkbox" checked={clause.enabled}
                     onChange={(e) => updateClause(clause.id, { enabled: e.target.checked })}
                     className="w-4 h-4 rounded accent-primary cursor-pointer shrink-0" />
-                  <span className="text-base leading-none shrink-0">{emoji}</span>
                   <span className={`text-sm font-semibold flex-1 min-w-0 truncate pe-2 ${clause.enabled ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
                   {clause.isCustom && (
                     <button type="button" onClick={() => removeClause(clause.id)}
@@ -26806,11 +26790,11 @@ function ContractPreviewCard({ logoUrl, chaletName, terms }: { logoUrl: string; 
             </tr>
             <tr style={{ borderBottom: "1px solid rgba(227,217,207,0.5)", background: "rgba(139,94,43,0.05)" }}>
               <td style={{ padding: "5px 0", fontWeight: 700, color: C.fg }}>إجمالي الإيجار</td>
-              <td style={{ padding: "5px 0", fontWeight: 700, color: C.primary }}>١٢٠٠ ر.س</td>
+              <td style={{ padding: "5px 0", fontWeight: 700, color: C.primary }}>{contractMoney(1200)}</td>
             </tr>
             <tr>
               <td style={{ padding: "5px 0", color: C.muted }}>مبلغ التأمين</td>
-              <td style={{ padding: "5px 0", color: C.fg }}>٣٠٠ ر.س</td>
+              <td style={{ padding: "5px 0", color: C.fg }}>{contractMoney(300)}</td>
             </tr>
           </tbody>
         </table>
@@ -26819,7 +26803,7 @@ function ContractPreviewCard({ logoUrl, chaletName, terms }: { logoUrl: string; 
       <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
         <p style={{ margin: "0 0 8px", fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" }}>الشروط والأحكام</p>
         {terms ? (
-          <p style={{ margin: 0, fontSize: 12.5, color: "#1a1008", lineHeight: 1.85, whiteSpace: "pre-line", fontWeight: 400 }}>{terms}</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: "#1a1008", lineHeight: 1.85, whiteSpace: "pre-wrap", fontWeight: 400 }}>{contractTermsText(terms)}</p>
         ) : (
           <p style={{ margin: 0, fontSize: 12, color: "#75604a", fontStyle: "italic", lineHeight: 1.7 }}>لا توجد بنود محددة — ستُستخدم البنود الافتراضية عند التوقيع</p>
         )}
@@ -26880,27 +26864,14 @@ function buildContractWaMsg(
     full:     "يوم كامل" + _range(fIn, fOut),
   };
   const periodText = (period && periodMap[period]?.trim()) || period || "-";
-  const header = (isReturning && tenantName)
-    ? `يا هلا وغلا بأخونا ${tenantName}، يسعدنا تكرار زيارتكم لـ ${cn} واعتمدنا حجزكم المبدئي.\n\n`
-    : `السلام عليكم ورحمة الله وبركاته،\nنرحب بكم في ${cn} ونشكركم على اختيارنا واعتمدنا حجزكم المبدئي.\n\n`;
-  const inviteText = isReturning
-    ? "ولإتمام التأكيد النهائي والموثق لحجزكم، يرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتحديث بياناتكم والتوقيع إلكترونياً:\n"
-    : "ولإتمام التأكيد النهائي والموثق لحجزكم، يرجى التكرم بالدخول على رابط العقد الرقمي أدناه لتعبئة بياناتكم الرسمية والتوقيع إلكترونياً:\n";
-  return encodeWhatsAppText(
-    header +
-    "تفاصيل الحجز:\n" +
-    "- اليوم: " + dayN + "\n" +
-    "- التاريخ الميلادي: " + gregorianStr + "\n" +
-    "- التاريخ الهجري: " + hijriStr + "\n" +
-    "- الفترة: " + periodText + "\n\n" +
-    inviteText +
-    contractLink + "\n\n" +
-    "حياكم الله، ونتمنى لكم إقامة سعيدة وممتعة"
-  );
+  return encodeWhatsAppText(contractInvitationText({
+    clientName: tenantName, propertyName: cn, day: dayN, hijri: hijriStr,
+    gregorian: gregorianStr, period: periodText, link: contractLink,
+  }));
 }
 
 /* ── Digital Contracts Archive Tab ───────────────────────── */
-function ContractsArchiveTab() {
+export function ContractsArchiveTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -27000,19 +26971,19 @@ function ContractsArchiveTab() {
     return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([p]) => p));
   }, [bookings]);
 
-  function contractUrl(id: number) { return `${window.location.origin}${BASE}/contract/${id}`; }
+  function contractUrl(id: number) { return publicContractUrl(id, "property", BASE); }
   function copyLink(id: number) {
     navigator.clipboard.writeText(contractUrl(id)).then(() =>
       toast({ title: "تم النسخ ✓", description: "رابط العقد في الحافظة" }),
     );
   }
-  function openPrint(id: number) { window.open(contractUrl(id), "_blank"); }
+  function openPrint(id: number) { window.open(`${window.location.origin}${BASE}/contract/${id}`, "_blank", "noopener,noreferrer"); }
 
   type StatusKey = "signed" | "pending" | "cancelled";
   function statusBadge(b: OwnerBooking): { key: StatusKey; label: string; cls: string } {
-    if (b.cancelledAt)    return { key: "cancelled", label: "ملغي",           cls: "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-700/40" };
-    if (b.contractSigned) return { key: "signed",    label: "مُوقَّع ✓",     cls: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-700/40" };
-    return                       { key: "pending",   label: "قيد الانتظار", cls: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-400 dark:border-amber-700/40" };
+    if (b.cancelledAt)    return { key: "cancelled", label: "ملغى", cls: CONTRACT_STATUS_STYLES.cancelled };
+    if (b.contractSigned) return { key: "signed", label: "موقّع", cls: CONTRACT_STATUS_STYLES.signed };
+    return { key: "pending", label: "قيد الانتظار", cls: CONTRACT_STATUS_STYLES.pending };
   }
 
   /* ── Year options built from actual bookings ── */
@@ -27207,9 +27178,9 @@ function ContractsArchiveTab() {
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { suffix: "مُوقَّع",       value: signed,    color: "text-emerald-700 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800" },
-          { suffix: "قيد الانتظار", value: pending,   color: "text-amber-700 dark:text-amber-400",   bg: "bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800" },
-          { suffix: "ملغى",         value: cancelled, color: "text-red-600 dark:text-red-400",       bg: "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800" },
+          { suffix: "موقّع", value: signed, color: "", bg: CONTRACT_STATUS_STYLES.signed },
+          { suffix: "قيد الانتظار", value: pending, color: "", bg: CONTRACT_STATUS_STYLES.pending },
+          { suffix: "ملغى", value: cancelled, color: "", bg: CONTRACT_STATUS_STYLES.cancelled },
         ].map(({ suffix, value, color, bg }) => {
           const noun = value >= 3 && value <= 10 ? "عقود" : "عقد";
           return (
@@ -27371,7 +27342,7 @@ function ContractsArchiveTab() {
                           : <span className="text-muted-foreground text-xs">—</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${status.cls}`}>
+                        <span className={`inline-flex items-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold border ${status.cls}`}>
                           {status.label}
                         </span>
                       </td>

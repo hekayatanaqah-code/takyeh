@@ -4,6 +4,8 @@ import { Loader2, CheckCircle, AlertCircle, Pen, Trash2, Printer, FileText } fro
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDualDate } from "@/lib/hijri";
+import { contractMoney, contractTermsText } from "@/lib/digitalContracts";
+import { SAUDI_RIYAL_FONT_CSS } from "@/lib/saudiCurrencyFont";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -75,13 +77,14 @@ function periodTimeSuffix(period: string | null, b: {
 function Row({ label, value, highlight }: { label: string; value: React.ReactNode; highlight?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className={`font-medium text-right ${highlight ? "text-primary font-bold" : "text-foreground"}`}>{value}</span>
+      <span className="text-slate-700 shrink-0">{label}</span>
+      <span className={`font-medium text-right ${highlight ? "text-amber-950 font-bold" : "text-slate-950"}`}>{value}</span>
     </div>
   );
 }
 
-function printContract() {
+async function printContract() {
+  await document.fonts?.ready;
   window.print();
 }
 
@@ -95,7 +98,7 @@ function ContractLetterhead({
   signedAtFormatted: string | null;
 }) {
   const dualDate = formatDualDate(booking.bookingDate);
-  const fmtM = (v: string | null) => (v ? toAr(Math.round(Number(v)).toLocaleString("en")) : "—");
+  const fmtM = contractMoney;
 
   /* ── Hardcoded hex colors — no CSS variables, fully html2canvas-safe ── */
   const C = {
@@ -115,7 +118,8 @@ function ContractLetterhead({
   const secHead: React.CSSProperties = { margin: "0 0 10px", fontSize: 9, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.5px" };
 
   return (
-    <div className="contract-print-area" style={{ background: C.white, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden", direction: "rtl", textAlign: "right" }}>
+    <div className="contract-print-area" style={{ fontFamily: "'Saudi Riyal Symbol', 'Noto Sans Arabic', sans-serif", background: C.white, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden", direction: "rtl", textAlign: "right" }}>
+      <style>{SAUDI_RIYAL_FONT_CSS}</style>
 
       {/* ── Platform Header ── */}
       <div className="contract-header" style={{ background: C.primary, padding: "14px 24px", textAlign: "center" }}>
@@ -197,20 +201,20 @@ function ContractLetterhead({
             {booking.totalPrice && Number(booking.totalPrice) > 0 && (
               <tr style={{ ...rowDiv, background: "rgba(139,94,43,0.05)" }}>
                 <td style={{ ...cell, fontWeight: 700, color: C.fg }}>إجمالي الإيجار</td>
-                <td style={{ ...cellVal, fontWeight: 700, color: C.primary }}>{fmtM(booking.totalPrice)} ر.س</td>
+                <td style={{ ...cellVal, fontWeight: 700, color: C.primary }}>{fmtM(booking.totalPrice)}</td>
               </tr>
             )}
             {booking.depositPaid && Number(booking.depositPaid) > 0 && (
               <tr style={rowDiv}>
                 <td style={cell}>العربون المدفوع</td>
-                <td style={cellVal}>{fmtM(booking.depositPaid)} ر.س</td>
+                <td style={cellVal}>{fmtM(booking.depositPaid)}</td>
               </tr>
             )}
             {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
               <tr style={rowDiv}>
                 <td style={cell}>مبلغ التأمين</td>
                 <td style={cellVal}>
-                  {fmtM(booking.insuranceFee)} ر.س
+                  {fmtM(booking.insuranceFee)}
                   {booking.insuranceReceived === false && (
                     <span style={{ marginRight: 6, color: "#b45309", fontWeight: 600, fontSize: 11 }}>⚠️ غير مستلم</span>
                   )}
@@ -222,7 +226,7 @@ function ContractLetterhead({
               return (
                 <tr style={{ ...rowDiv, background: "rgba(139,94,43,0.08)" }}>
                   <td style={{ ...cell, fontWeight: 700, color: "#8b5e2b" }}>المبلغ المتبقي</td>
-                  <td style={{ ...cellVal, fontWeight: 700, color: _rem > 0 ? "#b45309" : "#059669" }}>{_rem === 0 ? "٠" : fmtM(String(_rem))} ر.س</td>
+                  <td style={{ ...cellVal, fontWeight: 700, color: _rem > 0 ? "#92400e" : "#065f46" }}>{fmtM(_rem)}</td>
                 </tr>
               );
             })()}
@@ -233,20 +237,7 @@ function ContractLetterhead({
       {/* ── Terms & Conditions ── */}
       <div style={{ padding: 20, borderBottom: `1px solid ${C.border}` }}>
         <p style={secHead}>الشروط والأحكام</p>
-        {booking.contractTerms ? (
-          <ul style={{ margin: 0, paddingRight: 16, fontSize: 11, color: C.fg, lineHeight: 1.8, listStyleType: "disc" }}>
-            {booking.contractTerms.split("\n").filter(l => l.trim()).map((line, i) => (
-              <li key={i}>{line.replace(/^#+\s*/, "")}</li>
-            ))}
-          </ul>
-        ) : (
-          <ul style={{ margin: 0, paddingRight: 16, fontSize: 11, color: C.fg, lineHeight: 1.8 }}>
-            <li>يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه المتفق عليها.</li>
-            <li>مبلغ التأمين يُستردّ كاملاً في حالة عدم وجود أضرار.</li>
-            <li>يُحظر التدخين وإقامة الحفلات داخل الشاليه.</li>
-            <li>المستأجر مسؤول عن أي أضرار تحدث خلال فترة الإقامة.</li>
-          </ul>
-        )}
+        <p style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 11, color: C.fg, lineHeight: 1.8 }}>{contractTermsText(booking.contractTerms)}</p>
       </div>
 
       {/* ── Signature & ID ── */}
@@ -449,7 +440,7 @@ export default function ContractPage() {
   }
 
   const dualDate = formatDualDate(booking.bookingDate);
-  const fmtMoney = (v: string | null) => v ? toAr(Math.round(Number(v)).toLocaleString("en")) : "—";
+  const fmtMoney = contractMoney;
   const signedAtFormatted = (() => {
     if (!booking.contractSignedAt) return null;
     try {
@@ -563,17 +554,17 @@ export default function ContractPage() {
               value={`${toAr(booking.durationDays)} ${booking.durationDays === 1 ? "يوم" : "أيام"}${booking.period ? ` · ${periodLabel(booking.period)}${periodTimeSuffix(booking.period, booking)}` : ""}`}
             />
             {booking.totalPrice && (
-              <Row label="إجمالي قيمة الإيجار" value={`${fmtMoney(booking.totalPrice)} ر.س`} highlight />
+              <Row label="إجمالي قيمة الإيجار" value={fmtMoney(booking.totalPrice)} highlight />
             )}
             {booking.depositPaid && Number(booking.depositPaid) > 0 && (
-              <Row label="العربون المدفوع" value={`${fmtMoney(booking.depositPaid)} ر.س`} />
+              <Row label="العربون المدفوع" value={fmtMoney(booking.depositPaid)} />
             )}
             {booking.insuranceFee && Number(booking.insuranceFee) > 0 && (
               <Row
                 label="مبلغ التأمين"
                 value={
                   <span>
-                    {fmtMoney(booking.insuranceFee)} ر.س
+                    {fmtMoney(booking.insuranceFee)}
                     {booking.insuranceReceived === false && (
                       <span className="ms-2 text-amber-700 font-semibold text-xs">⚠️ غير مستلم</span>
                     )}
@@ -586,7 +577,7 @@ export default function ContractPage() {
               return (
                 <Row
                   label="المبلغ المتبقي"
-                  value={`${_rem === 0 ? "٠" : fmtMoney(String(_rem))} ر.س`}
+                  value={fmtMoney(_rem)}
                   highlight={_rem > 0}
                 />
               );
@@ -597,22 +588,7 @@ export default function ContractPage() {
         {/* Policies */}
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
           <h3 className="font-bold text-sm text-amber-800">📋 الشروط والأحكام</h3>
-          {booking.contractTerms ? (
-            <ul className="text-xs text-amber-900 space-y-1.5 list-disc list-inside leading-relaxed">
-              {booking.contractTerms.split("\n").filter(l => l.trim()).map((line, i) => (
-                <li key={i}>{line.replace(/^#+\s*/, "")}</li>
-              ))}
-            </ul>
-          ) : (
-            <ul className="text-xs text-amber-900 space-y-1.5 list-disc list-inside leading-relaxed">
-              <li>يُلزَم المستأجر بالالتزام بمواعيد تسليم الشاليه المتفق عليها.</li>
-              <li>مبلغ التأمين يُستردّ كاملاً في حالة عدم وجود أضرار أو مخالفات.</li>
-              <li>يُحظر إقامة الحفلات الصاخبة أو الأنشطة التي تُخل بالنظام العام.</li>
-              <li>التدخين ممنوع داخل الشاليه بالكامل.</li>
-              <li>في حالة الإلغاء، يُطبَّق نظام الاسترداد وفق سياسة مالك العقار.</li>
-              <li>المستأجر مسؤول عن أي أضرار تحدث خلال فترة الإقامة.</li>
-            </ul>
-          )}
+          <p className="whitespace-pre-wrap text-sm font-medium text-amber-950 leading-7">{contractTermsText(booking.contractTerms)}</p>
         </div>
 
         {/* Signer Info */}

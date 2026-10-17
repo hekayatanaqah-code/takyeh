@@ -3,6 +3,8 @@ import { useParams } from "wouter";
 import { AlertCircle, CheckCircle, Eraser, FileText, Loader2, PenLine, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDualDate } from "@/lib/hijri";
+import { contractMoney, CONTRACT_STATUS_STYLES } from "@/lib/digitalContracts";
+import { saudiMoneyMessage } from "@/lib/saudiCurrency";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const toAr = (value: unknown) => String(value ?? "").replace(/[0-9]/g, d => "٠١٢٣٤٥٦٧٨٩"[+d]);
@@ -290,21 +292,21 @@ export default function ServiceContractPage() {
               {contract.serviceAddress && <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">موقع تقديم الخدمة: </span><b>{contract.serviceAddress}</b></div>}
               <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">طريقة تقديم الخدمة: </span><b>{contract.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : contract.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—"}</b></div>
               <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">تفاصيل وملاحظات الخدمة: </span><b>{contract.notes || "—"}</b></div>
-              {contract.amount && Number(contract.amount) > 0 && <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">قيمة الخدمة: </span><b className="text-[#8b5e2b]">{toAr(Number(contract.amount).toLocaleString("en"))} ر.س</b></div>}
+              {contract.amount && Number(contract.amount) > 0 && <div className="rounded-xl bg-[#fdf9f6] p-3 sm:col-span-2"><span className="text-[#75604a]">قيمة الخدمة: </span><b className="text-[#8b5e2b]">{contractMoney(contract.amount)}</b></div>}
             </div>
           </section>
-          <section className="p-5 border-b border-[#e3d9cf]"><h2 className="text-xs font-bold text-[#75604a] mb-3">الشروط والأحكام</h2><div className="text-sm leading-8 whitespace-pre-wrap">{contract.contractText?.trim() || "لا توجد شروط وأحكام مضافة."}</div></section>
+          <section className="p-5 border-b border-[#e3d9cf]"><h2 className="text-xs font-bold text-[#75604a] mb-3">الشروط والأحكام</h2><div className="text-sm leading-8 whitespace-pre-wrap">{saudiMoneyMessage(contract.contractText?.trim() || "لا توجد شروط وأحكام مضافة.")}</div></section>
           {contract.includeElectronicSignature && (
             <section className="p-5">
               <h2 className="text-xs font-bold text-[#75604a] mb-3">التوقيع الإلكتروني</h2>
               {contract.contractSigned ? (
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex items-center gap-3 text-emerald-700"><CheckCircle className="w-5 h-5" /><b>تم توقيع العقد إلكترونياً</b></div>
+                  <div className={`rounded-xl border p-4 flex items-center gap-3 font-bold ${CONTRACT_STATUS_STYLES.signed}`}><CheckCircle className="w-5 h-5" /><b>تم توقيع العقد إلكترونياً</b></div>
                   {contract.contractSignatureDataUrl && <img src={contract.contractSignatureDataUrl} alt="توقيع العميل" className="service-contract-signature-image w-full h-40 object-contain rounded-xl border border-[#e3d9cf] bg-[#fdf9f6]" />}
                   {contract.contractSignedAt && <p className="text-xs text-[#75604a] text-center">تاريخ التوقيع: {new Date(contract.contractSignedAt).toLocaleString("ar-SA")}</p>}
                 </div>
               ) : cancelled ? (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-600 font-bold">لا يمكن توقيع عقد حجز ملغى.</div>
+                <div className={`rounded-xl border p-4 font-bold ${CONTRACT_STATUS_STYLES.cancelled}`}>لا يمكن توقيع عقد حجز ملغى.</div>
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold"><PenLine className="w-4 h-4 text-[#8b5e2b]" />ارسم توقيعك داخل المربع</div>

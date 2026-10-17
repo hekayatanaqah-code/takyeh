@@ -14,6 +14,7 @@
 - [Property add-on quantities](property-addon-quantities.md) — property facilities have per-booking caps, not shared daily stock; historical prices are quoted line totals.
 - [Saudi currency presentation](saudi-currency-presentation.md) — use the supplied riyal artwork, Eastern digits and plain Unicode in WhatsApp; keep rendering separate from payment values.
 - [WhatsApp receipt identity](whatsapp-receipt-identity.md) — owner-editable receipts use the booked property, configured platform and approved property terms, including when proof links exist.
+- [Digital contract terms](digital-contract-property-terms.md) — never auto-add legal conditions or replace saved property wording; signature sharing uses the verified published domain.
 - [Mixed-owner data scoping](mixed-owner-data-scoping.md) — service tabs must never reuse chalet-only data sources; scope every query and action to the selected product.
 - [Print-flow verification](print-flow-verification.md) — service receipts must print and export from the same visible DOM; never retain a parallel receipt template or report-renderer fallback.
 - [Database declaration refresh](database-declaration-refresh.md) — after shared DB schema edits, regenerate its declarations before API typechecking or stale table types can report false errors.
