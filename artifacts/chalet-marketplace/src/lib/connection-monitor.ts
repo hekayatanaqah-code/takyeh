@@ -57,8 +57,14 @@ export class ConnectionMonitor {
     if (!this.relevant(input)) return this.nativeFetch(input, init);
     const id = Symbol();
     const scope = this.scope();
-    this.requests.set(id, this.now());
-    this.update({ oldestRequest: Math.min(...this.requests.values()) });
+    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    const path = new URL(input instanceof Request ? input.url : String(input), this.apiUrl).pathname;
+    // Customer notes have their own inline save status. A slow autosave must
+    // not make the whole page inert and prevent the next edit. Still observe
+    // transport failures below, and never replay the write after recovery.
+    const noteAutosave = method === "PUT" && /\/owner\/(?:customers|service-clients)\/[^/]+\/note$/.test(path);
+    if (!noteAutosave) this.requests.set(id, this.now());
+    this.update({ oldestRequest: this.requests.size ? Math.min(...this.requests.values()) : null });
     try {
       // HTTP errors (including 401/403/500) are not evidence of lost internet.
       return await this.nativeFetch(input, init);
@@ -66,8 +72,6 @@ export class ConnectionMonitor {
       const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
       if (!signal?.aborted && !(error instanceof Error && error.name === "AbortError")) {
         this.update({ poor: true });
-        const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-        const path = new URL(input instanceof Request ? input.url : String(input), this.apiUrl).pathname;
         // In particular, GET /auth/logout and other authentication actions are
         // NOT read-only. Writes and authentication actions are never replayed.
         const authAction = /\/(?:auth|logout|login|callback|verify|activate|reset|impersonat)[^/]*(?:\/|$)/i.test(path)

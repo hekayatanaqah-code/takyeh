@@ -29,6 +29,38 @@ test("HTTP authorization and server errors are not mistaken for offline failures
     assert.equal(monitor.getSnapshot().poor, false);
   }
 });
+test("slow customer-note autosaves do not block the editor or hide unrelated foreground reads", async () => {
+  for (const endpoint of ["customers", "service-clients"]) {
+    const finish: Array<() => void> = [];
+    const monitor = new ConnectionMonitor(() => new Promise(resolve => {
+      finish.push(() => resolve(new Response()));
+    }), API, () => 100);
+    const save = monitor.fetch(`${API}/owner/${endpoint}/0501234567/note?providerId=12`, { method: "PUT", body: '{"notes":"draft"}' });
+    assert.equal(monitor.getSnapshot().oldestRequest, null);
+    const read = monitor.fetch(`${API}/owner/profile`);
+    assert.equal(monitor.getSnapshot().oldestRequest, 100);
+    finish[0]();
+    await save;
+    assert.equal(monitor.getSnapshot().oldestRequest, 100);
+    finish[1]();
+    await read;
+    assert.equal(monitor.getSnapshot().oldestRequest, null);
+  }
+});
+test("background note failures still report poor connectivity and are never replayed", async () => {
+  let writes = 0;
+  const monitor = new ConnectionMonitor(async input => {
+    if (String(input).endsWith("/healthz")) return new Response();
+    ++writes;
+    throw new TypeError("Offline");
+  }, API);
+  await assert.rejects(monitor.fetch(`${API}/owner/customers/0501234567/note`, { method: "PUT", body: '{"notes":"draft"}' }));
+  assert.equal(monitor.getSnapshot().oldestRequest, null);
+  assert.equal(monitor.getSnapshot().poor, true);
+  await monitor.probe();
+  assert.equal(monitor.getSnapshot().poor, false);
+  assert.equal(writes, 1);
+});
 test("failed saves are never replayed and their options remain unchanged", async () => {
   const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
   const failure = new TypeError("Failed to fetch");

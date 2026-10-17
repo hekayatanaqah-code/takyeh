@@ -7,3 +7,9 @@ Network recovery must preserve the mounted page and form inputs. Never reload an
 **Why:** A transport error does not prove that the server rejected a write. Retrying an ambiguous payment or save can duplicate it, and a full page refresh would discard unsaved work.
 
 **How to apply:** Automatic retries are limited to idempotent data reads; GET authentication endpoints such as logout are actions, not reads. Respect cancellation and navigation changes. Refresh failed empty queries rather than replacing populated form data. Only pre-application boot recovery may reload, because no form has mounted yet.
+
+Customer-note autosaves must not activate the foreground loading overlay. Keep transport monitoring and explicit error/retry behavior intact.
+
+**Why:** Browser verification showed that a slow note save made the whole app inert, preventing the owner from continuing to type while the save was in flight.
+
+**How to apply:** Exempt only the customer-note autosave from foreground loading accounting, not from connection-error handling. Retain normal loading behavior for all other requests.

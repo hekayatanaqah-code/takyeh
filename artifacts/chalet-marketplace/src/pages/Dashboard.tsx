@@ -50,6 +50,8 @@ import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
 import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
+import { CustomerDate } from "@/components/owner/CustomerDate";
+import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
 import {
   getServiceClientIdField,
   getServiceReceiptFinancialSummary,
@@ -24115,7 +24117,7 @@ const PERIOD_LABEL: Record<string, string> = {
   fullday:  "يومي كامل",
 };
 
-function CustomersTab() {
+function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "hijri" | "gregorian" }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { unit: repUnit } = useAdminFinance();
@@ -24132,11 +24134,16 @@ function CustomersTab() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError]     = useState(false);
   const [profileTab, setProfileTab]   = useState<"bookings" | "contracts" | "insurance">("bookings");
-  const [profileCalView, setProfileCalView]           = useState<"hijri" | "gregorian">("hijri");
+  const [profileCalView, setProfileCalView]           = useState<"hijri" | "gregorian">(calendarPreference);
   const [profileBookingMonth, setProfileBookingMonth] = useState<string>("all");
   const [profileBookingPage, setProfileBookingPage]   = useState(1);
-  const [note, setNote]               = useState("");
-  const [savingNote, setSavingNote]   = useState(false);
+  const notesRef = useRef<CustomerNotesHandle>(null);
+  const profileRequest = useRef(0);
+  useEffect(() => {
+    setProfileCalView(calendarPreference);
+    setProfileBookingMonth("all");
+    setProfileBookingPage(1);
+  }, [calendarPreference]);
 
   /* ── Edit modal state ── */
   const [editOpen, setEditOpen]   = useState(false);
@@ -24237,38 +24244,39 @@ function CustomersTab() {
   });
 
   async function loadProfile(phone: string) {
+    const request = ++profileRequest.current;
+    try { await notesRef.current?.flush(); } catch { return; }
+    if (request !== profileRequest.current) return;
     setSelected(phone);
     setProfile(null);
     setProfileError(false);
     setProfileLoading(true);
-    setProfileCalView("hijri");
+    setProfileCalView(calendarPreference);
     setProfileBookingMonth("all");
     setProfileBookingPage(1);
     try {
       const r = await apiFetch(customerApiPath(phone));
+      if (request !== profileRequest.current) return;
       if (r.ok) {
         const data: CustomerProfile = await r.json();
+        if (request !== profileRequest.current) return;
         setProfile(data);
-        setNote(data.note ?? "");
       } else {
         setProfileError(true);
       }
     } catch {
-      setProfileError(true);
+      if (request === profileRequest.current) setProfileError(true);
     }
-    setProfileLoading(false);
+    if (request === profileRequest.current) setProfileLoading(false);
   }
 
-  async function handleSaveNote() {
-    if (!selected) return;
-    setSavingNote(true);
-    await apiFetch(customerApiPath(selected, "/note"), {
+  async function saveCustomerNote(phone: string, notes: string) {
+    const response = await apiFetch(customerApiPath(phone, "/note"), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: note }),
+      body: JSON.stringify({ notes }),
+      keepalive: true,
     });
-    setSavingNote(false);
-    toast({ title: "تم حفظ الملاحظة" });
+    if (!response.ok) throw new Error("تعذّر حفظ الملاحظة");
   }
 
   const statCard = (label: string, value: string) => (
@@ -24363,22 +24371,16 @@ function CustomersTab() {
                     </span>
                   </div>
                 </div>
-                <p dir="ltr" className="text-xs text-muted-foreground mt-0.5 text-right">{c.client_phone}</p>
+                <p dir="ltr" className="text-xs text-muted-foreground mt-0.5 text-right">{toAr(c.client_phone)}</p>
                 {providers && providers.length > 0 && (
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 truncate">{providers.join("، ")}</p>
                 )}
-                {c.last_booking_date && (() => {
-                  const { hijri, gregorian } = formatDualDate(c.last_booking_date);
-                  return (
+                {c.last_booking_date && (
                     <div className="mt-1 flex flex-col gap-0">
                       <p className="text-xs text-muted-foreground">{src === "service" ? "آخر موعد:" : "آخر حجز:"}</p>
-                      <p className="text-xs font-medium text-foreground/90 leading-snug">
-                        {hijri.replace(/\s*هـ\s*$/, "")} هـ
-                      </p>
-                      <p className="text-xs text-muted-foreground leading-snug">{gregorian}</p>
+                      <span className="text-xs leading-snug"><CustomerDate value={c.last_booking_date} preference={profileCalView} /></span>
                     </div>
-                  );
-                })()}
+                )}
               </button>
             )})}
           </div>
@@ -24390,7 +24392,10 @@ function CustomersTab() {
         <div className="flex-1 min-w-0 flex flex-col gap-5">
           {/* Back button (mobile) */}
           <button
-            onClick={() => { setSelected(null); setProfile(null); }}
+            onClick={async () => {
+              try { await notesRef.current?.flush(); } catch { return; }
+              ++profileRequest.current; setSelected(null); setProfile(null);
+            }}
             className="lg:hidden flex items-center gap-1.5 text-sm text-primary font-medium"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -24422,12 +24427,13 @@ function CustomersTab() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-lg font-bold text-foreground">{profile.clientName}</p>
-                    <p dir="ltr" className="text-sm text-muted-foreground">{profile.clientPhone}</p>
+                    <p dir="ltr" className="text-sm text-muted-foreground">{toAr(profile.clientPhone)}</p>
                   </div>
                   {/* Edit & Delete actions */}
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => {
+                      onClick={async () => {
+                        try { await notesRef.current?.flush(); } catch { return; }
                         setEditName(profile.clientName);
                         setEditPhone(profile.clientPhone);
                         setEditOpen(true);
@@ -24438,7 +24444,10 @@ function CustomersTab() {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => setDeleteOpen(true)}
+                      onClick={async () => {
+                        try { await notesRef.current?.flush(); } catch { return; }
+                        setDeleteOpen(true);
+                      }}
                       className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                       title="حذف العميل"
                     >
@@ -24462,14 +24471,7 @@ function CustomersTab() {
                   </div>
                   <div className="bg-muted/40 rounded-xl p-4 flex flex-col gap-1">
                     <p className="text-xs text-muted-foreground">آخر حجز</p>
-                    <p className="text-base font-bold text-foreground">
-                      {profile.lastBookingDate ? (() => {
-                        const d = formatDualDate(profile.lastBookingDate);
-                        return profileCalView === "gregorian"
-                          ? d.gregorian + " م"
-                          : d.hijri.replace(/\s*هـ\s*$/, "") + " هـ";
-                      })() : "—"}
-                    </p>
+                    <CustomerDate value={profile.lastBookingDate} preference={profileCalView} />
                   </div>
                 </div>
               </div>
@@ -24655,30 +24657,29 @@ function CustomersTab() {
                                   <tbody className="divide-y divide-border">
                                     {pagedBkgs.map((b) => {
                                       const st         = bookingStatus(b);
-                                      const dual       = b.booking_date   ? formatDualDate(b.booking_date) : null;
-                                      const cancelDual = b.cancelled_at   ? formatDualDate(toRiyadhDate(b.cancelled_at))  : null;
-                                      const origDual   = b.original_date  ? formatDualDate(b.original_date.slice(0, 10))  : null;
-                                      const reschedDual= b.rescheduled_at ? formatDualDate(toRiyadhDate(b.rescheduled_at)) : null;
                                       return (
                                         <tr key={b.id} className="hover:bg-muted/20 transition-colors">
                                           <td className="px-2 py-2.5 font-mono text-xs font-bold text-primary align-top">#{toArN(b.id)}</td>
                                           <td className="px-2 py-2.5 text-xs align-top">
-                                            {dual ? (
+                                            {b.booking_date ? (
                                               <div className="flex flex-col gap-0.5">
-                                                <span className="font-medium text-foreground">{dual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
-                                                <span className="text-muted-foreground">{dual.gregorian}</span>
+                                                <CustomerDate value={b.booking_date} preference={profileCalView} />
                                                 <span className="text-muted-foreground/70">{durationLabel(b.duration_days)} · {PERIOD_LABEL[b.period] ?? b.period}</span>
-                                                {cancelDual && (
+                                                {b.cancelled_at && (
                                                   <div className="flex flex-col mt-0.5 gap-0 whitespace-nowrap">
-                                                    <span className="text-red-700"><span className="font-semibold">تم الإلغاء:</span> {cancelDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
-                                                    <span className="text-red-700"><span className="font-semibold">الموافق:</span> {cancelDual.gregorian} م</span>
+                                                    <span className="font-semibold text-red-700">تم الإلغاء:</span>
+                                                    <CustomerDate value={toRiyadhDate(b.cancelled_at)} preference={profileCalView} />
                                                   </div>
                                                 )}
-                                                {origDual && (
+                                                {b.original_date && (
                                                   <div className="flex flex-col mt-0.5 gap-0 whitespace-nowrap">
-                                                    <span className="text-blue-700"><span className="font-semibold">الموعد السابق:</span> {origDual.hijri.replace(/\s*هـ\s*$/, "")} هـ</span>
-                                                    {reschedDual && (
-                                                      <span className="text-blue-700"><span className="font-semibold">تاريخ التعديل:</span> {reschedDual.hijri.replace(/\s*هـ\s*$/, "")} هـ | {reschedDual.gregorian} م</span>
+                                                    <span className="font-semibold text-blue-700">الموعد السابق:</span>
+                                                    <CustomerDate value={b.original_date.slice(0, 10)} preference={profileCalView} />
+                                                    {b.rescheduled_at && (
+                                                      <>
+                                                        <span className="font-semibold text-blue-700">تاريخ التعديل:</span>
+                                                        <CustomerDate value={toRiyadhDate(b.rescheduled_at)} preference={profileCalView} />
+                                                      </>
                                                     )}
                                                   </div>
                                                 )}
@@ -24749,8 +24750,7 @@ function CustomersTab() {
                                   <tr key={b.id} className="hover:bg-muted/20 transition-colors">
                                     <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toArN(b.id)}</td>
                                     <td className="px-3 py-2.5 text-xs">
-                                      <p className="font-medium text-foreground">{b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}</p>
-                                      {b.booking_date && <p className="text-muted-foreground">{formatDualDate(b.booking_date).gregorian}</p>}
+                                      <CustomerDate value={b.booking_date} preference={profileCalView} />
                                     </td>
                                     <td className="px-3 py-2.5 text-xs text-muted-foreground">{b.chalet_name ?? "—"}</td>
                                     <td className="px-3 py-2.5 text-center">
@@ -24793,8 +24793,7 @@ function CustomersTab() {
                                     <tr key={b.id} className="hover:bg-muted/20 transition-colors">
                                       <td className="px-3 py-2.5 font-mono text-xs font-bold text-primary">#{toArN(b.id)}</td>
                                       <td className="px-3 py-2.5 text-xs">
-                                        <p className="font-medium text-foreground">{b.booking_date ? formatDualDate(b.booking_date).hijri.replace(/\s*هـ\s*$/, "") + " هـ" : "—"}</p>
-                                        {b.booking_date && <p className="text-muted-foreground">{formatDualDate(b.booking_date).gregorian}</p>}
+                                        <CustomerDate value={b.booking_date} preference={profileCalView} />
                                       </td>
                                       <td className="px-3 py-2.5 text-foreground font-semibold text-xs">
                                         {toArN(Math.round(Number(b.insurance_fee)))} ر.س
@@ -24817,29 +24816,9 @@ function CustomersTab() {
                 );
               })()}
               {/* ── Private Notes ── */}
-              <div className="bg-card border border-border rounded-2xl p-5">
-                <h3 className="font-bold text-sm text-foreground mb-1 flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-primary" />
-                  ملاحظات داخلية
-                </h3>
-                <p className="text-xs text-muted-foreground mb-3">
-                  هذه الملاحظات مخفية تماماً عن العميل — تُستخدم للتذكير والملاحظات الداخلية فقط
-                </p>
-                <Textarea
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="مثال: عميل VIP، يفضّل الفترة الصباحية، تأخّر في الخروج مرة واحدة…"
-                  rows={4}
-                  className="text-sm resize-none"
-                  dir="rtl"
-                />
-                <div className="flex justify-end mt-3">
-                  <Button size="sm" onClick={handleSaveNote} disabled={savingNote} className="gap-2">
-                    {savingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Archive className="w-3.5 h-3.5" />}
-                    حفظ الملاحظة
-                  </Button>
-                </div>
-              </div>
+              <CustomerNotes key={`${serviceScope ? scopedProviderId : "chalet"}:${profile.clientPhone}`}
+                ref={notesRef} initialValue={profile.note ?? ""}
+                save={value => saveCustomerNote(profile.clientPhone, value)} />
             </>
           )}
         </div>
@@ -24865,9 +24844,11 @@ function CustomersTab() {
             <div>
               <label className="text-sm font-medium text-foreground mb-1 block">رقم الجوال</label>
               <Input
-                value={editPhone}
-                onChange={(e) => setEditPhone(e.target.value)}
-                placeholder="05xxxxxxxx"
+                type="tel"
+                inputMode="tel"
+                value={toAr(editPhone)}
+                onChange={(e) => setEditPhone(fromAr(e.target.value))}
+                placeholder="٠٥••••••••"
                 dir="ltr"
                 className="text-left"
               />
@@ -24904,7 +24885,7 @@ function CustomersTab() {
               <br />
               <span className="font-semibold text-foreground">{profile?.clientName}</span>
               {" — "}
-              <span dir="ltr">{profile?.clientPhone}</span>
+              <span dir="ltr">{toAr(profile?.clientPhone)}</span>
               <br />
               <span className="text-destructive/80 text-sm">لا يمكن التراجع عن هذه العملية.</span>
             </DialogDescription>
@@ -26782,7 +26763,7 @@ export default function Dashboard() {
                         {selectedServiceTab === "reviews" && <ServiceReviewsTab />}
                         {selectedServiceTab === "customers" && (
                           <AdminFinanceCtx.Provider value={{ unit: { type: "service", id: selectedServiceId, name: selectedProvider?.businessName ?? "الخدمة" } }}>
-                            <CustomersTab />
+                            <CustomersTab key={selectedServiceId} calendarPreference={ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"} />
                           </AdminFinanceCtx.Provider>
                         )}
                         {selectedServiceTab === "messages" && <OwnerMessageSettingsTab establishmentName={selectedProvider?.businessName} providerId={selectedServiceId} />}
@@ -27061,7 +27042,7 @@ export default function Dashboard() {
         )}
         {visiblePropertyTab === "customers" && (
           <AdminFinanceCtx.Provider value={{ unit: { type: "all" } }}>
-            <CustomersTab />
+            <CustomersTab calendarPreference={ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"} />
           </AdminFinanceCtx.Provider>
         )}
         {visiblePropertyTab === "digitalContracts" && (
