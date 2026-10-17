@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { propertyStayComplete } from "../lib/booking-completion";
 import { sendBookingArchive } from "../lib/booking-archive";
-import { INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
+import { bookingCheckoutAt, INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import multer from "multer";
 import sharp from "sharp";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -1854,6 +1854,11 @@ router.patch("/bookings/:id", async (req, res) => {
       if (!existing) return { error: "الحجز غير موجود", status: 404 };
       if (!await propertyStayComplete(existing))
         return { error: INSURANCE_NOT_READY_MESSAGE, status: 409 };
+      const deduction = insuranceDeducted ?? Number(existing.insuranceDeducted ?? 0);
+      if (deduction > Number(existing.insuranceFee ?? 0))
+        return { error: "لا يمكن أن يتجاوز الخصم مبلغ التأمين", status: 400 };
+      if (deduction > 0 && !(body.data.insuranceDeductReason ?? existing.insuranceDeductReason)?.trim())
+        return { error: "يجب توثيق سبب خصم التأمين", status: 400 };
     }
     const [row] = await tx
     .update(ownerBookingsTable)
@@ -5232,6 +5237,7 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
       period: ownerBookingsTable.period,
       insuranceFee: ownerBookingsTable.insuranceFee,
       insuranceRefunded: ownerBookingsTable.insuranceRefunded,
+      insuranceReceived: ownerBookingsTable.insuranceReceived,
       insuranceDeducted: ownerBookingsTable.insuranceDeducted,
       insuranceDeductReason: ownerBookingsTable.insuranceDeductReason,
       insuranceProofImages: ownerBookingsTable.insuranceProofImages,
@@ -5252,7 +5258,18 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
     )
     .orderBy(desc(ownerBookingsTable.bookingDate));
 
-  return res.json(bookings);
+  const propertyIds = [...new Set(bookings.flatMap(booking => booking.submissionId ? [booking.submissionId] : []))];
+  const [liveProperties, submittedProperties] = propertyIds.length ? await Promise.all([
+    db.select().from(chaletsTable).where(inArray(chaletsTable.submissionId, propertyIds)),
+    db.select().from(chaletSubmissionsTable).where(inArray(chaletSubmissionsTable.id, propertyIds)),
+  ]) : [[], []];
+  const liveById = new Map(liveProperties.map(property => [property.submissionId, property]));
+  const submittedById = new Map(submittedProperties.map(property => [property.id, property]));
+  return res.json(bookings.map(booking => {
+    const times = booking.submissionId ? liveById.get(booking.submissionId) ?? submittedById.get(booking.submissionId) : undefined;
+    const checkoutAt = bookingCheckoutAt(booking, times);
+    return { ...booking, checkoutAt: Number.isFinite(checkoutAt) ? new Date(checkoutAt).toISOString() : null };
+  }));
 });
 
 /* ── GET /owner/submissions/:id — fetch one submission (owner only) ── */

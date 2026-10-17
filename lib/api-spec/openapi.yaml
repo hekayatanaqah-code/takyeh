@@ -21,6 +21,40 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/deposits:
+    get:
+      operationId: getOwnerDeposits
+      tags: [owner]
+      summary: Owner property insurance entries with authoritative Saudi checkout instants
+      responses:
+        "200":
+          description: All non-cancelled insured bookings for the signed-in owner
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, clientName, bookingDate, durationDays, insuranceFee, insuranceRefunded, insuranceReceived, checkoutAt]
+                  properties:
+                    id: { type: integer }
+                    clientName: { type: string }
+                    clientPhone: { type: [string, "null"] }
+                    bookingDate: { type: string, format: date }
+                    durationDays: { type: integer }
+                    period: { type: [string, "null"] }
+                    submissionId: { type: [integer, "null"] }
+                    chaletTitle: { type: [string, "null"] }
+                    insuranceFee: { type: string }
+                    insuranceRefunded: { type: boolean }
+                    insuranceReceived: { type: [boolean, "null"] }
+                    insuranceDeducted: { type: [string, "null"] }
+                    insuranceDeductReason: { type: [string, "null"] }
+                    insuranceProofImages: { type: [string, "null"] }
+                    cancelledAt: { type: [string, "null"] }
+                    checkoutAt: { type: [string, "null"], format: date-time }
+        "401":
+          description: Authentication required
   /owner/bookings/archive:
     get:
       operationId: getOwnerBookingArchive

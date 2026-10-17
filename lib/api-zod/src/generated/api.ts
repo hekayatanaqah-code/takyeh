@@ -9,6 +9,30 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Owner property insurance entries with authoritative Saudi checkout instants
+ */
+export const GetOwnerDepositsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "clientName": zod.string(),
+  "clientPhone": zod.string().nullish(),
+  "bookingDate": zod.date(),
+  "durationDays": zod.number().int(),
+  "period": zod.string().nullish(),
+  "submissionId": zod.number().int().nullish(),
+  "chaletTitle": zod.string().nullish(),
+  "insuranceFee": zod.string(),
+  "insuranceRefunded": zod.boolean(),
+  "insuranceReceived": zod.boolean().nullable(),
+  "insuranceDeducted": zod.string().nullish(),
+  "insuranceDeductReason": zod.string().nullish(),
+  "insuranceProofImages": zod.string().nullish(),
+  "cancelledAt": zod.string().nullish(),
+  "checkoutAt": zod.date().nullable()
+})
+export const GetOwnerDepositsResponse = zod.array(GetOwnerDepositsResponseItem)
+
+
+/**
  * @summary Owner-scoped booking archive, filtered by stay start date, with ten records per page
  */
 export const getOwnerBookingArchiveQueryTabDefault = `cancelled`;

@@ -57,8 +57,8 @@ export function reportExcelDate(value: string): Date {
   return new Date(`${dateOnly}T00:00:00Z`);
 }
 
-export function reportPropertyTitle(context: ArchiveReportContext): string {
-  return `أرشيف حجوزات: ${context.propertyNames.length ? context.propertyNames.join("، ") : "جميع العقارات"}`;
+export function reportPropertyTitle(context: ArchiveReportContext, title = "أرشيف حجوزات"): string {
+  return `${title}: ${context.propertyNames.length ? context.propertyNames.join("، ") : "جميع العقارات"}`;
 }
 
 export function reportIssuedAt(context: ArchiveReportContext): string {

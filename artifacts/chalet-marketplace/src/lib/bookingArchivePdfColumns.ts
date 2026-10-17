@@ -21,8 +21,11 @@ export function archivePdfColumns(table: ArchiveExportTable): ArchivePdfColumn[]
     "تاريخ بداية الإقامة": 130, "عدد الأيام": 52, "الفترة": 76, "حالة التأمين": 110,
     "سبب الإلغاء": 160, "سبب التعديل": 170,
     "الموعد السابق": 130, "الموعد الجديد": 130, "تاريخ التعديل": 130,
+    "تاريخ الخروج": 130, "وقت الخروج (السعودية)": 120, "سبب الخصم": 175,
+    "حالة الاستلام": 110, "حالة التسوية": 135, "توثيق الضرر": 110,
   };
-  return archiveAccountingOrder(table.headers, table.numericColumns.length > 0).map(index => ({
+  const order = table.kind === "insurance" ? table.headers.map((_, index) => index) : archiveAccountingOrder(table.headers, table.numericColumns.length > 0);
+  return order.map(index => ({
     title: compactLabels[table.headers[index]] ?? table.headers[index].replace(" (ر.س)", ""),
     width: widths[table.headers[index]] ?? 99, fields: [{ index }],
   }));

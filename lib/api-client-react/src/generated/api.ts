@@ -54,6 +54,7 @@ import type {
   GetChaletsParams,
   GetOwnerBookingArchive200,
   GetOwnerBookingArchiveParams,
+  GetOwnerDeposits200Item,
   GetOwnerWallet200,
   GetPhotographerStatement200,
   GetPhotographerStatementParams,
@@ -165,6 +166,107 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetOwnerDepositsUrl = () => {
+
+
+
+
+  return `/api/owner/deposits`
+}
+
+/**
+ * @summary Owner property insurance entries with authoritative Saudi checkout instants
+ */
+export const getOwnerDeposits = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetOwnerDeposits200Item[]> => {
+
+  return customFetch<GetOwnerDeposits200Item[]>(getGetOwnerDepositsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOwnerDepositsQueryKey = () => {
+    return [
+    `/api/owner/deposits`
+    ] as const;
+    }
+
+
+export const getGetOwnerDepositsQueryOptions = <TData = Awaited<ReturnType<typeof getOwnerDeposits>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerDeposits>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOwnerDepositsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOwnerDeposits>>> = ({ signal }) => getOwnerDeposits({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOwnerDeposits>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOwnerDepositsQueryResult = NonNullable<Awaited<ReturnType<typeof getOwnerDeposits>>>
+export type GetOwnerDepositsQueryError = ErrorType<void>
+
+
+export function useGetOwnerDeposits<TData = Awaited<ReturnType<typeof getOwnerDeposits>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerDeposits>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerDeposits>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerDeposits>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerDeposits<TData = Awaited<ReturnType<typeof getOwnerDeposits>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerDeposits>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerDeposits>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerDeposits>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerDeposits<TData = Awaited<ReturnType<typeof getOwnerDeposits>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerDeposits>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Owner property insurance entries with authoritative Saudi checkout instants
+ */
+
+export function useGetOwnerDeposits<TData = Awaited<ReturnType<typeof getOwnerDeposits>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerDeposits>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOwnerDepositsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetOwnerBookingArchiveUrl = (params?: GetOwnerBookingArchiveParams,) => {
   const normalizedParams = new URLSearchParams();

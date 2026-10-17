@@ -9,6 +9,10 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
 import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
+import { getOwnerDeposits } from "@workspace/api-client-react";
+import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
+import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
+import { Download } from "lucide-react";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
@@ -22570,23 +22574,7 @@ function ReviewsTab() {
 }
 
 /* ── DepositsTab ─────────────────────────────── */
-interface DepositEntry {
-  id: number;
-  clientName: string;
-  clientPhone?: string | null;
-  bookingDate: string;
-  durationDays: number;
-  period?: string | null;
-  insuranceFee: string;
-  insuranceRefunded: boolean;
-  insuranceReceived?: boolean | null;
-  insuranceDeducted?: string | null;
-  insuranceDeductReason?: string | null;
-  insuranceProofImages?: string | null;
-  submissionId?: number | null;
-  chaletTitle?: string | null;
-  cancelledAt?: string | null;
-}
+type DepositEntry = InsuranceEntry;
 
 function DepositsTab() {
   const { toast } = useToast();
@@ -22608,30 +22596,20 @@ function DepositsTab() {
   const [calendarMode, setCalendarMode] = useState<"hijri" | "gregorian">("hijri");
   const [currentPage, setCurrentPage] = useState(1);
   const [stayClock, setStayClock] = useState(Date.now);
+  const [insuranceExporting, setInsuranceExporting] = useState(false);
   useEffect(() => {
     const timer = window.setInterval(() => setStayClock(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
-  const { data: depositChalets = [] } = useQuery<any[]>({
-    queryKey: ["owner", "chalets"],
-    queryFn: async () => {
-      const response = await apiFetch("/owner/chalets");
-      if (!response.ok) throw new Error("تعذر تحميل توقيتات العقارات");
-      return response.json();
-    },
-  });
-  const canSettleDeposit = (entry: DepositEntry) => isStayComplete(
-    entry, depositChalets.find(chalet => chalet.submissionId === entry.submissionId), stayClock,
-  );
-
-  const { data: deposits = [], isLoading } = useQuery<DepositEntry[]>({
+  const { data: deposits = [], isLoading, isFetching: depositsFetching, isError: depositsError } = useQuery<DepositEntry[]>({
     queryKey: ["owner", "deposits"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/deposits");
-      if (!r.ok) return [];
-      return r.json();
-    },
+    queryFn: () => getOwnerDeposits({ credentials: "include" }),
+    refetchInterval: 30_000,
   });
+  const canSettleDeposit = (entry: DepositEntry) => {
+    const latest = deposits.find(deposit => deposit.id === entry.id);
+    return !depositsError && !!latest && canSettleInsurance(latest, stayClock);
+  };
 
   const patchMutation = useMutation({
     mutationFn: async ({ id, patch }: { id: number; patch: Record<string, unknown> }) => {
@@ -22812,50 +22790,40 @@ function DepositsTab() {
     return { primary, secondary };
   };
 
-  const filtered = useMemo(() => {
-    let result = deposits;
-    if (filterStatus === "pending") result = result.filter((d) => !d.insuranceRefunded);
-    if (filterStatus === "resolved") result = result.filter((d) => d.insuranceRefunded);
-    if (filterMonth) {
-      if (calendarMode === "gregorian") {
-        result = result.filter((d) => d.bookingDate?.startsWith(filterMonth));
-      } else {
-        result = result.filter((d) => {
-          if (!d.bookingDate) return false;
-          const h = toHijriComponents(new Date(d.bookingDate + "T00:00:00"));
-          return `${h.year}-${String(h.month).padStart(2, "0")}` === filterMonth;
-        });
-      }
-    } else if (filterYear) {
-      if (calendarMode === "gregorian") {
-        result = result.filter((d) => d.bookingDate?.startsWith(filterYear));
-      } else {
-        result = result.filter((d) => {
-          if (!d.bookingDate) return false;
-          const h = toHijriComponents(new Date(d.bookingDate + "T00:00:00"));
-          return String(h.year) === filterYear;
-        });
-      }
-    }
-    if (filterChalet !== "all") result = result.filter((d) => String(d.submissionId) === filterChalet);
-    if (searchQuery.trim()) {
-      const rawQ = searchQuery.trim();
-      const norm = (s: string) =>
-        s.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).toLowerCase();
-      const qNorm = norm(rawQ);
-      const qDigits = qNorm.replace(/\D/g, "");
-      result = result.filter((d) => {
-        if (norm(d.clientName ?? "").includes(qNorm)) return true;
-        if (d.clientPhone && norm(d.clientPhone).includes(qNorm)) return true;
-        if (qDigits.length > 0) {
-          const ph = norm(d.clientPhone ?? "").replace(/\D/g, "");
-          if (ph.includes(qDigits)) return true;
-        }
-        return false;
+  const insuranceFilters = { status: filterStatus, month: filterMonth, year: filterYear, chalet: filterChalet, search: searchQuery, calendar: calendarMode };
+  const filtered = useMemo(() => filterInsuranceEntries(deposits, insuranceFilters),
+    [deposits, filterStatus, filterMonth, filterYear, filterChalet, searchQuery, calendarMode]);
+
+  async function exportInsurance(format: "xlsx" | "pdf") {
+    if (insuranceExporting || depositsError || depositsFetching || !filtered.length) return;
+    setInsuranceExporting(true);
+    const filters = { ...insuranceFilters };
+    try {
+      const [freshEntries, response] = await Promise.all([
+        getOwnerDeposits({ credentials: "include" }), apiFetch("/owner/profile"),
+      ]);
+      if (!response.ok) throw new Error("تعذّر تحميل هوية المالك للتقرير");
+      const profile = await response.json();
+      const entries = filterInsuranceEntries(freshEntries, filters);
+      if (!entries.length) { toast({ title: "لا توجد تأمينات مطابقة للتصدير" }); return; }
+      const preference = profile.reportsCalPref === "gregorian" ? "gregorian" : profile.reportsCalPref === "hijri" ? "hijri" : filters.calendar;
+      const table = buildInsuranceReport(entries, preference);
+      const { exportArchiveFile } = await import("@/lib/bookingArchiveExport");
+      await exportArchiveFile(format, table, {
+        ownerName: profile.fullName || profile.businessName || "اسم المالك غير مسجل",
+        ownerPhone: profile.phone || "", platformLogoUrl: takyahLogoSrc, calendarPreference: preference,
+        propertyNames: [...new Set(entries.map(entry => entry.chaletTitle || "عقار غير متاح"))],
+        issuedAt: new Date().toISOString(),
+        search: [
+          filters.status === "pending" ? "بانتظار القرار" : filters.status === "resolved" ? "تمت التسوية" : "جميع الحالات",
+          filters.month ? `الشهر: ${filters.month}` : filters.year ? `السنة: ${filters.year}` : "جميع الفترات",
+          `التقويم: ${filters.calendar === "hijri" ? "هجري" : "ميلادي"}`, filters.search ? `البحث: ${filters.search}` : "",
+        ].filter(Boolean).join(" | "),
       });
-    }
-    return result;
-  }, [deposits, filterStatus, filterMonth, filterYear, filterChalet, searchQuery, calendarMode]);
+    } catch (error) {
+      toast({ title: "تعذّر تصدير تقرير التأمينات", description: error instanceof Error ? error.message : "أعد المحاولة", variant: "destructive" });
+    } finally { setInsuranceExporting(false); }
+  }
 
   const PAGE_SIZE = 10;
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -22901,6 +22869,18 @@ function DepositsTab() {
             جميع الحجوزات التي تحتوي على مبلغ تأمين
           </p>
         </div>
+        <DropdownMenu dir="rtl">
+          <DropdownMenuTrigger asChild>
+            <Button className="h-auto min-h-10 gap-2 whitespace-normal text-center text-xs sm:text-sm" disabled={insuranceExporting || depositsFetching || depositsError || !filtered.length} data-testid="export-insurance-report">
+              {insuranceExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {insuranceExporting ? "جارٍ التصدير..." : "تصدير تقرير التأمينات (Excel / PDF)"}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => exportInsurance("xlsx")} data-testid="export-insurance-xlsx">تصدير Excel</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => exportInsurance("pdf")} data-testid="export-insurance-pdf">تصدير PDF</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         {pendingCount > 0 && (
           <span className="self-start sm:self-auto bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-sm font-semibold px-3 py-1.5 rounded-full">
             🔒 {toAr(pendingCount)} بانتظار القرار
@@ -22911,11 +22891,12 @@ function DepositsTab() {
       {/* Summary Cards — dynamic: reflects active filters */}
       {deposits.length > 0 && (() => {
         const totalDeposits  = filtered.reduce((s, d) => s + Number(d.insuranceFee), 0);
-        const totalDeducted  = filtered.reduce((s, d) => s + Number(d.insuranceDeducted ?? 0), 0);
-        const totalRefundable = filtered
-          .filter((d) => !d.insuranceRefunded && !d.cancelledAt)
-          .reduce((s, d) => s + Number(d.insuranceFee), 0);
-        const totalReturned = Math.max(0, totalDeposits - totalDeducted - totalRefundable);
+        let balances: ReturnType<typeof insuranceAmounts>[];
+        try { balances = filtered.map(insuranceAmounts); }
+        catch (error) { return <p role="alert" className="text-sm text-destructive">{error instanceof Error ? error.message : "تعذّر حساب أرصدة التأمينات"}</p>; }
+        const totalDeducted = balances.reduce((s, d) => s + Math.round(d.deducted * 100), 0) / 100;
+        const totalRefundable = balances.reduce((s, d) => s + Math.round(d.held * 100), 0) / 100;
+        const totalReturned = balances.reduce((s, d) => s + Math.round(d.returned * 100), 0) / 100;
         return (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800 rounded-xl p-3 text-center">
@@ -23100,6 +23081,8 @@ function DepositsTab() {
         </div>
       )}
 
+      <p className="text-xs text-muted-foreground">التقرير يشمل جميع التأمينات المطابقة للفلاتر، وليس الصفحة الحالية فقط. المحتجز يُحسب من التأمين المستلم فقط.</p>
+      {depositsError && <p role="alert" className="text-sm text-destructive">تعذّر تحديث التأمينات ومواعيد الخروج؛ قرارات التسوية والتصدير مقفلة حتى نجاح الاتصال.</p>}
       {/* Cards */}
       {!isLoading && pagedFiltered.map((d) => {
         const status = getStatus(d);
@@ -23123,6 +23106,7 @@ function DepositsTab() {
             }`}
           >
             {/* Row 1: Client + status badge */}
+            <DepositBookingHeading id={d.id} checkoutAt={d.checkoutAt} ready={canSettleDeposit(d)} settled={d.insuranceRefunded} />
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="font-semibold text-foreground truncate">{d.clientName}</div>
@@ -23292,7 +23276,7 @@ function DepositsTab() {
             <Button
               className="bg-green-600 hover:bg-green-700 text-white"
               onClick={handleRefund}
-              disabled={patchMutation.isPending}
+              disabled={patchMutation.isPending || !refundConfirm || !canSettleDeposit(refundConfirm)}
             >
               {patchMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "✅ تأكيد الإعادة"}
             </Button>
@@ -23429,7 +23413,7 @@ function DepositsTab() {
             <Button
               className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
               onClick={handleDeduct}
-              disabled={patchMutation.isPending || uploading || (deductDialog ? Number(deductAmount) > Number(deductDialog.insuranceFee) : false) || !deductAmount || Number(deductAmount) <= 0}
+              disabled={patchMutation.isPending || uploading || !deductDialog || !canSettleDeposit(deductDialog) || !deductReason.trim() || (deductDialog ? Number(deductAmount) > Number(deductDialog.insuranceFee) : false) || !deductAmount || Number(deductAmount) <= 0}
             >
               {patchMutation.isPending
                 ? <Loader2 className="w-4 h-4 animate-spin" />

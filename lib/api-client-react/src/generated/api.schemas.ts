@@ -896,6 +896,35 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type GetOwnerDeposits200Item = {
+  id: number;
+  clientName: string;
+  /** @nullable */
+  clientPhone?: string | null;
+  bookingDate: string;
+  durationDays: number;
+  /** @nullable */
+  period?: string | null;
+  /** @nullable */
+  submissionId?: number | null;
+  /** @nullable */
+  chaletTitle?: string | null;
+  insuranceFee: string;
+  insuranceRefunded: boolean;
+  /** @nullable */
+  insuranceReceived: boolean | null;
+  /** @nullable */
+  insuranceDeducted?: string | null;
+  /** @nullable */
+  insuranceDeductReason?: string | null;
+  /** @nullable */
+  insuranceProofImages?: string | null;
+  /** @nullable */
+  cancelledAt?: string | null;
+  /** @nullable */
+  checkoutAt: string | null;
+};
+
 export type GetOwnerBookingArchiveParams = {
 tab?: GetOwnerBookingArchiveTab;
 /**

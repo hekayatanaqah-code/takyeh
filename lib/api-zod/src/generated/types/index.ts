@@ -46,6 +46,7 @@ export * from './getOwnerBookingArchive200RescheduleLogItem';
 export * from './getOwnerBookingArchiveExport';
 export * from './getOwnerBookingArchiveParams';
 export * from './getOwnerBookingArchiveTab';
+export * from './getOwnerDeposits200Item';
 export * from './getOwnerWallet200';
 export * from './getPhotographerStatement200';
 export * from './getPhotographerStatementParams';

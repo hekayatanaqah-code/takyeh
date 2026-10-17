@@ -16,6 +16,7 @@ interface ExportLog {
   oldDuration: number; newDuration: number; reason: string; rescheduledAt: string;
 }
 export interface ArchiveExportTable {
+  kind?: "insurance";
   title: string; headers: string[]; rows: Cell[][]; numericColumns: number[]; summaryNote?: string;
   /** Original ISO dates for compact PDF cells, without parsing localized text or changing Excel. */
   dateValues?: { column: number; values: string[] }[];
@@ -100,7 +101,8 @@ export async function createArchiveWorkbook(source: ArchiveExportTable, context:
   });
   const dates = new Map(source.dateValues?.map(column => [column.column, column.values]));
   const calendars: ReportCalendar[] = context.calendarPreference === "hijri" ? ["hijri", "gregorian"] : ["gregorian", "hijri"];
-  const columns = archiveAccountingOrder(source.headers, source.numericColumns.length > 0).flatMap((index): { index: number; calendar: ReportCalendar | undefined }[] =>
+  const order = source.kind === "insurance" ? source.headers.map((_, index) => index) : archiveAccountingOrder(source.headers, source.numericColumns.length > 0);
+  const columns = order.flatMap((index): { index: number; calendar: ReportCalendar | undefined }[] =>
     dates.has(index) ? calendars.map(calendar => ({ index, calendar })) : [{ index, calendar: undefined }]);
   const table = {
     ...source, headers: columns.map(({ index, calendar }) =>
@@ -118,12 +120,12 @@ export async function createArchiveWorkbook(source: ArchiveExportTable, context:
   workbook.created = new Date(context.issuedAt);
   workbook.calcProperties.fullCalcOnLoad = true;
   workbook.views = [{ x: 0, y: 0, width: 16000, height: 10000, visibility: "visible", activeTab: 0, firstSheet: 0 }];
-  const sheet = workbook.addWorksheet("أرشيف الحجوزات", {
+  const sheet = workbook.addWorksheet(source.kind === "insurance" ? "تقرير التأمينات" : "أرشيف الحجوزات", {
     views: [{ rightToLeft: true, state: "frozen", ySplit: ARCHIVE_EXCEL_HEADER_ROW,
       topLeftCell: `A${ARCHIVE_EXCEL_HEADER_ROW + 1}`, activeCell: `A${ARCHIVE_EXCEL_HEADER_ROW + 1}` }],
   });
   const metadata = [
-    reportPropertyTitle(context),
+    reportPropertyTitle(context, source.kind === "insurance" ? "تقرير التأمينات" : undefined),
     `${table.title} | المالك / النشاط: ${context.ownerName} | الجوال: ${context.ownerPhone || "غير مسجل"}`,
     reportDateRange(context, source),
     `تاريخ الإصدار: ${reportIssuedAt(context)}`,
@@ -197,7 +199,7 @@ export async function createArchiveWorkbook(source: ArchiveExportTable, context:
 }
 
 export async function exportArchiveFile(format: "xlsx" | "pdf", table: ArchiveExportTable, context: ArchiveReportContext) {
-  const filename = `أرشيف-الحجوزات-${context.issuedAt.slice(0, 10)}`;
+  const filename = `${table.kind === "insurance" ? "تقرير-التأمينات" : "أرشيف-الحجوزات"}-${context.issuedAt.slice(0, 10)}`;
   if (format === "xlsx") {
     const buffer = await createArchiveWorkbook(table, context);
     downloadBlob(new Blob([new Uint8Array(buffer)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${filename}.xlsx`);
