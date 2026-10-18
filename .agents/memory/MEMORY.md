@@ -46,6 +46,7 @@
 - [Broadcast channel consent](broadcast-channel-consent.md) — campaigns honor independent owner channel preferences; queued external sends must recheck consent before delivery.
 - [Password recovery boundaries](password-recovery-boundaries.md) — recovery is transactional, not marketing; use unique stored destinations and explicit session identity, with honest provider readiness.
 - [Employee access onboarding](employee-access-onboarding.md) — name/mobile/salary required for all; operational staff have no login, access staff choose passwords through WhatsApp activation.
+- [Employee financial register](employee-financial-register.md) — custody and deposits are separate from platform permissions; documentation never automatically moves money.
 - [Dependency audit coverage](dependency-audit-coverage.md) — compare the workspace dependency scanner with pnpm audit; their advisories can differ for the same lockfile.
 - [Dynamic marketplace catalogs](dynamic-marketplace-catalogs.md) — active categories appear before inventory exists; admin filters retain historical values and reconcile dependent cities.
 - [Administrative inventory display](admin-inventory-display.md) — no property pricing-method controls; show actual owner identity alongside property and service names.

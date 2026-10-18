@@ -139,6 +139,9 @@ import type {
   SelectLoginRoleBody,
   ServiceGlobalSeason,
   ServiceSeason,
+  SettleStaffHoldingBody,
+  StaffHolding,
+  StaffHoldingInput,
   SubmissionResponse,
   UpdateAdminPhotographerProfile200,
   UpdatePhotographyPackage200,
@@ -177,6 +180,269 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListStaffHoldingsUrl = (staffId: number,) => {
+
+
+
+
+  return `/api/owner/staff/${staffId}/holdings`
+}
+
+export const listStaffHoldings = async (staffId: number, options?: Parameters<typeof customFetch>[1]): Promise<StaffHolding[]> => {
+
+  return customFetch<StaffHolding[]>(getListStaffHoldingsUrl(staffId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStaffHoldingsQueryKey = (staffId: number,) => {
+    return [
+    `/api/owner/staff/${staffId}/holdings`
+    ] as const;
+    }
+
+
+export const getListStaffHoldingsQueryOptions = <TData = Awaited<ReturnType<typeof listStaffHoldings>>, TError = ErrorType<void>>(staffId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listStaffHoldings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStaffHoldingsQueryKey(staffId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStaffHoldings>>> = ({ signal }) => listStaffHoldings(staffId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: staffId !== null && staffId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStaffHoldings>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListStaffHoldingsQueryResult = NonNullable<Awaited<ReturnType<typeof listStaffHoldings>>>
+export type ListStaffHoldingsQueryError = ErrorType<void>
+
+
+export function useListStaffHoldings<TData = Awaited<ReturnType<typeof listStaffHoldings>>, TError = ErrorType<void>>(
+ staffId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listStaffHoldings>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listStaffHoldings>>,
+          TError,
+          Awaited<ReturnType<typeof listStaffHoldings>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListStaffHoldings<TData = Awaited<ReturnType<typeof listStaffHoldings>>, TError = ErrorType<void>>(
+ staffId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listStaffHoldings>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listStaffHoldings>>,
+          TError,
+          Awaited<ReturnType<typeof listStaffHoldings>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListStaffHoldings<TData = Awaited<ReturnType<typeof listStaffHoldings>>, TError = ErrorType<void>>(
+ staffId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listStaffHoldings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListStaffHoldings<TData = Awaited<ReturnType<typeof listStaffHoldings>>, TError = ErrorType<void>>(
+ staffId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listStaffHoldings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListStaffHoldingsQueryOptions(staffId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateStaffHoldingUrl = (staffId: number,) => {
+
+
+
+
+  return `/api/owner/staff/${staffId}/holdings`
+}
+
+export const createStaffHolding = async (staffId: number,
+    staffHoldingInput: StaffHoldingInput, options?: Parameters<typeof customFetch>[1]): Promise<StaffHolding> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<StaffHolding>(getCreateStaffHoldingUrl(staffId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(staffHoldingInput)
+  }
+);}
+
+
+
+
+
+export const getCreateStaffHoldingMutationKey = () => ['createStaffHolding'] as const;
+
+export const getCreateStaffHoldingMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStaffHolding>>, TError,CreateStaffHoldingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createStaffHolding>>, TError,CreateStaffHoldingMutationVariables, TContext> => {
+
+const mutationKey = getCreateStaffHoldingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createStaffHolding>>, CreateStaffHoldingMutationVariables> = (props) => {
+          const {staffId,data} = props ?? {};
+
+          return  createStaffHolding(staffId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateStaffHoldingMutationResult = NonNullable<Awaited<ReturnType<typeof createStaffHolding>>>
+    export type CreateStaffHoldingMutationBody = BodyType<StaffHoldingInput>
+    export type CreateStaffHoldingMutationError = ErrorType<void>
+    export type CreateStaffHoldingMutationVariables = {staffId: number;data: BodyType<StaffHoldingInput>}
+
+    export const useCreateStaffHolding = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStaffHolding>>, TError,CreateStaffHoldingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createStaffHolding>>,
+        TError,
+        CreateStaffHoldingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateStaffHoldingMutationOptions(options), queryClient);
+    }
+
+export const getSettleStaffHoldingUrl = (staffId: number,
+    holdingId: number,) => {
+
+
+
+
+  return `/api/owner/staff/${staffId}/holdings/${holdingId}/settle`
+}
+
+export const settleStaffHolding = async (staffId: number,
+    holdingId: number,
+    settleStaffHoldingBody: SettleStaffHoldingBody, options?: Parameters<typeof customFetch>[1]): Promise<StaffHolding> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<StaffHolding>(getSettleStaffHoldingUrl(staffId,holdingId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(settleStaffHoldingBody)
+  }
+);}
+
+
+
+
+
+export const getSettleStaffHoldingMutationKey = () => ['settleStaffHolding'] as const;
+
+export const getSettleStaffHoldingMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof settleStaffHolding>>, TError,SettleStaffHoldingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof settleStaffHolding>>, TError,SettleStaffHoldingMutationVariables, TContext> => {
+
+const mutationKey = getSettleStaffHoldingMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof settleStaffHolding>>, SettleStaffHoldingMutationVariables> = (props) => {
+          const {staffId,holdingId,data} = props ?? {};
+
+          return  settleStaffHolding(staffId,holdingId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SettleStaffHoldingMutationResult = NonNullable<Awaited<ReturnType<typeof settleStaffHolding>>>
+    export type SettleStaffHoldingMutationBody = BodyType<SettleStaffHoldingBody>
+    export type SettleStaffHoldingMutationError = ErrorType<void>
+    export type SettleStaffHoldingMutationVariables = {staffId: number;holdingId: number;data: BodyType<SettleStaffHoldingBody>}
+
+    export const useSettleStaffHolding = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof settleStaffHolding>>, TError,SettleStaffHoldingMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof settleStaffHolding>>,
+        TError,
+        SettleStaffHoldingMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSettleStaffHoldingMutationOptions(options), queryClient);
+    }
 
 export const getGetOwnerWhatsAppSettingsUrl = () => {
 

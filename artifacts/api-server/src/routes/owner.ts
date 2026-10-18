@@ -1,4 +1,5 @@
 import { Router } from "express";
+import staffHoldingsRouter from "./staff-holdings";
 import { paySalaryWithExpense } from "../lib/salary-expenses";
 import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
 import { SaveOwnerWhatsAppSettingsBody } from "@workspace/api-zod";
@@ -20,6 +21,7 @@ import {
   ownerSubscriptionsTable,
   ownerExpensesTable,
   ownerStaffTable,
+  staffHoldingsTable,
   staffSessionsTable,
   salaryLogsTable,
   ownerReportArchiveTable,
@@ -3486,6 +3488,8 @@ router.get("/staff/check-username", async (req, res) => {
   return res.json({ available: !existing });
 });
 
+router.use("/staff/:staffId/holdings", staffHoldingsRouter);
+
 router.get("/staff", async (req, res) => {
   const allOwnerIds = await getOwnerIds(req);
   const rows = await db
@@ -3619,6 +3623,9 @@ router.put("/staff/:id/permissions", async (req, res) => {
 router.delete("/staff/:id", async (req, res) => {
   const ownerId = req.user!.id;
   const id = Number(req.params.id);
+  const [holding] = await db.select({ id: staffHoldingsTable.id }).from(staffHoldingsTable)
+    .where(and(eq(staffHoldingsTable.ownerId, ownerId), eq(staffHoldingsTable.staffId, id))).limit(1);
+  if (holding) return res.status(409).json({ error: "لا يمكن حذف موظف له سجل عهد أو تأمينات؛ يمكنك تعطيل الموظف مع الاحتفاظ بسجله." });
   await db.delete(staffSessionsTable).where(eq(staffSessionsTable.staffId, id));
   await db.delete(ownerStaffTable).where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)));
   return res.json({ ok: true });

@@ -16,6 +16,7 @@ export type {
 export * from './generated/types';
 // Prefer the inferred operation schemas when Orval also emits a model alias.
 export {
+  SettleStaffHoldingBody,
   CreateChaletFacilityBody,
   AdminResetPartnerPasswordBody,
   AdminUpdatePartnerAccountBody,

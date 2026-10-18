@@ -21,6 +21,63 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/staff/{staffId}/holdings:
+    parameters:
+      - { name: staffId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: listStaffHoldings
+      tags: [owner]
+      responses:
+        "200":
+          description: Employee-scoped custody and deposit register
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StaffHolding" }
+        "404": { description: Employee not found }
+    post:
+      operationId: createStaffHolding
+      tags: [owner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffHoldingInput" }
+      responses:
+        "201":
+          description: Documented holding; no salary or bank mutation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffHolding" }
+        "400": { description: Invalid holding }
+        "404": { description: Employee not found }
+  /owner/staff/{staffId}/holdings/{holdingId}/settle:
+    parameters:
+      - { name: staffId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      - { name: holdingId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      operationId: settleStaffHolding
+      tags: [owner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [settledOn, settlementNotes]
+              properties:
+                settledOn: { type: string, format: date }
+                settlementNotes: { type: string, minLength: 1, maxLength: 2000 }
+      responses:
+        "200":
+          description: Holding settled once, original amount preserved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffHolding" }
+        "400": { description: Invalid settlement }
+        "404": { description: Holding not found }
+        "409": { description: Already settled }
   /owner/message-settings:
     get:
       operationId: getOwnerWhatsAppSettings
@@ -1052,6 +1109,31 @@ components:
       schema:
         type: string
   schemas:
+    StaffHoldingInput:
+      type: object
+      required: [kind, description, amount, recordedOn, notes, requestId]
+      properties:
+        kind: { type: string, enum: [custody, withheld, emergency, deposit] }
+        description: { type: string, minLength: 1, maxLength: 500 }
+        amount: { type: number, minimum: 0, maximum: 99999999.99, description: "SAR, at most two decimals; zero only for noncash custody" }
+        recordedOn: { type: string, format: date }
+        notes: { type: string, maxLength: 2000 }
+        requestId: { type: string, format: uuid }
+    StaffHolding:
+      type: object
+      required: [id, staffId, kind, description, amount, recordedOn, notes, status, settledOn, settlementNotes, createdAt]
+      properties:
+        id: { type: integer }
+        staffId: { type: integer }
+        kind: { type: string, enum: [custody, withheld, emergency, deposit] }
+        description: { type: string }
+        amount: { type: string }
+        recordedOn: { type: string, format: date }
+        notes: { type: string }
+        status: { type: string, enum: [open, settled] }
+        settledOn: { type: [string, "null"], format: date }
+        settlementNotes: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
     OwnerWhatsAppTemplate:
       type: object
       required: [id, title, body]

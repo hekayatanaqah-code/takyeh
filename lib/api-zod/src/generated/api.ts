@@ -8,6 +8,102 @@
 import * as zod from 'zod';
 
 
+
+
+
+export const ListStaffHoldingsParams = zod.object({
+  "staffId": zod.coerce.number().int().min(1)
+})
+
+export const ListStaffHoldingsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "staffId": zod.number().int(),
+  "kind": zod.enum(['custody', 'withheld', 'emergency', 'deposit']),
+  "description": zod.string(),
+  "amount": zod.string(),
+  "recordedOn": zod.date(),
+  "notes": zod.string(),
+  "status": zod.enum(['open', 'settled']),
+  "settledOn": zod.date().nullable(),
+  "settlementNotes": zod.string().nullable(),
+  "createdAt": zod.date()
+})
+export const ListStaffHoldingsResponse = zod.array(ListStaffHoldingsResponseItem)
+
+
+
+
+
+export const CreateStaffHoldingParams = zod.object({
+  "staffId": zod.coerce.number().int().min(1)
+})
+
+export const createStaffHoldingBodyDescriptionMax = 500;
+
+export const createStaffHoldingBodyAmountMin = 0;
+export const createStaffHoldingBodyAmountMax = 99999999.99;
+
+export const createStaffHoldingBodyNotesMax = 2000;
+
+
+
+export const CreateStaffHoldingBody = zod.object({
+  "kind": zod.enum(['custody', 'withheld', 'emergency', 'deposit']),
+  "description": zod.string().min(1).max(createStaffHoldingBodyDescriptionMax),
+  "amount": zod.number().min(createStaffHoldingBodyAmountMin).max(createStaffHoldingBodyAmountMax).describe('SAR, at most two decimals; zero only for noncash custody'),
+  "recordedOn": zod.date(),
+  "notes": zod.string().max(createStaffHoldingBodyNotesMax),
+  "requestId": zod.string().uuid()
+})
+
+export const CreateStaffHoldingResponse = zod.object({
+  "id": zod.number().int(),
+  "staffId": zod.number().int(),
+  "kind": zod.enum(['custody', 'withheld', 'emergency', 'deposit']),
+  "description": zod.string(),
+  "amount": zod.string(),
+  "recordedOn": zod.date(),
+  "notes": zod.string(),
+  "status": zod.enum(['open', 'settled']),
+  "settledOn": zod.date().nullable(),
+  "settlementNotes": zod.string().nullable(),
+  "createdAt": zod.date()
+})
+
+
+
+
+
+
+export const SettleStaffHoldingParams = zod.object({
+  "staffId": zod.coerce.number().int().min(1),
+  "holdingId": zod.coerce.number().int().min(1)
+})
+
+export const settleStaffHoldingBodySettlementNotesMax = 2000;
+
+
+
+export const SettleStaffHoldingBody = zod.object({
+  "settledOn": zod.date(),
+  "settlementNotes": zod.string().min(1).max(settleStaffHoldingBodySettlementNotesMax)
+})
+
+export const SettleStaffHoldingResponse = zod.object({
+  "id": zod.number().int(),
+  "staffId": zod.number().int(),
+  "kind": zod.enum(['custody', 'withheld', 'emergency', 'deposit']),
+  "description": zod.string(),
+  "amount": zod.string(),
+  "recordedOn": zod.date(),
+  "notes": zod.string(),
+  "status": zod.enum(['open', 'settled']),
+  "settledOn": zod.date().nullable(),
+  "settlementNotes": zod.string().nullable(),
+  "createdAt": zod.date()
+})
+
+
 export const GetOwnerWhatsAppSettingsResponse = zod.object({
   "waEnabled": zod.boolean(),
   "waPhone": zod.string(),

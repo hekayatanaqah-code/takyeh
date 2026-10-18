@@ -68,6 +68,7 @@ import { CustomerDate } from "@/components/owner/CustomerDate";
 import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
 import { CustomerHistory } from "@/components/owner/CustomerHistory";
 import { CustomerDirectory } from "@/components/owner/CustomerDirectory";
+import { StaffHoldingsPanel } from "@/components/owner/StaffHoldingsPanel";
 import {
   getServiceClientIdField,
   getServiceReceiptFinancialSummary,
@@ -17166,7 +17167,7 @@ function StaffTab() {
   const [editPerms, setEditPerms] = useState<StaffPermissions>({});
   /* Employee profile slide-over */
   const [staffProfileTarget, setStaffProfileTarget] = useState<any | null>(null);
-  const [staffProfileTab, setStaffProfileTab] = useState<"profile" | "finance" | "permissions">("profile");
+  const [staffProfileTab, setStaffProfileTab] = useState<"profile" | "finance" | "permissions" | "holdings">("profile");
   const [staffProfileEditing, setStaffProfileEditing] = useState(false);
   /* Permission panel state */
   const [permEditId, setPermEditId] = useState<number | null>(null);
@@ -17400,9 +17401,13 @@ function StaffTab() {
   const deleteStaff = useMutation({
     mutationFn: async (id: number) => {
       const r = await apiFetch(`/owner/staff/${id}`, { method: "DELETE" });
-      if (!r.ok) throw new Error();
+      if (!r.ok) {
+        const result = await r.json().catch(() => ({}));
+        throw new Error(result.error || "تعذّر حذف الموظف");
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "staff"] }),
+    onError: (error: Error) => toast({ title: "تعذّر حذف الموظف", description: error.message, variant: "destructive" }),
   });
 
   const paySalary = useMutation({
@@ -17850,9 +17855,8 @@ function StaffTab() {
                                 <DropdownMenuItem onSelect={() => { setStaffProfileTab("profile"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
                                   بيانات العقد
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => { setStaffProfileTab("permissions"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
+                                <DropdownMenuItem onSelect={() => { setStaffProfileTab("holdings"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
                                   التأمينات والودائع
-                                  <span className="ms-auto text-xs text-muted-foreground">{member.permissions?.insuranceManagement && hasStaffPlatformAccess(member) ? "مفعلة" : "غير مفعلة"}</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => { setStaffProfileTab("finance"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
                                   عرض الإحصائيات
@@ -18603,8 +18607,8 @@ function StaffTab() {
                 </div>
 
                 {/* ── Tabs ── */}
-                <div className="flex border-b border-border shrink-0">
-                  {(["profile", "finance", "permissions"] as const).map((tab) => (
+                <div className="flex flex-wrap border-b border-border shrink-0">
+                  {(["profile", "finance", "holdings", "permissions"] as const).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setStaffProfileTab(tab)}
@@ -18614,13 +18618,16 @@ function StaffTab() {
                           : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
                       }`}
                     >
-                      {tab === "profile" ? "📋 الملف الشخصي" : tab === "finance" ? "💰 السجل المالي" : "صلاحية المنصة"}
+                      {tab === "profile" ? "الملف الشخصي" : tab === "finance" ? "السجل المالي" : tab === "holdings" ? "التأمينات والودائع" : "صلاحية المنصة"}
                     </button>
                   ))}
                 </div>
 
                 {/* ── Tab Content (scrollable) ── */}
                 <div className="flex-1 overflow-y-auto">
+                  {staffProfileTab === "holdings" && (
+                    <StaffHoldingsPanel key={emp.id} staffId={emp.id} staffName={emp.name} readOnly={isReadOnly} apiFetch={apiFetch} />
+                  )}
                   {staffProfileTab === "permissions" && (
                     <div className="p-5 space-y-4">
                       <h3 className="text-sm font-bold text-foreground">صلاحية المنصة — {emp.name}</h3>
@@ -18630,14 +18637,17 @@ function StaffTab() {
                           : "دخول المنصة غير مفعّل لهذا الموظف؛ عرض الصلاحيات المحفوظة لا يمنحه صلاحية الدخول."}
                       </p>
                       <div className="space-y-2">
-                        {ALL_PERM_KEYS.map(key => (
+                        {empPerms.length === 0 && (
+                          <p className="text-sm text-muted-foreground rounded-xl border border-border p-3">لا توجد صلاحيات ممنوحة لهذا الموظف.</p>
+                        )}
+                        {empPerms.map(key => (
                           <div key={key} className="rounded-xl border border-border p-3 flex items-start gap-3">
                             <div className="flex-1">
                               <p className="text-sm font-semibold text-foreground">{PERM_LABELS[key].label}</p>
                               <p className="text-xs text-muted-foreground mt-1">{PERM_LABELS[key].description}</p>
                             </div>
-                            <span className={`rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap ${emp.permissions?.[key] && hasStaffPlatformAccess(emp) ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200" : "bg-muted text-foreground"}`}>
-                              {emp.permissions?.[key] && hasStaffPlatformAccess(emp) ? "مفعلة" : "غير مفعلة"}
+                            <span className="rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200">
+                              ممنوحة
                             </span>
                           </div>
                         ))}

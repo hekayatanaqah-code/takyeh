@@ -5,6 +5,69 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type StaffHoldingInputKind = typeof StaffHoldingInputKind[keyof typeof StaffHoldingInputKind];
+
+
+export const StaffHoldingInputKind = {
+  custody: 'custody',
+  withheld: 'withheld',
+  emergency: 'emergency',
+  deposit: 'deposit',
+} as const;
+
+export interface StaffHoldingInput {
+  kind: StaffHoldingInputKind;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  description: string;
+  /**
+     * SAR, at most two decimals; zero only for noncash custody
+     * @minimum 0
+     * @maximum 99999999.99
+     */
+  amount: number;
+  recordedOn: string;
+  /** @maxLength 2000 */
+  notes: string;
+  requestId: string;
+}
+
+export type StaffHoldingKind = typeof StaffHoldingKind[keyof typeof StaffHoldingKind];
+
+
+export const StaffHoldingKind = {
+  custody: 'custody',
+  withheld: 'withheld',
+  emergency: 'emergency',
+  deposit: 'deposit',
+} as const;
+
+export type StaffHoldingStatus = typeof StaffHoldingStatus[keyof typeof StaffHoldingStatus];
+
+
+export const StaffHoldingStatus = {
+  open: 'open',
+  settled: 'settled',
+} as const;
+
+export interface StaffHolding {
+  id: number;
+  staffId: number;
+  kind: StaffHoldingKind;
+  description: string;
+  amount: string;
+  recordedOn: string;
+  notes: string;
+  status: StaffHoldingStatus;
+  /** @nullable */
+  settledOn: string | null;
+  /** @nullable */
+  settlementNotes: string | null;
+  createdAt: string;
+}
+
 export interface OwnerWhatsAppTemplate {
   id: string;
   title: string;
@@ -1087,6 +1150,15 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type SettleStaffHoldingBody = {
+  settledOn: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  settlementNotes: string;
+};
 
 export type CreateChaletFacilityBody = ChaletFacilityInput & { [key: string]: unknown } & Required<Pick<ChaletFacilityInput & { [key: string]: unknown }, 'name' | 'price'>>;
 
