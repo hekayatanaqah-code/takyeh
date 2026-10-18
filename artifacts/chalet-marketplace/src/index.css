@@ -445,6 +445,19 @@ input, textarea, select, [contenteditable] {
 .leaflet-popup-content { overflow: visible !important; margin: 12px 14px !important; }
 
 /* ── Scrollbar: hidden visually but still scrollable ───────────────── */
+/* Employee/payroll header contrast, independent of other dashboard tables. */
+.staff-screen .staff-main-table thead th,
+.staff-screen .staff-payroll-table thead th {
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.dark .staff-screen .staff-main-table thead th,
+.dark .staff-screen .staff-payroll-table thead th {
+  color: #f3f4f6;
+}
+
 /* Expense contrast is scoped so other dashboard screens keep their styling. */
 .expenses-screen thead th {
   color: #1f2937;

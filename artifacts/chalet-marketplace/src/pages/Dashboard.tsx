@@ -38,6 +38,7 @@ import { serviceImageError, moveServicePhoto } from "@/lib/chaletServiceMedia";
 import { Label } from "@/components/ui/label";
 import { normalizeIdentifier } from "@/lib/authLabels";
 import { employeeDigits, EMPTY_NEW_STAFF_FORM, STAFF_JOB_TITLES } from "@/lib/employeeForm";
+import { currentSalaryMonth, hasStaffPlatformAccess, paidPayrollRecords, paidPayrollPeriods, payrollPeriod, payrollPeriodLabel } from "@/lib/payrollPeriods";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16843,12 +16844,7 @@ interface VoucherData {
 }
 
 function fmtMonthForPrint(ym: string, calMode: "hijri" | "gregorian"): string {
-  const d = new Date(ym + "-15");
-  if (calMode === "hijri") {
-    const h = toHijriComponents(d);
-    return `${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`;
-  }
-  return d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+  return payrollPeriodLabel(ym, calMode);
 }
 
 function fmtDateForPrint(iso: string, calMode: "hijri" | "gregorian"): string {
@@ -16857,7 +16853,7 @@ function fmtDateForPrint(iso: string, calMode: "hijri" | "gregorian"): string {
     const h = toHijriComponents(d);
     return `${toArN(h.day)} ${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`;
   }
-  return d.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" });
+  return d.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" });
 }
 
 function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"): string {
@@ -17170,7 +17166,7 @@ function StaffTab() {
   const [editPerms, setEditPerms] = useState<StaffPermissions>({});
   /* Employee profile slide-over */
   const [staffProfileTarget, setStaffProfileTarget] = useState<any | null>(null);
-  const [staffProfileTab, setStaffProfileTab] = useState<"profile" | "finance">("profile");
+  const [staffProfileTab, setStaffProfileTab] = useState<"profile" | "finance" | "permissions">("profile");
   const [staffProfileEditing, setStaffProfileEditing] = useState(false);
   /* Permission panel state */
   const [permEditId, setPermEditId] = useState<number | null>(null);
@@ -17247,12 +17243,7 @@ function StaffTab() {
 
   /* ── salary month label (respects staffCalMode) ── */
   const salaryMonthLabel = useCallback((ym: string) => {
-    const d = new Date(ym + "-15");
-    if (staffCalMode === "hijri") {
-      const h = toHijriComponents(d);
-      return `${HIJRI_MONTHS_AR[h.month - 1]} ${h.year} هـ`;
-    }
-    return d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+    return payrollPeriodLabel(ym, staffCalMode);
   }, [staffCalMode]);
 
   /* Explicit SAR formatter — guarantees ر.س without relying on ICU locale data */
@@ -17285,9 +17276,7 @@ function StaffTab() {
 
   const payMonthLabels = useMemo(() => {
     if (staffCalMode === "hijri") return HIJRI_MONTHS_AR;
-    return Array.from({ length: 12 }, (_, i) =>
-      new Date(payDateParsed.year, i, 1).toLocaleDateString("ar-SA", { month: "long" })
-    );
+    return GREGORIAN_MONTHS_AR;
   }, [staffCalMode, payDateParsed.year]);
 
   const applyPayDate = (year: number, monthIdx: number) => {
@@ -17334,6 +17323,28 @@ function StaffTab() {
     queryKey: ["owner", "salary-logs-history"],
     queryFn: async () => { const r = await apiFetch("/owner/salary-logs/history"); if (!r.ok) return []; return r.json(); },
   });
+  const paidHistory = useMemo(() => paidPayrollRecords(history), [history]);
+  const bulkPeriods = useMemo(() => paidPayrollPeriods(history, staffCalMode), [history, staffCalMode]);
+  const bulkYearOptions = [...new Set(bulkPeriods.map(period => period.year))];
+  const bulkMonthOptions = bulkPeriods.filter(period => period.year === bulkReportYear).map(period => period.month);
+  const bulkPeriodAvailable = bulkReportYear !== null && bulkReportMonth !== null
+    && bulkPeriods.some(period => period.year === bulkReportYear && period.month === bulkReportMonth);
+
+  useEffect(() => {
+    setBulkReportYear(null);
+    setBulkReportMonth(null);
+    setBulkReportError(null);
+  }, [staffCalMode]);
+
+  useEffect(() => {
+    if (histLoading) return;
+    if (bulkReportYear !== null && !bulkPeriods.some(period => period.year === bulkReportYear)) {
+      setBulkReportYear(null);
+      setBulkReportMonth(null);
+    } else if (bulkReportMonth !== null && !bulkPeriods.some(period => period.year === bulkReportYear && period.month === bulkReportMonth)) {
+      setBulkReportMonth(null);
+    }
+  }, [bulkPeriods, bulkReportYear, bulkReportMonth, histLoading]);
 
   /* ── mutations ── */
   const addStaff = useMutation({
@@ -17487,7 +17498,7 @@ function StaffTab() {
   const displayHistory = histLoading ? [] : history.length > 0 ? history : [MOCK_HISTORY_ITEM];
 
   return (
-    <div className="space-y-5">
+    <div className="staff-screen space-y-5">
       <SectionGuideButton sectionKey="employees" />
       {/* ── Add Staff Button ── */}
       <div className="flex justify-start">
@@ -17530,6 +17541,14 @@ function StaffTab() {
               const jobTitle = addForm.jobTitle === "other" ? addForm.customJobTitle.trim() : addForm.jobTitle;
               if (addForm.jobTitle === "other" && !jobTitle) {
                 toast({ title: "المسمى الوظيفي مطلوب", description: "أدخل المسمى الوظيفي عند اختيار «أخرى».", variant: "destructive" });
+                return;
+              }
+              if (addAssignType !== "all" && !(
+                addAssignType === "chalet"
+                  ? staffChalets.some(unit => String(unit.id) === addAssignId)
+                  : staffProviders.some(provider => String(provider.id) === addAssignId)
+              )) {
+                toast({ title: "اختر الوحدة المكلّفة", description: "يجب اختيار وحدة أو خدمة من القائمة قبل حفظ الموظف.", variant: "destructive" });
                 return;
               }
               addStaff.mutate({
@@ -17627,7 +17646,7 @@ function StaffTab() {
                 <p className="text-xs font-semibold text-muted-foreground mb-3 flex items-center gap-1.5">
                   <Briefcase className="w-3.5 h-3.5" /> الوحدة المكلّفة
                 </p>
-                <div className="flex gap-3 flex-wrap">
+                <div className="space-y-3">
                   <Select value={addAssignType} onValueChange={(v) => { setAddAssignType(v as any); setAddAssignId(""); }}>
                     <SelectTrigger className="h-10 flex-1 min-w-[130px] text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -17637,12 +17656,15 @@ function StaffTab() {
                     </SelectContent>
                   </Select>
                   {addAssignType === "chalet" && staffChalets.length > 0 && (
-                    <Select value={addAssignId} onValueChange={setAddAssignId}>
-                      <SelectTrigger className="h-10 flex-1 min-w-[150px] text-sm"><SelectValue placeholder="اختر الوحدة" /></SelectTrigger>
-                      <SelectContent>
+                    <div className="space-y-1.5">
+                    <Label htmlFor="new-staff-unit">اختر العقار / الوحدة <span className="text-destructive">*</span></Label>
+                    <Select dir="rtl" value={addAssignId} onValueChange={setAddAssignId} disabled={addStaff.isPending}>
+                      <SelectTrigger id="new-staff-unit" className="h-10 w-full text-sm"><SelectValue placeholder="اختر من وحداتك المسجلة" /></SelectTrigger>
+                      <SelectContent position="popper" className="z-[100]">
                         {staffChalets.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.nameAr ?? `عقار #${c.id}`}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    </div>
                   )}
                   {addAssignType === "service" && staffProviders.length > 0 && (
                     <Select value={addAssignId} onValueChange={setAddAssignId}>
@@ -17736,18 +17758,20 @@ function StaffTab() {
             {(pagination) => (
               <div ref={pagination.tableRef} className="rounded-xl overflow-hidden border border-border/40 scroll-mt-4">
                 <div className="overflow-x-auto">
-                  <table className="w-full table-fixed border-collapse" dir="rtl">
+                  <table className="w-full min-w-[720px] table-fixed border-collapse staff-main-table" dir="rtl">
               <colgroup>
-                <col className="w-[28%]" />
-                <col className="w-[18%]" />
+                <col className="w-[23%]" />
+                <col className="w-[16%]" />
+                <col className="w-[21%]" />
+                <col className="w-[16%]" />
                 <col className="w-[24%]" />
-                <col className="w-[30%]" />
               </colgroup>
               <thead>
                 <tr className="bg-muted/60 border-b border-border/40">
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الاسم</th>
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الراتب الأساسي</th>
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الوحدة المكلّفة</th>
+                  <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">صلاحية المنصة</th>
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الإجراءات السريعة</th>
                 </tr>
               </thead>
@@ -17774,8 +17798,8 @@ function StaffTab() {
                           <div>
                             <p
                               className="text-sm font-semibold text-foreground leading-tight cursor-pointer hover:text-primary transition-colors"
-                              title="ملف الموظف — قريباً"
-                              onClick={() => { if (!isMock) setStaffProfileTarget(member); }}
+                              title="ملف الموظف"
+                              onClick={() => { if (!isMock) { setStaffProfileTab("profile"); setStaffProfileTarget(member); setStaffProfileEditing(false); } }}
                             >{member.name}</p>
                             {!isMock && member.username && <p className="text-[10px] text-muted-foreground">@{member.username}</p>}
                             {isMock && <p className="text-[10px] text-amber-600 font-medium">بيانات تجريبية</p>}
@@ -17789,24 +17813,52 @@ function StaffTab() {
                         <span className="text-xs text-muted-foreground">{unitLabel}</span>
                       </td>
                       <td className="text-right px-3 py-3">
+                        <button
+                          type="button"
+                          disabled={isMock}
+                          aria-label={`صلاحية المنصة — ${member.name}: ${hasStaffPlatformAccess(member) ? "مفعلة" : "غير مفعلة"}`}
+                          onClick={() => { setStaffProfileTab("permissions"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}
+                          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${hasStaffPlatformAccess(member) ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"}`}
+                        >
+                          {hasStaffPlatformAccess(member) ? "مفعلة" : "غير مفعلة"}
+                        </button>
+                      </td>
+                      <td className="text-right px-3 py-3">
                         {!isMock ? (
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <Button
                               size="sm"
                               className="h-7 px-3 text-[11px] font-bold"
-                              onClick={() => { setPayTarget(member as any); setPayYearState(null); setPayForm({ month: "", bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash", iban: "" }); }}
+                              onClick={() => {
+                                const month = currentSalaryMonth();
+                                setPayTarget(member);
+                                setPaidVoucher(null);
+                                setPayYearState(payrollPeriod(month, staffCalMode)!.year);
+                                setPayForm({ month, bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash", iban: "" });
+                              }}
                             >
                               <Banknote className="w-3 h-3 me-1" />
                               صرف الراتب
                             </Button>
-                            <div className="flex items-center gap-1 flex-wrap">
-                              {ALL_PERM_KEYS.filter((k) => !!(member.permissions?.[k])).length === 0
-                                ? <span className="text-[10px] text-muted-foreground/50 italic">لا صلاحيات</span>
-                                : ALL_PERM_KEYS.filter((k) => !!(member.permissions?.[k])).map((k) => (
-                                    <span key={k} className="inline-flex items-center text-[10px] bg-primary/10 text-primary rounded-full px-2 py-0.5 font-semibold whitespace-nowrap">{PERM_LABELS[k].icon} {PERM_LABELS[k].label}</span>
-                                  ))
-                              }
-                            </div>
+                            <DropdownMenu dir="rtl">
+                              <DropdownMenuTrigger asChild>
+                                <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label={`إجراءات الموظف ${member.name}`}>
+                                  <MoreVertical className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuItem onSelect={() => { setStaffProfileTab("profile"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
+                                  بيانات العقد
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => { setStaffProfileTab("permissions"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
+                                  التأمينات والودائع
+                                  <span className="ms-auto text-xs text-muted-foreground">{member.permissions?.insuranceManagement && hasStaffPlatformAccess(member) ? "مفعلة" : "غير مفعلة"}</span>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => { setStaffProfileTab("finance"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
+                                  عرض الإحصائيات
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         ) : (
                           <span className="text-[10px] text-muted-foreground">—</span>
@@ -17845,10 +17897,10 @@ function StaffTab() {
             <Button
               size="sm"
               className="h-8 text-xs gap-1.5"
-              onClick={() => { setBulkReportYear(null); setBulkReportMonth(null); setBulkReportOpen(true); }}
+              onClick={() => { setBulkReportYear(null); setBulkReportMonth(null); setBulkReportError(null); setBulkReportOpen(true); }}
             >
               <FileText className="w-3.5 h-3.5" />
-              إصدار كشف جماعي
+              إصدار مسير الرواتب
             </Button>
             {selectedLogIds.size > 0 && (
               <Button
@@ -17875,7 +17927,7 @@ function StaffTab() {
             {(pagination) => (
               <div ref={pagination.tableRef} className="rounded-xl overflow-hidden border border-border/40 scroll-mt-4">
                 <div className="overflow-x-auto">
-                  <table className="w-full table-fixed border-collapse text-sm" dir="rtl">
+                  <table className="w-full table-fixed border-collapse text-sm staff-payroll-table" dir="rtl">
               <colgroup>
                 <col className="w-[4%]" />
                 <col className="w-[16%]" />
@@ -18337,7 +18389,7 @@ function StaffTab() {
                   <SelectValue placeholder="اختر السنة" />
                 </SelectTrigger>
                 <SelectContent>
-                  {payYearOptions.map((y) => (
+                  {bulkYearOptions.map((y) => (
                     <SelectItem key={y} value={String(y)}>
                       {toArN(y)} {staffCalMode === "hijri" ? "هـ" : "م"}
                     </SelectItem>
@@ -18357,22 +18409,25 @@ function StaffTab() {
                   <SelectValue placeholder="اختر الشهر" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(staffCalMode === "hijri" ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR).map((name, idx) => (
-                    <SelectItem key={idx + 1} value={String(idx + 1)}>{name}</SelectItem>
+                  {bulkMonthOptions.map((month) => (
+                    <SelectItem key={month} value={String(month)}>{(staffCalMode === "hijri" ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR)[month - 1]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
+          {!histLoading && bulkPeriods.length === 0 && (
+            <p role="status" className="text-sm text-muted-foreground text-center">لا توجد رواتب مصروفة لإصدار كشف جماعي.</p>
+          )}
           {bulkReportError && (
             <p className="text-sm text-destructive font-medium text-center pt-1">{bulkReportError}</p>
           )}
           <div className="pt-2">
             <Button
               className="w-full h-11 font-bold gap-2"
-              disabled={bulkReportYear === null || bulkReportMonth === null}
+              disabled={histLoading || !bulkPeriodAvailable}
               onClick={() => {
-                if (!bulkReportYear || !bulkReportMonth) return;
+                if (!bulkReportYear || !bulkReportMonth || !bulkPeriodAvailable) return;
                 setBulkReportError(null);
                 const ownerName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "صاحب العمل";
                 let filterMonth = "";
@@ -18392,7 +18447,7 @@ function StaffTab() {
                 } else {
                   filterMonth = `${bulkReportYear}-${String(bulkReportMonth).padStart(2, "0")}`;
                 }
-                const hasRecords = (history as any[]).some(l => {
+                const hasRecords = paidHistory.some(l => {
                   if (hijriFilter) {
                     const d = new Date((l.month ?? "") + "-15");
                     if (isNaN(d.getTime())) return false;
@@ -18405,7 +18460,7 @@ function StaffTab() {
                   setBulkReportError("لا توجد رواتب مسجلة للفترة المحددة");
                   return;
                 }
-                const html = buildMasterPayrollHtml(filterMonth, history as any[], ownerName, staffCalMode, hijriFilter);
+                const html = buildMasterPayrollHtml(filterMonth, paidHistory, ownerName, staffCalMode, hijriFilter);
                 setPreviewTitle("معاينة كشف الرواتب الجماعي");
                 setPreviewEmpty(false);
                 setPreviewHtml(html);
@@ -18549,7 +18604,7 @@ function StaffTab() {
 
                 {/* ── Tabs ── */}
                 <div className="flex border-b border-border shrink-0">
-                  {(["profile", "finance"] as const).map((tab) => (
+                  {(["profile", "finance", "permissions"] as const).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setStaffProfileTab(tab)}
@@ -18559,13 +18614,39 @@ function StaffTab() {
                           : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
                       }`}
                     >
-                      {tab === "profile" ? "📋 الملف الشخصي" : "💰 السجل المالي"}
+                      {tab === "profile" ? "📋 الملف الشخصي" : tab === "finance" ? "💰 السجل المالي" : "صلاحية المنصة"}
                     </button>
                   ))}
                 </div>
 
                 {/* ── Tab Content (scrollable) ── */}
                 <div className="flex-1 overflow-y-auto">
+                  {staffProfileTab === "permissions" && (
+                    <div className="p-5 space-y-4">
+                      <h3 className="text-sm font-bold text-foreground">صلاحية المنصة — {emp.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {hasStaffPlatformAccess(emp)
+                          ? "دخول المنصة مفعّل لهذا الموظف وفق الصلاحيات التالية."
+                          : "دخول المنصة غير مفعّل لهذا الموظف؛ عرض الصلاحيات المحفوظة لا يمنحه صلاحية الدخول."}
+                      </p>
+                      <div className="space-y-2">
+                        {ALL_PERM_KEYS.map(key => (
+                          <div key={key} className="rounded-xl border border-border p-3 flex items-start gap-3">
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-foreground">{PERM_LABELS[key].label}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{PERM_LABELS[key].description}</p>
+                            </div>
+                            <span className={`rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap ${emp.permissions?.[key] && hasStaffPlatformAccess(emp) ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200" : "bg-muted text-foreground"}`}>
+                              {emp.permissions?.[key] && hasStaffPlatformAccess(emp) ? "مفعلة" : "غير مفعلة"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <Button variant="outline" disabled={isReadOnly} onClick={() => { setStaffProfileTab("profile"); startEdit(); }}>
+                        تعديل بيانات الموظف وصلاحياته
+                      </Button>
+                    </div>
+                  )}
 
                   {/* ─ Tab 1: الملف الشخصي ─ */}
                   {staffProfileTab === "profile" && (
