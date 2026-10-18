@@ -23,6 +23,7 @@ import { BankLedgerSummary } from "@/components/owner/BankLedgerSummary";
 import { isExpenseInScope } from "@/lib/expenseScope";
 import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit, type LedgerExpense, type LedgerPayment, type LedgerServiceAppointment } from "@/lib/bankLedger";
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
+import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
@@ -13691,7 +13692,7 @@ function RevenueTab() {
   const currentMonth = `${_nowRev.getFullYear()}-${String(_nowRev.getMonth() + 1).padStart(2, "0")}`;
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
   const [calType, setCalType]                 = useState<"gregorian" | "hijri">(() => (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian");
-  const [selectedHijriMonth, setSelectedHijriMonth] = useState<string>("");
+  const [selectedHijriMonth, setSelectedHijriMonth] = useState(() => getCurrentFinanceMonth("hijri"));
   const [serviceSelectedMonth, setServiceSelectedMonth] = useState(currentMonth);
   const [serviceSelectedHijriMonth, setServiceSelectedHijriMonth] = useState("");
   const [serviceRevenueYear, setServiceRevenueYear] = useState(() => String(new Date().getFullYear()));
@@ -13706,55 +13707,6 @@ function RevenueTab() {
   const [refundType, setRefundType] = useState<"partial" | "full">("partial");
   const [refundPending, setRefundPending] = useState(false);
   const { toast } = useToast();
-
-  const monthOptions = useMemo(() => {
-    const opts: { val: string; label: string; isFuture?: boolean }[] = [];
-    // Past 12 months + current + next 5 months = 18 total
-    for (let i = 11; i >= -5; i--) {
-      const d = new Date();
-      d.setDate(1);
-      d.setMonth(d.getMonth() - i);
-      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const hijriPart = new Date(d.getFullYear(), d.getMonth(), 15).toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
-      const gregPart = d.toLocaleDateString("ar-SA", { month: "long", year: "numeric", calendar: "gregory" });
-      const isFuture = i < 0;
-      const label = isFuture ? `🔮 ${hijriPart} · ${gregPart}` : `${hijriPart} · ${gregPart}`;
-      opts.push({ val, label, isFuture });
-    }
-    return opts.reverse();
-  }, []);
-
-  /* ── Hijri month options (past 15 + current + next 13 Hijri months, covering 1448) ── */
-  const hijriMonthOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const opts: { key: string; label: string; isFuture?: boolean }[] = [];
-    const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
-    const now = new Date();
-    const nowKey = fmt.format(now);
-    const MS = 86_400_000;
-    // Step every 29 days to guarantee every Hijri month is sampled.
-    // Cover ~15 months back and ~13 months forward (to cover full year 1448).
-    for (let day = -450; day <= 390; day += 29) {
-      const d = new Date(now.getTime() + day * MS);
-      const key = fmt.format(d);
-      if (!seen.has(key)) {
-        seen.add(key);
-        const isFuture = day > 0 && key !== nowKey;
-        opts.push({ key, label: isFuture ? `🔮 ${key}` : key, isFuture });
-      }
-    }
-    // Newest first (future → current → past), mirroring Gregorian month selector
-    return opts.reverse();
-  }, []);
-
-  /* Default selectedHijriMonth to current Hijri month */
-  useEffect(() => {
-    if (!selectedHijriMonth && hijriMonthOptions.length > 0) {
-      const currentKey = getHijriMonthKey(new Date().toISOString().slice(0, 10));
-      const match = hijriMonthOptions.find(o => o.key === currentKey);
-      setSelectedHijriMonth(match?.key ?? hijriMonthOptions[hijriMonthOptions.length - 1].key);
-    }
-  }, [hijriMonthOptions, selectedHijriMonth]);
 
   const { data: revOwnerChalets = [] } = useQuery<{ id: number; submissionId: number | null; nameAr: string; waReviewTemplate?: string | null }[]>({
     queryKey: ["owner", "chalets"],
@@ -13785,22 +13737,9 @@ function RevenueTab() {
 
   const financialSubmissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
 
-  /* Map selected Hijri month key → nearest Gregorian YYYY-MM for API queries */
-  const hijriToGregorianMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
-    const now = new Date();
-    const MS = 86_400_000;
-    // Same 29-day stepping as hijriMonthOptions — must stay in sync
-    for (let day = -450; day <= 210; day += 29) {
-      const d = new Date(now.getTime() + day * MS);
-      const key = fmt.format(d);
-      if (!map[key]) map[key] = d.toISOString().slice(0, 7);
-    }
-    return map;
-  }, []);
-  const effectiveMonth = calType === "hijri" && selectedHijriMonth
-    ? (hijriToGregorianMap[selectedHijriMonth] ?? selectedMonth) : selectedMonth;
+  // This endpoint supplies all-time cash custody only; sales use the filtered
+  // booking dataset below, including annual and all-time periods.
+  const effectiveMonth = selectedMonth || currentMonth;
 
   const [cashBreakdownOpen, setCashBreakdownOpen] = useState(false);
   const [depositCashOpen, setDepositCashOpen] = useState(false);
@@ -13815,6 +13754,12 @@ function RevenueTab() {
     return mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
   });
   const [pendingYear, setPendingYear] = useState<string>(() => String(new Date().getFullYear()));
+  const revenuePeriod = useMemo(() => ({
+    calendar: calType,
+    year: revYear,
+    month: revYear ? (calType === "hijri" ? selectedHijriMonth : selectedMonth) : "",
+  }), [calType, revYear, selectedHijriMonth, selectedMonth]);
+  const salesTitle = revenueSalesTitle(revenuePeriod);
 
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
@@ -13832,12 +13777,9 @@ function RevenueTab() {
       const params = new URLSearchParams({ month: effectiveMonth });
       if (financialSubmissionId) params.set("submissionId", String(financialSubmissionId));
       if (calType === "hijri" && selectedHijriMonth) {
-        const approxDate = new Date((hijriToGregorianMap[selectedHijriMonth] ?? selectedMonth) + "-15T12:00:00");
-        const hym = getHijriYMClient(approxDate);
-        if (hym.year > 0) {
-          params.set("hijriYear", String(hym.year));
-          params.set("hijriMonth", String(hym.month));
-        }
+        const [year, month] = selectedHijriMonth.split("-");
+        params.set("hijriYear", year);
+        params.set("hijriMonth", String(Number(month)));
       }
       const r = await apiFetch(`/owner/financial-summary?${params}`);
       if (!r.ok) throw new Error("failed");
@@ -13923,6 +13865,7 @@ function RevenueTab() {
   }, [allBookings]);
 
   const revMonthsForYear = useMemo(() => {
+    if (!revYear) return [];
     if (calType === "gregorian") {
       const months = new Set<string>();
       const curYear = String(new Date().getFullYear());
@@ -13932,15 +13875,14 @@ function RevenueTab() {
       });
       return Array.from(months).sort().reverse();
     } else {
-      const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" });
       const months = new Map<string, Date>();
       const now = new Date();
-      if (revYear === String(toHijriComponents(now).year)) months.set(fmt.format(now), now);
+      if (revYear === String(toHijriComponents(now).year)) months.set(getCurrentFinanceMonth("hijri"), now);
       allBookings.forEach(bk => {
         if (!bk.bookingDate) return;
         const d = new Date(bk.bookingDate + "T00:00:00");
         if (String(toHijriComponents(d).year) === revYear) {
-          const key = fmt.format(d);
+          const key = revenueMonthKey(bk.bookingDate, "hijri");
           if (!months.has(key)) months.set(key, d);
         }
       });
@@ -14167,35 +14109,19 @@ function RevenueTab() {
 
   // Filter bookings to selected month + optional chalet unit filter
   const monthBookings = useMemo(() => {
-    let filtered: OwnerBooking[];
-    if (calType === "hijri" && selectedHijriMonth) {
-      filtered = allBookings.filter(b => b.bookingDate && getHijriMonthKey(b.bookingDate) === selectedHijriMonth);
-    } else {
-      filtered = allBookings.filter(b => b.bookingDate?.startsWith(selectedMonth));
-    }
+    let filtered = allBookings.filter(b => isInRevenuePeriod(b.bookingDate, revenuePeriod));
     // FIX: ownerBookingsTable has submissionId, NOT chaletId
     if (unit.type === "chalet") {
       const subId = (unit as any).submissionId;
       if (subId) filtered = filtered.filter(b => b.submissionId === subId);
     }
     return filtered;
-  }, [allBookings, selectedMonth, selectedHijriMonth, calType, unit]);
+  }, [allBookings, revenuePeriod, unit]);
 
   // ── Monthly revenue breakdown: base rent + services for selected month ───
   // Computed directly from allBookings (not monthBookings) with correct submissionId filter
   const monthRevBreakdown = useMemo(() => {
-    // Step 1: filter by calendar month
-    let filtered: OwnerBooking[];
-    if (calType === "hijri" && selectedHijriMonth) {
-      filtered = allBookings.filter(b => b.bookingDate && getHijriMonthKey(b.bookingDate) === selectedHijriMonth);
-    } else {
-      filtered = allBookings.filter(b => !!b.bookingDate && b.bookingDate.startsWith(selectedMonth));
-    }
-    // Step 2: filter by property (use submissionId, not the non-existent chaletId)
-    if (unit.type === "chalet") {
-      const subId = (unit as any).submissionId;
-      if (subId) filtered = filtered.filter(b => b.submissionId === subId);
-    }
+    const filtered = monthBookings;
     // Step 3: compute breakdown
     let base = 0, services = 0;
     for (const b of filtered) {
@@ -14211,7 +14137,7 @@ function RevenueTab() {
     const result = { base: Math.round(base), services: Math.round(services), total: Math.round(base + services) };
     console.log(`[تكية REV] ${calType==="hijri"?selectedHijriMonth:selectedMonth} | all:${allBookings.length} → filtered:${filtered.length} | إيجار:${result.base} خدمات:${result.services} إجمالي:${result.total}`);
     return result;
-  }, [allBookings, selectedMonth, selectedHijriMonth, calType, unit]);
+  }, [monthBookings]);
 
   // Service-unit: use the exact selected Gregorian or Hijri period.
   const monthSvcAppts = useMemo(() =>
@@ -14241,18 +14167,13 @@ function RevenueTab() {
   /* Cancelled bookings with income, filtered to the selected period */
   const allCancelledBookings = useMemo(() => {
     let cancelled = cancelledBookings.filter(b => b.cancelledAt && b.cancelIncome && Number(b.cancelIncome) > 0);
-    // Filter by cancellation date in the selected month
-    if (calType === "hijri" && selectedHijriMonth) {
-      cancelled = cancelled.filter(b => b.cancelledAt && getHijriMonthKey(b.cancelledAt.slice(0, 10)) === selectedHijriMonth);
-    } else {
-      cancelled = cancelled.filter(b => b.cancelledAt?.startsWith(selectedMonth));
-    }
+    cancelled = cancelled.filter(b => isInRevenuePeriod(b.cancelledAt?.slice(0, 10), revenuePeriod));
     if (unit.type === "chalet") {
       const subId = (unit as any).submissionId;
       if (subId) cancelled = cancelled.filter(b => b.submissionId === subId);
     }
     return cancelled;
-  }, [cancelledBookings, selectedMonth, selectedHijriMonth, calType, unit]);
+  }, [cancelledBookings, revenuePeriod, unit]);
 
   const today = getLocalDateStr();
 
@@ -14726,7 +14647,7 @@ function RevenueTab() {
                       const newYear = mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
                       setCalType(mode); setRevYear(newYear);
                       if (mode === "gregorian") { const d = new Date(); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`); }
-                      else { const fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura",{month:"long",year:"numeric"}); setSelectedHijriMonth(fmt.format(new Date())); }
+                      else { setSelectedHijriMonth(getCurrentFinanceMonth("hijri")); }
                       localStorage.setItem("revCalType", mode);
                       setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50);
                     }}
@@ -14737,11 +14658,12 @@ function RevenueTab() {
                 ))}
               </div>
               {/* Year dropdown */}
-              <Select value={revYear} onValueChange={yr => { setRevYear(yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
-                <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[6.5rem] shrink-0" dir="rtl">
+              <Select value={revYear || "__all__"} onValueChange={yr => { setRevYear(yr === "__all__" ? "" : yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
+                <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                   <SelectValue placeholder="السنة" />
                 </SelectTrigger>
                 <SelectContent dir="rtl" align="end">
+                  <SelectItem value="__all__">كل السنوات</SelectItem>
                   {(calType === "gregorian" ? revGregYearOptions : revHijriYearOptions.map(String)).map(yr => (
                     <SelectItem key={yr} value={yr}>
                       {calType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
@@ -14750,17 +14672,18 @@ function RevenueTab() {
                 </SelectContent>
               </Select>
               {/* Month dropdown — data-driven */}
-              {revMonthsForYear.length > 0 && (calType === "gregorian" ? (
-                <Select dir="rtl" value={selectedMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedMonth}>
+              {calType === "gregorian" ? (
+                <Select dir="rtl" value={selectedMonth || "__all__"} onValueChange={v => setSelectedMonth(v === "__all__" ? "" : v)} disabled={!revYear}>
                   <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                     {(() => {
-                      const ym = selectedMonth || revMonthsForYear[0] || "";
-                      if (!ym) return <span className="text-sm text-muted-foreground">الشهر</span>;
+                      const ym = selectedMonth;
+                      if (!revYear || !ym) return <span className="text-sm text-muted-foreground">كل الشهور</span>;
                       const [y,m] = ym.split("-").map(Number);
                       return <span className="text-sm font-medium">{new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"})}</span>;
                     })()}
                   </SelectTrigger>
                   <SelectContent dir="rtl" align="end" className="revenue-gregorian-month-menu">
+                    <SelectItem value="__all__">كل الشهور</SelectItem>
                     {revMonthsForYear.map(ym => {
                       const [y,m] = ym.split("-").map(Number);
                       const gregPrimary = new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"});
@@ -14778,24 +14701,23 @@ function RevenueTab() {
                   </SelectContent>
                 </Select>
               ) : (
-                <Select dir="rtl" value={selectedHijriMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedHijriMonth}>
+                <Select dir="rtl" value={selectedHijriMonth || "__all__"} onValueChange={v => setSelectedHijriMonth(v === "__all__" ? "" : v)} disabled={!revYear}>
                   <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
-                    {selectedHijriMonth || revMonthsForYear[0]
-                      ? <span className="text-sm font-medium truncate">{selectedHijriMonth || revMonthsForYear[0]}</span>
-                      : <span className="text-sm text-muted-foreground">الشهر</span>}
+                    {revYear && selectedHijriMonth
+                      ? <span className="text-sm font-medium truncate">{getBookingMonthLabel(selectedHijriMonth, "hijri")}</span>
+                      : <span className="text-sm text-muted-foreground">كل الشهور</span>}
                   </SelectTrigger>
                   <SelectContent dir="rtl" align="end">
+                    <SelectItem value="__all__">كل الشهور</SelectItem>
                     {revMonthsForYear.map(key => {
-                      const gregYm = hijriToGregorianMap[key];
-                      let gregSec = "";
-                      if (gregYm) { const [gy,gm] = gregYm.split("-").map(Number); gregSec = new Date(gy,gm-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"}); }
+                      const gregSec = getCalCorrespondenceHint(key, "hijri");
                       return (
-                        <RevenueMonthItem key={key} value={key} primary={key} secondary={gregSec} />
+                        <RevenueMonthItem key={key} value={key} primary={getBookingMonthLabel(key, "hijri")} secondary={gregSec} />
                       );
                     })}
                   </SelectContent>
                 </Select>
-              ))}
+              )}
             </div>
           )}
         </div>
@@ -14909,7 +14831,7 @@ function RevenueTab() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-muted/30 border-t-2 border-border">
-                    <td colSpan={3} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">الإجمالي</td>
+                    <td colSpan={3} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">إجمالي المبالغ المتبقية</td>
                     <td className="py-2.5 px-4 text-left">
                       <span className="font-extrabold text-amber-700 dark:text-amber-400 tabular-nums">{fmtN(filteredReceivables.reduce((s, bk) => s + bk.remaining, 0))}</span>
                       <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
@@ -14941,12 +14863,14 @@ function RevenueTab() {
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/20 border-2 border-blue-300 dark:border-blue-700 rounded-2xl p-5 space-y-2">
           <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 text-xs font-bold uppercase tracking-wide">
             <Receipt className="w-4 h-4" />
-            إجمالي مبيعات الشهر
+            {salesTitle}
           </div>
           {loading ? <Skeleton className="h-10 w-32" /> : (
             <OwnerStatAmount amount={fmtN(big3.sales)} className="text-blue-700 dark:text-blue-400" />
           )}
-          <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي قيمة الحجوزات في الشهر المحدد</div>
+          <div className="text-sm font-medium leading-relaxed text-foreground/80">
+            {revenuePeriod.month ? "إجمالي قيمة الحجوزات في الشهر المحدد" : revYear ? "إجمالي قيمة الحجوزات في السنة المحددة" : "إجمالي قيمة الحجوزات منذ بدء التشغيل"}
+          </div>
         </div>
 
         <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/20 border-2 border-green-300 dark:border-green-700 rounded-2xl p-5 space-y-2">
