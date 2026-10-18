@@ -445,6 +445,39 @@ input, textarea, select, [contenteditable] {
 .leaflet-popup-content { overflow: visible !important; margin: 12px 14px !important; }
 
 /* ── Scrollbar: hidden visually but still scrollable ───────────────── */
+/* Expense contrast is scoped so other dashboard screens keep their styling. */
+.expenses-screen thead th {
+  color: #1f2937;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.expenses-screen .expense-entry-form label {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.expenses-screen .expense-entry-form input::placeholder {
+  color: #4b5563;
+  opacity: 1;
+}
+
+.expenses-screen .expense-entry-form .text-muted-foreground,
+.expenses-screen .expense-entry-form [data-placeholder] {
+  color: #374151;
+}
+
+.dark .expenses-screen thead th,
+.dark .expenses-screen .expense-entry-form label {
+  color: #f3f4f6;
+}
+
+.dark .expenses-screen .expense-entry-form input::placeholder,
+.dark .expenses-screen .expense-entry-form .text-muted-foreground,
+.dark .expenses-screen .expense-entry-form [data-placeholder] {
+  color: #d1d5db;
+}
+
 @layer utilities {
   .scrollbar-hide::-webkit-scrollbar { display: none; }
   .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }

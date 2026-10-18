@@ -16387,13 +16387,18 @@ export function ExpensesTab() {
   }, [expenses, expCalType, expYear, expMonth, unit, unitProviderId]);
 
   const totalMonth = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0);
+  const expenseTotalLabel = expMonth
+    ? `إجمالي ${getBookingMonthLabel(expMonth, expCalType)}`
+    : expYear
+      ? `إجمالي عام ${toArN(Number(expYear))} ${expCalType === "hijri" ? "هـ" : "م"}`
+      : "الإجمالي العام";
   const expShowProp = unit.type === "all";
   const expTableCols = expShowProp
     ? "max-content max-content max-content 1fr max-content max-content max-content"
     : "max-content max-content 1fr max-content max-content max-content";
 
   return (
-    <div className="space-y-5">
+    <div className="expenses-screen space-y-5">
       <SectionGuideButton sectionKey="expenses" />
       {/* Quick Entry Form — only for individual unit, not master view */}
       {unit.type !== "all" && (
@@ -16402,7 +16407,7 @@ export function ExpensesTab() {
           <Receipt className="w-4 h-4 text-primary" />
           {unit.type === "chalet" ? `تسجيل مصروف: ${(unit as any).name}` : `تسجيل مصروف: ${(unit as any).name}`}
         </h2>
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={handleSubmit} className="expense-entry-form space-y-3">
           {/* Row 1: 3-column grid — Category + Amount + Date */}
           <div className="grid grid-cols-3 gap-3">
             {/* Category */}
@@ -16556,7 +16561,7 @@ export function ExpensesTab() {
             <span className="text-xl">💸</span>
             <div>
               <div className="text-sm font-bold text-amber-800 dark:text-amber-300">تسجيل مسحوبات شخصية</div>
-              <div className="text-[11px] text-amber-600 dark:text-amber-500">تُخصم من صافي الربح وتظهر في سجل المعاملات</div>
+              <div className="text-xs text-amber-800 dark:text-amber-200">تُخصم من صافي الربح وتظهر في سجل المعاملات</div>
             </div>
           </div>
           <button
@@ -16593,7 +16598,7 @@ export function ExpensesTab() {
                 }
               } finally { setWSaving(false); }
             }}
-            className="space-y-2.5 pt-1 border-t border-amber-200 dark:border-amber-800"
+            className="expense-entry-form space-y-2.5 pt-1 border-t border-amber-200 dark:border-amber-800"
           >
             {/* Row 1: Amount + Date (2-col grid) */}
             <div className="grid grid-cols-2 gap-2">
@@ -16835,8 +16840,8 @@ export function ExpensesTab() {
 
         {expenses.length > 0 && (
           <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              {expMonth ? "إجمالي الشهر المختار" : expYear ? "إجمالي السنة المختارة" : "الإجمالي العام"}
+            <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+              {expenseTotalLabel}
             </span>
             <span className="text-lg font-bold text-destructive"><bdi dir="ltr">{formatBankAmount(totalMonth)}</bdi> ⃁</span>
           </div>
