@@ -17,6 +17,8 @@ import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE }
 import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type OwnerWhatsAppSettingsInput } from "@workspace/api-client-react";
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
+import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
+import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { Download } from "lucide-react";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
@@ -14342,7 +14344,7 @@ function RevenueTab() {
 
   const channels = useMemo(() => {
     // Use allBookings for bankTransfers (preserves all-time bank position)
-    // cashUndeposited is derived from big3.collected to ensure the three rows always sum correctly
+    // Outstanding cash is all-time custody, exactly as listed in the details dialog.
     let scoped = allBookings;
     if (unit.type === "chalet") {
       const subId = (unit as any).submissionId;
@@ -14378,15 +14380,14 @@ function RevenueTab() {
     }
     const totalDeposited = scopedLogs.reduce((s, l) => s + Math.round(Number(l.amount)), 0);
     const bankRounded = Math.round(bankTransfers);
-    // كاش لم يودع = المبالغ المحصلة - (الحساب البنكي + كاش تم إيداعه)
     return {
       bankTransfers: bankRounded,
       cashDeposited: totalDeposited,
-      cashUndeposited: Math.max(0, big3.collected - bankRounded - totalDeposited),
+      cashUndeposited: cashBreakdownTotal(financial?.cashBreakdown ?? []),
       cashOnHand: Math.round(totalCashOnHand),
       insuranceCustody: Math.round(insuranceCustody),
     };
-  }, [allBookings, depositLogs, unit, big3.collected]);
+  }, [allBookings, depositLogs, unit, financial?.cashBreakdown]);
 
   /* ── SERVICE UNIT: render service appointments revenue ── */
   if (unit.type === "service") {
@@ -14488,6 +14489,7 @@ function RevenueTab() {
             )}
             {serviceMonthsForYear.length > 0 && (
               <Select
+                dir="rtl"
                 value={activeServiceMonth}
                 onValueChange={calType === "gregorian" ? setServiceSelectedMonth : setServiceSelectedHijriMonth}
               >
@@ -14503,12 +14505,7 @@ function RevenueTab() {
                   {serviceMonthsForYear.map((month) => {
                     const label = serviceMonthLabel(month, calType);
                     return (
-                      <SelectItem key={month} value={month} className="text-right [&>span:last-child]:flex-1 [&>span:last-child]:min-w-0">
-                        <div dir="rtl" className="flex w-full flex-col items-start text-right gap-0.5 py-0.5">
-                          <span className="font-semibold text-sm leading-tight">{label.primary}</span>
-                          {label.secondary && <span className="text-xs text-muted-foreground leading-tight">{label.secondary}</span>}
-                        </div>
-                      </SelectItem>
+                      <RevenueMonthItem key={month} value={month} primary={label.primary} secondary={label.secondary} />
                     );
                   })}
                 </SelectContent>
@@ -14715,7 +14712,7 @@ function RevenueTab() {
               </Select>
               {/* Month dropdown — data-driven */}
               {revMonthsForYear.length > 0 && (calType === "gregorian" ? (
-                <Select value={selectedMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedMonth}>
+                <Select dir="rtl" value={selectedMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedMonth}>
                   <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                     {(() => {
                       const ym = selectedMonth || revMonthsForYear[0] || "";
@@ -14736,18 +14733,13 @@ function RevenueTab() {
                           ? `${HIJRI_MONTHS_AR[h1.month-1]} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h1.year)} هـ`
                           : `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h2.year)} هـ`;
                       return (
-                        <SelectItem key={ym} value={ym} className="text-right [&>span:last-child]:flex-1 [&>span:last-child]:min-w-0">
-                          <div dir="rtl" className="flex w-full flex-col items-start text-right gap-0.5 py-0.5">
-                            <span className="font-semibold text-sm leading-tight">{gregPrimary}</span>
-                            {hijriSec && <span className="text-xs text-muted-foreground leading-tight">{hijriSec}</span>}
-                          </div>
-                        </SelectItem>
+                        <RevenueMonthItem key={ym} value={ym} primary={gregPrimary} secondary={hijriSec} />
                       );
                     })}
                   </SelectContent>
                 </Select>
               ) : (
-                <Select value={selectedHijriMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedHijriMonth}>
+                <Select dir="rtl" value={selectedHijriMonth || (revMonthsForYear[0] ?? "")} onValueChange={setSelectedHijriMonth}>
                   <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                     {selectedHijriMonth || revMonthsForYear[0]
                       ? <span className="text-sm font-medium truncate">{selectedHijriMonth || revMonthsForYear[0]}</span>
@@ -14759,12 +14751,7 @@ function RevenueTab() {
                       let gregSec = "";
                       if (gregYm) { const [gy,gm] = gregYm.split("-").map(Number); gregSec = new Date(gy,gm-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"}); }
                       return (
-                        <SelectItem key={key} value={key} className="text-right [&>span:last-child]:flex-1 [&>span:last-child]:min-w-0">
-                          <div dir="rtl" className="flex w-full flex-col items-start text-right gap-0.5 py-0.5">
-                            <span className="font-semibold text-sm leading-tight">{key}</span>
-                            {gregSec && <span className="text-xs text-muted-foreground leading-tight">{gregSec}</span>}
-                          </div>
-                        </SelectItem>
+                        <RevenueMonthItem key={key} value={key} primary={key} secondary={gregSec} />
                       );
                     })}
                   </SelectContent>
@@ -15096,9 +15083,9 @@ function RevenueTab() {
                         <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
                           <span className="break-words min-w-0">{row.clientName}</span>
                           {row.bookingId != null && (
-                            <bdi dir="ltr" className="text-xs font-semibold tabular-nums text-muted-foreground whitespace-nowrap" aria-label={`رقم الحجز ${row.bookingId}`}>
-                              #{toArN(row.bookingId)}
-                            </bdi>
+                            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-1.5 py-0.5 text-xs font-semibold tabular-nums text-foreground whitespace-nowrap">
+                              حجز <bdi dir="ltr">#{toArN(row.bookingId)}</bdi>
+                            </span>
                           )}
                         </div>
                       </td>
@@ -15131,7 +15118,7 @@ function RevenueTab() {
                   <tr>
                     <td colSpan={2} className="px-1 pt-2 text-right font-bold text-amber-700 dark:text-amber-400">الإجمالي</td>
                     <td className="px-1 pt-2 text-left font-extrabold tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">
-                      {fmtN(financial?.cashOnHand ?? 0)} <span className="text-[10px] font-normal">ر.س</span>
+                      {fmtN(channels.cashUndeposited)} <span className="text-[10px] font-normal">ر.س</span>
                     </td>
                     <td />
                   </tr>
@@ -15381,7 +15368,7 @@ function RevenueTab() {
                     body: JSON.stringify({ amount: amt, submissionId }),
                   });
                   if (r.ok) {
-                    await Promise.all([refetchBookings(), refetchDepositLogs()]);
+                    await Promise.all([refetchBookings(), refetchDepositLogs(), refetchFinancial()]);
                     setDepositCashOpen(false);
                     setDepositAmount("");
                   }
@@ -26316,8 +26303,7 @@ export default function Dashboard() {
                     }}
                   >
                     <SelectTrigger className="w-full rounded-xl border-border bg-background h-10 text-sm">
-                      <SelectValue placeholder="اختر الوحدة المالية">
-                        <span className="flex items-center gap-2">
+                      <span className="flex min-w-0 items-center gap-2 text-right">
                           {selectedFinanceUnit.type === "all" ? (
                             <><Briefcase className="w-3.5 h-3.5 shrink-0" />الميزانية الرئيسية</>
                           ) : selectedFinanceUnit.type === "chalet" ? (
@@ -26325,8 +26311,7 @@ export default function Dashboard() {
                           ) : (
                             <><Activity className="w-3.5 h-3.5 shrink-0" />{selectedFinanceUnit.name}</>
                           )}
-                        </span>
-                      </SelectValue>
+                      </span>
                     </SelectTrigger>
                     <SelectContent dir="rtl">
                       <SelectItem value="all">
