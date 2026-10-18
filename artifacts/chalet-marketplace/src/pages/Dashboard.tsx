@@ -16835,7 +16835,9 @@ export function ExpensesTab() {
 
         {expenses.length > 0 && (
           <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">إجمالي الشهر</span>
+            <span className="text-sm text-muted-foreground">
+              {expMonth ? "إجمالي الشهر المختار" : expYear ? "إجمالي السنة المختارة" : "الإجمالي العام"}
+            </span>
             <span className="text-lg font-bold text-destructive"><bdi dir="ltr">{formatBankAmount(totalMonth)}</bdi> ⃁</span>
           </div>
         )}
