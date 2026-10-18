@@ -409,18 +409,21 @@ input, textarea, select, [contenteditable] {
 }
 
 /* ── Custom thin scrollbar — brand colors ─────────────────────────── */
-/* Gregorian revenue months: both calendar lines share one full-width right edge. */
+/* Revenue months: both calendar lines share one full-width right edge. */
+.revenue-month-menu [role="option"],
 .revenue-gregorian-month-menu [role="option"] {
   direction: rtl !important;
   text-align: right !important;
   justify-content: flex-start !important;
 }
+.revenue-month-menu [role="option"] > span[id],
 .revenue-gregorian-month-menu [role="option"] > span[id] {
   flex: 1 1 0%;
   min-width: 0;
   width: 100%;
   text-align: right !important;
 }
+.revenue-month-menu [role="option"] > span[id] > span,
 .revenue-gregorian-month-menu [role="option"] > span[id] > span {
   display: block;
   width: 100%;

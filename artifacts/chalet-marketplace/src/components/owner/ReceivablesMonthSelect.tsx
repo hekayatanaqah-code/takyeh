@@ -13,7 +13,7 @@ export function ReceivablesMonthSelect({ mode, value, onValueChange, months, mon
 }) {
   return (
     <Select
-      dir={mode === "gregorian" ? "rtl" : undefined}
+      dir="rtl"
       value={value}
       onValueChange={onValueChange}
       defaultOpen={defaultOpen}
@@ -25,21 +25,14 @@ export function ReceivablesMonthSelect({ mode, value, onValueChange, months, mon
           <span className="text-sm text-muted-foreground">كل الشهور</span>
         )}
       </SelectTrigger>
-      <SelectContent dir="rtl" align="end" className={mode === "gregorian" ? "revenue-gregorian-month-menu" : undefined}>
+      <SelectContent dir="rtl" align="end" className="revenue-month-menu" data-calendar={mode}>
         <SelectItem value="__all__">
           <span className="text-sm">كل الشهور</span>
         </SelectItem>
         {months.map(month => {
           const { primary, secondary } = monthParts(month);
-          return mode === "gregorian" ? (
+          return (
             <RevenueMonthItem key={month} value={month} primary={primary} secondary={secondary} />
-          ) : (
-            <SelectItem key={month} value={month}>
-              <div className="flex flex-col items-end gap-0.5 py-0.5">
-                <span className="font-semibold text-sm leading-tight">{primary}</span>
-                {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
-              </div>
-            </SelectItem>
           );
         })}
       </SelectContent>

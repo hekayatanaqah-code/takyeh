@@ -6,7 +6,7 @@ The Gregorian month dropdown must visually match the Hijri dropdown: the main mo
 
 **Why:** The user repeated this requirement after confirming that the financial calculations and deposit dialog were correct.
 
-**How to apply:** Keep follow-up changes to month layout scoped to that dropdown. Preserve the accepted financial behavior and the existing Hijri appearance.
+**How to apply:** Keep follow-up changes to month layout scoped to that dropdown and preserve the accepted financial behavior. The user subsequently requested the same full-width right alignment for the Hijri menu's Gregorian secondary line; both calendar modes must now use the same aligned two-line layout.
 
 The user's comparison images showed the guest-receivables subtab, identifiable by “كل الشهور” and month labels that include the year, not the monthly-accounts selector. Earlier fixes and isolated previews targeted the similar monthly-accounts menu instead.
 
