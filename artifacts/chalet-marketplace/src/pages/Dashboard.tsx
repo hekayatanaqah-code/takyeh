@@ -19,6 +19,8 @@ import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insur
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
 import { ReceivablesMonthSelect } from "@/components/owner/ReceivablesMonthSelect";
+import { BankLedgerSummary } from "@/components/owner/BankLedgerSummary";
+import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit, type LedgerExpense, type LedgerPayment, type LedgerServiceAppointment } from "@/lib/bankLedger";
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { Download } from "lucide-react";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
@@ -13372,66 +13374,86 @@ function getHijriYMClient(date: Date): { year: number; month: number } {
 }
 
 /* ── BankLedgerTab — Standalone Bank Account Ledger ──────────── */
-function BankLedgerTab() {
+export function BankLedgerTab() {
   const { unit } = useAdminFinance();
-  const [activeTab, setActiveTab] = useState<"all" | "revenue" | "insurance" | "cash_deposit">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "revenue" | "insurance" | "cash_deposit" | "expense">("all");
   const [bankCalType, setBankCalType] = useState<"hijri" | "gregorian">("gregorian");
   const initialBankMonth = getCurrentFinanceMonth("gregorian");
   const [bankYear, setBankYear] = useState<string>(() => initialBankMonth.split("-")[0]);
   const [bankMonth, setBankMonth] = useState<string>(() => initialBankMonth);
-  const fmtN = (n: number) => n.toLocaleString("ar-SA");
+  const fmtN = formatBankAmount;
 
-  const { data: allBookings = [], isLoading: bkLoading } = useQuery<OwnerBooking[]>({
+  const { data: allBookings = [], isLoading: bkLoading, isError: bkError, refetch: refetchLedgerBookings } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings-ledger", unit],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذر تحميل حجوزات الحساب البنكي");
       return r.json();
     },
+    enabled: unit.type !== "service",
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 60_000,
   });
 
-  const { data: depositLogs = [], isLoading: logsLoading } = useQuery<Array<{ id: number; ownerId: number; submissionId: number | null; amount: string; note: string | null; createdAt: string }>>({
+  const { data: depositLogs = [], isLoading: logsLoading, isError: logsError, refetch: refetchLedgerLogs } = useQuery<LedgerDeposit[]>({
     queryKey: ["owner", "cash-deposit-logs-ledger"],
     queryFn: async () => {
       const r = await apiFetch("/owner/cash-deposit-logs");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذر تحميل الإيداعات النقدية");
       return r.json();
     },
+    enabled: unit.type !== "service",
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 60_000,
   });
 
-  const ledgerEntries = useMemo(() => {
-    let scoped = allBookings;
-    let scopedLogs = depositLogs;
-    if (unit.type === "chalet") {
-      const subId = (unit as any).submissionId;
-      if (subId) {
-        scoped = allBookings.filter(bk => bk.submissionId === subId);
-        scopedLogs = depositLogs.filter(l => l.submissionId === subId);
+  const { data: ledgerExpenses = [], isLoading: expensesLoading, isError: expensesError, refetch: refetchLedgerExpenses } = useQuery<LedgerExpense[]>({
+    queryKey: ["owner", "expenses"],
+    queryFn: async () => {
+      const response = await apiFetch("/owner/expenses");
+      if (!response.ok) throw new Error("تعذر تحميل المصروفات");
+      return response.json();
+    },
+    staleTime: 0, refetchOnMount: "always", refetchInterval: 60_000,
+  });
+  const { data: ledgerPayments = [], isLoading: paymentsLoading, isError: paymentsError, refetch: refetchLedgerPayments } = useQuery<LedgerPayment[]>({
+    queryKey: ["owner", "booking-payments-ledger"],
+    queryFn: async () => {
+      const response = await apiFetch("/owner/booking-payments");
+      if (!response.ok) throw new Error("تعذر تحميل دفعات الحجوزات");
+      return response.json();
+    },
+    enabled: unit.type !== "service", staleTime: 0, refetchOnMount: "always", refetchInterval: 60_000,
+  });
+  const { data: ledgerServices = [], isLoading: servicesLoading, isError: servicesError, refetch: refetchLedgerServices } = useQuery<LedgerServiceAppointment[]>({
+    queryKey: ["owner", "bank-ledger-services", unit.type === "service" ? unit.id : "all"],
+    queryFn: async () => {
+      let providerIds: number[];
+      if (unit.type === "service") providerIds = [unit.id];
+      else {
+        const providersResponse = await apiFetch("/providers/my/approved");
+        if (!providersResponse.ok) throw new Error("تعذر تحميل الخدمات");
+        const providers: Array<{ id: number }> = await providersResponse.json();
+        providerIds = providers.map(provider => provider.id);
       }
-    }
-    const entries: {
-      bookingId: number; clientName: string; bookingDate: string;
-      type: "revenue" | "insurance" | "cash_deposit";
-      amount: number; status: string;
-    }[] = [];
-    for (const bk of scoped) {
-      if (bk.cancelledAt) continue;
-      if (bk.paymentMethod !== "cash") {
-        const dep = Number(bk.depositPaid ?? 0);
-        const tp = bk.totalPrice != null && Number(bk.totalPrice) > 0 ? Number(bk.totalPrice) : dep;
-        const bal = bk.balanceCollected ? Math.max(0, tp - dep) : 0;
-        const total = dep + bal;
-        if (total > 0) entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "revenue", amount: total, status: bk.balanceCollected || dep >= tp ? "مكتمل" : "جزئي" });
-      }
-      if (bk.insuranceReceived && Number(bk.insuranceFee ?? 0) > 0 && (bk.insurancePaymentMethod ?? "transfer") === "transfer") {
-        entries.push({ bookingId: bk.id, clientName: bk.clientName, bookingDate: bk.bookingDate ?? "", type: "insurance", amount: Math.round(Number(bk.insuranceFee)), status: bk.insuranceRefunded ? "تم الرد" : "محتجز" });
-      }
-    }
-    for (const log of scopedLogs) {
-      entries.push({ bookingId: 0, clientName: log.note ?? "إيداع نقدي", bookingDate: log.createdAt.slice(0, 10), type: "cash_deposit", amount: Math.round(Number(log.amount)), status: "تم الإيداع" });
-    }
-    return entries.sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
-  }, [allBookings, depositLogs, unit]);
+      const appointments = await Promise.all(providerIds.map(async providerId => {
+        const response = await apiFetch(`/providers/my/approved/${providerId}/appointments`);
+        if (!response.ok) throw new Error("تعذر تحميل إيرادات الخدمة");
+        return response.json() as Promise<LedgerServiceAppointment[]>;
+      }));
+      return appointments.flat();
+    },
+    enabled: unit.type !== "chalet", staleTime: 0, refetchOnMount: "always", refetchInterval: 60_000,
+  });
+  const ledgerLoading = expensesLoading || (unit.type !== "service" && (bkLoading || logsLoading || paymentsLoading)) || (unit.type !== "chalet" && servicesLoading);
+  const ledgerFailed = expensesError || (unit.type !== "service" && (bkError || logsError || paymentsError)) || (unit.type !== "chalet" && servicesError);
+  const ledgerEntries = useMemo(() => buildBankLedger({
+    scope: unit, bookings: allBookings, deposits: depositLogs, payments: ledgerPayments,
+    expenses: ledgerExpenses, serviceAppointments: ledgerServices,
+    categoryLabels: Object.fromEntries(EXPENSE_CATS.map(category => [category.key, category.label])),
+  }), [allBookings, depositLogs, ledgerPayments, ledgerExpenses, ledgerServices, unit]);
 
   const bankYearOptions = useMemo(() => {
     const years = new Set<string>();
@@ -13469,15 +13491,16 @@ function BankLedgerTab() {
 
   return (
     <div className="space-y-4">
+      <BankLedgerSummary entries={ledgerEntries} loading={ledgerLoading} failed={ledgerFailed} />
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-4 border-b border-border">
           <span className="text-2xl">🏦</span>
           <div>
             <h3 className="font-bold text-base text-foreground">سجل الحساب البنكي</h3>
-            <p className="text-[11px] text-muted-foreground">سجل مفصّل لجميع الحوالات والإيداعات البنكية</p>
+            <p className="text-[11px] text-muted-foreground">كشف الحوالات والإيداعات والمصروفات المسحوبة</p>
           </div>
           <SectionGuideButton sectionKey="ledger" />
-          {!bkLoading && (
+          {!ledgerLoading && !ledgerFailed && (
             <div className="ms-auto text-xs font-semibold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg">
               {ledgerEntries.length} معاملة
             </div>
@@ -13550,6 +13573,7 @@ function BankLedgerTab() {
             ["revenue",      "🏠 إيرادات الحجوزات"],
             ["insurance",    "🔒 حوالات التأمينات"],
             ["cash_deposit", "💵 إيداعات نقدية"],
+            ["expense",      "المصروفات المسحوبة 💸"],
           ] as const).map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)}
               className={`px-4 py-3 font-semibold whitespace-nowrap transition-colors border-b-2 ${activeTab === id ? "border-primary text-primary bg-primary/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}>
@@ -13557,8 +13581,17 @@ function BankLedgerTab() {
             </button>
           ))}
         </div>
-        {bkLoading || logsLoading ? (
+        {ledgerLoading ? (
           <div className="p-4 space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : ledgerFailed ? (
+          <div role="alert" className="p-6 text-center space-y-3">
+            <p className="text-sm text-destructive">تعذر تحميل بعض حركات الحساب. لم يُعرض رصيد ناقص.</p>
+            <Button variant="outline" onClick={() => {
+              void refetchLedgerExpenses();
+              if (unit.type !== "service") { void refetchLedgerBookings(); void refetchLedgerLogs(); void refetchLedgerPayments(); }
+              if (unit.type !== "chalet") void refetchLedgerServices();
+            }}>إعادة المحاولة</Button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="text-center text-muted-foreground text-sm py-14">
             <div className="text-3xl mb-2">📭</div>لا توجد بيانات
@@ -13568,32 +13601,35 @@ function BankLedgerTab() {
             {(pagination) => (
               <div ref={pagination.tableRef} className="scroll-mt-4">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm min-w-[620px]">
+                  <table className="w-full text-sm min-w-[800px]">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">تاريخ الحوالة</th>
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم المستأجر</th>
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">رقم الحجز</th>
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">نوع الدفعة</th>
-                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground">المبلغ المحوّل</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">الوصف</th>
+                  <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground">المبلغ</th>
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">الحالة</th>
                 </tr>
               </thead>
               <tbody>
-                {pagination.paginatedItems.map((e, i) => {
+                {pagination.paginatedItems.map(e => {
                   const _dualDate = e.bookingDate ? formatDualDate(e.bookingDate) : null;
                   const typeInfo = {
                     revenue:      { label: "🏠 حجز",        cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
                     insurance:    { label: "🔒 تأمين",       cls: "bg-slate-50 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300" },
-                    cash_deposit: { label: "💵 إيداع نقدي", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+                    cash_deposit: { label: e.insuranceDeposit ? "💵 إيداع نقدي / تأمين" : "💵 إيداع نقدي", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
+                    expense:      { label: "💸 مصروف مسحوب", cls: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
                   }[e.type];
-                  const statusCls = e.status === "مكتمل" || e.status === "تم الإيداع"
+                  const statusCls = e.type === "expense" ? "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                    : e.status === "مكتمل" || e.status === "تم الإيداع"
                     ? "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                     : e.status === "تم الرد" ? "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"
                     : e.status === "محتجز"   ? "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
                     : "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300";
                   return (
-                    <tr key={i} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                    <tr key={e.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
                       <td className="py-2.5 px-4 text-xs text-muted-foreground leading-tight whitespace-nowrap">
                         {_dualDate ? (
                           <>
@@ -13607,8 +13643,9 @@ function BankLedgerTab() {
                       <td className="py-2.5 px-4">
                         <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${typeInfo.cls}`}>{typeInfo.label}</span>
                       </td>
+                      <td className="py-2.5 px-4 text-xs text-foreground max-w-[260px] break-words">{e.description}</td>
                       <td className="py-2.5 px-4 text-left">
-                        <span className="font-bold text-blue-600 dark:text-blue-400 tabular-nums">{fmtN(e.amount)}</span>
+                        <bdi dir="ltr" className={`font-bold tabular-nums whitespace-nowrap ${e.amount < 0 ? "text-red-700 dark:text-red-300" : "text-blue-600 dark:text-blue-400"}`}>{fmtN(e.amount, true)}</bdi>
                         <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
                       </td>
                       <td className="py-2.5 px-4">
@@ -13620,9 +13657,9 @@ function BankLedgerTab() {
               </tbody>
               <tfoot>
                 <tr className="bg-muted/30 border-t-2 border-border">
-                  <td colSpan={4} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">الإجمالي</td>
+                  <td colSpan={5} className="py-2.5 px-4 text-xs font-bold text-muted-foreground">صافي الحركات المعروضة</td>
                   <td className="py-2.5 px-4 text-left">
-                    <span className="font-extrabold text-blue-700 dark:text-blue-400 tabular-nums">{fmtN(filtered.reduce((s, e) => s + e.amount, 0))}</span>
+                    <bdi dir="ltr" className={`font-extrabold tabular-nums ${bankLedgerTotals(filtered).balance < 0 ? "text-red-700 dark:text-red-300" : "text-blue-700 dark:text-blue-400"}`}>{fmtN(bankLedgerTotals(filtered).balance)}</bdi>
                     <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
                   </td>
                   <td />

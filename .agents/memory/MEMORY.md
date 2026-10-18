@@ -73,3 +73,4 @@
 - [Archive report exports](archive-report-export.md) — one complete booking per landscape table row; range-navigation rules and Excel calculation-metadata verification.
 - [Revenue cash custody](revenue-cash-custody.md) — outstanding cash must match its detail records; never derive it by subtracting cumulative bank balances from monthly collections.
 - [Revenue month alignment](revenue-month-alignment.md) — Gregorian month labels and secondary dates must share the Hijri menu’s right alignment; preserve accepted financial behavior.
+- [Bank ledger accounting](bank-ledger-accounting.md) — full-history balance differs from filtered subtotals; registered expenses are red, explicitly signed debits.
