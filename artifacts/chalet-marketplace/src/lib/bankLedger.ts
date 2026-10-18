@@ -1,7 +1,6 @@
-export type BankLedgerScope =
-  | { type: "all" }
-  | { type: "chalet"; submissionId?: number | null }
-  | { type: "service"; id: number };
+import { isExpenseInScope, type ExpenseScope } from "./expenseScope";
+
+export type BankLedgerScope = ExpenseScope;
 
 export interface LedgerBooking {
   id: number; submissionId?: number | null; clientName: string; bookingDate: string;
@@ -108,12 +107,7 @@ export function buildBankLedger(input: {
     });
   }
   for (const expense of expenses) {
-    if (scope.type === "chalet" && (
-      expense.providerId != null ||
-      (expense.submissionId != null && expense.submissionId !== scope.submissionId) ||
-      scope.submissionId == null
-    )) continue;
-    if (scope.type === "service" && expense.providerId !== scope.id) continue;
+    if (!isExpenseInScope(expense, scope)) continue;
     const category = expense.customCategory || categoryLabels[expense.category] || expense.category;
     entries.push({
       id: `expense-${expense.id}`, bookingId: 0, clientName: "—",

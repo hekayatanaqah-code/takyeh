@@ -20,6 +20,7 @@ import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading"
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
 import { ReceivablesMonthSelect } from "@/components/owner/ReceivablesMonthSelect";
 import { BankLedgerSummary } from "@/components/owner/BankLedgerSummary";
+import { isExpenseInScope } from "@/lib/expenseScope";
 import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit, type LedgerExpense, type LedgerPayment, type LedgerServiceAppointment } from "@/lib/bankLedger";
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { Download } from "lucide-react";
@@ -15634,6 +15635,7 @@ interface OwnerExpense {
   notes: string | null;
   receiptUrl: string | null;
   submissionId: number | null;
+  providerId?: number | null;
 }
 
 interface ExpenseCatItem {
@@ -16189,7 +16191,7 @@ function TransactionHistoryTab() {
   );
 }
 
-function ExpensesTab() {
+export function ExpensesTab() {
   const { unit } = useAdminFinance();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
@@ -16243,13 +16245,16 @@ function ExpensesTab() {
     return map;
   }, [expenseCats]);
 
-  const { data: expenses = [], isLoading } = useQuery<OwnerExpense[]>({
+  const { data: expenses = [], isLoading, isError: expensesFailed, refetch: refetchExpenses } = useQuery<OwnerExpense[]>({
     queryKey: ["owner", "expenses"],
     queryFn: async () => {
       const r = await apiFetch(`/owner/expenses`);
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذر تحميل المصروفات");
       return r.json();
     },
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchInterval: 60_000,
   });
 
   const { data: mySubmissions = [] } = useQuery<any[]>({
@@ -16377,12 +16382,7 @@ function ExpensesTab() {
     } else if (expYear) {
       result = result.filter(e => (e as any).dateStr && getBookingMonthKey((e as any).dateStr, expCalType).startsWith(expYear));
     }
-    if (unit.type === "chalet" && (unit as any).submissionId) {
-      result = result.filter(e => (e as any).submissionId === (unit as any).submissionId);
-    }
-    if (unit.type === "service") {
-      result = result.filter(e => (e as any).providerId === unitProviderId);
-    }
+    result = result.filter(expense => isExpenseInScope(expense, unit));
     return result;
   }, [expenses, expCalType, expYear, expMonth, unit, unitProviderId]);
 
@@ -16728,6 +16728,11 @@ function ExpensesTab() {
 
         {isLoading ? (
           <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+        ) : expensesFailed ? (
+          <div role="alert" className="py-8 text-center space-y-3">
+            <p className="text-sm text-destructive">تعذر تحميل المصروفات. أعد المحاولة لعرض الرواتب والمصروفات المسجلة.</p>
+            <Button variant="outline" onClick={() => void refetchExpenses()}>إعادة المحاولة</Button>
+          </div>
         ) : filteredExpenses.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <Receipt className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -16791,7 +16796,7 @@ function ExpensesTab() {
                         <span className="text-[10px] text-muted-foreground line-clamp-2">{exp.notes || "—"}</span>
                       </td>
                       <td className="text-right px-3 py-2.5">
-                        <p className="text-sm font-bold text-foreground leading-tight">{toArN(Math.round(Number(exp.amount)).toLocaleString("en-US"))}</p>
+                        <p className="text-sm font-bold text-foreground leading-tight">{formatBankAmount(Number(exp.amount))}</p>
                         <p className="text-[9px] text-muted-foreground">ر.س</p>
                       </td>
                       <td className="text-center px-2 py-2.5">
@@ -16831,7 +16836,7 @@ function ExpensesTab() {
         {expenses.length > 0 && (
           <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
             <span className="text-sm text-muted-foreground">إجمالي الشهر</span>
-            <span className="text-lg font-bold text-destructive">{formatAmount(totalMonth)}</span>
+            <span className="text-lg font-bold text-destructive"><bdi dir="ltr">{formatBankAmount(totalMonth)}</bdi> ⃁</span>
           </div>
         )}
       </div>
@@ -17461,14 +17466,19 @@ function StaffTab() {
   const paySalary = useMutation({
     mutationFn: async (data: any) => {
       const r = await apiFetch("/owner/salary-logs/pay", { method: "POST", body: JSON.stringify(data) });
-      if (!r.ok) throw new Error("فشل صرف الراتب");
+      if (!r.ok) {
+        const error = await r.json().catch(() => null);
+        throw new Error(error?.error || "فشل صرف الراتب");
+      }
       return r.json() as Promise<{ salaryLog: any; expense: any }>;
     },
     onSuccess: (result, variables) => {
       qc.invalidateQueries({ queryKey: ["owner", "salary-logs-history"] });
+      qc.invalidateQueries({ queryKey: ["owner", "salary-logs"] });
       qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary"] });
       qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
+      qc.invalidateQueries({ queryKey: ["owner", "transaction-history"] });
       /* Build voucher data from the result + payTarget context */
       if (payTarget) {
         const base  = Number(payTarget.baseSalary);
@@ -17499,6 +17509,11 @@ function StaffTab() {
       }
       setPayForm({ month: "", bonus: "0", deduction: "0", bonusNotes: "", deductionNotes: "", generalNotes: "", paymentMethod: "cash", iban: "" });
       setPayYearState(null);
+    },
+    onError: (error: Error) => {
+      void qc.invalidateQueries({ queryKey: ["owner", "salary-logs-history"] });
+      void qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
+      toast({ title: "تعذر صرف الراتب", description: error.message, variant: "destructive" });
     },
   });
 

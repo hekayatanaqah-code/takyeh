@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { paySalaryWithExpense } from "../lib/salary-expenses";
 import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
 import { SaveOwnerWhatsAppSettingsBody } from "@workspace/api-zod";
 import { propertyStayComplete } from "../lib/booking-completion";
@@ -3720,7 +3721,7 @@ router.post("/salary-logs/pay", async (req, res) => {
   const ownerId = req.user!.id;
   const body = z.object({
     staffId: z.number().int().positive(),
-    month: z.string().regex(/^\d{4}-\d{2}$/),
+    month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
     bonus: z.number().nonnegative().default(0),
     deduction: z.number().nonnegative().default(0),
     notes: z.string().optional(),
@@ -3729,71 +3730,11 @@ router.post("/salary-logs/pay", async (req, res) => {
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
-  const [staff] = await db
-    .select()
-    .from(ownerStaffTable)
-    .where(and(eq(ownerStaffTable.id, body.data.staffId), eq(ownerStaffTable.ownerId, ownerId)));
-  if (!staff) return res.status(403).json({ error: "غير مصرح" });
-
-  const netSalary = Number(staff.baseSalary) + body.data.bonus - body.data.deduction;
-  const paidAt = new Date();
-  const dateStr = paidAt.toISOString().slice(0, 10);
-
-  /* Create expense entry automatically */
-  const [expense] = await db
-    .insert(ownerExpensesTable)
-    .values({
-      ownerId,
-      category: "salaries",
-      amount: String(netSalary),
-      dateStr,
-      notes: `راتب ${staff.name} – ${body.data.month}${body.data.notes ? ` – ${body.data.notes}` : ""}`,
-      receiptUrl: null,
-      submissionId: null,
-    })
-    .returning();
-
-  /* Upsert salary log with paidAt + expenseId */
-  const [existing] = await db
-    .select()
-    .from(salaryLogsTable)
-    .where(and(eq(salaryLogsTable.staffId, body.data.staffId), eq(salaryLogsTable.month, body.data.month)))
-    .limit(1);
-
-  let row;
-  if (existing) {
-    [row] = await db
-      .update(salaryLogsTable)
-      .set({
-        bonus: String(body.data.bonus),
-        deduction: String(body.data.deduction),
-        notes: body.data.notes ?? null,
-        bonusNotes: body.data.bonusNotes ?? null,
-        deductionNotes: body.data.deductionNotes ?? null,
-        paidAt,
-        expenseId: expense.id,
-      })
-      .where(eq(salaryLogsTable.id, existing.id))
-      .returning();
-  } else {
-    [row] = await db
-      .insert(salaryLogsTable)
-      .values({
-        ownerId,
-        staffId: body.data.staffId,
-        month: body.data.month,
-        bonus: String(body.data.bonus),
-        deduction: String(body.data.deduction),
-        notes: body.data.notes ?? null,
-        bonusNotes: body.data.bonusNotes ?? null,
-        deductionNotes: body.data.deductionNotes ?? null,
-        paidAt,
-        expenseId: expense.id,
-      })
-      .returning();
-  }
-
-  return res.json({ salaryLog: row, expense });
+  const result = await paySalaryWithExpense(ownerId, body.data);
+  if (result.kind === "not-found") return res.status(403).json({ error: "غير مصرح" });
+  if (result.kind === "already-paid") return res.status(409).json({ error: "تم صرف راتب هذا الموظف للشهر المحدد مسبقاً؛ لم يتم إنشاء مصروف مكرر" });
+  if (result.kind === "invalid-amount") return res.status(400).json({ error: "يجب أن يكون صافي الراتب المصروف مبلغاً موجباً وصالحاً" });
+  return res.json({ salaryLog: result.salaryLog, expense: result.expense });
 });
 
 router.delete("/salary-logs/:id", async (req, res) => {
