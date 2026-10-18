@@ -18,6 +18,7 @@ import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type Own
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
+import { ReceivablesMonthSelect } from "@/components/owner/ReceivablesMonthSelect";
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { Download } from "lucide-react";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
@@ -14804,34 +14805,13 @@ function RevenueTab() {
             )}
             {/* Month dropdown — data-driven, only months with activity */}
             {pendingMonthsForYear.length > 0 && (
-              <Select
+              <ReceivablesMonthSelect
+                mode={pendingCalType}
                 value={pendingFilterMonth || "__all__"}
                 onValueChange={v => setPendingFilterMonth(v === "__all__" ? "" : v)}
-              >
-                <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[130px] max-w-[200px]" dir="rtl">
-                  {pendingFilterMonth ? (
-                    <span className="text-sm font-medium">{pendingMonthParts(pendingFilterMonth).primary}</span>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">كل الشهور</span>
-                  )}
-                </SelectTrigger>
-                <SelectContent dir="rtl" align="end">
-                  <SelectItem value="__all__">
-                    <span className="text-sm">كل الشهور</span>
-                  </SelectItem>
-                  {pendingMonthsForYear.map(ym => {
-                    const { primary, secondary } = pendingMonthParts(ym);
-                    return (
-                      <SelectItem key={ym} value={ym}>
-                        <div className="flex flex-col items-end gap-0.5 py-0.5">
-                          <span className="font-semibold text-sm leading-tight">{primary}</span>
-                          {secondary && <span className="text-xs text-muted-foreground leading-tight">{secondary}</span>}
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
+                months={pendingMonthsForYear}
+                monthParts={pendingMonthParts}
+              />
             )}
             {filteredReceivables.length > 0 && (
               <span className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded-full ms-auto font-semibold">

@@ -411,9 +411,9 @@ input, textarea, select, [contenteditable] {
 /* ── Custom thin scrollbar — brand colors ─────────────────────────── */
 /* Gregorian revenue months: both calendar lines share one full-width right edge. */
 .revenue-gregorian-month-menu [role="option"] {
-  direction: rtl;
+  direction: rtl !important;
   text-align: right !important;
-  justify-content: flex-start;
+  justify-content: flex-start !important;
 }
 .revenue-gregorian-month-menu [role="option"] > span[id] {
   flex: 1 1 0%;
