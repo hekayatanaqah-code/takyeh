@@ -409,6 +409,24 @@ input, textarea, select, [contenteditable] {
 }
 
 /* ── Custom thin scrollbar — brand colors ─────────────────────────── */
+/* Gregorian revenue months: both calendar lines share one full-width right edge. */
+.revenue-gregorian-month-menu [role="option"] {
+  direction: rtl;
+  text-align: right !important;
+  justify-content: flex-start;
+}
+.revenue-gregorian-month-menu [role="option"] > span[id] {
+  flex: 1 1 0%;
+  min-width: 0;
+  width: 100%;
+  text-align: right !important;
+}
+.revenue-gregorian-month-menu [role="option"] > span[id] > span {
+  display: block;
+  width: 100%;
+  text-align: right !important;
+}
+
 .scrollbar-thin::-webkit-scrollbar { width: 4px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 .scrollbar-thin::-webkit-scrollbar-thumb {

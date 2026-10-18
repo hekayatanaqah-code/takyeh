@@ -14501,7 +14501,7 @@ function RevenueTab() {
                     ).primary}
                   </span>
                 </SelectTrigger>
-                <SelectContent dir="rtl" align="end">
+                <SelectContent dir="rtl" align="end" className={calType === "gregorian" ? "revenue-gregorian-month-menu" : undefined}>
                   {serviceMonthsForYear.map((month) => {
                     const label = serviceMonthLabel(month, calType);
                     return (
@@ -14721,7 +14721,7 @@ function RevenueTab() {
                       return <span className="text-sm font-medium">{new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"})}</span>;
                     })()}
                   </SelectTrigger>
-                  <SelectContent dir="rtl" align="end">
+                  <SelectContent dir="rtl" align="end" className="revenue-gregorian-month-menu">
                     {revMonthsForYear.map(ym => {
                       const [y,m] = ym.split("-").map(Number);
                       const gregPrimary = new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"});
