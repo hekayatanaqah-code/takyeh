@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { RiyalIcon } from "@/components/icons/RiyalIcon";
+import saudiRiyalSymbol from "@/assets/saudi-riyal.svg";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { easternHoldingDigits, latinHoldingDigits } from "@/lib/staffHoldingNumbers";
+import { formatHoldingSettlementDate } from "@/lib/staffHoldingDates";
 import { holdingGroup, holdingGroupTotals, type HoldingGroup, type LegacyHoldingKind } from "@/lib/staffHoldingGroups";
 import { cn } from "@/lib/utils";
 
@@ -70,7 +71,7 @@ function Money({ value, className, currency = true }: { value: string | number; 
   return (
     <span className={cn("inline-flex items-baseline gap-1 tabular-nums", className)} dir="rtl">
       <span>{fmtAmount(value)}</span>
-      {currency && <RiyalIcon className="h-[0.85em] w-[0.85em]" />}
+      {currency && <img src={saudiRiyalSymbol} alt="ريال سعودي" className="h-[0.85em] w-[0.85em] shrink-0 self-center object-contain" />}
     </span>
   );
 }
@@ -199,7 +200,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
         </div>
       </header>
 
-      <div className="flex gap-2 rounded-lg border border-dashed bg-muted/40 p-3 text-sm font-medium leading-7 text-foreground" data-testid="text-holdings-disclaimer">
+      <div className="flex gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm font-semibold leading-7 text-slate-950" data-testid="text-holdings-disclaimer">
         <FileText className="mt-0.5 h-4 w-4 shrink-0" />
         <p>هذا السجل توثيقي فقط. لا يُنشئ خصمًا تلقائيًا من الراتب ولا تحويلًا بنكيًا ولا مصروفًا، ولا تنتقل أي أموال عند الحفظ أو التسوية. القيود لا تُعدّل ولا تُحذف بعد حفظها.</p>
       </div>
@@ -211,16 +212,16 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
       {/* totals per category, never combined */}
       {!showForm && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2" data-testid="grid-holdings-totals">
         {KINDS.map((k) => (
-          <div key={k.value} className={cn("flex min-w-0 flex-col items-center gap-3 rounded-xl border p-5 text-center sm:p-6", k.tone)} data-testid={`total-${k.value}`}>
-            <p className="text-sm font-bold leading-6">{k.label}</p>
+          <div key={k.value} className={cn("flex min-w-0 flex-col items-center gap-4 rounded-xl border p-6 text-center sm:p-8", k.tone)} data-testid={`total-${k.value}`}>
+            <p className="w-full text-sm font-bold leading-6 text-slate-950">{k.label}</p>
             {list.isLoading ? <div className="h-10 w-28 animate-pulse rounded bg-current/10 opacity-20" /> : list.isError && !list.data ? (
               <p className="mt-2 text-xs">تعذّر تحميل الرصيد</p>
             ) : (
               <>
-                <Money value={totals[k.value].open} currency={false} className="max-w-full justify-center break-all text-3xl font-extrabold leading-tight sm:text-4xl" />
-                <p className="text-xs font-medium text-slate-700">ريال سعودي</p>
-                <p className="text-sm font-semibold text-slate-700">{easternHoldingDigits(String(totals[k.value].count))} قيد مفتوح</p>
-                <p className="mt-auto w-full border-t border-current/10 pt-3 text-xs font-medium leading-6 text-slate-700">{k.hint}</p>
+                <Money value={totals[k.value].open} currency={false} className="w-full max-w-full justify-center break-all text-3xl font-extrabold leading-tight sm:text-4xl" />
+                <p className="text-sm font-semibold text-slate-900">ريال سعودي</p>
+                <p className="text-sm font-semibold text-slate-900">{easternHoldingDigits(String(totals[k.value].count))} قيد مفتوح</p>
+                <p className="mt-auto w-full border-t border-current/10 pt-4 text-sm font-semibold leading-7 text-slate-900">{k.hint}</p>
               </>
             )}
           </div>
@@ -255,7 +256,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs font-medium leading-6 text-foreground">{kindMeta(kind).hint}</p>
+            <p className="mt-2 text-sm font-semibold leading-7 text-slate-900">{kindMeta(kind).hint}</p>
           </fieldset>
           <div>
             <label className="mb-1 block text-sm font-medium" htmlFor="holding-desc">الوصف</label>
@@ -266,7 +267,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
             <div>
               <label className="mb-1 block text-sm font-medium" htmlFor="holding-amount">المبلغ</label>
               <Input id="holding-amount" inputMode="decimal" dir="ltr" className="h-11 text-right tabular-nums" value={easternHoldingDigits(amount)} onChange={(e) => setAmount(easternHoldingDigits(e.target.value))} placeholder="٠,٠٠" data-testid="input-holding-amount" />
-              <p className="mt-1 text-xs font-medium text-foreground">{kind === "custody" ? "يمكن إدخال صفر للعهدة العينية غير النقدية." : "مبلغ موجب حتى منزلتين عشريتين."}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">{kind === "custody" ? "يمكن إدخال صفر للعهدة العينية غير النقدية." : "مبلغ موجب حتى منزلتين عشريتين."}</p>
               <FieldError msg={errors.amount} id="holding-amount" />
             </div>
             <div>
@@ -333,7 +334,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
                 {h.notes && <p className="mt-2 whitespace-pre-wrap break-words text-xs text-muted-foreground">{h.notes}</p>}
                 {settled && (
                   <div className="mt-2 rounded-md bg-emerald-50 p-2 text-xs text-emerald-900" data-testid={`text-holding-settlement-${h.id}`}>
-                    <p className="flex items-center gap-1 font-semibold"><CheckCircle2 className="h-3.5 w-3.5" /> سُوّي بالكامل في {fmtDate(h.settledOn)}</p>
+                    <p className="flex items-start gap-1 font-semibold"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>سُوي بالكامل في <bdi dir="rtl">{formatHoldingSettlementDate(h.settledOn)}</bdi></span></p>
                     {h.settlementNotes && <p className="mt-1 whitespace-pre-wrap break-words">{h.settlementNotes}</p>}
                   </div>
                 )}

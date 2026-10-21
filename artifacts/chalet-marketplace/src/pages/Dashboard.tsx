@@ -18525,7 +18525,7 @@ function StaffTab() {
         open={staffProfileTarget !== null}
         onOpenChange={(o) => { if (!o) { setStaffProfileTarget(null); setStaffProfileEditing(false); setEditId(null); } }}
       >
-        <DialogContent className={`${staffProfileTab === "holdings" ? "max-w-4xl" : "max-w-2xl"} p-0 overflow-hidden gap-0 flex flex-col max-h-[88dvh]`} dir="rtl">
+        <DialogContent className={`${staffProfileTab === "holdings" ? "max-w-5xl" : "max-w-2xl"} p-0 overflow-hidden gap-0 flex flex-col max-h-[88dvh]`} dir="rtl">
           {staffProfileTarget && (() => {
             const emp = staffProfileTarget;
             const empHistory = history.filter((l: SalaryLog) => l.staffId === emp.id);
