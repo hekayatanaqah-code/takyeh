@@ -8,9 +8,10 @@ import { useToast } from "@/hooks/use-toast";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { easternHoldingDigits, latinHoldingDigits } from "@/lib/staffHoldingNumbers";
+import { holdingGroup, holdingGroupTotals, type HoldingGroup, type LegacyHoldingKind } from "@/lib/staffHoldingGroups";
 import { cn } from "@/lib/utils";
 
-type Kind = "custody" | "withheld" | "emergency" | "deposit";
+type Kind = LegacyHoldingKind;
 
 export interface StaffHolding {
   id: number;
@@ -33,13 +34,11 @@ interface Props {
   apiFetch: (path: string, opts?: RequestInit) => Promise<Response>;
 }
 
-const KINDS: { value: Kind; label: string; hint: string; tone: string }[] = [
-  { value: "custody", label: "عهدة لدى الموظف", hint: "أصل أو مبلغ سُلّم للموظف ويُعاد للمنشأة", tone: "border-amber-300 bg-amber-50 text-amber-900" },
-  { value: "withheld", label: "مبلغ محتجز للموظف", hint: "مبلغ مستحق للموظف محفوظ لدى المنشأة", tone: "border-sky-300 bg-sky-50 text-sky-900" },
-  { value: "emergency", label: "مبلغ طوارئ لدى الموظف", hint: "مبلغ طوارئ بحوزة الموظف ويُعاد للمنشأة", tone: "border-rose-300 bg-rose-50 text-rose-900" },
-  { value: "deposit", label: "وديعة للموظف", hint: "وديعة مملوكة للموظف محفوظة لدى المنشأة", tone: "border-emerald-300 bg-emerald-50 text-emerald-900" },
+const KINDS: { value: HoldingGroup; label: string; hint: string; tone: string }[] = [
+  { value: "custody", label: "عهدة / مبلغ تحت اليد", hint: "يشمل العهد ومبالغ الطوارئ بحوزة الموظف", tone: "border-amber-300 bg-amber-50 text-amber-900" },
+  { value: "withheld", label: "مبلغ محتجز / وديعة", hint: "يشمل المبالغ المحتجزة والودائع المحفوظة للموظف", tone: "border-sky-300 bg-sky-50 text-sky-900" },
 ];
-const kindMeta = (k: Kind) => KINDS.find((x) => x.value === k) ?? KINDS[0];
+const kindMeta = (k: Kind) => KINDS.find((x) => x.value === holdingGroup(k))!;
 
 const MAX = 99999999.99;
 const AMOUNT_RE = /^\d+(\.\d{1,2})?$/;
@@ -67,11 +66,11 @@ async function throwIfBad(res: Response): Promise<Response> {
   throw new Error(msg);
 }
 
-function Money({ value, className }: { value: string | number; className?: string }) {
+function Money({ value, className, currency = true }: { value: string | number; className?: string; currency?: boolean }) {
   return (
     <span className={cn("inline-flex items-baseline gap-1 tabular-nums", className)} dir="rtl">
       <span>{fmtAmount(value)}</span>
-      <RiyalIcon className="h-[0.85em] w-[0.85em]" />
+      {currency && <RiyalIcon className="h-[0.85em] w-[0.85em]" />}
     </span>
   );
 }
@@ -98,7 +97,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
 
   // ---- add form ----
   const [showForm, setShowForm] = useState(false);
-  const [kind, setKind] = useState<Kind>("custody");
+  const [kind, setKind] = useState<HoldingGroup>("custody");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [recordedOn, setRecordedOn] = useState(saudiToday);
@@ -177,15 +176,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
   };
 
   const items = list.data ?? [];
-  const totals = useMemo(() => {
-    const t: Record<Kind, { open: number; count: number }> = {
-      custody: { open: 0, count: 0 }, withheld: { open: 0, count: 0 }, emergency: { open: 0, count: 0 }, deposit: { open: 0, count: 0 },
-    };
-    for (const h of list.data ?? []) {
-      if (h.status === "open" && t[h.kind]) { t[h.kind].open += Number(h.amount) || 0; t[h.kind].count += 1; }
-    }
-    return t;
-  }, [list.data]);
+  const totals = useMemo(() => holdingGroupTotals(list.data ?? []), [list.data]);
 
   const sorted = useMemo(() => [...items].sort((a, b) => (a.status === b.status ? b.recordedOn.localeCompare(a.recordedOn) || b.id - a.id : a.status === "open" ? -1 : 1)), [items]);
 
@@ -218,7 +209,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
       )}
 
       {/* totals per category, never combined */}
-      {!showForm && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="grid-holdings-totals">
+      {!showForm && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="grid-holdings-totals">
         {KINDS.map((k) => (
           <div key={k.value} className={cn("min-w-0 space-y-2 rounded-xl border p-4", k.tone)} data-testid={`total-${k.value}`}>
             <p className="text-xs font-semibold">{k.label}</p>
@@ -226,7 +217,8 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
               <p className="mt-2 text-xs">تعذّر تحميل الرصيد</p>
             ) : (
               <>
-                <Money value={totals[k.value].open} className="max-w-full flex-wrap text-base font-extrabold sm:text-lg" />
+                <Money value={totals[k.value].open} currency={false} className="max-w-full flex-wrap text-base font-extrabold sm:text-lg" />
+                <p className="text-[11px] opacity-80">ريال سعودي</p>
                 <p className="text-xs font-medium opacity-80">{easternHoldingDigits(String(totals[k.value].count))} قيد مفتوح</p>
                 <p className="text-[11px] leading-relaxed opacity-80">{k.hint}</p>
               </>
@@ -249,7 +241,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
           </div>
           <fieldset>
             <legend className="mb-1.5 text-sm font-medium">النوع</legend>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {KINDS.map((k) => (
                 <button
                   type="button"

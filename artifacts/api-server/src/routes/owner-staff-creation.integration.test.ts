@@ -93,11 +93,40 @@ it("rejects nonnumeric or overlong mobile and identity inputs even when sent dir
   for (const phoneNum of ["05000000000", "5500000000", "+966500000000", "050-000000", "050000000a"]) {
     assert.equal((await createStaff({ ...valid, phoneNum })).status, 400, phoneNum);
   }
-  for (const nationalId of ["12345678901", "123abc", "123-456", "١٢٣a"]) {
+  for (const nationalId of ["1", "123456789", "١٢٣٤٥٦٧٨٩", "12345678901", "123abc", "123-456", "١٢٣a"]) {
     assert.equal((await createStaff({ ...valid, nationalId })).status, 400, nationalId);
   }
   assert.equal((await createStaff({ ...valid, email: "not-an-email" })).status, 400);
   assert.equal((await createStaff({ ...valid, jobTitle: "a".repeat(121) })).status, 400);
+});
+
+it("employee editing enforces the same digit and length rules without overwriting stored data on failure", async () => {
+  const created = await createStaff({ ...valid, nationalId: "1234567890" });
+  assert.equal(created.status, 201);
+  const employee = await created.json() as SafeStaff;
+  const update = (body: Record<string, unknown>) => fetch(`${baseUrl}/api/owner/staff/${employee.id}`, {
+    method: "PATCH",
+    headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  for (const body of [
+    { nationalId: "123456789" }, { nationalId: "12345678901" }, { nationalId: "1234a67890" },
+    { phoneNum: "051234567" }, { phoneNum: "05123456789" }, { phoneNum: "05123a5678" },
+    { phoneNum: "5512345678" }, { phoneNum: "" },
+  ]) assert.equal((await update(body)).status, 400, JSON.stringify(body));
+  const [unchanged] = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.id, employee.id));
+  assert.equal(unchanged.nationalId, "1234567890");
+  assert.equal(unchanged.phoneNum, valid.phoneNum);
+  const response = await update({ phoneNum: "٠٥١٢٣٤٥٦٧٨", nationalId: "١٢٣٤٥٦٧٨٩٠" });
+  assert.equal(response.status, 200);
+  const saved = await response.json() as SafeStaff;
+  assert.equal(saved.phoneNum, "0512345678");
+  assert.equal(saved.nationalId, "1234567890");
+  assert.equal((await update({ nationalId: "" })).status, 200);
+  const [cleared] = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.id, employee.id));
+  assert.equal(cleared.nationalId, null);
+  // Unrelated permission/status changes do not need to resubmit personal information.
+  assert.equal((await update({ isActive: false })).status, 200);
 });
 
 it("persists optional job title and email with normalized identity and retains them on reload", async () => {

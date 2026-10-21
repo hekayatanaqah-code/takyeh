@@ -1,5 +1,6 @@
 import { Router } from "express";
 import staffHoldingsRouter from "./staff-holdings";
+import { staffMobileSchema, staffNationalIdSchema } from "../lib/staff-contact-validation";
 import { paySalaryWithExpense } from "../lib/salary-expenses";
 import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
 import { SaveOwnerWhatsAppSettingsBody } from "@workspace/api-zod";
@@ -3509,18 +3510,14 @@ router.post("/staff", async (req, res) => {
   const ownerId = req.user!.id;
   const body = z.object({
     name: z.string().trim().min(1, "الاسم الكامل مطلوب"),
-    phoneNum: z.string({ required_error: "رقم الجوال مطلوب" })
-      .regex(/^[0-9٠-٩۰-۹]{10}$/, "رقم الجوال يجب أن يتكون من ١٠ أرقام فقط تبدأ بـ ٠٥")
-      .transform(value => normalizeSaudiMobile(value))
-      .refine((value): value is string => value !== null, "أدخل رقم جوال سعودي صحيح"),
+    phoneNum: staffMobileSchema,
     baseSalary: z.number({ required_error: "الراتب الأساسي مطلوب" }).finite()
       .nonnegative("الراتب الأساسي لا يمكن أن يكون سالباً").max(99_999_999.99),
     grantAccess: z.boolean().default(false),
     permissions: z.record(z.boolean()).optional(),
     assignedToType: z.enum(["all", "chalet", "service"]).optional(),
     assignedToId: z.number().int().positive().optional(),
-    nationalId: z.string().regex(/^[0-9٠-٩۰-۹]{0,10}$/, "رقم الهوية / الإقامة يقبل أرقاماً فقط وبحد أقصى ١٠ أرقام")
-      .transform(value => value.replace(/[٠-٩]/g, digit => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))).replace(/[۰-۹]/g, digit => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))).optional(),
+    nationalId: staffNationalIdSchema.optional(),
     jobTitle: z.string().trim().max(120).optional(),
     email: z.union([z.string().trim().email("أدخل بريداً إلكترونياً صحيحاً").max(254), z.literal("")]).optional(),
     birthDate: z.string().optional(),
@@ -3574,12 +3571,12 @@ router.patch("/staff/:id", async (req, res) => {
     permissions: z.record(z.boolean()).optional(),
     assignedToType: z.enum(["all", "chalet", "service"]).optional(),
     assignedToId: z.number().int().positive().nullable().optional(),
-    nationalId: z.string().optional(),
-    phoneNum: z.string().optional(),
+    nationalId: staffNationalIdSchema.optional(),
+    phoneNum: staffMobileSchema.optional(),
     birthDate: z.string().optional(),
     hireDate: z.string().optional(),
   }).safeParse(req.body);
-  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
 
   const staffPatch: Record<string, unknown> = {};
   if (body.data.name !== undefined) staffPatch.name = body.data.name;

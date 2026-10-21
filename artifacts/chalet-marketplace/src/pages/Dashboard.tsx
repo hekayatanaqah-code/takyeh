@@ -37,7 +37,7 @@ import { Switch } from "@/components/ui/switch";
 import { serviceImageError, moveServicePhoto } from "@/lib/chaletServiceMedia";
 import { Label } from "@/components/ui/label";
 import { normalizeIdentifier } from "@/lib/authLabels";
-import { employeeDigits, EMPTY_NEW_STAFF_FORM, STAFF_JOB_TITLES } from "@/lib/employeeForm";
+import { employeeDigits, employeeMobileInput, validEmployeeMobile, validEmployeeNationalId, EMPTY_NEW_STAFF_FORM, STAFF_JOB_TITLES } from "@/lib/employeeForm";
 import { currentSalaryMonth, hasStaffPlatformAccess, paidPayrollRecords, paidPayrollPeriods, payrollPeriod, payrollPeriodLabel } from "@/lib/payrollPeriods";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -17543,6 +17543,10 @@ function StaffTab() {
                 toast({ title: "تحقق من بيانات الموظف", description: "الاسم الكامل ورقم جوال سعودي صحيح والراتب الأساسي غير السالب حقول مطلوبة.", variant: "destructive" });
                 return;
               }
+              if (!validEmployeeNationalId(addForm.nationalId)) {
+                toast({ title: "رقم الهوية / الإقامة غير مكتمل", description: "أدخل ١٠ أرقام بالضبط أو اترك الحقل الاختياري فارغًا.", variant: "destructive" });
+                return;
+              }
               const jobTitle = addForm.jobTitle === "other" ? addForm.customJobTitle.trim() : addForm.jobTitle;
               if (addForm.jobTitle === "other" && !jobTitle) {
                 toast({ title: "المسمى الوظيفي مطلوب", description: "أدخل المسمى الوظيفي عند اختيار «أخرى».", variant: "destructive" });
@@ -17581,7 +17585,7 @@ function StaffTab() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="new-staff-phone">رقم الجوال <span className="text-destructive">*</span></Label>
-                <Input id="new-staff-phone" type="text" placeholder="٠٥٠٠٠٠٠٠٠٠" value={toAr(addForm.phoneNum)} onChange={(e) => setAddForm((f) => ({ ...f, phoneNum: employeeDigits(e.target.value) }))} className="h-11" inputMode="numeric" maxLength={10} pattern="٠٥[٠-٩]{8}" title="أدخل ١٠ أرقام تبدأ بـ ٠٥" dir="ltr" autoComplete="tel-national" required disabled={addStaff.isPending} />
+                <Input id="new-staff-phone" type="text" placeholder="٠٥٠٠٠٠٠٠٠٠" value={toAr(addForm.phoneNum)} onChange={(e) => setAddForm((f) => ({ ...f, phoneNum: employeeMobileInput(e.target.value) }))} className="h-11" inputMode="numeric" minLength={10} pattern="٠٥[٠-٩]{8}" title="أدخل ١٠ أرقام تبدأ بـ ٠٥" dir="ltr" autoComplete="tel-national" required disabled={addStaff.isPending} />
                 <p className="text-xs text-muted-foreground">المرجع الأساسي للموظف، ويُستخدم لدعوة التفعيل عند منحه دخولاً.</p>
               </div>
               <div className="space-y-1.5">
@@ -17620,7 +17624,7 @@ function StaffTab() {
                 </div>
                 <div className="min-w-0 space-y-1.5">
                   <Label htmlFor="new-staff-national-id" className="text-xs text-muted-foreground">رقم الهوية / الإقامة</Label>
-                  <Input id="new-staff-national-id" placeholder="رقم الهوية / الإقامة" value={toAr(addForm.nationalId)} onChange={(e) => setAddForm((f) => ({ ...f, nationalId: employeeDigits(e.target.value) }))} className="h-10 text-sm" type="text" inputMode="numeric" maxLength={10} pattern="[٠-٩]{1,10}" dir="ltr" disabled={addStaff.isPending} />
+                  <Input id="new-staff-national-id" placeholder="١٠ أرقام" value={toAr(addForm.nationalId)} onChange={(e) => setAddForm((f) => ({ ...f, nationalId: employeeDigits(e.target.value) }))} className="h-10 text-sm" type="text" inputMode="numeric" minLength={10} pattern="[٠-٩]{10}" title="رقم الهوية / الإقامة يتكون من ١٠ أرقام بالضبط" dir="ltr" disabled={addStaff.isPending} />
                 </div>
                 <div className="min-w-0 space-y-1.5">
                   <label className="text-xs text-muted-foreground block">تاريخ التعيين</label>
@@ -18537,8 +18541,8 @@ function StaffTab() {
                 assignedToType: target.assignedToType ?? "all",
                 assignedToId: String(target.assignedToId ?? ""),
                 username: target.username ?? "", password: "",
-                nationalId: target.nationalId ?? "",
-                phoneNum: target.phoneNum ?? "",
+                nationalId: fromAr(target.nationalId ?? ""),
+                phoneNum: employeeMobileInput(target.phoneNum ?? ""),
                 birthDate: target.birthDate ?? "",
                 hireDate: target.hireDate ?? "",
                 isActive: target.isActive !== false,
@@ -18548,6 +18552,14 @@ function StaffTab() {
             const saveEdit = () => {
               const target = staffProfileTarget;
               if (!target?.id || !editForm.name.trim()) return;
+              if (!validEmployeeMobile(editForm.phoneNum)) {
+                toast({ title: "رقم الجوال غير مكتمل", description: "أدخل ١٠ أرقام تبدأ بـ ٠٥.", variant: "destructive" });
+                return;
+              }
+              if (!validEmployeeNationalId(editForm.nationalId)) {
+                toast({ title: "رقم الهوية / الإقامة غير مكتمل", description: "أدخل ١٠ أرقام بالضبط أو اترك الحقل الاختياري فارغًا.", variant: "destructive" });
+                return;
+              }
               const hasAnyPerm = Object.values(editPerms).some(Boolean);
               if (hasAnyPerm && !editForm.username.trim()) {
                 toast({ title: "اسم المستخدم مطلوب", description: "يجب إدخال اسم مستخدم عند تفعيل أي صلاحية", variant: "destructive" });
@@ -18564,8 +18576,8 @@ function StaffTab() {
                   password: editForm.password.trim() || undefined,
                   permissions: editPerms,
                   isActive: editForm.isActive,
-                  nationalId: editForm.nationalId.trim() || undefined,
-                  phoneNum: editForm.phoneNum.trim() || undefined,
+                  nationalId: editForm.nationalId.trim(),
+                  phoneNum: editForm.phoneNum,
                   birthDate: editForm.birthDate.trim() || undefined,
                   hireDate: editForm.hireDate.trim() || undefined,
                 },
@@ -18819,11 +18831,11 @@ function StaffTab() {
                             <div className="grid grid-cols-2 gap-3">
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">رقم الهوية / الإقامة</label>
-                                <Input value={editForm.nationalId} onChange={(e) => setEditForm((f) => ({ ...f, nationalId: e.target.value }))} className="h-9 text-sm" placeholder="10 أرقام" inputMode="numeric" />
+                                <Input value={toAr(editForm.nationalId)} onChange={(e) => setEditForm((f) => ({ ...f, nationalId: employeeDigits(e.target.value) }))} className="h-9 text-sm" placeholder="١٠ أرقام" type="text" inputMode="numeric" minLength={10} pattern="[٠-٩]{10}" title="رقم الهوية / الإقامة يتكون من ١٠ أرقام بالضبط" dir="ltr" />
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">رقم الجوال</label>
-                                <Input value={editForm.phoneNum} onChange={(e) => setEditForm((f) => ({ ...f, phoneNum: e.target.value }))} className="h-9 text-sm" placeholder="05xxxxxxxx" inputMode="tel" dir="ltr" />
+                                <Input value={toAr(editForm.phoneNum)} onChange={(e) => setEditForm((f) => ({ ...f, phoneNum: employeeMobileInput(e.target.value) }))} className="h-9 text-sm" placeholder="٠٥٠٠٠٠٠٠٠٠" type="text" inputMode="numeric" minLength={10} pattern="٠٥[٠-٩]{8}" title="أدخل ١٠ أرقام تبدأ بـ ٠٥" autoComplete="tel-national" required dir="ltr" />
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">تاريخ الميلاد</label>
