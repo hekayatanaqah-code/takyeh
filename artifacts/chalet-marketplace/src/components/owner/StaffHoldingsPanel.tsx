@@ -335,7 +335,6 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
                 {settled && (
                   <div className="mt-2 rounded-md bg-emerald-50 p-2 text-xs text-emerald-900" data-testid={`text-holding-settlement-${h.id}`}>
                     <p className="flex items-start gap-1 font-semibold"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span>سُوي بالكامل في <bdi dir="rtl">{formatHoldingSettlementDate(h.settledOn)}</bdi></span></p>
-                    {h.settlementNotes && <p className="mt-1 whitespace-pre-wrap break-words">{h.settlementNotes}</p>}
                   </div>
                 )}
                 {!settled && !readOnly && settlingId !== h.id && (
