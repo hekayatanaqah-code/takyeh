@@ -64,6 +64,7 @@ import type {
   GetOwnerCrmHistoryParams,
   GetOwnerCrmProfileParams,
   GetOwnerDeposits200Item,
+  GetOwnerPropertyPriceQuoteParams,
   GetOwnerWallet200,
   GetPhotographerStatement200,
   GetPhotographerStatementParams,
@@ -77,9 +78,11 @@ import type {
   GetPhotographySlots200,
   GetPhotographySlotsParams,
   GetPhotographyStatus200,
+  GetPropertyPriceQuoteParams,
   HealthStatus,
   InvitePhotographer200,
   InvitePhotographerBody,
+  ListPropertyOffersParams,
   LoginPhotographer200,
   LoginPhotographerBody,
   LogoutPhotographer200,
@@ -117,6 +120,10 @@ import type {
   PhotographyTransferInput,
   PropertyIdentityInput,
   PropertyIdentityResult,
+  PropertyOffer,
+  PropertyOfferInput,
+  PropertyOfferPatch,
+  PropertyPriceQuote,
   PropertySocialAccountInput,
   PropertySocialAccountResult,
   RatePhotographySession200,
@@ -180,6 +187,553 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListPropertyOffersUrl = (params: ListPropertyOffersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/owner/offers?${stringifiedParams}` : `/api/owner/offers`
+}
+
+export const listPropertyOffers = async (params: ListPropertyOffersParams, options?: Parameters<typeof customFetch>[1]): Promise<PropertyOffer[]> => {
+
+  return customFetch<PropertyOffer[]>(getListPropertyOffersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPropertyOffersQueryKey = (params?: ListPropertyOffersParams,) => {
+    return [
+    `/api/owner/offers`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPropertyOffersQueryOptions = <TData = Awaited<ReturnType<typeof listPropertyOffers>>, TError = ErrorType<unknown>>(params: ListPropertyOffersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPropertyOffers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPropertyOffersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPropertyOffers>>> = ({ signal }) => listPropertyOffers(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPropertyOffers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListPropertyOffersQueryResult = NonNullable<Awaited<ReturnType<typeof listPropertyOffers>>>
+export type ListPropertyOffersQueryError = ErrorType<unknown>
+
+
+export function useListPropertyOffers<TData = Awaited<ReturnType<typeof listPropertyOffers>>, TError = ErrorType<unknown>>(
+ params: ListPropertyOffersParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPropertyOffers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPropertyOffers>>,
+          TError,
+          Awaited<ReturnType<typeof listPropertyOffers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPropertyOffers<TData = Awaited<ReturnType<typeof listPropertyOffers>>, TError = ErrorType<unknown>>(
+ params: ListPropertyOffersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPropertyOffers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listPropertyOffers>>,
+          TError,
+          Awaited<ReturnType<typeof listPropertyOffers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListPropertyOffers<TData = Awaited<ReturnType<typeof listPropertyOffers>>, TError = ErrorType<unknown>>(
+ params: ListPropertyOffersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPropertyOffers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListPropertyOffers<TData = Awaited<ReturnType<typeof listPropertyOffers>>, TError = ErrorType<unknown>>(
+ params: ListPropertyOffersParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listPropertyOffers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListPropertyOffersQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreatePropertyOfferUrl = () => {
+
+
+
+
+  return `/api/owner/offers`
+}
+
+export const createPropertyOffer = async (propertyOfferInput: PropertyOfferInput, options?: Parameters<typeof customFetch>[1]): Promise<PropertyOffer> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PropertyOffer>(getCreatePropertyOfferUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propertyOfferInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePropertyOfferMutationKey = () => ['createPropertyOffer'] as const;
+
+export const getCreatePropertyOfferMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPropertyOffer>>, TError,CreatePropertyOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPropertyOffer>>, TError,CreatePropertyOfferMutationVariables, TContext> => {
+
+const mutationKey = getCreatePropertyOfferMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPropertyOffer>>, CreatePropertyOfferMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPropertyOffer(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePropertyOfferMutationResult = NonNullable<Awaited<ReturnType<typeof createPropertyOffer>>>
+    export type CreatePropertyOfferMutationBody = BodyType<PropertyOfferInput>
+    export type CreatePropertyOfferMutationError = ErrorType<unknown>
+    export type CreatePropertyOfferMutationVariables = {data: BodyType<PropertyOfferInput>}
+
+    export const useCreatePropertyOffer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPropertyOffer>>, TError,CreatePropertyOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createPropertyOffer>>,
+        TError,
+        CreatePropertyOfferMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreatePropertyOfferMutationOptions(options), queryClient);
+    }
+
+export const getUpdatePropertyOfferUrl = (offerId: number,) => {
+
+
+
+
+  return `/api/owner/offers/${offerId}`
+}
+
+export const updatePropertyOffer = async (offerId: number,
+    propertyOfferPatch: PropertyOfferPatch, options?: Parameters<typeof customFetch>[1]): Promise<PropertyOffer> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PropertyOffer>(getUpdatePropertyOfferUrl(offerId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propertyOfferPatch)
+  }
+);}
+
+
+
+
+
+export const getUpdatePropertyOfferMutationKey = () => ['updatePropertyOffer'] as const;
+
+export const getUpdatePropertyOfferMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePropertyOffer>>, TError,UpdatePropertyOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePropertyOffer>>, TError,UpdatePropertyOfferMutationVariables, TContext> => {
+
+const mutationKey = getUpdatePropertyOfferMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePropertyOffer>>, UpdatePropertyOfferMutationVariables> = (props) => {
+          const {offerId,data} = props ?? {};
+
+          return  updatePropertyOffer(offerId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePropertyOfferMutationResult = NonNullable<Awaited<ReturnType<typeof updatePropertyOffer>>>
+    export type UpdatePropertyOfferMutationBody = BodyType<PropertyOfferPatch>
+    export type UpdatePropertyOfferMutationError = ErrorType<unknown>
+    export type UpdatePropertyOfferMutationVariables = {offerId: number;data: BodyType<PropertyOfferPatch>}
+
+    export const useUpdatePropertyOffer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePropertyOffer>>, TError,UpdatePropertyOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updatePropertyOffer>>,
+        TError,
+        UpdatePropertyOfferMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdatePropertyOfferMutationOptions(options), queryClient);
+    }
+
+export const getDeletePropertyOfferUrl = (offerId: number,) => {
+
+
+
+
+  return `/api/owner/offers/${offerId}`
+}
+
+export const deletePropertyOffer = async (offerId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeletePropertyOfferUrl(offerId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePropertyOfferMutationKey = () => ['deletePropertyOffer'] as const;
+
+export const getDeletePropertyOfferMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePropertyOffer>>, TError,DeletePropertyOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePropertyOffer>>, TError,DeletePropertyOfferMutationVariables, TContext> => {
+
+const mutationKey = getDeletePropertyOfferMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePropertyOffer>>, DeletePropertyOfferMutationVariables> = (props) => {
+          const {offerId} = props ?? {};
+
+          return  deletePropertyOffer(offerId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePropertyOfferMutationResult = NonNullable<Awaited<ReturnType<typeof deletePropertyOffer>>>
+
+    export type DeletePropertyOfferMutationError = ErrorType<unknown>
+    export type DeletePropertyOfferMutationVariables = {offerId: number}
+
+    export const useDeletePropertyOffer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePropertyOffer>>, TError,DeletePropertyOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deletePropertyOffer>>,
+        TError,
+        DeletePropertyOfferMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeletePropertyOfferMutationOptions(options), queryClient);
+    }
+
+export const getGetPropertyPriceQuoteUrl = (chaletId: number,
+    params: GetPropertyPriceQuoteParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/chalets/${chaletId}/price-quote?${stringifiedParams}` : `/api/chalets/${chaletId}/price-quote`
+}
+
+export const getPropertyPriceQuote = async (chaletId: number,
+    params: GetPropertyPriceQuoteParams, options?: Parameters<typeof customFetch>[1]): Promise<PropertyPriceQuote> => {
+
+  return customFetch<PropertyPriceQuote>(getGetPropertyPriceQuoteUrl(chaletId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPropertyPriceQuoteQueryKey = (chaletId: number,
+    params?: GetPropertyPriceQuoteParams,) => {
+    return [
+    `/api/chalets/${chaletId}/price-quote`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPropertyPriceQuoteQueryOptions = <TData = Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError = ErrorType<unknown>>(chaletId: number,
+    params: GetPropertyPriceQuoteParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPropertyPriceQuoteQueryKey(chaletId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPropertyPriceQuote>>> = ({ signal }) => getPropertyPriceQuote(chaletId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: chaletId !== null && chaletId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPropertyPriceQuoteQueryResult = NonNullable<Awaited<ReturnType<typeof getPropertyPriceQuote>>>
+export type GetPropertyPriceQuoteQueryError = ErrorType<unknown>
+
+
+export function useGetPropertyPriceQuote<TData = Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError = ErrorType<unknown>>(
+ chaletId: number,
+    params: GetPropertyPriceQuoteParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPropertyPriceQuote>>,
+          TError,
+          Awaited<ReturnType<typeof getPropertyPriceQuote>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPropertyPriceQuote<TData = Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError = ErrorType<unknown>>(
+ chaletId: number,
+    params: GetPropertyPriceQuoteParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPropertyPriceQuote>>,
+          TError,
+          Awaited<ReturnType<typeof getPropertyPriceQuote>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPropertyPriceQuote<TData = Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError = ErrorType<unknown>>(
+ chaletId: number,
+    params: GetPropertyPriceQuoteParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPropertyPriceQuote<TData = Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError = ErrorType<unknown>>(
+ chaletId: number,
+    params: GetPropertyPriceQuoteParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPropertyPriceQuote>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPropertyPriceQuoteQueryOptions(chaletId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetOwnerPropertyPriceQuoteUrl = (params: GetOwnerPropertyPriceQuoteParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/owner/price-quote?${stringifiedParams}` : `/api/owner/price-quote`
+}
+
+export const getOwnerPropertyPriceQuote = async (params: GetOwnerPropertyPriceQuoteParams, options?: Parameters<typeof customFetch>[1]): Promise<PropertyPriceQuote> => {
+
+  return customFetch<PropertyPriceQuote>(getGetOwnerPropertyPriceQuoteUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOwnerPropertyPriceQuoteQueryKey = (params?: GetOwnerPropertyPriceQuoteParams,) => {
+    return [
+    `/api/owner/price-quote`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetOwnerPropertyPriceQuoteQueryOptions = <TData = Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError = ErrorType<unknown>>(params: GetOwnerPropertyPriceQuoteParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOwnerPropertyPriceQuoteQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>> = ({ signal }) => getOwnerPropertyPriceQuote(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOwnerPropertyPriceQuoteQueryResult = NonNullable<Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>>
+export type GetOwnerPropertyPriceQuoteQueryError = ErrorType<unknown>
+
+
+export function useGetOwnerPropertyPriceQuote<TData = Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError = ErrorType<unknown>>(
+ params: GetOwnerPropertyPriceQuoteParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerPropertyPriceQuote<TData = Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError = ErrorType<unknown>>(
+ params: GetOwnerPropertyPriceQuoteParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerPropertyPriceQuote<TData = Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError = ErrorType<unknown>>(
+ params: GetOwnerPropertyPriceQuoteParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetOwnerPropertyPriceQuote<TData = Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError = ErrorType<unknown>>(
+ params: GetOwnerPropertyPriceQuoteParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerPropertyPriceQuote>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOwnerPropertyPriceQuoteQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListStaffHoldingsUrl = (staffId: number,) => {
 

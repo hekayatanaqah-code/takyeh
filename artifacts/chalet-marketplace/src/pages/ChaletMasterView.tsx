@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePropertyPriceQuote, quotePriceText } from "@/hooks/usePropertyPriceQuote";
+import { PropertyPeriodPrice } from "@/components/chalet/PropertyOfferPrice";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -56,6 +58,7 @@ export default function ChaletMasterView() {
   const [termsOpen, setTermsOpen]   = useState(false);
   const [bookDate,  setBookDate]    = useState("");
   const [period,    setPeriod]      = useState<string | null>(null);
+  const priceQuote = usePropertyPriceQuote(Number(id), bookDate, period);
   const { data: chalet, isLoading, error } = useQuery<DiamondData>({
     queryKey: ["chalet-master", id],
     queryFn: async () => {
@@ -130,11 +133,13 @@ export default function ChaletMasterView() {
   /* WhatsApp booking message */
   const handleBook = () => {
     if (!phone) return;
+    if (bookDate && period && (!priceQuote.data || priceQuote.isFetching || priceQuote.isError)) return;
     const lines = [`السلام عليكم، أرغب في حجز شاليه: ${chalet.nameAr}`];
     if (bookDate) lines.push(`📅 التاريخ: ${toHijri(bookDate)}`);
     if (selConf && selSlot) {
       lines.push(`🕐 الفترة: ${selConf.emoji} ${selConf.ar}`);
-      if (selSlot.price) lines.push(`💰 السعر: ${selSlot.price}`);
+      if (priceQuote.data) lines.push(`💰 السعر: ${quotePriceText(priceQuote.data)}`);
+      else if (selSlot.price) lines.push(`💰 السعر: ${selSlot.price}`);
     }
     if (terms.length) lines.push("\n📋 شروط الشاليه:\n" + terms.map(t => `• ${t}`).join("\n"));
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
@@ -277,7 +282,7 @@ export default function ChaletMasterView() {
                       <div key={s.key} style={{borderRadius:14,border:`1.5px solid ${c.border}`,background:c.bg,padding:"20px 22px"}}>
                         <p style={{fontSize:28,margin:"0 0 10px"}}>{c.emoji}</p>
                         <p style={{margin:"0 0 6px",fontWeight:800,color:c.text,fontSize:15}}>{c.ar}</p>
-                        {s.price && <p style={{margin:"0 0 6px",fontWeight:900,color:c.text,fontSize:17}}>{s.price}</p>}
+                        {s.price && <div style={{margin:"0 0 6px",fontWeight:900,color:c.text,fontSize:17}}><PropertyPeriodPrice chaletId={Number(id)} date={bookDate} period={s.key} fallback={s.price} /></div>}
                         {(s.ci||s.co) && (
                           <p style={{margin:0,fontSize:12,color:c.text,opacity:0.8,lineHeight:1.7}}>
                             {s.ci&&`دخول ${s.ci}`}{s.ci&&s.co&&<br/>}{s.co&&`خروج ${s.co}`}
@@ -421,7 +426,7 @@ export default function ChaletMasterView() {
                               </div>
                             </div>
                             {s.price && (
-                              <span style={{fontWeight:900,fontSize:15,color:active?"#16a34a":c.text}}>{s.price}</span>
+                              <span style={{fontWeight:900,fontSize:15,color:active?"#16a34a":c.text}}><PropertyPeriodPrice chaletId={Number(id)} date={bookDate} period={s.key} fallback={s.price} /></span>
                             )}
                           </button>
                         );
@@ -432,7 +437,7 @@ export default function ChaletMasterView() {
 
                 {/* ── BOOK BUTTON ── */}
                 {phone ? (
-                  <button onClick={handleBook} style={{
+                  <button onClick={handleBook} disabled={!!bookDate && !!period && (!priceQuote.data || priceQuote.isFetching || priceQuote.isError)} style={{
                     width:"100%", height:52, borderRadius:14, border:"none",
                     background:"#16a34a", color:"#fff",
                     fontWeight:800, fontSize:16, cursor:"pointer",
@@ -472,7 +477,7 @@ export default function ChaletMasterView() {
           {fmt(chalet.priceWeekday) && <p style={{margin:"2px 0 0",fontSize:13,color:"#16a34a",fontWeight:800}}>يبدأ من {fmt(chalet.priceWeekday)}</p>}
         </div>
         {phone && (
-          <button onClick={handleBook} style={{flexShrink:0,height:46,padding:"0 22px",borderRadius:12,background:"#16a34a",color:"#fff",fontWeight:800,fontSize:14,border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={handleBook} disabled={!!bookDate && !!period && (!priceQuote.data || priceQuote.isFetching || priceQuote.isError)} style={{flexShrink:0,height:46,padding:"0 22px",borderRadius:12,background:"#16a34a",color:"#fff",fontWeight:800,fontSize:14,border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:8}}>
             <svg viewBox="0 0 24 24" fill="currentColor" style={{width:18,height:18}}>
               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
             </svg>

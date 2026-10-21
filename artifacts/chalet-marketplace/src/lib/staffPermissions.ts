@@ -29,6 +29,7 @@ export const ALL_PERM_KEYS = Object.keys(PERM_LABELS) as PermKey[];
 export const TAB_PERMISSION: Record<string, PermKey | "__owner__"> = {
   chalets:  "chaletManagement",
   seasons:  "pricingControl",
+  offers:   "pricingControl",
   calendar: "bookingsControl",
   revenue:  "financialAccess",
   expenses: "financialAccess",

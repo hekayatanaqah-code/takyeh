@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PropertyPeriodPrice } from "@/components/chalet/PropertyOfferPrice";
 import { useParams, useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -625,7 +626,7 @@ export default function ChaletDetail() {
                             <p style={{ margin: "0 0 2px", fontSize: 12, color: c.text, opacity: 0.9, fontWeight: 700 }}>
                               {s.hasDayPrice && dayNameAr ? `سعر يوم ${dayNameAr}` : "يبدأ من"}
                             </p>
-                            <p style={{ margin: "0 0 4px", fontWeight: 900, color: c.text, fontSize: 17 }}>{s.price}</p>
+                            <span style={{ display: "block", margin: "0 0 4px", fontWeight: 900, color: c.text, fontSize: 17 }}><PropertyPeriodPrice chaletId={Number(id)} date={selectedDate} period={s.key} fallback={s.price} /></span>
                           </>
                         )}
                         {(s.ci || s.co) && (
@@ -905,7 +906,7 @@ export default function ChaletDetail() {
                         <span style={{ fontSize: 18 }}>💰</span>
                         <div>
                           <p style={{ margin: 0, fontSize: 10, color: "#6b7280" }}>الإجمالي</p>
-                          <p style={{ margin: "2px 0 0", fontWeight: 900, color: "#16a34a", fontSize: 16 }}>{activePeriod.price}</p>
+                          <p style={{ margin: "2px 0 0", fontWeight: 900, color: "#16a34a", fontSize: 16 }}><PropertyPeriodPrice chaletId={Number(id)} date={selectedDate} period={activePeriod.key} fallback={activePeriod.price} /></p>
                         </div>
                       </div>
                     )}

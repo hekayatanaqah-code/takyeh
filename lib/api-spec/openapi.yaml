@@ -21,6 +21,84 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/offers:
+    get:
+      operationId: listPropertyOffers
+      tags: [owner]
+      parameters:
+        - { name: submissionId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Property offers
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PropertyOffer" } }
+    post:
+      operationId: createPropertyOffer
+      tags: [owner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PropertyOfferInput" }
+      responses:
+        "201":
+          description: Created offer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PropertyOffer" }
+  /owner/offers/{offerId}:
+    parameters:
+      - { name: offerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    patch:
+      operationId: updatePropertyOffer
+      tags: [owner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PropertyOfferPatch" }
+      responses:
+        "200":
+          description: Updated offer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PropertyOffer" }
+    delete:
+      operationId: deletePropertyOffer
+      tags: [owner]
+      responses:
+        "204": { description: Deleted without changing existing bookings }
+  /chalets/{chaletId}/price-quote:
+    get:
+      operationId: getPropertyPriceQuote
+      tags: [chalets]
+      parameters:
+        - { name: chaletId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: date, in: query, required: true, schema: { type: string } }
+        - { name: period, in: query, required: true, schema: { type: string, enum: [morning, evening, full_day] } }
+        - { name: durationDays, in: query, schema: { type: integer, minimum: 1, maximum: 60, default: 1 } }
+      responses:
+        "200":
+          description: Authoritative daily and seasonal price with the best non-stacking offer
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PropertyPriceQuote" }
+  /owner/price-quote:
+    get:
+      operationId: getOwnerPropertyPriceQuote
+      tags: [owner]
+      parameters:
+        - { name: submissionId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: date, in: query, required: true, schema: { type: string } }
+        - { name: period, in: query, required: true, schema: { type: string, enum: [morning, evening, full_day] } }
+        - { name: durationDays, in: query, schema: { type: integer, minimum: 1, maximum: 60, default: 1 } }
+      responses:
+        "200":
+          description: Same price calculation used by the customer and new offer-priced bookings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PropertyPriceQuote" }
   /owner/staff/{staffId}/holdings:
     parameters:
       - { name: staffId, in: path, required: true, schema: { type: integer, minimum: 1 } }
@@ -1109,6 +1187,55 @@ components:
       schema:
         type: string
   schemas:
+    PropertyOfferInput:
+      type: object
+      required: [submissionId, nameAr, startDate, endDate, weekdays, discountType, value, enabled]
+      properties:
+        submissionId: { type: integer, minimum: 1 }
+        nameAr: { type: string, minLength: 1, maxLength: 120 }
+        startDate: { type: string }
+        endDate: { type: string }
+        weekdays: { type: array, minItems: 1, maxItems: 7, uniqueItems: true, items: { type: integer, minimum: 0, maximum: 6 } }
+        discountType: { type: string, enum: [percent, fixed, night_price] }
+        value: { type: number, exclusiveMinimum: 0, maximum: 99999999.99 }
+        enabled: { type: boolean }
+    PropertyOfferPatch:
+      type: object
+      properties:
+        nameAr: { type: string, minLength: 1, maxLength: 120 }
+        startDate: { type: string }
+        endDate: { type: string }
+        weekdays: { type: array, minItems: 1, maxItems: 7, uniqueItems: true, items: { type: integer, minimum: 0, maximum: 6 } }
+        discountType: { type: string, enum: [percent, fixed, night_price] }
+        value: { type: number, exclusiveMinimum: 0, maximum: 99999999.99 }
+        enabled: { type: boolean }
+    PropertyOffer:
+      allOf:
+        - { $ref: "#/components/schemas/PropertyOfferInput" }
+        - type: object
+          required: [id, createdAt, updatedAt]
+          properties:
+            id: { type: integer }
+            createdAt: { type: string }
+            updatedAt: { type: string }
+    PropertyPriceDay:
+      type: object
+      required: [date, basePrice, price, offerId, offerName, badge]
+      properties:
+        date: { type: string }
+        basePrice: { type: number }
+        price: { type: number }
+        offerId: { type: [integer, "null"] }
+        offerName: { type: [string, "null"] }
+        badge: { type: [string, "null"] }
+    PropertyPriceQuote:
+      type: object
+      required: [basePrice, price, discountAmount, days]
+      properties:
+        basePrice: { type: number }
+        price: { type: number }
+        discountAmount: { type: number }
+        days: { type: array, items: { $ref: "#/components/schemas/PropertyPriceDay" } }
     StaffHoldingInput:
       type: object
       required: [kind, description, amount, recordedOn, notes, requestId]

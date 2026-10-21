@@ -1,5 +1,7 @@
 import { Router } from "express";
 import staffHoldingsRouter from "./staff-holdings";
+import { propertyOffersRouter } from "./property-offers";
+import { quotePropertyPrice } from "../lib/property-offer-pricing";
 import { staffMobileSchema, staffNationalIdSchema } from "../lib/staff-contact-validation";
 import { paySalaryWithExpense } from "../lib/salary-expenses";
 import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
@@ -470,6 +472,7 @@ router.post("/contract/:bookingId/sign", async (req, res) => {
 });
 
 router.use(requireAuth);
+router.use(propertyOffersRouter(getOwnerIds));
 
 // A property-only plan retains booking and property tools, but not the financial
 // and staff-management modules. The trial deliberately enables every module.
@@ -1596,6 +1599,7 @@ router.post("/bookings", async (req, res) => {
     notes: z.string().optional(),
     revenueAmount: z.number().nonnegative().optional(),
     totalPrice: z.number().nonnegative().optional(),
+    applyOfferPrice: z.boolean().optional(),
     depositPaid: z.number().nonnegative().optional(),
     insuranceFee: z.number().nonnegative().optional(),
     insuranceReceived: z.boolean().default(false),
@@ -1612,6 +1616,8 @@ router.post("/bookings", async (req, res) => {
     return res.status(400).json({ error: "بيانات غير صحيحة — رقم الجوال والفترة مطلوبان", details: body.error.flatten() });
   }
 
+  // Never trust a browser's offer total. Recalculate after property authorization
+  // and add-on resolution below; a changed quote requires explicit review.
   /* ── Deposit cap: depositPaid must not exceed totalPrice (+ addons) ── */
   if (body.data.depositPaid !== undefined && body.data.totalPrice !== undefined) {
     if (body.data.depositPaid > body.data.totalPrice) {
@@ -1664,7 +1670,22 @@ router.post("/bookings", async (req, res) => {
     catch (error) { return res.status(400).json({ error: (error as Error).message }); }
   }
 
-  const { revenueAmount, totalPrice, depositPaid, insuranceFee, addonIds: _addonIds, addonQuantities: _addonQuantities, ...restBooking } = body.data;
+  const { revenueAmount, totalPrice: requestedTotal, depositPaid, insuranceFee, addonIds: _addonIds, addonQuantities: _addonQuantities, applyOfferPrice, ...restBooking } = body.data;
+  let totalPrice = requestedTotal;
+  let offerSnapshot: Awaited<ReturnType<typeof quotePropertyPrice>> | null = null;
+  if (applyOfferPrice) {
+    if (!body.data.submissionId || body.data.durationDays > 60) return res.status(400).json({ error: "حدد العقار ومدة لا تتجاوز ٦٠ يوماً لحساب العرض" });
+    try {
+      offerSnapshot = await quotePropertyPrice(body.data.submissionId, body.data.bookingDate, body.data.period, body.data.durationDays);
+    } catch (error) { return res.status(400).json({ error: (error as Error).message }); }
+    const addonsPrice = (resolvedAddons ?? []).reduce((sum, item) => sum + Number(item.price), 0);
+    const verifiedTotal = Math.round((offerSnapshot.price + addonsPrice) * 100) / 100;
+    if (requestedTotal == null || Math.abs(requestedTotal - verifiedTotal) > 0.001) {
+      return res.status(409).json({ error: "تغيّر السعر المعتمد. راجع السعر المحدّث قبل تأكيد الحجز.", quote: offerSnapshot });
+    }
+    totalPrice = verifiedTotal;
+    if (depositPaid != null && depositPaid > totalPrice) return res.status(400).json({ error: "العربون يتجاوز السعر بعد الخصم" });
+  }
   const customerName = restBooking.clientName?.trim() || "عميل مؤقت";
   const phoneNormalized = normalizeCustomerPhone(restBooking.clientPhone);
   const booking = await db.transaction(async (tx) => {
@@ -1690,7 +1711,8 @@ router.post("/bookings", async (req, res) => {
         clientPhone: phoneNormalized,
         ownerId,
         revenueAmount: revenueAmount !== undefined ? String(Math.round(revenueAmount)) : null,
-        totalPrice: totalPrice !== undefined ? String(Math.round(totalPrice)) : null,
+        totalPrice: totalPrice !== undefined ? (applyOfferPrice ? totalPrice.toFixed(2) : String(Math.round(totalPrice * 100) / 100)) : null,
+        offerSnapshot,
         depositPaid: depositPaid !== undefined ? String(Math.round(depositPaid)) : null,
         insuranceFee: insuranceFee !== undefined ? String(Math.round(insuranceFee)) : null,
         bookedAddons: resolvedAddons,

@@ -5,6 +5,99 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type PropertyOfferInputDiscountType = typeof PropertyOfferInputDiscountType[keyof typeof PropertyOfferInputDiscountType];
+
+
+export const PropertyOfferInputDiscountType = {
+  percent: 'percent',
+  fixed: 'fixed',
+  night_price: 'night_price',
+} as const;
+
+export interface PropertyOfferInput {
+  /** @minimum 1 */
+  submissionId: number;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  nameAr: string;
+  startDate: string;
+  endDate: string;
+  /**
+     * @minItems 1
+     * @maxItems 7
+     * @items.minimum 0
+     * @items.maximum 6
+     */
+  weekdays: number[];
+  discountType: PropertyOfferInputDiscountType;
+  /**
+     * @maximum 99999999.99
+     * @exclusiveMinimum 0
+     */
+  value: number;
+  enabled: boolean;
+}
+
+export type PropertyOfferPatchDiscountType = typeof PropertyOfferPatchDiscountType[keyof typeof PropertyOfferPatchDiscountType];
+
+
+export const PropertyOfferPatchDiscountType = {
+  percent: 'percent',
+  fixed: 'fixed',
+  night_price: 'night_price',
+} as const;
+
+export interface PropertyOfferPatch {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  nameAr?: string;
+  startDate?: string;
+  endDate?: string;
+  /**
+     * @minItems 1
+     * @maxItems 7
+     * @items.minimum 0
+     * @items.maximum 6
+     */
+  weekdays?: number[];
+  discountType?: PropertyOfferPatchDiscountType;
+  /**
+     * @maximum 99999999.99
+     * @exclusiveMinimum 0
+     */
+  value?: number;
+  enabled?: boolean;
+}
+
+export type PropertyOffer = PropertyOfferInput & {
+  id: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export interface PropertyPriceDay {
+  date: string;
+  basePrice: number;
+  price: number;
+  /** @nullable */
+  offerId: number | null;
+  /** @nullable */
+  offerName: string | null;
+  /** @nullable */
+  badge: string | null;
+}
+
+export interface PropertyPriceQuote {
+  basePrice: number;
+  price: number;
+  discountAmount: number;
+  days: PropertyPriceDay[];
+}
+
 export type StaffHoldingInputKind = typeof StaffHoldingInputKind[keyof typeof StaffHoldingInputKind];
 
 
@@ -1150,6 +1243,55 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListPropertyOffersParams = {
+/**
+ * @minimum 1
+ */
+submissionId: number;
+};
+
+export type GetPropertyPriceQuoteParams = {
+date: string;
+period: GetPropertyPriceQuotePeriod;
+/**
+ * @minimum 1
+ * @maximum 60
+ */
+durationDays?: number;
+};
+
+export type GetPropertyPriceQuotePeriod = typeof GetPropertyPriceQuotePeriod[keyof typeof GetPropertyPriceQuotePeriod];
+
+
+export const GetPropertyPriceQuotePeriod = {
+  morning: 'morning',
+  evening: 'evening',
+  full_day: 'full_day',
+} as const;
+
+export type GetOwnerPropertyPriceQuoteParams = {
+/**
+ * @minimum 1
+ */
+submissionId: number;
+date: string;
+period: GetOwnerPropertyPriceQuotePeriod;
+/**
+ * @minimum 1
+ * @maximum 60
+ */
+durationDays?: number;
+};
+
+export type GetOwnerPropertyPriceQuotePeriod = typeof GetOwnerPropertyPriceQuotePeriod[keyof typeof GetOwnerPropertyPriceQuotePeriod];
+
+
+export const GetOwnerPropertyPriceQuotePeriod = {
+  morning: 'morning',
+  evening: 'evening',
+  full_day: 'full_day',
+} as const;
 
 export type SettleStaffHoldingBody = {
   settledOn: string;

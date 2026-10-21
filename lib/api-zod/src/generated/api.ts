@@ -11,6 +11,225 @@ import * as zod from 'zod';
 
 
 
+export const ListPropertyOffersQueryParams = zod.object({
+  "submissionId": zod.coerce.number().int().min(1)
+})
+
+
+export const listPropertyOffersResponseOneNameArMax = 120;
+
+export const listPropertyOffersResponseOneWeekdaysItemMin = 0;
+export const listPropertyOffersResponseOneWeekdaysItemMax = 6;
+
+export const listPropertyOffersResponseOneWeekdaysMax = 7;
+
+export const listPropertyOffersResponseOneValueExclusiveMin = 0;
+export const listPropertyOffersResponseOneValueMax = 99999999.99;
+
+
+
+export const ListPropertyOffersResponseItem = zod.object({
+  "submissionId": zod.number().int().min(1),
+  "nameAr": zod.string().min(1).max(listPropertyOffersResponseOneNameArMax),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "weekdays": zod.array(zod.number().int().min(listPropertyOffersResponseOneWeekdaysItemMin).max(listPropertyOffersResponseOneWeekdaysItemMax)).min(1).max(listPropertyOffersResponseOneWeekdaysMax),
+  "discountType": zod.enum(['percent', 'fixed', 'night_price']),
+  "value": zod.number().gt(listPropertyOffersResponseOneValueExclusiveMin).max(listPropertyOffersResponseOneValueMax),
+  "enabled": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}))
+export const ListPropertyOffersResponse = zod.array(ListPropertyOffersResponseItem)
+
+
+
+export const createPropertyOfferBodyNameArMax = 120;
+
+export const createPropertyOfferBodyWeekdaysItemMin = 0;
+export const createPropertyOfferBodyWeekdaysItemMax = 6;
+
+export const createPropertyOfferBodyWeekdaysMax = 7;
+
+export const createPropertyOfferBodyValueExclusiveMin = 0;
+export const createPropertyOfferBodyValueMax = 99999999.99;
+
+
+
+export const CreatePropertyOfferBody = zod.object({
+  "submissionId": zod.number().int().min(1),
+  "nameAr": zod.string().min(1).max(createPropertyOfferBodyNameArMax),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "weekdays": zod.array(zod.number().int().min(createPropertyOfferBodyWeekdaysItemMin).max(createPropertyOfferBodyWeekdaysItemMax)).min(1).max(createPropertyOfferBodyWeekdaysMax),
+  "discountType": zod.enum(['percent', 'fixed', 'night_price']),
+  "value": zod.number().gt(createPropertyOfferBodyValueExclusiveMin).max(createPropertyOfferBodyValueMax),
+  "enabled": zod.boolean()
+})
+
+
+export const createPropertyOfferResponseOneNameArMax = 120;
+
+export const createPropertyOfferResponseOneWeekdaysItemMin = 0;
+export const createPropertyOfferResponseOneWeekdaysItemMax = 6;
+
+export const createPropertyOfferResponseOneWeekdaysMax = 7;
+
+export const createPropertyOfferResponseOneValueExclusiveMin = 0;
+export const createPropertyOfferResponseOneValueMax = 99999999.99;
+
+
+
+export const CreatePropertyOfferResponse = zod.object({
+  "submissionId": zod.number().int().min(1),
+  "nameAr": zod.string().min(1).max(createPropertyOfferResponseOneNameArMax),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "weekdays": zod.array(zod.number().int().min(createPropertyOfferResponseOneWeekdaysItemMin).max(createPropertyOfferResponseOneWeekdaysItemMax)).min(1).max(createPropertyOfferResponseOneWeekdaysMax),
+  "discountType": zod.enum(['percent', 'fixed', 'night_price']),
+  "value": zod.number().gt(createPropertyOfferResponseOneValueExclusiveMin).max(createPropertyOfferResponseOneValueMax),
+  "enabled": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}))
+
+
+
+
+
+export const UpdatePropertyOfferParams = zod.object({
+  "offerId": zod.coerce.number().int().min(1)
+})
+
+export const updatePropertyOfferBodyNameArMax = 120;
+
+export const updatePropertyOfferBodyWeekdaysItemMin = 0;
+export const updatePropertyOfferBodyWeekdaysItemMax = 6;
+
+export const updatePropertyOfferBodyWeekdaysMax = 7;
+
+export const updatePropertyOfferBodyValueExclusiveMin = 0;
+export const updatePropertyOfferBodyValueMax = 99999999.99;
+
+
+
+export const UpdatePropertyOfferBody = zod.object({
+  "nameAr": zod.string().min(1).max(updatePropertyOfferBodyNameArMax).optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "weekdays": zod.array(zod.number().int().min(updatePropertyOfferBodyWeekdaysItemMin).max(updatePropertyOfferBodyWeekdaysItemMax)).min(1).max(updatePropertyOfferBodyWeekdaysMax).optional(),
+  "discountType": zod.enum(['percent', 'fixed', 'night_price']).optional(),
+  "value": zod.number().gt(updatePropertyOfferBodyValueExclusiveMin).max(updatePropertyOfferBodyValueMax).optional(),
+  "enabled": zod.boolean().optional()
+})
+
+
+export const updatePropertyOfferResponseOneNameArMax = 120;
+
+export const updatePropertyOfferResponseOneWeekdaysItemMin = 0;
+export const updatePropertyOfferResponseOneWeekdaysItemMax = 6;
+
+export const updatePropertyOfferResponseOneWeekdaysMax = 7;
+
+export const updatePropertyOfferResponseOneValueExclusiveMin = 0;
+export const updatePropertyOfferResponseOneValueMax = 99999999.99;
+
+
+
+export const UpdatePropertyOfferResponse = zod.object({
+  "submissionId": zod.number().int().min(1),
+  "nameAr": zod.string().min(1).max(updatePropertyOfferResponseOneNameArMax),
+  "startDate": zod.string(),
+  "endDate": zod.string(),
+  "weekdays": zod.array(zod.number().int().min(updatePropertyOfferResponseOneWeekdaysItemMin).max(updatePropertyOfferResponseOneWeekdaysItemMax)).min(1).max(updatePropertyOfferResponseOneWeekdaysMax),
+  "discountType": zod.enum(['percent', 'fixed', 'night_price']),
+  "value": zod.number().gt(updatePropertyOfferResponseOneValueExclusiveMin).max(updatePropertyOfferResponseOneValueMax),
+  "enabled": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+}))
+
+
+
+
+
+export const DeletePropertyOfferParams = zod.object({
+  "offerId": zod.coerce.number().int().min(1)
+})
+
+export const DeletePropertyOfferResponse = zod.void()
+
+
+
+
+
+export const GetPropertyPriceQuoteParams = zod.object({
+  "chaletId": zod.coerce.number().int().min(1)
+})
+
+export const getPropertyPriceQuoteQueryDurationDaysDefault = 1;
+export const getPropertyPriceQuoteQueryDurationDaysMax = 60;
+
+
+
+export const GetPropertyPriceQuoteQueryParams = zod.object({
+  "date": zod.coerce.string(),
+  "period": zod.enum(['morning', 'evening', 'full_day']),
+  "durationDays": zod.coerce.number().int().min(1).max(getPropertyPriceQuoteQueryDurationDaysMax).default(getPropertyPriceQuoteQueryDurationDaysDefault)
+})
+
+export const GetPropertyPriceQuoteResponse = zod.object({
+  "basePrice": zod.number(),
+  "price": zod.number(),
+  "discountAmount": zod.number(),
+  "days": zod.array(zod.object({
+  "date": zod.string(),
+  "basePrice": zod.number(),
+  "price": zod.number(),
+  "offerId": zod.number().int().nullable(),
+  "offerName": zod.string().nullable(),
+  "badge": zod.string().nullable()
+}))
+})
+
+
+
+export const getOwnerPropertyPriceQuoteQueryDurationDaysDefault = 1;
+export const getOwnerPropertyPriceQuoteQueryDurationDaysMax = 60;
+
+
+
+export const GetOwnerPropertyPriceQuoteQueryParams = zod.object({
+  "submissionId": zod.coerce.number().int().min(1),
+  "date": zod.coerce.string(),
+  "period": zod.enum(['morning', 'evening', 'full_day']),
+  "durationDays": zod.coerce.number().int().min(1).max(getOwnerPropertyPriceQuoteQueryDurationDaysMax).default(getOwnerPropertyPriceQuoteQueryDurationDaysDefault)
+})
+
+export const GetOwnerPropertyPriceQuoteResponse = zod.object({
+  "basePrice": zod.number(),
+  "price": zod.number(),
+  "discountAmount": zod.number(),
+  "days": zod.array(zod.object({
+  "date": zod.string(),
+  "basePrice": zod.number(),
+  "price": zod.number(),
+  "offerId": zod.number().int().nullable(),
+  "offerName": zod.string().nullable(),
+  "badge": zod.string().nullable()
+}))
+})
+
+
+
+
+
 export const ListStaffHoldingsParams = zod.object({
   "staffId": zod.coerce.number().int().min(1)
 })

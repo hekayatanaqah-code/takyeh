@@ -3,3 +3,4 @@ export * from "./auth";
 export * from "./photography";
 export * from "./owner-services";
 export * from "./staff-holdings";
+export * from "./property-offers";

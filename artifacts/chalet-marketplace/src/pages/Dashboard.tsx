@@ -18,6 +18,10 @@ import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type Own
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
+import { PropertyOffersTab } from "@/components/owner/PropertyOffersTab";
+import { Tag } from "lucide-react";
+import { OfferPrice } from "@/components/chalet/PropertyOfferPrice";
+import type { PropertyPriceQuote } from "@workspace/api-client-react";
 import { ReceivablesMonthSelect } from "@/components/owner/ReceivablesMonthSelect";
 import { BankLedgerSummary } from "@/components/owner/BankLedgerSummary";
 import { isExpenseInScope } from "@/lib/expenseScope";
@@ -2103,7 +2107,25 @@ export function AddBookingDialog({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [period, bookingDate, submissionId, activeSeason, selectedChalet]);
 
-  const tp = totalPrice ? Math.round(Number(totalPrice)) : null;
+  const offerPriceKey = `${submissionId}:${bookingDate}:${period}:${durationDays}`;
+  const [manualPriceKey, setManualPriceKey] = useState("");
+  useEffect(() => { if (!open) setManualPriceKey(""); }, [open]);
+  const offerPriceQuery = useQuery<PropertyPriceQuote>({
+    queryKey: ["owner", "property-price-quote", submissionId, bookingDate, period, durationDays],
+    enabled: open && !!submissionId && submissionId !== "none" && !!bookingDate && !!period,
+    queryFn: async () => {
+      const params = new URLSearchParams({ submissionId, date: bookingDate, period, durationDays: String(durationDays) });
+      const r = await apiFetch(`/owner/price-quote?${params}`);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? "تعذّر حساب السعر");
+      return r.json();
+    },
+    refetchInterval: 30000, retry: false,
+  });
+  useEffect(() => {
+    if (offerPriceQuery.data && manualPriceKey !== offerPriceKey) setTotalPrice(String(offerPriceQuery.data.price));
+  }, [offerPriceQuery.data, offerPriceKey, manualPriceKey]);
+  const useOfferPrice = manualPriceKey !== offerPriceKey && !!offerPriceQuery.data;
+  const tp = totalPrice ? Math.round(Number(totalPrice) * 100) / 100 : null;
   const dp = depositPaid ? Math.round(Number(depositPaid)) : null;
   const grandTotal = tp !== null ? tp + addonsTotalPrice : null;
   const remainingBalance = grandTotal !== null && dp !== null ? Math.max(0, grandTotal - dp) : null;
@@ -2165,6 +2187,12 @@ export function AddBookingDialog({
     const snapPrice    = totalPrice;
     const snapDeposit  = depositPaid;
     const snapDuration = durationDays;
+    const snapApplyOfferPrice = useOfferPrice;
+    if (submissionId && submissionId !== "none" && manualPriceKey !== offerPriceKey
+      && (!offerPriceQuery.data || offerPriceQuery.isFetching || offerPriceQuery.isError)) {
+      toast({ title: "انتظر اكتمال تحديث السعر قبل الحفظ", variant: "destructive" });
+      return;
+    }
     const snapSource   = source;
     const snapNotes    = notes;
     const snapSubId    = submissionId;
@@ -2207,7 +2235,8 @@ export function AddBookingDialog({
         source: snapSource,
         notes: snapNotes || undefined,
         submissionId: snapSubId && snapSubId !== "none" ? Number(snapSubId) : undefined,
-        totalPrice: snapPrice ? Math.round(Number(snapPrice)) + snapAddonTotal : undefined,
+        totalPrice: snapPrice ? Math.round((Number(snapPrice) + snapAddonTotal) * 100) / 100 : undefined,
+        applyOfferPrice: snapApplyOfferPrice,
         depositPaid: snapDeposit ? Math.round(Number(snapDeposit)) : undefined,
         insuranceFee: snapInsuranceFee ? Math.round(Number(snapInsuranceFee)) : undefined,
         insuranceReceived: Number(snapInsuranceFee) > 0 ? snapInsuranceReceived : false,
@@ -2225,6 +2254,7 @@ export function AddBookingDialog({
       });
       if (!r.ok) {
         const errJson = await r.json().catch(() => ({}));
+        if (r.status === 409 && errJson.quote) await offerPriceQuery.refetch();
         if (errJson?.details) console.error("[AddBooking] Zod details:", JSON.stringify(errJson.details));
         setError(errJson?.error ?? "حدث خطأ، يرجى المحاولة مجدداً");
         return;
@@ -2548,7 +2578,7 @@ export function AddBookingDialog({
                       size="sm"
                       variant="outline"
                       className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-400 w-full"
-                      onClick={() => setTotalPrice(String(seasonPrice))}
+                      onClick={() => { setManualPriceKey(offerPriceKey); setTotalPrice(String(seasonPrice)); }}
                     >
                       تطبيق السعر الموسمي للفترة المحددة
                     </Button>
@@ -2556,6 +2586,14 @@ export function AddBookingDialog({
                 </div>
               );
             })()}
+            {offerPriceQuery.data && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-950" data-testid="owner-booking-offer-price">
+                <p className="mb-2 font-semibold">السعر المعتمد للأيام المحددة</p>
+                <OfferPrice quote={offerPriceQuery.data} />
+                {manualPriceKey === offerPriceKey && <p className="mt-2 text-xs">تم اختيار سعر يدوي لهذا الحجز. <button type="button" className="underline" onClick={() => setManualPriceKey("")}>تطبيق السعر المعتمد</button></p>}
+              </div>
+            )}
+            {offerPriceQuery.isError && <p className="text-sm text-destructive">تعذّر حساب السعر المعتمد. يمكنك إعادة المحاولة أو إدخال سعر يدوي.</p>}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold">
@@ -2563,13 +2601,14 @@ export function AddBookingDialog({
                 </label>
                 <Input
                   type="text"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   value={toAr(totalPrice)}
-                  onChange={(e) => setTotalPrice(
+                  onChange={(e) => { setManualPriceKey(offerPriceKey); setTotalPrice(
                     e.target.value
                       .replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-                      .replace(/\D/g, "")
-                  )}
+                      .replace("٫", ".").replace(",", ".")
+                      .replace(/[^\d.]/g, "")
+                  ); }}
                   placeholder="٠"
                   className="text-right"
                 />
@@ -25040,7 +25079,7 @@ export default function Dashboard() {
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(requestedServiceId);
   const [serviceView, setServiceView] = useState<"manage" | "submissions">("manage");
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
-  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
+  const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "offers" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
   const [activityChoiceOpen, setActivityChoiceOpen] = useState(false);
   const [showHeaderAddon, setShowHeaderAddon] = useState<"chalet" | "service" | null>(null);
@@ -25543,6 +25582,7 @@ export default function Dashboard() {
   const allTabs = [
     { id: "chalets",   label: "عقاراتي",             icon: <Building2 className="w-4 h-4" /> },
     { id: "seasons",   label: "المواسم والأعياد",    icon: <Sun className="w-4 h-4" /> },
+    { id: "offers",    label: "العروض والخصومات",   icon: <Tag className="w-4 h-4" /> },
     { id: "reviews",   label: "التقييمات",            icon: <Star className="w-4 h-4" /> },
     { id: "calendar",  label: "التقويم والحجوزات",   icon: <Calendar className="w-4 h-4" /> },
     { id: "deposits",  label: "إدارة التأمينات",       icon: <Lock className="w-4 h-4" /> },
@@ -26517,6 +26557,9 @@ export default function Dashboard() {
         )}
         {visiblePropertyTab === "seasons" && (
           <SeasonsTab ownerChalets={ownerChalets} />
+        )}
+        {visiblePropertyTab === "offers" && (
+          <PropertyOffersTab ownerChalets={ownerChalets} apiFetch={apiFetch} />
         )}
         {visiblePropertyTab === "reviews" && (
           <ReviewsTab />

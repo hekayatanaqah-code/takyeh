@@ -17,6 +17,8 @@ import { resolveAmenity } from "@/lib/amenityUtils";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
 import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
+import { usePropertyPriceQuote, quotePriceText } from "@/hooks/usePropertyPriceQuote";
+import { PropertyPeriodPrice } from "@/components/chalet/PropertyOfferPrice";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -155,6 +157,7 @@ function Lightbox({ photos, startIdx, onClose }: { photos: string[]; startIdx: n
 function BookingPanel({ data }: { data: DiamondData }) {
   const [date, setDate]     = useState("");
   const [period, setPeriod] = useState<string | null>(null);
+  const priceQuote = usePropertyPriceQuote(data.id, date, period);
   const [open, setOpen]     = useState(false);
   const [, setLocation]     = useLocation();
   const { data: globalSeasons = [] } = useGlobalSeasons(data.submissionId ?? undefined);
@@ -169,11 +172,12 @@ function BookingPanel({ data }: { data: DiamondData }) {
 
   const handleWhatsApp = () => {
     if (!data.whatsappNumber) return;
+    if (data.id && date && period && (!priceQuote.data || priceQuote.isFetching || priceQuote.isError)) return;
     const phone = data.whatsappNumber.replace(/\D/g, "");
     let dateLine = "";
     if (date) { try { dateLine = toHijri(new Date(date)); } catch { dateLine = date; } }
     const slotLabel = slots.find(s => s.key === period)?.label ?? "";
-    const slotPrice = slots.find(s => s.key === period)?.price ?? "";
+    const slotPrice = priceQuote.data ? quotePriceText(priceQuote.data) : slots.find(s => s.key === period)?.price ?? "";
     const termsBlock = terms.length ? "\n\n📋 شروط الشاليه:\n" + terms.map(t => `• ${t}`).join("\n") : "";
     const msg = [
       `السلام عليكم، أرغب في حجز شاليه: ${data.nameAr}`,
@@ -291,7 +295,7 @@ function BookingPanel({ data }: { data: DiamondData }) {
                     period === s.key ? "border-amber-500 bg-amber-500/15 text-amber-300" : "border-stone-700 bg-stone-800 hover:border-amber-700 text-stone-300"
                   }`}>
                   <p className="font-bold">{s.label}</p>
-                  {s.price && <p className="text-[10px] mt-0.5 opacity-80">{s.price}</p>}
+                  {s.price && <span className="mt-0.5 block text-xs"><PropertyPeriodPrice chaletId={data.id} date={date} period={s.key} fallback={s.price} dark /></span>}
                   {(s.ci || s.co) && (
                     <p className="text-[10px] mt-0.5 opacity-60">
                       {s.ci && `دخول ${s.ci}`}{s.ci && s.co && " · "}{s.co && `خروج ${s.co}`}
@@ -337,7 +341,7 @@ function BookingPanel({ data }: { data: DiamondData }) {
           </button>
         )}
         {!data.id && data.whatsappNumber && (
-          <button onClick={handleWhatsApp}
+          <button onClick={handleWhatsApp} disabled={!!data.id && !!date && !!period && (!priceQuote.data || priceQuote.isFetching || priceQuote.isError)}
             className="w-full h-12 rounded-2xl bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold text-base flex items-center justify-center gap-2.5 transition-colors shadow-lg shadow-green-900/30">
             <MessageCircle className="w-5 h-5" />
             احجز الآن عبر واتساب

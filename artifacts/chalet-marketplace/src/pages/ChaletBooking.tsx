@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePropertyPriceQuote, quotePriceText } from "@/hooks/usePropertyPriceQuote";
+import { PropertyPeriodPrice } from "@/components/chalet/PropertyOfferPrice";
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
@@ -40,6 +42,7 @@ export default function ChaletBooking() {
   const [, setLocation] = useLocation();
   const [date, setDate]         = useState("");
   const [period, setPeriod]     = useState<string | null>(null);
+  const priceQuote = usePropertyPriceQuote(Number(id), date, period);
   const [termsOpen, setTermsOpen] = useState(false);
   const { data: chalet, isLoading, error } = useQuery<DiamondData>({
     queryKey: ["chalet-master", id],
@@ -100,6 +103,7 @@ export default function ChaletBooking() {
 
   const handleBook = () => {
     if (!phone) return;
+    if (date && period && (!priceQuote.data || priceQuote.isFetching || priceQuote.isError)) return;
     let dateLine = "";
     if (date) { try { dateLine = toHijri(new Date(date)); } catch { dateLine = date; } }
     const meta = period ? SLOT_META[period] : null;
@@ -108,7 +112,7 @@ export default function ChaletBooking() {
       `السلام عليكم، أرغب في حجز شاليه: ${chalet.nameAr}`,
       dateLine && `📅 التاريخ: ${dateLine}`,
       meta && selectedSlot ? `🕐 الفترة: ${meta.emoji} ${meta.ar}` : null,
-      selectedSlot?.price ? `💰 السعر: ${selectedSlot.price}` : null,
+      priceQuote.data ? `💰 السعر: ${quotePriceText(priceQuote.data)}` : selectedSlot?.price ? `💰 السعر: ${selectedSlot.price}` : null,
       termsBlock,
     ].filter(Boolean).join("\n");
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank");
@@ -223,7 +227,7 @@ export default function ChaletBooking() {
                         <p style={{ fontSize: 28, margin: "0 0 8px" }}>{meta.emoji}</p>
                         <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: active ? "#16a34a" : meta.text }}>{meta.ar}</p>
                         {s.price && (
-                          <p style={{ margin: "4px 0 0", fontSize: 13, fontWeight: 800, color: active ? "#16a34a" : meta.text }}>{s.price}</p>
+                          <span style={{ display: "block", margin: "4px 0 0", fontSize: 13, fontWeight: 800, color: active ? "#16a34a" : meta.text }}><PropertyPeriodPrice chaletId={Number(id)} date={date} period={s.key} fallback={s.price} /></span>
                         )}
                         {(s.ci || s.co) && (
                           <p style={{ margin: "6px 0 0", fontSize: 11, color: "#9ca3af", lineHeight: 1.5 }}>
@@ -293,6 +297,7 @@ export default function ChaletBooking() {
             {phone ? (
               <button
                 onClick={handleBook}
+                disabled={!!date && !!period && (!priceQuote.data || priceQuote.isFetching || priceQuote.isError)}
                 style={{
                   width: "100%", height: 56, borderRadius: 14, border: "none",
                   background: "#16a34a", color: "#fff",
@@ -431,7 +436,7 @@ export default function ChaletBooking() {
           )}
         </div>
         {phone && (
-          <button onClick={handleBook} style={{
+          <button onClick={handleBook} disabled={!!date && !!period && (!priceQuote.data || priceQuote.isFetching || priceQuote.isError)} style={{
             flexShrink: 0, height: 44, padding: "0 20px", borderRadius: 10,
             background: "#16a34a", color: "#fff", fontWeight: 800,
             fontSize: 14, border: "none", cursor: "pointer",

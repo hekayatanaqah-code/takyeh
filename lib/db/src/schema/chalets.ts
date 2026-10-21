@@ -284,6 +284,10 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   insurancePaymentMethod: text("insurance_payment_method").$type<"cash" | "transfer">().notNull().default("transfer"),
   paymentReceiptUrl: text("payment_receipt_url"),
   bookedAddons: jsonb("booked_addons").$type<Array<{ id: number; name: string; price: string; unit: string }>>(),
+  offerSnapshot: jsonb("offer_snapshot").$type<{
+    basePrice: number; price: number; discountAmount: number;
+    days: Array<{ date: string; basePrice: number; price: number; offerId: number | null; offerName: string | null; badge: string | null }>;
+  }>(),
   contractSigned: boolean("contract_signed").notNull().default(false),
   contractSignerName: text("contract_signer_name"),
   contractSignerId: text("contract_signer_id"),
