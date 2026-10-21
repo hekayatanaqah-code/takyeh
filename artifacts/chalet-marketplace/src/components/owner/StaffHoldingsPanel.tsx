@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
+import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { easternHoldingDigits, latinHoldingDigits } from "@/lib/staffHoldingNumbers";
 import { cn } from "@/lib/utils";
 
 type Kind = "custody" | "withheld" | "emergency" | "deposit";
@@ -46,15 +48,12 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 function saudiToday(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
-const numFmt = new Intl.NumberFormat("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const numFmt = new Intl.NumberFormat("ar-SA", { numberingSystem: "arab", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtAmount = (v: string | number) => numFmt.format(Number(v) || 0);
 function fmtDate(d: string | null) {
   if (!d) return "—";
   const [y, m, day] = d.slice(0, 10).split("-").map(Number);
-  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, day)));
-}
-function toLatinDigits(s: string) {
-  return s.replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660)).replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06f0)).replace(/[٫,]/g, ".");
+  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { numberingSystem: "arab", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, day)));
 }
 
 async function throwIfBad(res: Response): Promise<Response> {
@@ -127,7 +126,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
 
   const submitCreate = () => {
     const errs: Record<string, string> = {};
-    const amt = toLatinDigits(amount.trim());
+    const amt = latinHoldingDigits(amount.trim());
     if (!description.trim()) errs.description = "الوصف مطلوب";
     else if (description.trim().length > 500) errs.description = "الوصف طويل جدًا";
     if (!amt) errs.amount = "المبلغ مطلوب";
@@ -191,10 +190,10 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
   const sorted = useMemo(() => [...items].sort((a, b) => (a.status === b.status ? b.recordedOn.localeCompare(a.recordedOn) || b.id - a.id : a.status === "open" ? -1 : 1)), [items]);
 
   return (
-    <section dir="rtl" className="space-y-4 text-right" data-testid="panel-staff-holdings">
+    <section dir="rtl" className={cn("min-w-0 p-4 text-right", showForm ? "space-y-3 sm:p-5" : "space-y-4 sm:p-6")} data-testid="panel-staff-holdings">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-base font-bold">سجل العهد والمبالغ المحفوظة</h3>
+          <h3 className="text-base font-bold">العهد والودائع</h3>
           <p className="text-sm text-muted-foreground" data-testid="text-holdings-staff-name">{staffName}</p>
         </div>
         <div className="flex gap-2">
@@ -203,7 +202,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
           </Button>
           {!readOnly && !showForm && (
             <Button type="button" size="sm" onClick={() => setShowForm(true)} data-testid="button-add-holding">
-              <Plus className="ml-1 h-4 w-4" /> قيد جديد
+              <Plus className="ml-1 h-4 w-4" /> توثيق قيد جديد
             </Button>
           )}
         </div>
@@ -219,21 +218,22 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
       )}
 
       {/* totals per category, never combined */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" data-testid="grid-holdings-totals">
+      {!showForm && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="grid-holdings-totals">
         {KINDS.map((k) => (
-          <div key={k.value} className={cn("rounded-lg border p-3", k.tone)} data-testid={`total-${k.value}`}>
+          <div key={k.value} className={cn("min-w-0 space-y-2 rounded-xl border p-4", k.tone)} data-testid={`total-${k.value}`}>
             <p className="text-xs font-semibold">{k.label}</p>
             {list.isLoading ? <div className="mt-2 h-6 w-24 animate-pulse rounded bg-current/10 opacity-20" /> : list.isError && !list.data ? (
               <p className="mt-2 text-xs">تعذّر تحميل الرصيد</p>
             ) : (
               <>
-                <Money value={totals[k.value].open} className="mt-1 text-lg font-extrabold" />
-                <p className="text-[11px] opacity-80">{totals[k.value].count.toLocaleString("ar-SA")} قيد مفتوح · {k.hint}</p>
+                <Money value={totals[k.value].open} className="max-w-full flex-wrap text-base font-extrabold sm:text-lg" />
+                <p className="text-xs font-medium opacity-80">{easternHoldingDigits(String(totals[k.value].count))} قيد مفتوح</p>
+                <p className="text-[11px] leading-relaxed opacity-80">{k.hint}</p>
               </>
             )}
           </div>
         ))}
-      </div>
+      </div>}
 
       {showForm && !readOnly && (
         <form
@@ -249,7 +249,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
           </div>
           <fieldset>
             <legend className="mb-1.5 text-sm font-medium">النوع</legend>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {KINDS.map((k) => (
                 <button
                   type="button"
@@ -260,26 +260,28 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
                   data-testid={`button-kind-${k.value}`}
                 >
                   {k.label}
-                  <span className="block text-[11px] font-normal opacity-75">{k.hint}</span>
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{kindMeta(kind).hint}</p>
           </fieldset>
           <div>
             <label className="mb-1 block text-sm font-medium" htmlFor="holding-desc">الوصف</label>
             <Input id="holding-desc" value={description} maxLength={500} onChange={(e) => setDescription(e.target.value)} placeholder={kind === "custody" ? "مثال: مفتاح المستودع أو جهاز نقاط البيع" : "مثال: مبلغ نقدي محفوظ"} data-testid="input-holding-description" />
             <FieldError msg={errors.description} id="holding-description" />
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 flex items-center gap-1 text-sm font-medium" htmlFor="holding-amount">المبلغ <RiyalIcon className="h-3.5 w-3.5" /></label>
-              <Input id="holding-amount" inputMode="decimal" dir="ltr" className="text-left tabular-nums" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" data-testid="input-holding-amount" />
+              <Input id="holding-amount" inputMode="decimal" dir="ltr" className="h-11 text-right tabular-nums" value={easternHoldingDigits(amount)} onChange={(e) => setAmount(easternHoldingDigits(e.target.value))} placeholder="٠٫٠٠" data-testid="input-holding-amount" />
               <p className="mt-1 text-[11px] text-muted-foreground">{kind === "custody" ? "يمكن إدخال صفر للعهدة العينية غير النقدية." : "مبلغ موجب حتى منزلتين عشريتين."}</p>
               <FieldError msg={errors.amount} id="holding-amount" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium" htmlFor="holding-date">تاريخ التسجيل</label>
-              <Input id="holding-date" type="date" value={recordedOn} onChange={(e) => setRecordedOn(e.target.value)} data-testid="input-holding-date" />
+              <div className="mb-1 text-sm font-medium">تاريخ التسجيل</div>
+              <div data-testid="input-holding-date">
+                <DualCalendarPicker value={recordedOn} onChange={setRecordedOn} placeholder="تاريخ التسجيل" className="min-h-11 w-full" />
+              </div>
               <FieldError msg={errors.recordedOn} id="holding-date" />
             </div>
           </div>
@@ -302,7 +304,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
         </form>
       )}
 
-      {list.isLoading ? (
+      {!showForm && (list.isLoading ? (
         <div className="space-y-2" data-testid="status-holdings-loading">
           {[0, 1, 2].map((i) => <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />)}
         </div>
@@ -352,8 +354,10 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
                   <form className="mt-3 space-y-2 rounded-md border bg-muted/40 p-3" onSubmit={(e) => { e.preventDefault(); submitSettle(h); }} data-testid={`form-settle-holding-${h.id}`}>
                     <p className="text-xs font-semibold">تأكيد تسوية القيد بالكامل بمبلغه الأصلي <Money value={h.amount} />. لا يمكن التراجع عن التسوية ولا تتم أي حركة مالية فعلية.</p>
                     <div>
-                      <label className="mb-1 block text-xs font-medium" htmlFor={`settle-date-${h.id}`}>تاريخ التسوية</label>
-                      <Input id={`settle-date-${h.id}`} type="date" min={h.recordedOn.slice(0, 10)} value={settledOn} onChange={(e) => setSettledOn(e.target.value)} data-testid={`input-settle-date-${h.id}`} />
+                      <div className="mb-1 text-xs font-medium">تاريخ التسوية</div>
+                      <div data-testid={`input-settle-date-${h.id}`}>
+                        <DualCalendarPicker value={settledOn} onChange={setSettledOn} minDate={h.recordedOn.slice(0, 10)} placeholder="تاريخ التسوية" className="min-h-11 w-full" />
+                      </div>
                       <FieldError msg={settleErrors.settledOn} id={`settle-date-${h.id}`} />
                     </div>
                     <div>
@@ -373,7 +377,7 @@ export function StaffHoldingsPanel({ staffId, staffName, readOnly, apiFetch }: P
             );
           })}
         </ul>
-      )}
+      ))}
     </section>
   );
 }

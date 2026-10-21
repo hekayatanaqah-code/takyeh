@@ -17853,13 +17853,16 @@ function StaffTab() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-56">
                                 <DropdownMenuItem onSelect={() => { setStaffProfileTab("profile"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
-                                  بيانات العقد
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => { setStaffProfileTab("holdings"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
-                                  التأمينات والودائع
+                                  الملف الشخصي
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onSelect={() => { setStaffProfileTab("finance"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
-                                  عرض الإحصائيات
+                                  السجل المالي
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => { setStaffProfileTab("holdings"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
+                                  العهد والودائع
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => { setStaffProfileTab("permissions"); setStaffProfileTarget(member); setStaffProfileEditing(false); }}>
+                                  صلاحية المنصة
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -18513,12 +18516,12 @@ function StaffTab() {
         </div>
       )}
 
-      {/* ── Employee Profile Modal (2 tabs) ── */}
+      {/* ── Employee Profile Modal ── */}
       <Dialog
         open={staffProfileTarget !== null}
         onOpenChange={(o) => { if (!o) { setStaffProfileTarget(null); setStaffProfileEditing(false); setEditId(null); } }}
       >
-        <DialogContent className="max-w-2xl p-0 overflow-hidden gap-0 flex flex-col max-h-[88vh]" dir="rtl">
+        <DialogContent className={`${staffProfileTab === "holdings" ? "max-w-4xl" : "max-w-2xl"} p-0 overflow-hidden gap-0 flex flex-col max-h-[88dvh]`} dir="rtl">
           {staffProfileTarget && (() => {
             const emp = staffProfileTarget;
             const empHistory = history.filter((l: SalaryLog) => l.staffId === emp.id);
@@ -18618,13 +18621,13 @@ function StaffTab() {
                           : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
                       }`}
                     >
-                      {tab === "profile" ? "الملف الشخصي" : tab === "finance" ? "السجل المالي" : tab === "holdings" ? "التأمينات والودائع" : "صلاحية المنصة"}
+                      {tab === "profile" ? "الملف الشخصي" : tab === "finance" ? "السجل المالي" : tab === "holdings" ? "العهد والودائع" : "صلاحية المنصة"}
                     </button>
                   ))}
                 </div>
 
                 {/* ── Tab Content (scrollable) ── */}
-                <div className="flex-1 overflow-y-auto">
+                <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${staffProfileTab === "holdings" ? "scrollbar-hide" : ""}`}>
                   {staffProfileTab === "holdings" && (
                     <StaffHoldingsPanel key={emp.id} staffId={emp.id} staffName={emp.name} readOnly={isReadOnly} apiFetch={apiFetch} />
                   )}
