@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db, chaletsTable, chaletSeasonsTable, globalSeasonsTable, chaletGlobalSeasonsTable, propertyOffersTable } from "@workspace/db";
 
 export type PropertyPeriod = "morning" | "evening" | "full_day";
@@ -27,19 +27,24 @@ export function bestPropertyOffer(basePrice: number, date: string, offers: reado
   return { date, basePrice: money(basePrice), price, offerId: winner?.id ?? null, offerName: winner?.nameAr ?? null, badge };
 }
 
-export async function quotePropertyPrice(submissionId: number, date: string, period: PropertyPeriod, durationDays = 1) {
-  const [chalet] = await db.select().from(chaletsTable)
-    .where(and(eq(chaletsTable.submissionId, submissionId), eq(chaletsTable.isActive, true))).limit(1);
-  if (!chalet || chalet.deletedAt) throw new Error("العقار غير متاح");
+async function loadPricingData(submissionIds: number[]) {
+  const [privateSeasons, globalSeasons, associations, offers] = await Promise.all([
+    db.select().from(chaletSeasonsTable).where(inArray(chaletSeasonsTable.submissionId, submissionIds)).orderBy(chaletSeasonsTable.startDate, chaletSeasonsTable.id),
+    db.select().from(globalSeasonsTable).where(eq(globalSeasonsTable.isActive, true)).orderBy(globalSeasonsTable.startDate, globalSeasonsTable.id),
+    db.select().from(chaletGlobalSeasonsTable).where(inArray(chaletGlobalSeasonsTable.submissionId, submissionIds)),
+    db.select().from(propertyOffersTable).where(and(inArray(propertyOffersTable.submissionId, submissionIds), eq(propertyOffersTable.enabled, true))).orderBy(desc(propertyOffersTable.id)),
+  ]);
+  return { privateSeasons, globalSeasons, associations, offers };
+}
+
+type PricingData = Awaited<ReturnType<typeof loadPricingData>>;
+type PricedChalet = typeof chaletsTable.$inferSelect;
+function calculatePropertyPrice(chalet: PricedChalet, data: PricingData, date: string, period: PropertyPeriod, durationDays = 1) {
+  if (chalet.deletedAt || !chalet.isActive) throw new Error("العقار غير متاح");
   if (!(period === "morning" ? chalet.slotMorning : period === "evening" ? chalet.slotEvening : chalet.slotFullDay)) {
     throw new Error("الفترة غير متاحة لهذا العقار");
   }
-  const [privateSeasons, globalSeasons, associations, offers] = await Promise.all([
-    db.select().from(chaletSeasonsTable).where(eq(chaletSeasonsTable.submissionId, submissionId)).orderBy(chaletSeasonsTable.startDate, chaletSeasonsTable.id),
-    db.select().from(globalSeasonsTable).where(eq(globalSeasonsTable.isActive, true)).orderBy(globalSeasonsTable.startDate, globalSeasonsTable.id),
-    db.select().from(chaletGlobalSeasonsTable).where(eq(chaletGlobalSeasonsTable.submissionId, submissionId)),
-    db.select().from(propertyOffersTable).where(and(eq(propertyOffersTable.submissionId, submissionId), eq(propertyOffersTable.enabled, true))).orderBy(desc(propertyOffersTable.id)),
-  ]);
+  const { privateSeasons, globalSeasons, associations, offers } = data;
   const periodField = period === "morning" ? "priceMorning" : period === "evening" ? "priceEvening" : "priceFullDay";
   const dailyField = period === "full_day" ? "fullDay" : period;
   const dailyBaseField = period === "full_day" ? "fullday" : period;
@@ -76,4 +81,50 @@ export async function quotePropertyPrice(submissionId: number, date: string, per
   const basePrice = money(days.reduce((sum, day) => sum + day.basePrice, 0));
   const price = money(days.reduce((sum, day) => sum + day.price, 0));
   return { basePrice, price, discountAmount: money(basePrice - price), days };
+}
+
+function pricingForProperty(data: PricingData, submissionId: number): PricingData {
+  return {
+    privateSeasons: data.privateSeasons.filter(row => row.submissionId === submissionId),
+    globalSeasons: data.globalSeasons,
+    associations: data.associations.filter(row => row.submissionId === submissionId),
+    offers: data.offers.filter(row => row.submissionId === submissionId),
+  };
+}
+
+export async function quotePropertyPrice(submissionId: number, date: string, period: PropertyPeriod, durationDays = 1) {
+  const [chalet] = await db.select().from(chaletsTable)
+    .where(and(eq(chaletsTable.submissionId, submissionId), eq(chaletsTable.isActive, true))).limit(1);
+  if (!chalet || chalet.deletedAt) throw new Error("العقار غير متاح");
+  return calculatePropertyPrice(chalet, await loadPricingData([submissionId]), date, period, durationDays);
+}
+
+/** Batch-load pricing once, rather than making a request/query set for every search card. */
+export async function getPropertySearchPrices(entries: Array<{ chalet: PricedChalet; date: string }>, period?: PropertyPeriod) {
+  const prices = new Map<number, { date: string; period: PropertyPeriod; quote: ReturnType<typeof calculatePropertyPrice> }>();
+  const ids = [...new Set(entries.flatMap(({ chalet }) => chalet.submissionId == null ? [] : [chalet.submissionId]))];
+  if (!ids.length) return prices;
+  const data = await loadPricingData(ids);
+  for (const { chalet, date } of entries) {
+    if (chalet.submissionId == null) continue;
+    const scoped = pricingForProperty(data, chalet.submissionId);
+    const periods: PropertyPeriod[] = period ? [period] : ["full_day", "morning", "evening"];
+    for (const candidate of periods) {
+      // Missing/disabled slot prices must not fall back to another period's price.
+      if (!(candidate === "morning" ? chalet.slotMorning : candidate === "evening" ? chalet.slotEvening : chalet.slotFullDay)) continue;
+      const weekday = String(new Date(`${date}T12:00:00Z`).getUTCDay());
+      const dailyKey = candidate === "full_day" ? "fullday" : candidate;
+      if (chalet.dailyPrices && chalet.dailyPrices[dailyKey]?.[weekday] == null) continue;
+      let quote;
+      try { quote = calculatePropertyPrice(chalet, scoped, date, candidate); }
+      catch (error) {
+        if ((error as Error).message === "لا يوجد سعر معتمد للفترة المحددة") continue;
+        throw error;
+      }
+      if (!prices.has(chalet.id) || quote.price < prices.get(chalet.id)!.quote.price) {
+        prices.set(chalet.id, { date, period: candidate, quote });
+      }
+    }
+  }
+  return prices;
 }

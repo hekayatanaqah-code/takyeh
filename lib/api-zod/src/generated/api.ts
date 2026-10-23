@@ -1344,6 +1344,23 @@ export const GetChaletsQueryParams = zod.object({
 })
 
 export const GetChaletsResponseItem = zod.object({
+  "searchPrice": zod.union([zod.object({
+  "date": zod.string(),
+  "period": zod.enum(['morning', 'evening', 'full_day']),
+  "quote": zod.object({
+  "basePrice": zod.number(),
+  "price": zod.number(),
+  "discountAmount": zod.number(),
+  "days": zod.array(zod.object({
+  "date": zod.string(),
+  "basePrice": zod.number(),
+  "price": zod.number(),
+  "offerId": zod.number().int().nullable(),
+  "offerName": zod.string().nullable(),
+  "badge": zod.string().nullable()
+}))
+})
+}),zod.null()]).optional().describe('Authoritative price for the searched date and period; cheapest available period when none was selected.'),
   "id": zod.number().int(),
   "nameAr": zod.string().describe('Chalet name in Arabic'),
   "descriptionAr": zod.string().describe('Chalet description in Arabic'),
@@ -1379,6 +1396,23 @@ export const GetChaletByIdParams = zod.object({
 })
 
 export const GetChaletByIdResponse = zod.object({
+  "searchPrice": zod.union([zod.object({
+  "date": zod.string(),
+  "period": zod.enum(['morning', 'evening', 'full_day']),
+  "quote": zod.object({
+  "basePrice": zod.number(),
+  "price": zod.number(),
+  "discountAmount": zod.number(),
+  "days": zod.array(zod.object({
+  "date": zod.string(),
+  "basePrice": zod.number(),
+  "price": zod.number(),
+  "offerId": zod.number().int().nullable(),
+  "offerName": zod.string().nullable(),
+  "badge": zod.string().nullable()
+}))
+})
+}),zod.null()]).optional().describe('Authoritative price for the searched date and period; cheapest available period when none was selected.'),
   "id": zod.number().int(),
   "nameAr": zod.string().describe('Chalet name in Arabic'),
   "descriptionAr": zod.string().describe('Chalet description in Arabic'),

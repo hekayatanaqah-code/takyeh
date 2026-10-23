@@ -141,6 +141,9 @@ export function PropertyOffersTab({ ownerChalets, apiFetch }: PropertyOffersTabP
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["owner", "property-offers", selectedId] });
     qc.invalidateQueries({ predicate: (q) => q.queryKey.some(part => typeof part === "string" && part.includes("price-quote")) });
+    qc.invalidateQueries({ queryKey: ["chalets"] });
+    qc.invalidateQueries({ queryKey: ["chalets-next-avail"] });
+    qc.invalidateQueries({ queryKey: ["chalets-nearby"] });
   };
 
   // ---- dialog form ----

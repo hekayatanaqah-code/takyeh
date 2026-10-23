@@ -1236,6 +1236,13 @@ components:
         price: { type: number }
         discountAmount: { type: number }
         days: { type: array, items: { $ref: "#/components/schemas/PropertyPriceDay" } }
+    PropertySearchPrice:
+      type: object
+      required: [date, period, quote]
+      properties:
+        date: { type: string }
+        period: { type: string, enum: [morning, evening, full_day] }
+        quote: { $ref: "#/components/schemas/PropertyPriceQuote" }
     StaffHoldingInput:
       type: object
       required: [kind, description, amount, recordedOn, notes, requestId]
@@ -1969,6 +1976,11 @@ components:
     Chalet:
       type: object
       properties:
+        searchPrice:
+          description: Authoritative price for the searched date and period; cheapest available period when none was selected.
+          anyOf:
+            - { $ref: "#/components/schemas/PropertySearchPrice" }
+            - { type: "null" }
         id:
           type: integer
         nameAr:

@@ -159,6 +159,8 @@ export * from './propertyOfferPatch';
 export * from './propertyOfferPatchDiscountType';
 export * from './propertyPriceDay';
 export * from './propertyPriceQuote';
+export * from './propertySearchPrice';
+export * from './propertySearchPricePeriod';
 export * from './propertySocialAccountInput';
 export * from './propertySocialAccountResult';
 export * from './propertySocialAccountResultFieldErrors';

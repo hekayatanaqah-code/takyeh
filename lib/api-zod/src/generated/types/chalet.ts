@@ -5,8 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PropertySearchPrice } from './propertySearchPrice';
 
 export interface Chalet {
+  /** Authoritative price for the searched date and period; cheapest available period when none was selected. */
+  searchPrice?: PropertySearchPrice | null;
   id: number;
   /** Chalet name in Arabic */
   nameAr: string;

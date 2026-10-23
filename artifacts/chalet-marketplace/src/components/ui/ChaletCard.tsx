@@ -4,6 +4,7 @@ import { Chalet } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { resolveAmenity } from "@/lib/amenityUtils";
+import { OfferPrice } from "@/components/chalet/PropertyOfferPrice";
 
 type Period = "morning" | "evening" | "full_day";
 
@@ -24,6 +25,8 @@ function fmt(v: string | number | null | undefined): string | null {
 }
 
 export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardProps) {
+  const searchPrice = chalet.searchPrice && chalet.searchPrice.date === searchDate
+    && (!selectedPeriod || chalet.searchPrice.period === selectedPeriod) ? chalet.searchPrice : null;
   const mainPhoto = chalet.photos && chalet.photos.length > 0
     ? chalet.photos[0]
     : `${import.meta.env.BASE_URL}images/chalet-placeholder-${(chalet.id % 3) + 1}.png`;
@@ -124,7 +127,16 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
           </div>
 
           {/* ── Price Box ──────────────────────── */}
-          {hasDayPrices ? (
+          {searchPrice ? (
+            <div className="rounded-xl bg-primary/5 border border-primary/15 px-3.5 py-3 mb-3" data-testid={`search-price-${chalet.id}`}>
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">
+                {!selectedPeriod && "يبدأ من — "}{PERIOD_LABEL[searchPrice.period]} · التاريخ المختار
+              </p>
+              <OfferPrice quote={searchPrice.quote} />
+            </div>
+          ) : searchDate ? (
+            <p className="mb-3 text-xs text-muted-foreground">السعر غير متاح للتاريخ والفترة المحددين</p>
+          ) : hasDayPrices ? (
             <div className="rounded-xl bg-primary/5 border border-primary/15 px-3.5 py-2.5 mb-3 space-y-1.5">
               {weekdayPrice && (
                 <div className="flex items-center justify-between gap-3 text-sm min-w-0">

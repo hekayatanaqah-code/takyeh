@@ -5,7 +5,7 @@ import { before, after, test } from "node:test";
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
 import { createSession } from "../lib/auth";
-import { CreatePropertyOfferResponse, GetPropertyPriceQuoteResponse } from "@workspace/api-zod";
+import { CreatePropertyOfferResponse, GetPropertyPriceQuoteResponse, GetChaletsResponseItem } from "@workspace/api-zod";
 import { db, pool, chaletSubmissionsTable, chaletsTable, propertyOffersTable, chaletSeasonsTable, globalSeasonsTable, chaletGlobalSeasonsTable, sessionsTable, ownerSubscriptionsTable, ownerBookingsTable, ownerCustomersTable, chaletAvailabilityTable, ownerNotificationsTable } from "@workspace/db";
 
 const owner = `offers-test-${randomUUID()}`;
@@ -20,7 +20,11 @@ before(async () => {
   const data = { ownerId: owner, nameAr: "Synthetic offers fixture", whatsappNumber: "0500000000", location: "اختبار", descriptionAr: "اختبار معزول", pricePerNight: "1000", priceFullDay: "1000", priceMorning: "400", priceEvening: "600", status: "approved" as const };
   const [sub] = await db.insert(chaletSubmissionsTable).values(data).returning();
   subId = sub.id;
-  const [chalet] = await db.insert(chaletsTable).values({ ...data, submissionId: subId, dailyPrices: { fullday: { "4": 900 } } }).returning();
+  const [chalet] = await db.insert(chaletsTable).values({ ...data, submissionId: subId, dailyPrices: {
+    fullday: { "0": 1000, "1": 1000, "2": 1000, "3": 1000, "4": 900, "5": 1000, "6": 1000 },
+    morning: { "0": 400, "1": 400, "2": 400, "3": 400, "4": 400, "5": 400, "6": 400 },
+    evening: { "0": 600, "1": 600, "2": 600, "3": 600, "4": 600, "5": 600, "6": 600 },
+  } }).returning();
   chaletId = chalet.id;
   session = await createSession({ user: { id: owner, email: null, firstName: "Synthetic", lastName: "Owner", profileImageUrl: null }, access_token: "test" });
   outsider = await createSession({ user: { id: `${owner}-other`, email: null, firstName: "Synthetic", lastName: "Other", profileImageUrl: null }, access_token: "test" });
@@ -86,6 +90,48 @@ test("public and owner quotes agree on seasonal price, selected weekdays and mul
   assert.equal(quote.price, 2580);
   assert.deepEqual(await (await request(`/owner/price-quote?submissionId=${subId}&${query}`)).json(), quote);
   assert.equal((await request(`/chalets/${chaletId}/price-quote?date=2026-02-30&period=full_day`)).status, 400);
+});
+test("search cards use the selected Wednesday's seasonal offer and discounted price limit", async () => {
+  await request(`/owner/offers/${offerId}`, "PATCH", { enabled: false });
+  let temporaryOfferId: number | undefined;
+  try {
+    const created = await request("/owner/offers", "POST", {
+      ...valid, submissionId: subId, startDate: "2026-10-23", endDate: "2026-10-29", weekdays: [3], value: 30,
+    });
+    assert.equal(created.status, 201);
+    temporaryOfferId = CreatePropertyOfferResponse.parse(await created.json()).id;
+    const search = async (query: string) => {
+      const response = await request(`/chalets?location=${encodeURIComponent("اختبار")}&${query}`);
+      assert.equal(response.status, 200);
+      const rows = await response.json() as Array<{ id: number; searchPrice?: unknown }>;
+      const row = rows.find(item => item.id === chaletId);
+      if (!row && !query.includes("maxPrice=900")) assert.fail(`Fixture ${chaletId} missing from search; returned IDs: ${rows.map(item => item.id).join(",")}; query: ${query}`);
+      return row ? { id: row.id, searchPrice: GetChaletsResponseItem.shape.searchPrice.parse(row.searchPrice) } : undefined;
+    };
+    // 17 Jumada I 1448 is Wednesday 28 October 2026, inside 12–18 Jumada I.
+    const discounted = await search("date=2026-10-28&period=full_day&maxPrice=1000");
+    assert(discounted?.searchPrice);
+    assert.equal(discounted.searchPrice.date, "2026-10-28");
+    assert.equal(discounted.searchPrice.period, "full_day");
+    assert.equal(discounted.searchPrice.quote.basePrice, 1300);
+    assert.equal(discounted.searchPrice.quote.price, 910);
+    assert.equal(discounted.searchPrice.quote.days[0].offerId, temporaryOfferId);
+    const direct = GetPropertyPriceQuoteResponse.parse(await (await request(`/chalets/${chaletId}/price-quote?date=2026-10-28&period=full_day`)).json());
+    assert.deepEqual(discounted.searchPrice.quote, direct);
+    assert.equal(await search("date=2026-10-28&period=full_day&maxPrice=900"), undefined);
+    const allPeriods = await search("date=2026-10-28");
+    assert.equal(allPeriods?.searchPrice?.period, "morning");
+    assert.equal(allPeriods?.searchPrice?.quote.price, 280);
+    assert.equal((await search("date=2026-10-29&period=full_day"))?.searchPrice?.quote.discountAmount, 0);
+    assert.equal((await search("date=2026-10-21&period=full_day"))?.searchPrice?.quote.discountAmount, 0);
+    assert.equal((await search(""))?.searchPrice, null);
+    await request(`/owner/offers/${temporaryOfferId}`, "PATCH", { enabled: false });
+    assert.equal((await search("date=2026-10-28&period=full_day"))?.searchPrice?.quote.price, 1300);
+    assert.equal((await request("/chalets?date=2026-02-30&period=full_day")).status, 400);
+  } finally {
+    if (temporaryOfferId) await request(`/owner/offers/${temporaryOfferId}`, "DELETE");
+    await request(`/owner/offers/${offerId}`, "PATCH", { enabled: true });
+  }
 });
 test("best offer does not stack, and disabling/deleting immediately restores the correct price", async () => {
   const fixed = CreatePropertyOfferResponse.parse(await (await request("/owner/offers", "POST", { ...valid, submissionId: subId, discountType: "fixed", value: 400 })).json());

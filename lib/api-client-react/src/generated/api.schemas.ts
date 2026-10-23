@@ -98,6 +98,21 @@ export interface PropertyPriceQuote {
   days: PropertyPriceDay[];
 }
 
+export type PropertySearchPricePeriod = typeof PropertySearchPricePeriod[keyof typeof PropertySearchPricePeriod];
+
+
+export const PropertySearchPricePeriod = {
+  morning: 'morning',
+  evening: 'evening',
+  full_day: 'full_day',
+} as const;
+
+export interface PropertySearchPrice {
+  date: string;
+  period: PropertySearchPricePeriod;
+  quote: PropertyPriceQuote;
+}
+
 export type StaffHoldingInputKind = typeof StaffHoldingInputKind[keyof typeof StaffHoldingInputKind];
 
 
@@ -877,6 +892,8 @@ export interface SubmissionResponse {
 }
 
 export interface Chalet {
+  /** Authoritative price for the searched date and period; cheapest available period when none was selected. */
+  searchPrice?: PropertySearchPrice | null;
   id: number;
   /** Chalet name in Arabic */
   nameAr: string;

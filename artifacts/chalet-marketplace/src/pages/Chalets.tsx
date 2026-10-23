@@ -11,6 +11,7 @@ import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { ChaletCard } from "@/components/ui/ChaletCard";
+import { OfferPrice } from "@/components/chalet/PropertyOfferPrice";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -158,6 +159,8 @@ export default function Chalets() {
   const changeCategory = (value: string) => { setFilterCategory(value); setFilterSections("all"); };
   const { data: chalets, isLoading, isError, refetch } = useQuery<any[]>({
     queryKey: ["chalets", filterCity, filterDate, filterPeriod],
+    staleTime: 0,
+    refetchInterval: filterDate ? 30000 : false,
     queryFn: async ({ signal }) => {
       const params = new URLSearchParams();
       if (filterCity && filterCity !== "all") params.set("location", filterCity);
@@ -213,7 +216,8 @@ export default function Chalets() {
       if (!r.ok) throw new Error("تعذر التحقق من المواعيد البديلة");
       return r.json();
     },
-    staleTime: 1000 * 60 * 2,
+    staleTime: 0,
+    refetchInterval: 30000,
   });
 
   const cityIsEmpty    = nextAvailResult?.cityEmpty ?? false;
@@ -243,19 +247,22 @@ export default function Chalets() {
   })();
 
   const { data: nearbyChalets = [] } = useQuery<any[]>({
-    queryKey: ["chalets-nearby", ...nearestCities],
+    queryKey: ["chalets-nearby", ...nearestCities, filterDate, filterPeriod],
     enabled: cityIsEmpty && nearestCities.length > 0,
     queryFn: async () => {
       const results = await Promise.all(
         nearestCities.map(async (city) => {
           const params = new URLSearchParams({ location: city });
+          if (filterDate) params.set("date", filterDate);
+          if (filterPeriod && filterPeriod !== "all") params.set("period", filterPeriod);
           const r = await fetch(`${BASE}/api/chalets?${params.toString()}`, { credentials: "include" });
           return r.ok ? r.json() : [];
         })
       );
       return results.flat();
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    refetchInterval: filterDate ? 30000 : false,
   });
 
   const filteredChalets = (chalets ?? []).filter((c) => {
@@ -275,7 +282,9 @@ export default function Chalets() {
       const max = Number(toWesternDigits(filterMaxPrice));
       const weekday = Number((c as any).priceWeekday ?? 0);
       const weekend = Number((c as any).priceWeekend ?? 0);
-      const minPrice = Math.min(weekday || Infinity, weekend || Infinity);
+      const minPrice = filterDate && c.searchPrice?.date === filterDate
+        ? Number(c.searchPrice.quote.price)
+        : Math.min(weekday || Infinity, weekend || Infinity);
       if (minPrice !== Infinity && minPrice > max) return false;
     }
     return true;
@@ -473,7 +482,7 @@ export default function Chalets() {
             </button>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">يُقارن بسعر وسط الأسبوع</p>
+        <p className="text-xs text-muted-foreground">{filterDate ? "يُقارن بالسعر النهائي للتاريخ المختار" : "يُقارن بسعر وسط الأسبوع"}</p>
       </div>
 
       {/* المرافق */}
@@ -727,7 +736,9 @@ export default function Chalets() {
                                 <p style={{ fontWeight: 700, fontSize: 14, color: "#111827", margin: 0, flex: 1 }}>{chalet.nameAr}</p>
                               </div>
                               <p style={{ fontSize: 12, color: "#374151", fontWeight: 500, margin: "0 0 6px" }}>{chalet.location}</p>
-                              {chalet.priceWeekday && (
+                              {chalet.searchPrice?.date === filterDate ? (
+                                <div className="mb-2"><OfferPrice quote={chalet.searchPrice.quote} /></div>
+                              ) : !filterDate && chalet.priceWeekday && (
                                 <p style={{ fontSize: 12, color: "#5c3d25", fontWeight: 700, margin: "0 0 8px" }}>
                                   يبدأ من {Number(chalet.priceWeekday).toLocaleString("ar-SA")} ر.س
                                 </p>

@@ -12,6 +12,8 @@ import {
 import { eq, lte, gte, and, sql, inArray, isNull, or, type SQL } from "drizzle-orm";
 import { activeOwnersWithFreeAccess, isSubscriptionActive, preferredOwnerSubscription } from "../lib/subscription-access";
 import { cityNameMatches } from "../lib/city-name";
+import { getPropertySearchPrices, type PropertyPeriod } from "../lib/property-offer-pricing";
+import { priceQuery } from "./property-offers";
 import {
   GetChaletsQueryParams,
   GetChaletByIdParams,
@@ -164,6 +166,13 @@ router.get("/", async (req, res) => {
   const sections = req.query.sections as string | undefined;
   const searchDate = req.query.date as string | undefined;
   const searchPeriod = req.query.period as string | undefined;
+  const pricingQuery = searchDate ? priceQuery.omit({ durationDays: true }).partial({ period: true }).safeParse({
+    date: searchDate, period: searchPeriod === "all" ? undefined : searchPeriod,
+  }) : undefined;
+  if (pricingQuery && !pricingQuery.success) {
+    res.status(400).json({ error: "تاريخ أو فترة البحث غير صحيحة" });
+    return;
+  }
 
   const conditions: SQL[] = [eq(chaletsTable.isActive, true), isNull(chaletsTable.deletedAt)];
 
@@ -173,7 +182,7 @@ router.get("/", async (req, res) => {
   if (maxGuests !== undefined) {
     conditions.push(gte(chaletsTable.maxGuests, maxGuests));
   }
-  if (maxPrice !== undefined) {
+  if (maxPrice !== undefined && !searchDate) {
     conditions.push(lte(chaletsTable.pricePerNight, String(maxPrice)));
   }
   if (sections) {
@@ -282,8 +291,18 @@ router.get("/", async (req, res) => {
     }
   }
 
+  const searchPrices = pricingQuery?.success
+    ? await getPropertySearchPrices(rows.map(chalet => ({ chalet, date: pricingQuery.data.date })), pricingQuery.data.period)
+    : new Map();
+  if (searchDate && maxPrice !== undefined) {
+    rows = rows.filter(row => {
+      const price = searchPrices.get(row.id);
+      return price != null && price.quote.price <= maxPrice;
+    });
+  }
   const data = rows.map((row) => ({
     ...GetChaletsResponseItem.parse({
+      searchPrice: searchPrices.get(row.id) ?? null,
       id: row.id,
       nameAr: row.nameAr,
       descriptionAr: row.descriptionAr,
@@ -475,7 +494,12 @@ router.get("/next-available", async (req, res) => {
   /* 5. Sort by nextAvailableDate, then format response */
   result.sort((a, b) => a.nextAvailableDate.localeCompare(b.nextAvailableDate));
 
+  const searchPrices = await getPropertySearchPrices(
+    result.map(({ chalet, nextAvailableDate }) => ({ chalet, date: nextAvailableDate })),
+    period === "morning" || period === "evening" || period === "full_day" ? period as PropertyPeriod : undefined,
+  );
   const chalets = result.map(({ chalet, nextAvailableDate }) => ({
+    searchPrice: searchPrices.get(chalet.id) ?? null,
     id: chalet.id,
     nameAr: chalet.nameAr,
     descriptionAr: chalet.descriptionAr,
