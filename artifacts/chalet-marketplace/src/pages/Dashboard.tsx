@@ -17,6 +17,7 @@ import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE }
 import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type OwnerWhatsAppSettingsInput } from "@workspace/api-client-react";
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
+import { OwnerNotificationCard } from "@/components/owner/OwnerNotificationCard";
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
 import { PropertyOffersTab } from "@/components/owner/PropertyOffersTab";
 import { Tag } from "lucide-react";
@@ -21588,50 +21589,11 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
   ];
 
   function renderNotif(n: OwnerNotifRow) {
-    const rawMsg = n.message.replace(/\[[\w:]+\]/g, "").trim();
-    const waMatch = rawMsg.match(/\|\s*(wa\.me\/\S+)/);
-    const displayMsg = waMatch ? rawMsg.slice(0, rawMsg.lastIndexOf("|")).trim() : rawMsg;
-    const waHref = waMatch ? `https://${waMatch[1]}` : null;
-    const typeIcon = n.type === "new_booking" ? "📅" : n.type === "new_review" ? "⭐" : n.type === "report_dismissed" ? "🚩" : n.type === "booking_reminder" ? "⏰" : "🔔";
-    const notifDate = new Date(n.createdAt);
-    const hDate = toHijriComponents(notifDate);
-    const isToday = new Date().toDateString() === notifDate.toDateString();
-    const isYesterday = new Date(Date.now() - 86400000).toDateString() === notifDate.toDateString();
-    const hijriStr = `${toArN(hDate.day)} ${HIJRI_MONTHS_AR[hDate.month - 1]} ${toArN(hDate.year)} هـ`;
-    const gregStr = notifDate.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" });
-    const timeStr = notifDate.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true });
-    const dateLabel = isToday ? `اليوم، ${hijriStr}` : isYesterday ? `أمس، ${hijriStr}` : hijriStr;
-    const fullDateStr = `${dateLabel} (${gregStr} م) | ${timeStr}`;
-
-    const rowBg = n.isRead
-      ? "bg-card"
-      : n.type === "new_booking"
-        ? "bg-green-50 dark:bg-green-900/15 border-r-2 border-green-400"
-        : n.type === "booking_reminder"
-          ? "bg-amber-50 dark:bg-amber-900/15 border-r-2 border-amber-400"
-          : "bg-primary/5 border-r-2 border-primary/40";
-
-    return (
-      <div key={n.id} className={`flex items-start gap-3 px-5 py-3.5 text-sm transition-colors ${rowBg}`}>
-        <div className="text-base shrink-0 mt-0.5">{typeIcon}</div>
-        <div className="flex-1 min-w-0">
-          <p className={`leading-relaxed ${n.isRead ? "text-muted-foreground" : "text-foreground font-medium"}`}>{displayMsg}</p>
-          {waHref && (
-            <a href={waHref} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 mt-2 text-xs font-semibold text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded-lg transition-colors">
-              <Phone className="w-3 h-3" />
-              إرسال على واتساب
-            </a>
-          )}
-          <p className="text-[11px] text-muted-foreground/80 mt-1">{fullDateStr}</p>
-        </div>
-        {!n.isRead && <span className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1.5" />}
-      </div>
-    );
+    return <OwnerNotificationCard key={n.id} notification={n} />;
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+    <motion.div dir="rtl" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 text-right">
       <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
         {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 border-b border-border bg-muted/30">
