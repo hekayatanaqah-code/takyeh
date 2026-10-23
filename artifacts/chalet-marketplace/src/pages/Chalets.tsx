@@ -737,7 +737,7 @@ export default function Chalets() {
                               </div>
                               <p style={{ fontSize: 12, color: "#374151", fontWeight: 500, margin: "0 0 6px" }}>{chalet.location}</p>
                               {chalet.searchPrice?.date === filterDate ? (
-                                <div className="mb-2"><OfferPrice quote={chalet.searchPrice.quote} /></div>
+                                <div className="mb-2"><OfferPrice quote={chalet.searchPrice.quote} variant="search" /></div>
                               ) : !filterDate && chalet.priceWeekday && (
                                 <p style={{ fontSize: 12, color: "#5c3d25", fontWeight: 700, margin: "0 0 8px" }}>
                                   يبدأ من {Number(chalet.priceWeekday).toLocaleString("ar-SA")} ر.س

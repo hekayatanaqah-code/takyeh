@@ -132,7 +132,7 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
               <p className="mb-2 text-xs font-semibold text-muted-foreground">
                 {!selectedPeriod && "يبدأ من — "}{PERIOD_LABEL[searchPrice.period]} · التاريخ المختار
               </p>
-              <OfferPrice quote={searchPrice.quote} />
+              <OfferPrice quote={searchPrice.quote} variant="search" />
             </div>
           ) : searchDate ? (
             <p className="mb-3 text-xs text-muted-foreground">السعر غير متاح للتاريخ والفترة المحددين</p>
