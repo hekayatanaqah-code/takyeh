@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { after, before, it } from "node:test";
 import { eq, inArray } from "drizzle-orm";
-import { db, pool, ownerNotificationsTable, ownerBookingsTable, sessionsTable } from "@workspace/db";
+import { db, pool, ownerNotificationsTable, ownerBookingsTable, sessionsTable, chaletSubmissionsTable, ownerSubscriptionsTable } from "@workspace/db";
 import app from "../app";
 import { createSession } from "../lib/auth";
 
@@ -18,6 +18,10 @@ let bookingId: number;
 before(async () => {
   session = await createSession({ user: { id: owner, email: null, firstName: null, lastName: null, profileImageUrl: null }, access_token: "integration-test" });
   sessions.push(session);
+  await db.insert(ownerSubscriptionsTable).values([
+    { ownerId: owner, plan: "monthly", status: "active", expiresAt: new Date("2030-01-01") },
+    { ownerId: other, plan: "chalet_basic", status: "active", expiresAt: new Date("2030-01-01") },
+  ]);
   const [booking] = await db.insert(ownerBookingsTable).values({
     ownerId: owner, clientName: "عميل اختبار الإشعارات", bookingDate: "2026-10-23", period: "morning",
   }).returning();
@@ -39,6 +43,8 @@ after(async () => {
   await new Promise<void>(resolve => server.close(() => resolve()));
   await db.delete(ownerNotificationsTable).where(inArray(ownerNotificationsTable.ownerId, [owner, other]));
   await db.delete(ownerBookingsTable).where(eq(ownerBookingsTable.ownerId, owner));
+  await db.delete(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.ownerId, owner));
+  await db.delete(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, [owner, other]));
   if (sessions.length) await db.delete(sessionsTable).where(inArray(sessionsTable.sid, sessions));
   await pool.end();
 });
@@ -62,4 +68,42 @@ it("returns complete authorized history and booking search metadata without chan
 it("requires authentication and rejects invalid history queries", async () => {
   assert.equal((await fetch(`${base}?history=true`)).status, 401);
   assert.equal((await fetch(`${base}?history=invalid`, { headers: { Cookie: `sid=${session}` } })).status, 400);
+});
+
+it("marks only the selected property's notifications read, and never treats a service as all properties", async () => {
+  const data = { ownerId: owner, nameAr: "اختبار نطاق الإشعارات", whatsappNumber: "0500000000", location: "اختبار", descriptionAr: "اختبار معزول", pricePerNight: "1000", status: "approved" as const };
+  const properties = await db.insert(chaletSubmissionsTable).values([data, { ...data, nameAr: "اختبار النطاق الآخر" }]).returning();
+  const bookings = await db.insert(ownerBookingsTable).values(properties.map(property => ({
+    ownerId: owner, submissionId: property.id, clientName: "عميل اختبار", bookingDate: "2026-10-24", period: "morning",
+  }))).returning();
+  const notices = await db.insert(ownerNotificationsTable).values(bookings.map(booking => ({
+    ownerId: owner, bookingId: booking.id, type: "booking_reminder", message: "اختبار النطاق", isRead: false,
+  }))).returning();
+  const headers = { Cookie: `sid=${session}`, "content-type": "application/json" };
+  const response = await fetch(`${base}/read-all`, { method: "PATCH", headers, body: JSON.stringify({ submissionId: properties[0].id }) });
+  assert.equal(response.status, 200);
+  const rows = await db.select().from(ownerNotificationsTable).where(inArray(ownerNotificationsTable.id, notices.map(n => n.id)));
+  assert.equal(rows.find(n => n.id === notices[0].id)?.isRead, true);
+  assert.equal(rows.find(n => n.id === notices[1].id)?.isRead, false);
+  assert.equal((await fetch(`${base}/read-all`, { method: "PATCH", headers, body: JSON.stringify({ providerId: 999 }) })).status, 200);
+  const [otherNotice] = await db.select().from(ownerNotificationsTable).where(eq(ownerNotificationsTable.id, notices[1].id));
+  assert.equal(otherNotice.isRead, false);
+  assert.equal((await fetch(`${base}/read-all`, { method: "PATCH", headers, body: JSON.stringify({ providerId: 999, submissionId: properties[0].id }) })).status, 400);
+});
+
+it("keeps property tools available on property-only plans while protecting finance APIs", async () => {
+  const otherSession = await createSession({ user: { id: other, email: null, firstName: null, lastName: null, profileImageUrl: null }, access_token: "integration-test" });
+  sessions.push(otherSession);
+  const root = base.replace(/\/notifications$/, "");
+  const headers = { Cookie: `sid=${otherSession}` };
+  assert.equal((await fetch(`${root}/expenses`, { headers })).status, 403);
+  assert.equal((await fetch(`${root}/financial-summary`, { headers })).status, 403);
+  for (const route of ["yearly-summary", "yearly-summary-hijri", "service-revenue-summary", "transaction-history", "reports"])
+    assert.equal((await fetch(`${root}/${route}`, { headers })).status, 403, route);
+  assert.equal((await fetch(`${root}/message-settings`, { headers })).status, 200);
+  assert.equal((await fetch(`${root}/bookings`, { headers })).status, 200);
+  assert.equal((await fetch(`${root}/cash-deposit-logs`, { headers })).status, 200);
+  await db.update(ownerSubscriptionsTable).set({ plan: "monthly", expiresAt: new Date("2020-01-01") })
+    .where(eq(ownerSubscriptionsTable.ownerId, other));
+  assert.equal((await fetch(`${root}/expenses`, { headers })).status, 403);
 });

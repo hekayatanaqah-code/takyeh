@@ -42,6 +42,29 @@ paths:
           description: Invalid query.
         "401":
           description: Authentication required.
+  /owner/notifications/read-all:
+    patch:
+      operationId: markOwnerNotificationScopeRead
+      tags: [owner]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OwnerNotificationScopeInput" }
+      responses:
+        "200":
+          description: All notifications in the authorized activity scope marked read.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "400":
+          description: Invalid activity scope.
+        "401":
+          description: Authentication required.
   /owner/offers:
     get:
       operationId: listPropertyOffers
@@ -1208,6 +1231,12 @@ components:
       schema:
         type: string
   schemas:
+    OwnerNotificationScopeInput:
+      type: object
+      properties:
+        chaletId: { type: integer, minimum: 1 }
+        submissionId: { type: integer, minimum: 1 }
+        providerId: { type: integer, minimum: 1 }
     OwnerNotificationHistoryItem:
       type: object
       required: [id, type, message, isRead, createdAt]
@@ -1222,6 +1251,7 @@ components:
         reviewId: { type: ["integer", "null"] }
         clientName: { type: ["string", "null"] }
         propertyName: { type: ["string", "null"] }
+        submissionId: { type: ["integer", "null"] }
     PropertyOfferInput:
       type: object
       required: [submissionId, nameAr, startDate, endDate, weekdays, discountType, value, enabled]

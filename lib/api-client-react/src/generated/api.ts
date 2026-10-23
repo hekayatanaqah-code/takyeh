@@ -87,9 +87,11 @@ import type {
   LoginPhotographer200,
   LoginPhotographerBody,
   LogoutPhotographer200,
+  MarkOwnerNotificationScopeRead200,
   OwnerFreeAccessGrantInput,
   OwnerFreeAccessGrantResponse,
   OwnerNotificationHistoryItem,
+  OwnerNotificationScopeInput,
   OwnerService,
   OwnerServiceAdministration,
   OwnerServiceCatalog,
@@ -291,6 +293,88 @@ export function useListOwnerNotificationHistory<TData = Awaited<ReturnType<typeo
 
 
 
+
+export const getMarkOwnerNotificationScopeReadUrl = () => {
+
+
+
+
+  return `/api/owner/notifications/read-all`
+}
+
+export const markOwnerNotificationScopeRead = async (ownerNotificationScopeInput?: OwnerNotificationScopeInput, options?: Parameters<typeof customFetch>[1]): Promise<MarkOwnerNotificationScopeRead200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<MarkOwnerNotificationScopeRead200>(getMarkOwnerNotificationScopeReadUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(ownerNotificationScopeInput)
+  }
+);}
+
+
+
+
+
+export const getMarkOwnerNotificationScopeReadMutationKey = () => ['markOwnerNotificationScopeRead'] as const;
+
+export const getMarkOwnerNotificationScopeReadMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markOwnerNotificationScopeRead>>, TError,MarkOwnerNotificationScopeReadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markOwnerNotificationScopeRead>>, TError,MarkOwnerNotificationScopeReadMutationVariables, TContext> => {
+
+const mutationKey = getMarkOwnerNotificationScopeReadMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markOwnerNotificationScopeRead>>, MarkOwnerNotificationScopeReadMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  markOwnerNotificationScopeRead(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkOwnerNotificationScopeReadMutationResult = NonNullable<Awaited<ReturnType<typeof markOwnerNotificationScopeRead>>>
+    export type MarkOwnerNotificationScopeReadMutationBody = BodyType<OwnerNotificationScopeInput> | undefined
+    export type MarkOwnerNotificationScopeReadMutationError = ErrorType<void>
+    export type MarkOwnerNotificationScopeReadMutationVariables = {data?: BodyType<OwnerNotificationScopeInput>}
+
+    export const useMarkOwnerNotificationScopeRead = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markOwnerNotificationScopeRead>>, TError,MarkOwnerNotificationScopeReadMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof markOwnerNotificationScopeRead>>,
+        TError,
+        MarkOwnerNotificationScopeReadMutationVariables,
+        TContext
+      > => {
+      return useMutation(getMarkOwnerNotificationScopeReadMutationOptions(options), queryClient);
+    }
 
 export const getListPropertyOffersUrl = (params: ListPropertyOffersParams,) => {
   const normalizedParams = new URLSearchParams();

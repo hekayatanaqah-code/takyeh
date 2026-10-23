@@ -19,6 +19,9 @@ import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insur
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { OwnerNotificationCard } from "@/components/owner/OwnerNotificationCard";
 import { OwnerNotificationFilters } from "@/components/owner/OwnerNotificationFilters";
+import { DashboardActivitySelector } from "@/components/owner/DashboardActivitySelector";
+import { FinanceUpgradeDialog } from "@/components/owner/FinanceUpgradeDialog";
+import { activityKey, financialManagementAllowed, notificationInActivity, type DashboardActivity } from "@/lib/dashboardActivity";
 import { filterOwnerNotifications, type NotificationFilters } from "@/lib/ownerNotificationFilters";
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
 import { PropertyOffersTab } from "@/components/owner/PropertyOffersTab";
@@ -170,8 +173,8 @@ function useReadOnly() { return useContext(ImpersonationCtx); }
 const ServiceErpCtx = createContext<{ providerId: number | null }>({ providerId: null });
 function useServiceErp() { return useContext(ServiceErpCtx); }
 
-type FinanceUnit = { type: "all" } | { type: "chalet"; id: number; submissionId?: number; name: string } | { type: "service"; id: number; name: string };
-const AdminFinanceCtx = createContext<{ unit: FinanceUnit }>({ unit: { type: "all" } });
+type FinanceUnit = DashboardActivity;
+const AdminFinanceCtx = createContext<{ unit: FinanceUnit; selectUnit?: (unit: FinanceUnit) => void }>({ unit: { type: "all" } });
 function useAdminFinance() { return useContext(AdminFinanceCtx); }
 
 const statusConfig = {
@@ -4618,7 +4621,9 @@ function BookingCalendarTab({
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
   const [prefilledPeriod, setPrefilledPeriod] = useState<string | null>(null);
   const [backToSummaryDate, setBackToSummaryDate] = useState<string | null>(null);
-  const [selectedChaletId, setSelectedChaletId] = useState<number | "all" | null>(null);
+  const activityScope = useAdminFinance();
+  const [localChaletId, setSelectedChaletId] = useState<number | "all" | null>(null);
+  const selectedChaletId = activityScope.selectUnit ? (activityScope.unit.type === "chalet" ? activityScope.unit.id : "all") : localChaletId;
   const [calendarMode, setCalendarMode] = useState<"calendar" | "agenda">("calendar");
   const [agendaScope, setAgendaScope] = useState<"week" | "month">("week");
   const [dashCalType, setDashCalType] = useState<"hijri" | "gregorian">(() => (localStorage.getItem("dashCalDefaultType") as "hijri" | "gregorian") ?? "hijri");
@@ -6487,7 +6492,7 @@ function BookingCalendarTab({
       <div className="bg-card border border-border rounded-2xl p-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-5">
           <h3 className="font-bold text-foreground flex-1">التقويم والإتاحة</h3>
-          {approvedOwnerChalets.length > 1 && (
+          {approvedOwnerChalets.length > 1 && !activityScope.selectUnit && (
             <Select
               value={showAllChalets ? "all" : String(activeChaletId ?? "")}
               onValueChange={(v) => setSelectedChaletId(v === "all" ? "all" : Number(v))}
@@ -19604,7 +19609,7 @@ async function generateAndUploadReportPdf(
 
 function ReportsTab() {
   const { isReadOnly, onBlockedEdit } = useReadOnly();
-  const { unit: repUnit } = useAdminFinance();
+  const { unit: repUnit, selectUnit: selectReportActivity } = useAdminFinance();
   const _nowRep = new Date();
   const currentMonth = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}`;
   const currentYear = String(_nowRep.getFullYear());
@@ -19619,10 +19624,12 @@ function ReportsTab() {
   } as Intl.DateTimeFormatOptions);
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly" | "custom">("monthly");
-  const [reportType, setReportType] = useState<"chalets" | "services" | "unified">("chalets");
+  const [reportType, setReportType] = useState<"chalets" | "services" | "unified">(repUnit.type === "all" && selectReportActivity ? "unified" : "chalets");
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string>("all");
+  const [localReportSubmissionId, setSelectedSubmissionId] = useState<string>("all");
+  const selectedSubmissionId = repUnit.type === "chalet"
+    ? String(repUnit.submissionId ?? "none") : selectReportActivity ? "all" : localReportSubmissionId;
   const [isHijri, setIsHijri] = useState(false);
   const [isYearlyHijri, setIsYearlyHijri] = useState(false);
   const [selectedHijriMonthVal, setSelectedHijriMonthVal] = useState<string>(() => {
@@ -20338,7 +20345,7 @@ function ReportsTab() {
       <SectionGuideButton sectionKey="reports" />
 
       {/* ── Report Type Selector (only in "all" unit mode) ── */}
-      {repUnit.type === "all" && (
+      {repUnit.type === "all" && !selectReportActivity && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-muted-foreground">نوع التقرير:</span>
           {([
@@ -20481,7 +20488,7 @@ function ReportsTab() {
           </div>
 
           {/* ١. العقار — أقصى اليمين */}
-          <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
+          {!selectReportActivity && <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
             <SelectTrigger className="h-9 min-w-[130px] flex-1 text-sm">
               <SelectValue placeholder={mySubmissions.length === 1 ? (mySubmissions[0]?.nameAr || mySubmissions[0]?.name) : "جميع العقارات"} />
             </SelectTrigger>
@@ -20493,6 +20500,7 @@ function ReportsTab() {
             </SelectContent>
           </Select>
 
+          }
           {/* ٢. نوع التقويم — أزرار التبديل (مخفي في وضع مخصص) */}
           {viewMode !== "custom" && <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
             {(["gregorian", "hijri"] as const).map((c) => (
@@ -21537,12 +21545,14 @@ function ReportsTab() {
 interface OwnerNotifRow {
   id: number; type: string; chaletId: number | null; reviewId: number | null;
   bookingId?: number | null; clientName?: string | null; propertyName?: string | null;
+  submissionId?: number | null; providerId?: number | null;
   message: string; isRead: boolean; createdAt: string;
 }
 
 type NotifFilter = "all" | "new_booking" | "booking_reminder";
 
 function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
+  const { unit } = useAdminFinance();
   const qc = useQueryClient();
   const [activeFilter, setActiveFilter] = useState<NotifFilter>("all");
   const [filters, setFilters] = useState<NotificationFilters>({ search: "", read: "all", time: "all" });
@@ -21559,7 +21569,12 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
 
   const markAllRead = useMutation({
     mutationFn: async () => {
-      const r = await apiFetch("/owner/notifications/read-all", { method: "PATCH" });
+      const r = await apiFetch("/owner/notifications/read-all", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(unit.type === "chalet" ? { chaletId: unit.id, submissionId: unit.submissionId }
+          : unit.type === "service" ? { providerId: unit.id } : {}),
+      });
       if (!r.ok) throw new Error("تعذر تحديد الإشعارات كمقروءة");
     },
     onSuccess: () => {
@@ -21580,11 +21595,12 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
       })()
     : rawNotifications;
 
-  const matchingNotifs = filterOwnerNotifications(allNotifs, filters);
+  const scopedNotifs = allNotifs.filter(n => notificationInActivity(n, unit));
+  const matchingNotifs = filterOwnerNotifications(scopedNotifs, filters);
   const filtered = activeFilter === "all" ? matchingNotifs : matchingNotifs.filter(n => n.type === activeFilter);
 
-  const notificationPagination = useListPagination(filtered, JSON.stringify([activeFilter, filters]));
-  const unread = allNotifs.filter(n => !n.isRead);
+  const notificationPagination = useListPagination(filtered, JSON.stringify([activeFilter, filters, activityKey(unit)]));
+  const unread = scopedNotifs.filter(n => !n.isRead);
 
   const TABS: { key: NotifFilter; label: string; icon: string }[] = [
     { key: "all",              label: "الكل",           icon: "🔔" },
@@ -25044,7 +25060,14 @@ export default function Dashboard() {
       ? Number(requestedServiceRaw) : null;
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance" | "owner-services" | null>(routeParams.has("photographyBooking") || routeParams.get("mode") === "owner-services" ? "owner-services" : null);
   const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
-  const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>({ type: "all" });
+  const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>(() => {
+    const key = routeParams.get("activity");
+    const match = key?.match(/^(chalet|service)-(\d+)$/);
+    if (match && Number.isSafeInteger(Number(match[2])) && Number(match[2]) > 0)
+      return match[1] === "chalet" ? { type: "chalet", id: Number(match[2]), name: "عقار" } : { type: "service", id: Number(match[2]), name: "خدمة" };
+    return key === "all" || !requestedServiceId ? { type: "all" } : { type: "service", id: requestedServiceId, name: "خدمة" };
+  });
+  const [financeUpgradeOpen, setFinanceUpgradeOpen] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(requestedServiceId);
   const [serviceView, setServiceView] = useState<"manage" | "submissions">("manage");
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
@@ -25271,8 +25294,10 @@ export default function Dashboard() {
   // Independent service dashboards retain their existing financial management.
   const hasOperationalActivity = hasOperationalProperty
     || (canSeeServices && !providersLoading && !providersError && myApprovedProviders.length > 0);
-  const canAccessFinancialAdmin = actAsStaff
-    || (planLimits?.scope !== "property" && hasOperationalActivity);
+  const canAccessFinancialAdmin = actAsStaff || (hasOperationalActivity && financialManagementAllowed(planLimits));
+  const scopedOwnerChalets = ownerChalets.filter((chalet: any) =>
+    (actAsStaff || submissions?.some((submission: any) => submission.id === chalet.submissionId && submission.status === "approved"))
+    && (selectedFinanceUnit.type !== "chalet" || chalet.id === selectedFinanceUnit.id));
   const activeDashMode: "chalets" | "services" | "admin-finance" | "owner-services" =
     effectiveDashMode === "owner-services" && !actAsStaff
       ? "owner-services"
@@ -25305,6 +25330,14 @@ export default function Dashboard() {
   useEffect(() => {
     if (actAsStaff || isImpersonating) return;
     const requestedMode = new URLSearchParams(search).get("mode");
+    const requestedActivity = new URLSearchParams(search).get("activity");
+    const activityMatch = requestedActivity?.match(/^(chalet|service)-(\d+)$/);
+    if (requestedActivity === "all") setSelectedFinanceUnit(previous => previous.type === "all" ? previous : { type: "all" });
+    else if (activityMatch && Number.isSafeInteger(Number(activityMatch[2])) && Number(activityMatch[2]) > 0) {
+      const id = Number(activityMatch[2]);
+      setSelectedFinanceUnit(previous => activityKey(previous) === requestedActivity ? previous
+        : activityMatch[1] === "chalet" ? { type: "chalet", id, name: "عقار" } : { type: "service", id, name: "خدمة" });
+    }
     if (requestedServiceId) {
       setDashMode(requestedMode === "admin-finance" || requestedMode === "chalets" || requestedMode === "owner-services" ? requestedMode : "services");
       if (selectedServiceId !== requestedServiceId) {
@@ -25327,9 +25360,11 @@ export default function Dashboard() {
   }, [search, actAsStaff, isImpersonating, canSeeServices]);
 
   function selectService(id: number) {
+    const service = myApprovedProviders.find(item => item.id === id);
+    if (service) setSelectedFinanceUnit({ type: "service", id, name: service.businessName });
     setSelectedServiceId(id);
     setSelectedServiceTab("details");
-    if (!isImpersonating && !actAsStaff) navigate(`/dashboard?serviceId=${id}`);
+    if (!isImpersonating && !actAsStaff) navigate(`/dashboard?serviceId=${id}&activity=service-${id}&mode=services`);
   }
 
   function addOwnerActivity(kind: "chalet" | "service") {
@@ -25361,6 +25396,12 @@ export default function Dashboard() {
   }
 
   function switchOwnerDashboard(mode: OwnerDashboardMode) {
+    if (mode === "admin-finance" && !canAccessFinancialAdmin) {
+      setFinanceUpgradeOpen(true);
+      return;
+    }
+    if (mode === "chalets" && selectedFinanceUnit.type === "service") setSelectedFinanceUnit({ type: "all" });
+    if (mode === "services" && selectedFinanceUnit.type === "chalet") setSelectedFinanceUnit({ type: "all" });
     if (mode === "admin-finance" && unreadNotifCount + unreadSupportCount > 0) {
       setAdminFinanceTab("notifications");
     }
@@ -25371,6 +25412,8 @@ export default function Dashboard() {
     if (!actAsStaff && !isImpersonating) {
       const params = new URLSearchParams();
       if (selectedServiceId) params.set("serviceId", String(selectedServiceId));
+      params.set("activity", mode === "chalets" && selectedFinanceUnit.type === "service"
+        || mode === "services" && selectedFinanceUnit.type === "chalet" ? "all" : activityKey(selectedFinanceUnit));
       params.set("mode", mode);
       navigate(`/dashboard?${params.toString()}`);
     }
@@ -25423,15 +25466,38 @@ export default function Dashboard() {
     if (selectedServiceTab === "digitalContracts" && !provider.requiresContract) setSelectedServiceTab("details");
   }, [selectedServiceId, selectedServiceTab, myApprovedProviders]);
 
-  /* Auto-select the single chalet as finance unit when owner has only one property */
+  /* One activity scope for every section; preserve all rather than auto-picking a property. */
   useEffect(() => {
-    if (ownerChalets.length === 1 && myApprovedProviders.length === 0 && selectedFinanceUnit.type === "all") {
-      const c = ownerChalets[0];
-      setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `عقار ${c.id}` });
+    if (ownerChaletsLoading || providersLoading || ownerChaletsError || providersError) return;
+    if (selectedFinanceUnit.type === "chalet") {
+      const chalet = ownerChalets.find((c: any) => c.id === selectedFinanceUnit.id);
+      if (!chalet) setSelectedFinanceUnit({ type: "all" });
+      else if (selectedFinanceUnit.submissionId !== chalet.submissionId || selectedFinanceUnit.name !== chalet.nameAr)
+        setSelectedFinanceUnit({ type: "chalet", id: chalet.id, submissionId: chalet.submissionId, name: chalet.nameAr });
+    } else if (selectedFinanceUnit.type === "service") {
+      const service = myApprovedProviders.find(p => p.id === selectedFinanceUnit.id);
+      if (!service) setSelectedFinanceUnit({ type: "all" });
+      else if (selectedFinanceUnit.name !== service.businessName) setSelectedFinanceUnit({ ...selectedFinanceUnit, name: service.businessName });
     }
-  }, [ownerChalets.length, myApprovedProviders.length]);
+  }, [ownerChalets, myApprovedProviders, ownerChaletsLoading, providersLoading, ownerChaletsError, providersError, selectedFinanceUnit]);
 
-  interface NotifSummaryRow { id: number; isRead: boolean; type: string; message: string; }
+  function changeDashboardActivity(unit: FinanceUnit) {
+    setSelectedFinanceUnit(unit);
+    if (unit.type === "service") setSelectedServiceId(unit.id);
+    const mode = activeDashMode === "admin-finance" ? "admin-finance"
+      : unit.type === "service" ? "services"
+      : unit.type === "chalet" || canUseAdvancedPropertyTabs ? "chalets" : "services";
+    setDashMode(mode);
+    setServiceView("manage");
+    setAccountSettingsOpen(false);
+    if (!actAsStaff && !isImpersonating) {
+      const params = new URLSearchParams({ mode, activity: activityKey(unit) });
+      if (unit.type === "service") params.set("serviceId", String(unit.id));
+      navigate(`/dashboard?${params}`);
+    }
+  }
+
+  interface NotifSummaryRow { id: number; isRead: boolean; type: string; message: string; chaletId?: number | null; submissionId?: number | null; providerId?: number | null; }
   const { data: notifSummary = [] } = useQuery<NotifSummaryRow[]>({
     queryKey: ["owner", "notifications-summary"],
     queryFn: async () => {
@@ -25442,7 +25508,7 @@ export default function Dashboard() {
     enabled: isAuthenticated || isStaff || isImpersonating,
     refetchInterval: 15_000,
   });
-  const unreadNotifCount = notifSummary.filter((n) => !n.isRead).length;
+  const unreadNotifCount = notifSummary.filter((n) => !n.isRead && notificationInActivity(n, selectedFinanceUnit)).length;
 
   /* ── Unread admin replies count (support badge) ── */
   const { data: supportUnread } = useQuery<{ count: number }>({
@@ -25574,7 +25640,8 @@ export default function Dashboard() {
   // Guard the render itself, not only the effect: stale selections cannot mount hidden sections.
   const propertyRequestsOpen = !actAsStaff && activeDashMode === "chalets" && ownerView === "requests";
   const propertyListView: PropertyListView = propertyRequestsOpen ? "requests" : "approved";
-  const visiblePropertySubmissions = propertySubmissionsForView(submissions, propertyListView);
+  const visiblePropertySubmissions = propertySubmissionsForView(submissions, propertyListView)
+    .filter(item => propertyRequestsOpen || selectedFinanceUnit.type !== "chalet" || item.id === selectedFinanceUnit.submissionId);
   const visiblePropertyTab = propertyRequestsOpen
     ? "chalets" : tabs.find(tab => tab.id === activeTab)?.id ?? tabs[0]?.id;
 
@@ -25655,6 +25722,7 @@ export default function Dashboard() {
 
   return (
     <ImpersonationCtx.Provider value={{ isReadOnly, onBlockedEdit }}>
+    <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit, selectUnit: changeDashboardActivity }}>
     <div className="min-h-screen bg-background" dir="rtl">
       {/* ── Demo Preview Banner ── */}
       {isDemo && (
@@ -25749,6 +25817,9 @@ export default function Dashboard() {
         </div>
       )}
       <Navbar ownerDashboard={!actAsStaff && !isImpersonating} />
+      {(actAsStaff || isImpersonating) && hasOperationalActivity && <div className="container mx-auto max-w-6xl px-4">
+        <DashboardActivitySelector value={selectedFinanceUnit} properties={ownerChalets} services={myApprovedProviders} onChange={changeDashboardActivity} />
+      </div>}
       {!actAsStaff && !isImpersonating && (
         <div className="container mx-auto max-w-6xl px-4 pt-6">
           <OwnerToolbar
@@ -25766,12 +25837,20 @@ export default function Dashboard() {
             onLogout={logout}
             requestsOpen={showOwnerEmptyState ? ownerView === "requests" : activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
           />
+          {!showOwnerEmptyState && hasOperationalActivity && <DashboardActivitySelector
+            value={selectedFinanceUnit}
+            properties={ownerChalets.filter((chalet: any) => submissions?.some((submission: any) => submission.id === chalet.submissionId && submission.status === "approved"))}
+            services={myApprovedProviders}
+            onChange={changeDashboardActivity}
+          />}
           {<OwnerDashboardNavigation
               mode={activeDashMode}
               requestsOpen={activeDashMode === "services" ? serviceView === "submissions" || myApprovedProviders.length === 0 : ownerView === "requests" && activeDashMode === "chalets"}
               canSeeChalets={!showOwnerEmptyState && canSeeChalets}
               canSeeServices={!showOwnerEmptyState && canSeeServices}
               canAccessFinance={!showOwnerEmptyState && canAccessFinancialAdmin}
+              showFinance={!showOwnerEmptyState && hasOperationalActivity}
+              onFinanceLocked={() => setFinanceUpgradeOpen(true)}
               unreadCount={unreadNotifCount + unreadSupportCount}
               onSelect={switchOwnerDashboard}
           />}
@@ -25978,6 +26057,8 @@ export default function Dashboard() {
           extraPrice={showHeaderAddon === "service" ? planLimits?.extraServicePrice : planLimits?.extraChaletPrice}
           freeAccess
         />
+        <FinanceUpgradeDialog open={financeUpgradeOpen} onOpenChange={setFinanceUpgradeOpen}
+          onViewPlans={() => { setFinanceUpgradeOpen(false); navigate("/subscription"); }} />
         <AddonPaymentModal
           open={showHeaderAddon !== null && !freeAccess}
           onClose={() => setShowHeaderAddon(null)}
@@ -26056,9 +26137,9 @@ export default function Dashboard() {
               </button>
             )}
             {/* Admin Finance mode — always visible */}
-            {canAccessFinancialAdmin && (
+            {hasOperationalActivity && (
               <button
-                onClick={() => setDashMode("admin-finance")}
+                onClick={() => switchOwnerDashboard("admin-finance")}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
                   activeDashMode === "admin-finance"
                     ? "bg-background text-slate-700 dark:text-slate-200 shadow-sm ring-1 ring-border"
@@ -26067,6 +26148,7 @@ export default function Dashboard() {
               >
                 <Briefcase className="w-4 h-4" />
                 الشؤون المالية والإدارية
+                {!canAccessFinancialAdmin && <Lock className="h-4 w-4" aria-label="يتطلب ترقية الباقة" />}
                 {(unreadNotifCount + unreadSupportCount) > 0 && (
                   <span className="text-xs bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full px-2 py-0.5 font-semibold">
                     {unreadNotifCount + unreadSupportCount}
@@ -26171,7 +26253,24 @@ export default function Dashboard() {
             ) : (
               <>
                 {/* ── Service ERP Dashboard ─────────────────────────── */}
-                {selectedServiceId !== null && (() => {
+                {selectedFinanceUnit.type === "all" && (
+                  <div className="space-y-5">
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant={selectedServiceTab !== "seasons" ? "default" : "outline"} onClick={() => setSelectedServiceTab("calendar")}>التقويم والحجوزات — جميع الخدمات</Button>
+                      <Button variant={selectedServiceTab === "seasons" ? "default" : "outline"} onClick={() => setSelectedServiceTab("seasons")}>المواسم — جميع الخدمات</Button>
+                    </div>
+                    {myApprovedProviders.map(provider => <ServiceErpCtx.Provider key={provider.id} value={{ providerId: provider.id }}>
+                      <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="text-lg font-bold">{provider.businessName}</h3>
+                          <Button variant="outline" onClick={() => changeDashboardActivity({ type: "service", id: provider.id, name: provider.businessName })}>إدارة هذه الخدمة</Button>
+                        </div>
+                        {selectedServiceTab === "seasons" ? <ServiceSeasonsTab /> : <ServiceCalendarBookingsTab />}
+                      </section>
+                    </ServiceErpCtx.Provider>)}
+                  </div>
+                )}
+                {selectedFinanceUnit.type !== "all" && selectedServiceId !== null && (() => {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
                   if (!selectedProvider) return null;
                     const serviceErpTabs = [
@@ -26202,7 +26301,7 @@ export default function Dashboard() {
                           <p id={`service-name-${selectedServiceId}`} className="text-xl font-extrabold text-foreground">{selectedProvider?.businessName}</p>
                           <p className="text-sm text-muted-foreground">{selectedProvider?.city} · {SERVICE_CATEGORY_LABELS[selectedProvider?.category as keyof typeof SERVICE_CATEGORY_LABELS] ?? selectedProvider?.category}</p>
                         </div>
-                        {myApprovedProviders.length > 1 && (
+                        {isImpersonating && myApprovedProviders.length > 1 && (
                           <Select value={String(selectedServiceId)} onValueChange={value => {
                             selectService(Number(value));
                             setSelectedServiceTab("details");
@@ -26351,71 +26450,6 @@ export default function Dashboard() {
                 ))}
               </OwnerSubnav>
 
-              {/* ── Unit Selector (for Revenue / Expenses / Ledger tabs — Reports has its own inline filter) ── */}
-              {(adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "ledger") && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                    <BarChart2 className="w-3.5 h-3.5" />عرض التقارير المالية لـ:
-                  </p>
-                  <Select
-                    dir="rtl"
-                    value={
-                      selectedFinanceUnit.type === "all"
-                        ? "all"
-                        : selectedFinanceUnit.type === "chalet"
-                        ? `chalet-${(selectedFinanceUnit as any).id}`
-                        : `service-${(selectedFinanceUnit as any).id}`
-                    }
-                    onValueChange={(v) => {
-                      if (v === "all") {
-                        setSelectedFinanceUnit({ type: "all" });
-                      } else if (v.startsWith("chalet-")) {
-                        const id = Number(v.replace("chalet-", ""));
-                        const c = ownerChalets.find((c: any) => c.id === id);
-                        if (c) setSelectedFinanceUnit({ type: "chalet", id: c.id, submissionId: c.submissionId, name: c.nameAr ?? `عقار ${c.id}` });
-                      } else if (v.startsWith("service-")) {
-                        const id = Number(v.replace("service-", ""));
-                        const p = myApprovedProviders.find((p: any) => p.id === id);
-                        if (p) setSelectedFinanceUnit({ type: "service", id: p.id, name: p.businessName ?? `خدمة ${p.id}` });
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="w-full rounded-xl border-border bg-background h-10 text-sm">
-                      <span className="flex min-w-0 items-center gap-2 text-right">
-                          {selectedFinanceUnit.type === "all" ? (
-                            <><Briefcase className="w-3.5 h-3.5 shrink-0" />الميزانية الرئيسية</>
-                          ) : selectedFinanceUnit.type === "chalet" ? (
-                            <><Home className="w-3.5 h-3.5 shrink-0" />{selectedFinanceUnit.name}</>
-                          ) : (
-                            <><Activity className="w-3.5 h-3.5 shrink-0" />{selectedFinanceUnit.name}</>
-                          )}
-                      </span>
-                    </SelectTrigger>
-                    <SelectContent dir="rtl">
-                      <SelectItem value="all">
-                        <span className="flex items-center gap-2">
-                          <Briefcase className="w-3.5 h-3.5 shrink-0" />الميزانية الرئيسية
-                        </span>
-                      </SelectItem>
-                      {ownerChalets.map((c: any) => (
-                        <SelectItem key={`chalet-${c.id}`} value={`chalet-${c.id}`}>
-                          <span className="flex items-center gap-2">
-                            <Home className="w-3.5 h-3.5 shrink-0" />{c.nameAr ?? `عقار ${c.id}`}
-                          </span>
-                        </SelectItem>
-                      ))}
-                      {myApprovedProviders.map((p: any) => (
-                        <SelectItem key={`service-${p.id}`} value={`service-${p.id}`}>
-                          <span className="flex items-center gap-2">
-                            <Activity className="w-3.5 h-3.5 shrink-0" />{p.businessName ?? `خدمة ${p.id}`}
-                          </span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
               {/* Consolidated banner (shown for "all" view only) */}
               {selectedFinanceUnit.type === "all" && isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports") && (
                 <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
@@ -26428,8 +26462,8 @@ export default function Dashboard() {
               )}
 
               {/* Tab content */}
-              <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit }}>
-              <div className="min-h-[320px]">
+              <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit, selectUnit: changeDashboardActivity }}>
+              <div className="min-h-[320px]" key={activityKey(selectedFinanceUnit)}>
                 {adminFinanceTab === "revenue"       && <RevenueTab />}
                 {adminFinanceTab === "ledger"        && <BankLedgerTab />}
                 {adminFinanceTab === "expenses"      && <ExpensesTab />}
@@ -26524,12 +26558,19 @@ export default function Dashboard() {
             onRequestAddon={() => setShowHeaderAddon("chalet")}
           />
         )}
-        {visiblePropertyTab === "seasons" && (
-          <SeasonsTab ownerChalets={ownerChalets} />
-        )}
+        {visiblePropertyTab === "seasons" && <div className="space-y-6">
+          {scopedOwnerChalets.map((chalet: any) => <section key={chalet.id} className="space-y-3">
+            <h3 className="font-bold">{chalet.nameAr}</h3>
+            <SeasonsTab ownerChalets={[chalet]} />
+          </section>)}
+          {selectedFinanceUnit.type === "all" && myApprovedProviders.map(provider =>
+            <ServiceErpCtx.Provider key={provider.id} value={{ providerId: provider.id }}>
+              <section className="space-y-3"><h3 className="font-bold">{provider.businessName}</h3><ServiceSeasonsTab /></section>
+            </ServiceErpCtx.Provider>)}
+        </div>}
         {visiblePropertyTab === "offers" && (
           <PropertyOffersTab
-            ownerChalets={ownerChalets
+            ownerChalets={scopedOwnerChalets
               .filter(c => Number.isSafeInteger(c.submissionId) && c.submissionId > 0)
               .map(c => ({ id: c.submissionId, nameAr: c.nameAr }))}
             apiFetch={apiFetch}
@@ -26543,15 +26584,20 @@ export default function Dashboard() {
         )}
         {visiblePropertyTab === "calendar" && (
           <BookingCalendarTab
+            key={activityKey(selectedFinanceUnit)}
             submissions={submissions as any[] ?? []}
             submissionsLoading={submissionsLoading}
-            ownerChalets={ownerChalets}
+            ownerChalets={scopedOwnerChalets}
             chaletsLoading={ownerChaletsLoading}
             preferredReportCalendar={ownerProfile?.reportsCalPref === "gregorian" ? "gregorian"
               : ownerProfile?.reportsCalPref === "hijri" ? "hijri"
               : ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"}
           />
         )}
+        {visiblePropertyTab === "calendar" && selectedFinanceUnit.type === "all" && myApprovedProviders.map(provider =>
+          <ServiceErpCtx.Provider key={provider.id} value={{ providerId: provider.id }}>
+            <section className="mt-6 space-y-3"><h3 className="text-lg font-bold">{provider.businessName}</h3><ServiceCalendarBookingsTab /></section>
+          </ServiceErpCtx.Provider>)}
         {visiblePropertyTab === "deposits" && (
           <DepositsTab />
         )}
@@ -26563,7 +26609,7 @@ export default function Dashboard() {
           />
         )}
         {visiblePropertyTab === "customers" && (
-          <AdminFinanceCtx.Provider value={{ unit: { type: "all" } }}>
+          <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit }}>
             <CustomersTab calendarPreference={ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"} />
           </AdminFinanceCtx.Provider>
         )}
@@ -26575,6 +26621,7 @@ export default function Dashboard() {
         </>}
       </div>
     </div>
+    </AdminFinanceCtx.Provider>
     </ImpersonationCtx.Provider>
   );
 }

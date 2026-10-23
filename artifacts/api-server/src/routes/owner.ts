@@ -477,10 +477,10 @@ router.use(propertyOffersRouter(getOwnerIds));
 // A property-only plan retains booking and property tools, but not the financial
 // and staff-management modules. The trial deliberately enables every module.
 router.use(async (req, res, next) => {
-  if (!/^\/(reports|expenses|expense-categories|staff|salaries|salary|financial-summary|future-cash-summary|refunds|cash-deposit|message-settings)(\/|$)/.test(req.path)) return next();
+  if (!/^\/(reports|report-years|yearly-summary|yearly-summary-hijri|service-revenue-summary|transaction-history|expenses|expense-categories|staff|salaries|salary|financial-summary|future-cash-summary|refunds|cash-deposit)(\/|$)/.test(req.path)) return next();
   try {
     const access = await ownerPlanAccess(req.user!.id);
-    if (access.scope !== "full") return res.status(403).json({ error: "هذا القسم متاح في الباقة المالية والإدارية", upgradeRequired: true });
+    if (!access.active || access.scope !== "full") return res.status(403).json({ error: "هذا القسم متاح في الباقة المالية والإدارية", upgradeRequired: true });
     next();
   } catch (error) {
     next(error);
@@ -5067,6 +5067,7 @@ router.get("/notifications", async (req, res) => {
     .select({
       ...getTableColumns(ownerNotificationsTable),
       clientName: ownerBookingsTable.clientName,
+      submissionId: ownerBookingsTable.submissionId,
       propertyName: sql<string | null>`coalesce(${chaletSubmissionsTable.nameAr}, ${chaletsTable.nameAr})`,
     })
     .from(ownerNotificationsTable)
@@ -5091,11 +5092,29 @@ router.patch("/notifications/read-all", async (req, res) => {
   const ownerId = (req.user as any)?.id;
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
   const ownerIds = await getOwnerIds(req);
+  const scope = z.object({
+    chaletId: z.number().int().positive().optional(),
+    submissionId: z.number().int().positive().optional(),
+    providerId: z.number().int().positive().optional(),
+  }).refine(value => !value.providerId || (!value.chaletId && !value.submissionId))
+    .safeParse(req.body ?? {});
+  if (!scope.success) return res.status(400).json({ error: "نطاق الإشعارات غير صالح" });
+  // This register currently contains property/account notices, not independent
+  // service appointments. A service scope must never mark property notices read.
+  if (scope.data.providerId) return res.json({ ok: true });
+  const scopeConditions: SQL[] = [];
+  if (scope.data.chaletId) scopeConditions.push(eq(ownerNotificationsTable.chaletId, scope.data.chaletId));
+  if (scope.data.submissionId) scopeConditions.push(inArray(ownerNotificationsTable.bookingId,
+    db.select({ id: ownerBookingsTable.id }).from(ownerBookingsTable).where(and(
+      inArray(ownerBookingsTable.ownerId, ownerIds),
+      eq(ownerBookingsTable.submissionId, scope.data.submissionId),
+    ))));
 
   await db
     .update(ownerNotificationsTable)
     .set({ isRead: true })
-    .where(and(inArray(ownerNotificationsTable.ownerId, ownerIds), eq(ownerNotificationsTable.isRead, false)));
+    .where(and(inArray(ownerNotificationsTable.ownerId, ownerIds), eq(ownerNotificationsTable.isRead, false),
+      scopeConditions.length ? or(...scopeConditions) : undefined));
 
   return res.json({ ok: true });
 });

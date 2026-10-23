@@ -5,6 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface OwnerNotificationScopeInput {
+  /** @minimum 1 */
+  chaletId?: number;
+  /** @minimum 1 */
+  submissionId?: number;
+  /** @minimum 1 */
+  providerId?: number;
+}
+
 export interface OwnerNotificationHistoryItem {
   id: number;
   type: string;
@@ -21,6 +30,8 @@ export interface OwnerNotificationHistoryItem {
   clientName?: string | null;
   /** @nullable */
   propertyName?: string | null;
+  /** @nullable */
+  submissionId?: number | null;
 }
 
 export type PropertyOfferInputDiscountType = typeof PropertyOfferInputDiscountType[keyof typeof PropertyOfferInputDiscountType];
@@ -1284,6 +1295,10 @@ export type ListOwnerNotificationHistoryParams = {
  * Return complete searchable history instead of the latest 50 notifications.
  */
 history?: boolean;
+};
+
+export type MarkOwnerNotificationScopeRead200 = {
+  ok: boolean;
 };
 
 export type ListPropertyOffersParams = {

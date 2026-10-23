@@ -24,9 +24,26 @@ export const ListOwnerNotificationHistoryResponseItem = zod.object({
   "chaletId": zod.number().int().nullish(),
   "reviewId": zod.number().int().nullish(),
   "clientName": zod.string().nullish(),
-  "propertyName": zod.string().nullish()
+  "propertyName": zod.string().nullish(),
+  "submissionId": zod.number().int().nullish()
 })
 export const ListOwnerNotificationHistoryResponse = zod.array(ListOwnerNotificationHistoryResponseItem)
+
+
+
+
+
+
+
+export const MarkOwnerNotificationScopeReadBody = zod.object({
+  "chaletId": zod.number().int().min(1).optional(),
+  "submissionId": zod.number().int().min(1).optional(),
+  "providerId": zod.number().int().min(1).optional()
+})
+
+export const MarkOwnerNotificationScopeReadResponse = zod.object({
+  "ok": zod.boolean()
+})
 
 
 

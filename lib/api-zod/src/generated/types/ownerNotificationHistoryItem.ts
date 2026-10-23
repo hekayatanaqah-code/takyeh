@@ -22,4 +22,6 @@ export interface OwnerNotificationHistoryItem {
   clientName?: string | null;
   /** @nullable */
   propertyName?: string | null;
+  /** @nullable */
+  submissionId?: number | null;
 }

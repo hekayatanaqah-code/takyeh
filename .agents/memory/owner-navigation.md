@@ -9,7 +9,7 @@ There must be no independent intermediate Hub page. A service owner enters the a
 
 **How to apply:** Prefer an active service for ordinary default entry, but preserve an explicitly selected owned service across reloads and browser navigation. Keep activity switching inside the dashboard and settings, subscriptions, and registration requests account-wide. Preserve property-only, staff, and administrator-impersonation management paths. Reuse existing subscription capacity checks when adding activities. Use a single account-wide requests action labeled «متابعة الطلبات».
 
-The entire owner dashboard must keep the platform's primary header above the owner's greeting box: platform logo/name and one “الرئيسية / تصفح المنصة” control. The greeting box below it contains account actions only. For owners with an added activity, property/service management and “الشؤون الإدارية والمالية” are distinct primary sections immediately below the greeting, not mixed among account actions. Do not repeat those primary choices elsewhere or duplicate the platform-home link inside the greeting. Do not show separate “اختر الخدمة التي تريد إدارتها” cards above an already displayed activity. Offer compact activity switching only when multiple services exist.
+The entire owner dashboard must keep the platform's primary header above the owner's greeting box: platform logo/name and one “الرئيسية / تصفح المنصة” control. The greeting box below it contains account actions only. For owners with an added activity, property/service management and “الشؤون الإدارية والمالية” are distinct primary sections below the greeting, not mixed among account actions. Do not repeat those primary choices elsewhere or duplicate the platform-home link inside the greeting. Do not show separate “اختر الخدمة التي تريد إدارتها” cards above an already displayed activity. A shared “العقار/النشاط الحالي” selector above the tab navigation includes “جميع الأنشطة” and owned approved properties/services, even when only one activity exists.
 
 **Why:** After consolidating navigation, the user explicitly requested separating the major management sections from simple account controls while preserving the branded platform header and direct section transitions.
 
@@ -44,3 +44,15 @@ Account buttons inside the greeting should share one horizontal row on wide scre
 **Why:** المستخدم طلب فصل البيانات واستبعاد الحالات غير المقبولة من قائمة إدارة العقارات نهائياً، لا حذف سجلاتها.
 
 **How to apply:** انتقال حالة الطلب إلى مقبول ينقله إلى الإدارة ويزيله من المتابعة. احتفظ بسبب الإدارة وإجراء تعديل الطلب في قائمة المتابعة، ووجّه الرجوع بعد إرسال الطلب إليها. للحساب المختلط، افتح طلبات العقارات عند الضغط من إدارة العقارات بدلاً من التحويل تلقائياً إلى طلبات الخدمات.
+
+The activity selector governs property/service calendars, seasons, financial views and notifications across section changes. “جميع الأنشطة” is an intentional combined view, never an implicit choice of the first property or service. Keep account settings and registration requests account-wide.
+
+**Why:** The user explicitly adopted a single multi-activity dashboard scope, replacing independent per-tab selections.
+
+**How to apply:** Retain activity selection across navigation/reload and reconcile removed activities without exposing a different activity under the old label. Preserve provider-linked service components when rendering grouped activity views.
+
+Property-management subscriptions retain property-management tabs. Financial/administrative management stays visible as a locked navigation item when the plan lacks it; clicking opens an upgrade card rather than hiding the section or silently granting access.
+
+**Why:** The user explicitly requested an understandable upgrade path without restricting the property tools included in the current plan.
+
+**How to apply:** Use current subscription scope and activity status, fail closed while checking financial entitlement, preserve free/trial grants, and retain server-side financial checks. Route upgrade choices through the existing subscription flow, never initiate payment from the lock.
