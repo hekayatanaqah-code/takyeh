@@ -26559,7 +26559,12 @@ export default function Dashboard() {
           <SeasonsTab ownerChalets={ownerChalets} />
         )}
         {visiblePropertyTab === "offers" && (
-          <PropertyOffersTab ownerChalets={ownerChalets} apiFetch={apiFetch} />
+          <PropertyOffersTab
+            ownerChalets={ownerChalets
+              .filter(c => Number.isSafeInteger(c.submissionId) && c.submissionId > 0)
+              .map(c => ({ id: c.submissionId, nameAr: c.nameAr }))}
+            apiFetch={apiFetch}
+          />
         )}
         {visiblePropertyTab === "reviews" && (
           <ReviewsTab />

@@ -62,6 +62,7 @@
 - [Photographer contract boundaries](photography-contract-boundaries.md) — administrators supply legal terms; preserve historical consent and distinguish transfer records from moving money.
 - [Photography booking notices](photography-booking-notifications.md) — confirmed paid sessions drive notices and interval occupancy; keep internal reads separate from WhatsApp delivery.
 - [Browser test database evidence](browser-test-database-evidence.md) — reconcile contradictory SQL/UI observations using the mutation response and the app’s own database connection.
+- [Fixture identity integrity](fixture-identity-integrity.md) — preserve distinct registration and published-resource identities in mock dashboards; otherwise ownership bugs can pass tests.
 - [JSX preview transform](jsx-preview-transform.md) — avoid explicit JSX type arguments; injected preview metadata can break them despite a passing typecheck.
 - [Photography allocation policy](photography-allocation-policy.md) — admin-editable intro, decline and rating limits; paid replacement failures need review, not refunds.
 - [Photography financial policy](photography-financial-policy.md) — partial/full admin refunds, a wallet shared with subscriptions, and delivered-only fees; preserve settled transfer history.

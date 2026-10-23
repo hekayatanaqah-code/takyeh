@@ -50,6 +50,11 @@ after(async () => {
   }
 });
 test("offer CRUD persists, isolates properties and validates real calendar days and values", async () => {
+  const properties = await (await request("/owner/chalets")).json() as Array<{ id: number; submissionId: number }>;
+  const property = properties.find(item => item.id === chaletId);
+  assert(property, "The published property must be returned to its owner");
+  assert.equal(property.submissionId, subId, "Offers must receive submissionId, not the published property's id");
+  assert.equal((await request(`/owner/offers?submissionId=${property.submissionId}`)).status, 200);
   assert.equal((await fetch(`${base}/api/owner/offers?submissionId=${subId}`)).status, 401);
   assert.equal((await request(`/owner/offers?submissionId=${subId}`, "GET", undefined, true)).status, 403);
   for (const invalid of [

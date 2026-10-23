@@ -363,6 +363,17 @@ export function PropertyOffersTab({ ownerChalets, apiFetch }: PropertyOffersTabP
             </div>
             <fieldset>
               <legend className="mb-1.5 text-sm font-bold">أيام الأسبوع المشمولة</legend>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mb-2"
+                onClick={() => set("weekdays", WEEKDAYS.map((_, i) => i))}
+                disabled={pending || form.weekdays.length === WEEKDAYS.length}
+                data-testid="button-select-all-offer-days"
+              >
+                تحديد الكل
+              </Button>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {WEEKDAYS.map((name, i) => {
                   const checked = form.weekdays.includes(i);
@@ -413,7 +424,7 @@ export function PropertyOffersTab({ ownerChalets, apiFetch }: PropertyOffersTabP
             )}
             <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-start">
               <Button type="submit" disabled={pending} data-testid="button-submit-offer">
-                {pending && <Loader2 className="ml-1 h-4 w-4 animate-spin" />} {editing ? "حفظ التعديلات" : "إنشاء العرض"}
+                {pending && <Loader2 className="ml-1 h-4 w-4 animate-spin" />} حفظ العرض
               </Button>
               <Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)} data-testid="button-cancel-offer">إلغاء</Button>
             </DialogFooter>
