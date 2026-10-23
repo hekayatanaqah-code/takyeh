@@ -54,7 +54,7 @@ import {
   ownerCustomersTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
-import { eq, and, ne, inArray, gte, gt, lte, sql, desc, isNull, isNotNull, or, type SQL } from "drizzle-orm";
+import { eq, and, ne, inArray, gte, gt, lte, sql, desc, isNull, isNotNull, or, getTableColumns, type SQL } from "drizzle-orm";
 import { randomBytes, createHash, randomInt } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
@@ -5060,12 +5060,27 @@ router.get("/notifications", async (req, res) => {
   if (!ownerId) return res.status(401).json({ error: "unauthorized" });
   const ownerIds = await getOwnerIds(req);
 
-  const rows = await db
-    .select()
+  const query = z.object({ history: z.enum(["true", "false"]).optional() }).safeParse(req.query);
+  if (!query.success) return res.status(400).json({ error: "نطاق الإشعارات غير صالح" });
+
+  const notificationsQuery = db
+    .select({
+      ...getTableColumns(ownerNotificationsTable),
+      clientName: ownerBookingsTable.clientName,
+      propertyName: sql<string | null>`coalesce(${chaletSubmissionsTable.nameAr}, ${chaletsTable.nameAr})`,
+    })
     .from(ownerNotificationsTable)
+    .leftJoin(ownerBookingsTable, and(
+      eq(ownerBookingsTable.id, ownerNotificationsTable.bookingId),
+      inArray(ownerBookingsTable.ownerId, ownerIds),
+    ))
+    .leftJoin(chaletSubmissionsTable, eq(chaletSubmissionsTable.id, ownerBookingsTable.submissionId))
+    .leftJoin(chaletsTable, eq(chaletsTable.id, ownerNotificationsTable.chaletId))
     .where(inArray(ownerNotificationsTable.ownerId, ownerIds))
-    .orderBy(desc(ownerNotificationsTable.createdAt))
-    .limit(50);
+    .orderBy(desc(ownerNotificationsTable.createdAt), desc(ownerNotificationsTable.id));
+  // The searchable tab needs the complete history; live alert polling keeps its
+  // existing latest-50 behavior so its notification-diff logic stays unchanged.
+  const rows = await (query.data.history === "true" ? notificationsQuery : notificationsQuery.limit(50));
 
   return res.json(rows);
 });

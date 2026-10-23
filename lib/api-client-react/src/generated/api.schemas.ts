@@ -5,6 +5,24 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface OwnerNotificationHistoryItem {
+  id: number;
+  type: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  /** @nullable */
+  bookingId?: number | null;
+  /** @nullable */
+  chaletId?: number | null;
+  /** @nullable */
+  reviewId?: number | null;
+  /** @nullable */
+  clientName?: string | null;
+  /** @nullable */
+  propertyName?: string | null;
+}
+
 export type PropertyOfferInputDiscountType = typeof PropertyOfferInputDiscountType[keyof typeof PropertyOfferInputDiscountType];
 
 
@@ -1260,6 +1278,13 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListOwnerNotificationHistoryParams = {
+/**
+ * Return complete searchable history instead of the latest 50 notifications.
+ */
+history?: boolean;
+};
 
 export type ListPropertyOffersParams = {
 /**

@@ -18,6 +18,8 @@ import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type Own
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { OwnerNotificationCard } from "@/components/owner/OwnerNotificationCard";
+import { OwnerNotificationFilters } from "@/components/owner/OwnerNotificationFilters";
+import { filterOwnerNotifications, type NotificationFilters } from "@/lib/ownerNotificationFilters";
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
 import { PropertyOffersTab } from "@/components/owner/PropertyOffersTab";
 import { Tag } from "lucide-react";
@@ -21534,6 +21536,7 @@ function ReportsTab() {
 /* ── Notifications Tab ────────────────────────── */
 interface OwnerNotifRow {
   id: number; type: string; chaletId: number | null; reviewId: number | null;
+  bookingId?: number | null; clientName?: string | null; propertyName?: string | null;
   message: string; isRead: boolean; createdAt: string;
 }
 
@@ -21542,12 +21545,13 @@ type NotifFilter = "all" | "new_booking" | "booking_reminder";
 function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
   const qc = useQueryClient();
   const [activeFilter, setActiveFilter] = useState<NotifFilter>("all");
+  const [filters, setFilters] = useState<NotificationFilters>({ search: "", read: "all", time: "all" });
 
-  const { data: rawNotifications = [], isLoading } = useQuery<OwnerNotifRow[]>({
-    queryKey: ["owner", "notifications"],
+  const { data: rawNotifications = [], isLoading, isError } = useQuery<OwnerNotifRow[]>({
+    queryKey: ["owner", "notifications", "history"],
     queryFn: async () => {
-      const r = await apiFetch("/owner/notifications");
-      if (!r.ok) return [];
+      const r = await apiFetch("/owner/notifications?history=true");
+      if (!r.ok) throw new Error("تعذر تحميل الإشعارات");
       return r.json();
     },
     refetchInterval: 15_000,
@@ -21555,7 +21559,8 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
 
   const markAllRead = useMutation({
     mutationFn: async () => {
-      await apiFetch("/owner/notifications/read-all", { method: "PATCH" });
+      const r = await apiFetch("/owner/notifications/read-all", { method: "PATCH" });
+      if (!r.ok) throw new Error("تعذر تحديد الإشعارات كمقروءة");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["owner", "notifications"] });
@@ -21575,11 +21580,10 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
       })()
     : rawNotifications;
 
-  const filtered = activeFilter === "all"
-    ? allNotifs
-    : allNotifs.filter(n => n.type === activeFilter);
+  const matchingNotifs = filterOwnerNotifications(allNotifs, filters);
+  const filtered = activeFilter === "all" ? matchingNotifs : matchingNotifs.filter(n => n.type === activeFilter);
 
-  const notificationPagination = useListPagination(filtered, activeFilter);
+  const notificationPagination = useListPagination(filtered, JSON.stringify([activeFilter, filters]));
   const unread = allNotifs.filter(n => !n.isRead);
 
   const TABS: { key: NotifFilter; label: string; icon: string }[] = [
@@ -21609,6 +21613,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <OwnerNotificationFilters filters={filters} onChange={setFilters} />
             <SectionGuideButton sectionKey="notifications" />
             {unread.length > 0 && (
               <Button size="sm" variant="default" className="h-8 gap-1.5 text-xs px-3"
@@ -21623,7 +21628,7 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
         {/* Filter tabs */}
         <div className="flex items-center gap-1 px-4 py-2.5 border-b border-border bg-muted/10">
           {TABS.map(tab => {
-            const count = tab.key === "all" ? allNotifs.length : allNotifs.filter(n => n.type === tab.key).length;
+            const count = tab.key === "all" ? matchingNotifs.length : matchingNotifs.filter(n => n.type === tab.key).length;
             const isActive = activeFilter === tab.key;
             return (
               <button
@@ -21650,10 +21655,12 @@ function NotificationsTab({ deduplicate = false }: { deduplicate?: boolean }) {
         {/* Body */}
         {isLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="w-7 h-7 animate-spin text-muted-foreground" /></div>
+        ) : isError ? (
+          <p role="alert" className="px-5 py-10 text-sm text-destructive">تعذر تحميل الإشعارات. يرجى المحاولة مجددًا.</p>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3">
             <Bell className="w-9 h-9 opacity-20" />
-            <p className="text-sm">لا توجد إشعارات في هذا التصنيف</p>
+            <p className="text-sm">لا توجد إشعارات تطابق البحث والفلاتر المحددة</p>
           </div>
         ) : (
           <>

@@ -8,6 +8,27 @@
 import * as zod from 'zod';
 
 
+export const listOwnerNotificationHistoryQueryHistoryDefault = false;
+
+export const ListOwnerNotificationHistoryQueryParams = zod.object({
+  "history": zod.coerce.boolean().default(listOwnerNotificationHistoryQueryHistoryDefault).describe('Return complete searchable history instead of the latest 50 notifications.')
+})
+
+export const ListOwnerNotificationHistoryResponseItem = zod.object({
+  "id": zod.number().int(),
+  "type": zod.string(),
+  "message": zod.string(),
+  "isRead": zod.boolean(),
+  "createdAt": zod.date(),
+  "bookingId": zod.number().int().nullish(),
+  "chaletId": zod.number().int().nullish(),
+  "reviewId": zod.number().int().nullish(),
+  "clientName": zod.string().nullish(),
+  "propertyName": zod.string().nullish()
+})
+export const ListOwnerNotificationHistoryResponse = zod.array(ListOwnerNotificationHistoryResponseItem)
+
+
 
 
 

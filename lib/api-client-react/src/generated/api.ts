@@ -82,12 +82,14 @@ import type {
   HealthStatus,
   InvitePhotographer200,
   InvitePhotographerBody,
+  ListOwnerNotificationHistoryParams,
   ListPropertyOffersParams,
   LoginPhotographer200,
   LoginPhotographerBody,
   LogoutPhotographer200,
   OwnerFreeAccessGrantInput,
   OwnerFreeAccessGrantResponse,
+  OwnerNotificationHistoryItem,
   OwnerService,
   OwnerServiceAdministration,
   OwnerServiceCatalog,
@@ -187,6 +189,108 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListOwnerNotificationHistoryUrl = (params?: ListOwnerNotificationHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/owner/notifications?${stringifiedParams}` : `/api/owner/notifications`
+}
+
+export const listOwnerNotificationHistory = async (params?: ListOwnerNotificationHistoryParams, options?: Parameters<typeof customFetch>[1]): Promise<OwnerNotificationHistoryItem[]> => {
+
+  return customFetch<OwnerNotificationHistoryItem[]>(getListOwnerNotificationHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOwnerNotificationHistoryQueryKey = (params?: ListOwnerNotificationHistoryParams,) => {
+    return [
+    `/api/owner/notifications`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListOwnerNotificationHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError = ErrorType<void>>(params?: ListOwnerNotificationHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOwnerNotificationHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOwnerNotificationHistory>>> = ({ signal }) => listOwnerNotificationHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListOwnerNotificationHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listOwnerNotificationHistory>>>
+export type ListOwnerNotificationHistoryQueryError = ErrorType<void>
+
+
+export function useListOwnerNotificationHistory<TData = Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError = ErrorType<void>>(
+ params: undefined |  ListOwnerNotificationHistoryParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listOwnerNotificationHistory>>,
+          TError,
+          Awaited<ReturnType<typeof listOwnerNotificationHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListOwnerNotificationHistory<TData = Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError = ErrorType<void>>(
+ params?: ListOwnerNotificationHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listOwnerNotificationHistory>>,
+          TError,
+          Awaited<ReturnType<typeof listOwnerNotificationHistory>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListOwnerNotificationHistory<TData = Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError = ErrorType<void>>(
+ params?: ListOwnerNotificationHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListOwnerNotificationHistory<TData = Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError = ErrorType<void>>(
+ params?: ListOwnerNotificationHistoryParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerNotificationHistory>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListOwnerNotificationHistoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListPropertyOffersUrl = (params: ListPropertyOffersParams,) => {
   const normalizedParams = new URLSearchParams();

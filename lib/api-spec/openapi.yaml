@@ -21,6 +21,27 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/notifications:
+    get:
+      operationId: listOwnerNotificationHistory
+      tags: [owner]
+      parameters:
+        - name: history
+          in: query
+          description: Return complete searchable history instead of the latest 50 notifications.
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Owner-scoped notifications, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OwnerNotificationHistoryItem" }
+        "400":
+          description: Invalid query.
+        "401":
+          description: Authentication required.
   /owner/offers:
     get:
       operationId: listPropertyOffers
@@ -1187,6 +1208,20 @@ components:
       schema:
         type: string
   schemas:
+    OwnerNotificationHistoryItem:
+      type: object
+      required: [id, type, message, isRead, createdAt]
+      properties:
+        id: { type: integer }
+        type: { type: string }
+        message: { type: string }
+        isRead: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        bookingId: { type: ["integer", "null"] }
+        chaletId: { type: ["integer", "null"] }
+        reviewId: { type: ["integer", "null"] }
+        clientName: { type: ["string", "null"] }
+        propertyName: { type: ["string", "null"] }
     PropertyOfferInput:
       type: object
       required: [submissionId, nameAr, startDate, endDate, weekdays, discountType, value, enabled]
