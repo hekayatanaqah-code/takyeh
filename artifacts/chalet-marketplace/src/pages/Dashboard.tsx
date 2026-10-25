@@ -27872,7 +27872,7 @@ function OwnerSupportTab() {
               <Paperclip className="w-4 h-4 shrink-0 text-primary" />
               إرفاق صورة أو ملف المشكلة
               <span className="text-xs font-normal text-slate-700 dark:text-slate-200">
-                (اختياري — <bdi dir="ltr">PNG, JPG, PDF</bdi> · حتى <bdi dir="ltr">{SUPPORT_MAX_FILE_SIZE_MB}MB</bdi> لكل ملف)
+                (اختياري — <bdi dir="ltr">PNG, JPG, PDF</bdi> · حتى {toArN(SUPPORT_MAX_FILE_SIZE_MB)} ميجابايت لكل ملف)
               </span>
             </label>
             <input
