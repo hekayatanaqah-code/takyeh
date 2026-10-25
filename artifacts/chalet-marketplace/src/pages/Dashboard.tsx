@@ -27665,6 +27665,9 @@ const SUPPORT_STATUS_AR: Record<string, { label: string; color: string }> = {
   admin_message: { label: "رسالة من المنصة", color: "text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-700/40" },
 };
 
+const SUPPORT_MAX_FILE_SIZE_MB = 5;
+const SUPPORT_MAX_MESSAGE_LENGTH = 500;
+
 function OwnerSupportTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -27711,7 +27714,7 @@ function OwnerSupportTab() {
     const allowed = ["image/png", "image/jpeg", "image/jpg", "application/pdf"];
     for (const f of newFiles) {
       if (!allowed.includes(f.type)) { setError("يُسمح فقط بـ PNG, JPG, PDF"); return; }
-      if (f.size > 5 * 1024 * 1024) { setError("حجم الملف يتجاوز الحد الأقصى (5MB)"); return; }
+      if (f.size > SUPPORT_MAX_FILE_SIZE_MB * 1024 * 1024) { setError(`حجم الملف يتجاوز الحد الأقصى (${SUPPORT_MAX_FILE_SIZE_MB}MB)`); return; }
     }
     setAttachFiles(prev => [...prev, ...newFiles].slice(0, 10));
     setError("");
@@ -27755,6 +27758,7 @@ function OwnerSupportTab() {
     setError("");
     if (!subject) { setError("اختر الموضوع"); return; }
     if (!message.trim() || message.trim().length < 10) { setError("الرجاء كتابة وصف مفصّل (١٠ أحرف على الأقل)"); return; }
+    if (message.length > SUPPORT_MAX_MESSAGE_LENGTH) { setError(`الحد الأقصى لتفاصيل الطلب ${toArN(SUPPORT_MAX_MESSAGE_LENGTH)} حرف`); return; }
     setSubmitting(true);
     if (attachFiles.length > 0) setUploading(true);
     try {
@@ -27835,34 +27839,41 @@ function OwnerSupportTab() {
                   className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
                     subject === s
                       ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted text-muted-foreground border-border hover:border-primary hover:text-primary"
+                      : "bg-muted text-slate-700 dark:text-slate-200 border-border hover:border-primary hover:text-primary"
                   }`}
                 >{s}</button>
               ))}
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold">
+            <label htmlFor="owner-support-message" className="text-sm font-semibold">
               تفاصيل الطلب <span className="text-destructive">*</span>
-              <span className="text-xs text-muted-foreground font-normal mr-2">صِف المشكلة أو الطلب بوضوح</span>
+              <span id="owner-support-message-hint" className="text-xs text-slate-700 dark:text-slate-200 font-normal mr-2">صِف المشكلة أو الطلب بوضوح</span>
             </label>
             <Textarea
+              id="owner-support-message"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
+              maxLength={SUPPORT_MAX_MESSAGE_LENGTH}
+              aria-describedby="owner-support-message-hint owner-support-message-count"
               placeholder="مثال: لاحظت أن لوحة التقويم لا تحفظ الأيام المغلقة بشكل صحيح عند..."
               rows={5}
               dir="rtl"
-              className="resize-none"
+              className="resize-none text-foreground placeholder:text-slate-600 placeholder:opacity-100 dark:placeholder:text-slate-300"
             />
-            <p className="text-xs text-muted-foreground text-left">{message.length} حرف</p>
+            <p id="owner-support-message-count" aria-live="polite" aria-atomic="true" className="text-xs font-medium text-slate-700 dark:text-slate-200 text-left">
+              <bdi dir="ltr">{toArN(message.length)} / {toArN(SUPPORT_MAX_MESSAGE_LENGTH)}</bdi>{" "}حرف
+            </p>
           </div>
 
           {/* File attachment */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Paperclip className="w-4 h-4 text-primary/70" />
+            <label className="text-sm font-semibold text-foreground flex flex-wrap items-center gap-2">
+              <Paperclip className="w-4 h-4 shrink-0 text-primary" />
               إرفاق صورة أو ملف المشكلة
-              <span className="text-xs font-normal text-muted-foreground">(اختياري — PNG, JPG, PDF · حتى 5MB)</span>
+              <span className="text-xs font-normal text-slate-700 dark:text-slate-200">
+                (اختياري — <bdi dir="ltr">PNG, JPG, PDF</bdi> · حتى <bdi dir="ltr">{SUPPORT_MAX_FILE_SIZE_MB}MB</bdi> لكل ملف)
+              </span>
             </label>
             <input
               ref={fileInputRef}
@@ -27875,30 +27886,33 @@ function OwnerSupportTab() {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border hover:border-primary/50 rounded-xl py-5 text-muted-foreground hover:text-primary transition-colors bg-muted/30 hover:bg-primary/5"
+              className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-border hover:border-primary/50 rounded-xl px-3 py-5 text-center text-slate-700 dark:text-slate-200 hover:text-primary transition-colors bg-muted/30 hover:bg-primary/5"
             >
               <Upload className="w-5 h-5" />
               <span className="text-xs font-medium">اضغط لإضافة ملفات أو صور (يمكن اختيار أكثر من واحد)</span>
             </button>
             {attachFiles.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
+              <div className="grid grid-cols-2 gap-3 mt-2 sm:grid-cols-3 lg:grid-cols-4">
                 {attachFiles.map((f, i) => (
-                  <div key={i} className="flex items-center gap-2 bg-muted/40 border border-border rounded-xl px-3 py-2 max-w-[200px]">
+                  <div key={i} className="relative min-w-0 flex flex-col items-center justify-center gap-2 bg-muted/40 border border-border rounded-xl px-3 pb-3 pt-8 text-center">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center">
                     {attachPreviews[i] === "pdf" ? (
                       <FileText className="w-5 h-5 text-red-500 shrink-0" />
                     ) : attachPreviews[i] ? (
-                      <img src={attachPreviews[i]} alt="معاينة" className="w-8 h-8 rounded object-cover shrink-0 border border-border" />
+                      <img src={attachPreviews[i]} alt="معاينة" className="w-10 h-10 rounded object-contain border border-border" />
                     ) : (
                       <Loader2 className="w-5 h-5 animate-spin shrink-0" />
                     )}
-                    <p className="text-xs font-medium text-foreground truncate flex-1">{f.name}</p>
+                    </div>
+                    <p dir="auto" title={f.name} className="w-full text-center text-xs font-medium text-foreground truncate">{f.name}</p>
                     <button
                       type="button"
                       onClick={() => {
                         setAttachFiles(prev => prev.filter((_, j) => j !== i));
                         setAttachPreviews(prev => prev.filter((_, j) => j !== i));
                       }}
-                      className="shrink-0 w-5 h-5 rounded-full bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center text-destructive transition-colors"
+                      aria-label={`إزالة المرفق ${f.name}`}
+                      className="absolute top-1 start-1 w-6 h-6 rounded-full bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center text-destructive transition-colors"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -27993,8 +28007,8 @@ function OwnerSupportTab() {
                           <div className="mt-2 flex flex-wrap gap-2">
                             {urls.map((url, i) => url.endsWith(".pdf") ? (
                               <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-xs font-medium text-primary hover:underline border border-border rounded-lg px-3 py-2 bg-muted/30">
-                                <FileText className="w-4 h-4 text-red-500" />
+                                className="inline-flex min-h-10 items-center justify-center gap-2 text-center text-xs font-medium text-primary hover:underline border border-border rounded-lg px-3 py-2 bg-muted/30">
+                                <FileText className="w-4 h-4 shrink-0 text-red-500" />
                                 مرفق PDF {urls.length > 1 ? `(${i + 1})` : ""}
                               </a>
                             ) : (
@@ -28019,8 +28033,8 @@ function OwnerSupportTab() {
                             <div className="flex flex-wrap gap-2">
                               {adminUrls.map((url, i) => url.toLowerCase().includes(".pdf") ? (
                                 <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors font-medium">
-                                  <FileText className="w-3.5 h-3.5" />
+                                  className="inline-flex min-h-10 items-center justify-center gap-2 text-center text-xs px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors font-medium">
+                                  <FileText className="w-3.5 h-3.5 shrink-0" />
                                   مرفق {adminUrls.length > 1 ? `(${i + 1})` : ""}
                                   <ExternalLink className="w-3 h-3 opacity-60" />
                                 </a>
