@@ -35,7 +35,9 @@ import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
-import { buildActivitySummaryReportHtml, resolveReportCalendar } from "@/lib/financialReport";
+import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml } from "@/lib/financialReport";
+import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
+import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
@@ -19267,7 +19269,7 @@ function buildMonthlyReportHtml(
     slots.unspecified > 0 ? `<div class="slot-chip">غير محدد: ${toAr(slots.unspecified)} حجز (${toAr(slotPct(slots.unspecified))}٪)</div>` : "",
   ].filter(Boolean).join("") : "";
 
-  return saudiCurrencyHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return finalizeFinancialReportHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
  <title>${fileName}</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page print-container">
@@ -19300,7 +19302,7 @@ ${slotHtml ? `<div class="slot-row" style="margin-top:14px">${slotHtml}</div>` :
 
 ${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
 
-<div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYear} هـ / ${gregYear} م</div>
+<div class="footer">منصة تكيّة — تقرير مالي</div>
 </div>${scriptTag}</body></html>`);
 }
 
@@ -19383,7 +19385,7 @@ function buildYearlyReportHtml(
     ? `@page{size:A4 portrait;margin:0!important;}@media print{html,body{max-height:277mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
     : `@page{size:A4 portrait;margin:0!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;border-top:18px solid transparent!important;background-clip:padding-box!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
-  return saudiCurrencyHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return finalizeFinancialReportHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
  <title>${fileName}</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page print-container">
@@ -19415,7 +19417,7 @@ ${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;g
 </tr></tbody>
 </table></div>
 
-<div class="footer" style="font-size:12px;font-weight:500;color:#666;">تم إصدار هذا التقرير عبر منصة تكية · ${hijriYearY} هـ / ${gregYearY} م</div>
+<div class="footer">منصة تكيّة — تقرير مالي</div>
 </div>${scriptTag}</body></html>`);
 }
 
@@ -19511,9 +19513,14 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
       if (iDoc.readyState === "complete") resolve();
       else iframe.onload = () => resolve();
     });
-    await new Promise<void>(resolve => setTimeout(resolve, 450));
+    await iDoc.fonts.ready;
+    await Promise.all(Array.from(iDoc.images).map(image => image.decode().catch(() => undefined)));
+    await new Promise<void>(resolve => setTimeout(resolve, 150));
 
     const pageEl = iDoc.querySelector<HTMLElement>(".page") ?? iDoc.body;
+    // Keep Arabic shaping in the browser rather than reconstructing letters in PDF text.
+    pageEl.style.fontKerning = "normal";
+    pageEl.style.letterSpacing = "normal";
 
     const canvas = await html2canvas(pageEl, {
       scale: 2,
@@ -19686,6 +19693,37 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
     return { year: y, month: m };
   }, [isHijri, selectedHijriMonthVal]);
 
+  const { data: reportYears, isLoading: periodsLoading, isError: periodsError } = useQuery<GetOwnerFinancialPeriods200>({
+    queryKey: ["owner", "report-years", selectedSubmissionId, repUnit.type, repUnit.type === "service" ? repUnit.id : null, reportType],
+    queryFn: async () => {
+      const activity = repUnit.type === "service" || reportType === "services" ? "services"
+        : repUnit.type === "all" && reportType === "unified" ? "unified" : "properties";
+      const params = new URLSearchParams({ activity });
+      if (activity !== "services" && selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
+      if (repUnit.type === "service") params.set("providerId", String(repUnit.id));
+      const response = await apiFetch(`/owner/report-years?${params}`);
+      if (!response.ok) throw new Error("تعذّر تحميل الفترات المالية");
+      return response.json();
+    },
+    staleTime: 30_000,
+    refetchOnMount: "always",
+  });
+  const gregorianPeriods = useMemo(() => financialPeriodOptions(reportYears?.gregorianMonths ?? [], "gregorian"), [reportYears]);
+  const hijriPeriods = useMemo(() => financialPeriodOptions(reportYears?.hijriMonths ?? [], "hijri"), [reportYears]);
+  const activePeriods = isHijri ? hijriPeriods : gregorianPeriods;
+  const activeSelectedMonth = isHijri ? selectedHijriMonthVal : selectedMonth;
+  const monthlyPeriodReady = activePeriods.months.includes(activeSelectedMonth);
+  const yearOptions = gregorianPeriods.years.map(val => ({ val, label: `${toAr(val)} م` }));
+  const hijriYearOptions = hijriPeriods.years.map(val => ({ val, label: `${toAr(val)} هـ` }));
+  useEffect(() => {
+    const gregorian = reconcileFinancialMonth(gregorianPeriods.months, selectedMonth);
+    const hijri = reconcileFinancialMonth(hijriPeriods.months, selectedHijriMonthVal);
+    if (gregorian && gregorian !== selectedMonth) setSelectedMonth(gregorian);
+    if (hijri && hijri !== selectedHijriMonthVal) setSelectedHijriMonthVal(hijri);
+    if (gregorianPeriods.years.length && !gregorianPeriods.years.includes(selectedYear)) setSelectedYear(gregorianPeriods.years[0]);
+    if (hijriPeriods.years.length && !hijriPeriods.years.includes(selectedHijriYear)) setSelectedHijriYear(hijriPeriods.years[0]);
+  }, [gregorianPeriods, hijriPeriods, selectedMonth, selectedHijriMonthVal, selectedYear, selectedHijriYear]);
+
   const { data: report, isLoading } = useQuery<MonthReport>({
     queryKey: ["owner", "reports", isHijri, isHijri ? selectedHijriMonthVal : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
@@ -19701,7 +19739,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
-    enabled: viewMode === "monthly",
+    enabled: viewMode === "monthly" && monthlyPeriodReady,
   });
 
   const { data: subscription } = useQuery({
@@ -19739,7 +19777,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       if (!r.ok) return null;
       return r.json();
     },
-    enabled: viewMode === "monthly",
+    enabled: viewMode === "monthly" && monthlyPeriodReady,
   });
 
   const { data: yearly, isLoading: yearlyLoading } = useQuery<{
@@ -19755,7 +19793,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
-    enabled: viewMode === "yearly" && !isYearlyHijri,
+    enabled: viewMode === "yearly" && !isYearlyHijri && gregorianPeriods.years.includes(selectedYear),
   });
 
   const { data: yearlyHijri, isLoading: yearlyHijriLoading } = useQuery<{
@@ -19771,7 +19809,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
-    enabled: viewMode === "yearly" && isYearlyHijri,
+    enabled: viewMode === "yearly" && isYearlyHijri && hijriPeriods.years.includes(selectedHijriYear),
   });
 
   const { data: archive = [] } = useQuery<any[]>({
@@ -19795,7 +19833,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       if (!r.ok) throw new Error("تعذّر تحميل تقرير الخدمات");
       return r.json();
     },
-    enabled: isActivitySummary && viewMode === "monthly",
+    enabled: isActivitySummary && viewMode === "monthly" && monthlyPeriodReady,
   });
   const svcRepSummary = rawSvcRepSummary && repUnit.type === "service" ? (() => {
     const byProvider = rawSvcRepSummary.byProvider.filter(provider => provider.id === repUnit.id);
@@ -19821,17 +19859,9 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
     onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "reports-archive"] }),
   });
 
-  const monthOptions = useMemo(() => {
-    const opts = [];
-    const now = new Date();
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
-      opts.push({ val, label });
-    }
-    return opts;
-  }, []);
+  const monthOptions = gregorianPeriods.months.map(val => ({
+    val, label: `${GREGORIAN_MONTHS_AR[Number(val.slice(5)) - 1]} ${toAr(val.slice(0, 4))} م`,
+  }));
 
   // ── Fetch all owner bookings for revenue breakdown in التقارير المالية ───
   const { data: repAllBookings = [] } = useQuery<OwnerBooking[]>({
@@ -19853,37 +19883,6 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       return r.json();
     },
   });
-
-  // ── Months (past) that actually have ACTIVE (non-cancelled) booking/expense data, per property + calendar type ───
-  // ملاحظة: أي حجز ملغى (cancelledAt) أو مصروف بقيمة صفرية لا يُعتبر سجلاً مالياً فعلياً،
-  // ولا يجوز أن يُبقي الشهر متاحاً للاختيار في القائمة المنسدلة.
-  const monthsWithDataSet = useMemo(() => {
-    const gregorian = new Set<string>();
-    const hijri = new Set<string>();
-    const propMatch = (submissionId: number | string | null | undefined) =>
-      selectedSubmissionId === "all" || String(submissionId) === selectedSubmissionId;
-    for (const b of repAllBookings) {
-      if (!b.bookingDate || !propMatch(b.submissionId)) continue;
-      if (b.cancelledAt) continue; // حجز ملغى → لا يُحتسب كبيانات فعلية
-      gregorian.add(getBookingMonthKey(b.bookingDate, "gregorian"));
-      hijri.add(getBookingMonthKey(b.bookingDate, "hijri"));
-    }
-    for (const e of repAllExpenses) {
-      if (!e.dateStr) continue;
-      // مصروفات الرواتب (submission_id = null) تنتمي للمالك وليس لشاليه بعينه → تُحتسب دائماً
-      if (e.submissionId != null && !propMatch(e.submissionId)) continue;
-      if (!(Number(e.amount) > 0)) continue; // مصروف مُصفّر/ملغى → لا يُحتسب كبيانات فعلية
-      gregorian.add(getBookingMonthKey(e.dateStr, "gregorian"));
-      hijri.add(getBookingMonthKey(e.dateStr, "hijri"));
-    }
-    return { gregorian, hijri };
-  }, [repAllBookings, repAllExpenses, selectedSubmissionId]);
-
-  // ── Gregorian month options filtered to only months that have actual data ───
-  const filteredMonthOptions = useMemo(() => {
-    const nowKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-    return monthOptions.filter(o => o.val === nowKey || monthsWithDataSet.gregorian.has(o.val));
-  }, [monthOptions, monthsWithDataSet]);
 
   // ── Compute monthly booking breakdown for the selected month/property ───
   const repBreakdown = useMemo(() => {
@@ -20008,27 +20007,9 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
     return { monthly, totals };
   }, [repAllBookings, repAllExpenses, customFrom, customTo, selectedSubmissionId, groupByDay]);
 
-  const hijriMonthOptions = useMemo(() => {
-    const seen = new Set<string>();
-    const opts: { val: string; year: number; month: number; label: string }[] = [];
-    const now = new Date();
-    const MS = 86_400_000;
-    // Step every 28 days from 18 months back to 3 months forward.
-    // This guarantees every Hijri month is sampled at least once,
-    // including months that start late in a Gregorian month (e.g. ذو الحجة).
-    for (let day = -545; day <= 90; day += 28) {
-      const d = new Date(now.getTime() + day * MS);
-      const { year, month } = getHijriYMClient(d);
-      if (!year) continue;
-      const key = `${year}-${String(month).padStart(2, "0")}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        opts.push({ val: key, year, month, label: `${HIJRI_MONTH_NAMES_AR[month - 1] ?? month} ${toAr(year)} هـ` });
-      }
-    }
-    // Newest first
-    return opts.reverse();
-  }, []);
+  const hijriMonthOptions = hijriPeriods.months.map(val => ({
+    val, label: `${HIJRI_MONTHS_AR[Number(val.slice(5)) - 1]} ${toAr(val.slice(0, 4))} هـ`,
+  }));
 
   const activeMonthLabel = isHijri
     ? (report?.hijriMonthLabel ?? hijriMonthOptions.find(o => o.val === selectedHijriMonthVal)?.label ?? selectedHijriMonthVal)
@@ -20042,42 +20023,6 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
     if (!report || !report.daysInMonth) return report?.occupancyRate ?? 0;
     return Math.min(100, Math.round((report.totalDays / report.daysInMonth) * 100));
   }, [report]);
-
-  const { data: reportYears } = useQuery<{ gregorianYears: number[]; hijriYears: number[] }>({
-    queryKey: ["owner", "report-years", selectedSubmissionId],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (selectedSubmissionId && selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
-      const r = await apiFetch(`/owner/report-years?${params}`);
-      if (!r.ok) throw new Error("failed");
-      return r.json();
-    },
-    staleTime: 60_000,
-  });
-
-  const yearOptions = useMemo(() => {
-    const years = reportYears?.gregorianYears ?? [new Date().getFullYear()];
-    return years.map((y) => ({ val: String(y), label: String(y) }));
-  }, [reportYears]);
-
-  const hijriYearOptions = useMemo(() => {
-    const years = reportYears?.hijriYears ?? [nowHijriYearNum || 1448];
-    return years.map((y) => ({ val: String(y), label: `${y} هـ` }));
-  }, [reportYears]);
-
-  /* ── Auto-select the latest available year whenever reportYears loads or changes ── */
-  useEffect(() => {
-    if (!reportYears) return;
-    const gregStrs = reportYears.gregorianYears.map(String);
-    const hijrStrs = reportYears.hijriYears.map(String);
-    if (gregStrs.length > 0 && !gregStrs.includes(selectedYear)) {
-      setSelectedYear(gregStrs[0]);
-    }
-    if (hijrStrs.length > 0 && !hijrStrs.includes(selectedHijriYear)) {
-      setSelectedHijriYear(hijrStrs[0]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportYears]);
 
   const slotLabels: Record<string, { icon: ReactElement; label: string }> = {
     morning:     { icon: <Sunrise className="w-4 h-4" />,  label: "صباحي" },
@@ -20347,11 +20292,13 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
     }
   }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel]);
 
-  const quickReportReady = isActivitySummary
+  const quickReportReady = !periodsLoading && !periodsError && (viewMode === "monthly" ? monthlyPeriodReady
+    : viewMode === "yearly" ? (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear))
+      : activePeriods.years.length > 0) && (isActivitySummary
     ? !!svcRepSummary && !serviceReportLoading && !serviceReportError && (reportType !== "unified" || repUnit.type === "service" || !!financial)
     : viewMode === "monthly" ? !!report && !!financial && !isLoading
       : viewMode === "yearly" ? !!(isYearlyHijri ? yearlyHijri : yearly) && !(isYearlyHijri ? yearlyHijriLoading : yearlyLoading)
-      : !!(isHijri ? customRangeDataHijri : customRangeData) && !!customFrom && !!customTo;
+      : !!(isHijri ? customRangeDataHijri : customRangeData) && !!customFrom && !!customTo);
 
   async function handleQuickReportAction(action: "print" | "pdf" | "share") {
     if (!quickReportReady || quickAction) return;
@@ -20474,17 +20421,18 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
               </button>
             ))}
           </div>
-          <Select dir="rtl" value={isHijri ? selectedHijriMonthVal : selectedMonth} onValueChange={isHijri ? setSelectedHijriMonthVal : setSelectedMonth}>
-            <SelectTrigger className="h-9 w-full sm:w-56" aria-label="شهر التقرير المالي"><SelectValue /></SelectTrigger>
-            <SelectContent dir="rtl">
-              {(isHijri ? hijriMonthOptions.filter(option => option.val <= `${nowHijriYearNum}-${String(nowHijriMonthNum).padStart(2, "0")}`) : monthOptions).map(option =>
-                <SelectItem key={option.val} value={option.val}>{option.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <FinancialPeriodControls months={activePeriods.months} years={activePeriods.years}
+            month={activeSelectedMonth} year={isHijri ? selectedHijriYear : selectedYear}
+            monthNames={isHijri ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR} hijri={isHijri}
+            disabled={periodsLoading || periodsError} onMonthChange={isHijri ? setSelectedHijriMonthVal : setSelectedMonth}
+            onYearChange={isHijri ? setSelectedHijriYear : setSelectedYear} />
         </div>
       )}
 
       {/* ── Report Type Selector (only in "all" unit mode) ── */}
+      {periodsLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل الفترات المالية…</p>}
+      {periodsError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل السنوات والشهور المالية. أعد تحميل الصفحة للمحاولة مجددًا.</p>}
+      {!periodsLoading && !periodsError && !activePeriods.months.length && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">لا توجد بيانات مالية فعلية ونشطة لهذا النشاط. ستظهر السنوات والشهور عند تسجيل بيانات مالية.</p>}
       {isActivitySummary && serviceReportError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل تقرير الخدمات. أعد تحميل الصفحة للمحاولة مجددًا؛ إجراءات التصدير متوقفة حتى تكتمل البيانات.</p>}
       {repUnit.type === "all" && !selectReportActivity && (
         <div className="flex items-center gap-2 flex-wrap">
@@ -20507,7 +20455,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       )}
 
       {/* ── Services Report ── */}
-      {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && (
+      {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && monthlyPeriodReady && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Activity className="w-5 h-5 text-amber-500 shrink-0" />
@@ -20562,7 +20510,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       )}
 
       {/* ── Unified Report ── */}
-      {repUnit.type === "all" && reportType === "unified" && viewMode === "monthly" && (
+      {repUnit.type === "all" && reportType === "unified" && viewMode === "monthly" && monthlyPeriodReady && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Zap className="w-5 h-5 text-primary shrink-0" />
@@ -20703,40 +20651,14 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
           {/* ٣. السنة (مخفي في وضع مخصص) */}
           {viewMode !== "custom" && (viewMode === "monthly" ? (
             <Select
-              value={isHijri ? selectedHijriMonthVal.split("-")[0] : selectedMonth.split("-")[0]}
+              value={monthlyPeriodReady ? activeSelectedMonth.slice(0, 4) : ""}
+              disabled={periodsLoading || periodsError || !activePeriods.years.length}
               onValueChange={(y) => {
-                if (isHijri) {
-                  const yNum = Number(y);
-                  const curM = Number(selectedHijriMonthVal.split("-")[1] ?? "1");
-                  const isNewCurrentYear = yNum === nowHijriYearNum;
-                  const maxM = isNewCurrentYear ? nowHijriMonthNum : 12;
-                  /* إذا اخترنا السنة الحالية وكان الشهر المختار مستقبلياً → نصحح للشهر الحالي */
-                  let safeM = isNewCurrentYear && curM > maxM ? maxM : curM;
-                  const isCurrentMonthOfYear = isNewCurrentYear && safeM === maxM;
-                  /* إذا كان الشهر الناتج لا يملك بيانات فعلية → نقفز لآخر شهر فيه بيانات ضمن نفس السنة */
-                  if (!isCurrentMonthOfYear && !monthsWithDataSet.hijri.has(`${yNum}-${String(safeM).padStart(2, "0")}`)) {
-                    for (let m = maxM; m >= 1; m--) {
-                      if (monthsWithDataSet.hijri.has(`${yNum}-${String(m).padStart(2, "0")}`)) { safeM = m; break; }
-                    }
-                  }
-                  setSelectedHijriMonthVal(`${y}-${String(safeM).padStart(2, "0")}`);
-                } else {
-                  const yNum = Number(y);
-                  const curM = Number(selectedMonth.split("-")[1] ?? "1");
-                  const isNewCurrentYear = yNum === nowGregorianYearNum;
-                  const maxM = isNewCurrentYear ? nowGregorianMonthNum : 12;
-                  let safeM = isNewCurrentYear && curM > maxM ? maxM : curM;
-                  const isCurrentMonthOfYear = isNewCurrentYear && safeM === maxM;
-                  if (!isCurrentMonthOfYear && !monthsWithDataSet.gregorian.has(`${yNum}-${String(safeM).padStart(2, "0")}`)) {
-                    for (let m = maxM; m >= 1; m--) {
-                      if (monthsWithDataSet.gregorian.has(`${yNum}-${String(m).padStart(2, "0")}`)) { safeM = m; break; }
-                    }
-                  }
-                  setSelectedMonth(`${y}-${String(safeM).padStart(2, "0")}`);
-                }
+                const latest = activePeriods.months.find(key => key.startsWith(`${y}-`));
+                if (latest) (isHijri ? setSelectedHijriMonthVal : setSelectedMonth)(latest);
               }}
             >
-              <SelectTrigger className="h-9 w-[90px] shrink-0 text-sm"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-[120px] shrink-0 text-sm" aria-label="سنة التقرير المالي" data-testid="financial-report-year"><SelectValue placeholder="لا توجد سنوات" /></SelectTrigger>
               <SelectContent>
                 {(isHijri ? hijriYearOptions : yearOptions).map(o => (
                   <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
@@ -20744,7 +20666,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
               </SelectContent>
             </Select>
           ) : (
-            <Select value={isYearlyHijri ? selectedHijriYear : selectedYear} onValueChange={isYearlyHijri ? setSelectedHijriYear : setSelectedYear}>
+            <Select value={(isYearlyHijri ? hijriPeriods : gregorianPeriods).years.includes(isYearlyHijri ? selectedHijriYear : selectedYear) ? (isYearlyHijri ? selectedHijriYear : selectedYear) : ""} onValueChange={isYearlyHijri ? setSelectedHijriYear : setSelectedYear} disabled={periodsLoading || periodsError || !(isYearlyHijri ? hijriPeriods : gregorianPeriods).years.length}>
               <SelectTrigger className="h-9 w-[90px] shrink-0 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {(isYearlyHijri ? hijriYearOptions : yearOptions).map(o => (
@@ -20767,7 +20689,8 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
               : 12;
             return (
               <Select
-                value={String(Number(isHijri ? selectedHijriMonthVal.split("-")[1] : selectedMonth.split("-")[1]))}
+                value={monthlyPeriodReady ? String(Number(activeSelectedMonth.slice(5))) : ""}
+                disabled={periodsLoading || periodsError || !monthlyPeriodReady}
                 onValueChange={(m) => {
                   const mNum = Number(m);
                   if (isCurrentYear && mNum > maxMonth) return;
@@ -20781,19 +20704,19 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
                   }
                 }}
               >
-                <SelectTrigger className="h-9 min-w-[90px] flex-1 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 min-w-[90px] flex-1 text-sm" aria-label="شهر التقرير المالي" data-testid="financial-report-month"><SelectValue placeholder="لا توجد أشهر" /></SelectTrigger>
                 <SelectContent dir="rtl">
                   {Array.from({ length: 12 }, (_, i) => {
-                    const mNum = i + 1;
+                    const mNum = 12 - i;
                     const isFuture = isCurrentYear && mNum > maxMonth;
                     const isCurrentMonthOption = isCurrentYear && mNum === maxMonth;
                     const monthKey = `${selYearNum}-${String(mNum).padStart(2, "0")}`;
-                    const hasData = (isHijri ? monthsWithDataSet.hijri : monthsWithDataSet.gregorian).has(monthKey);
+                    const hasData = activePeriods.months.includes(monthKey);
                     /* أشهر مستقبلية أو فارغة تماماً → تُخفى كلياً من القائمة */
-                    const hide = isFuture || (!isCurrentMonthOption && !hasData);
+                    const hide = isFuture || !hasData;
                     return {
                       val: String(mNum),
-                      label: isHijri ? HIJRI_MONTHS_AR[i] : GREGORIAN_MONTHS_AR[i],
+                      label: isHijri ? HIJRI_MONTHS_AR[mNum - 1] : GREGORIAN_MONTHS_AR[mNum - 1],
                       hide,
                     };
                   }).filter(o => !o.hide).map(o => (
@@ -20816,7 +20739,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       </div>
 
       {/* ── YEARLY VIEW ── */}
-      {viewMode === "yearly" && (() => {
+      {viewMode === "yearly" && (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear)) && (() => {
         const activeYearly = isYearlyHijri ? yearlyHijri : yearly;
         const activeYearlyLoading = isYearlyHijri ? yearlyHijriLoading : yearlyLoading;
         const activeYearLabel = isYearlyHijri ? `${selectedHijriYear} هـ` : selectedYear;
@@ -21208,7 +21131,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       })()}
 
       {/* ── MONTHLY VIEW ── */}
-      {viewMode === "monthly" && (
+      {viewMode === "monthly" && monthlyPeriodReady && (
         <>
           {/* ══ Revenue Breakdown Cards: إجمالي الإيجار | إجمالي الخدمات | صافي الدخل ══ */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>

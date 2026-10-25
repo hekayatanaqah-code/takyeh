@@ -1307,6 +1307,34 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type GetOwnerFinancialPeriodsParams = {
+activity?: GetOwnerFinancialPeriodsActivity;
+/**
+ * @minimum 1
+ */
+submissionId?: number;
+/**
+ * @minimum 1
+ */
+providerId?: number;
+};
+
+export type GetOwnerFinancialPeriodsActivity = typeof GetOwnerFinancialPeriodsActivity[keyof typeof GetOwnerFinancialPeriodsActivity];
+
+
+export const GetOwnerFinancialPeriodsActivity = {
+  properties: 'properties',
+  services: 'services',
+  unified: 'unified',
+} as const;
+
+export type GetOwnerFinancialPeriods200 = {
+  gregorianYears: number[];
+  hijriYears: number[];
+  gregorianMonths: string[];
+  hijriMonths: string[];
+};
+
 export type GetOwnerServiceRevenueSummaryParams = {
 /**
  * @pattern ^\d{4}-(0[1-9]|1[0-2])$

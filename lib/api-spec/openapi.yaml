@@ -21,6 +21,39 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/report-years:
+    get:
+      operationId: getOwnerFinancialPeriods
+      tags: [owner]
+      parameters:
+        - name: activity
+          in: query
+          schema: { type: string, enum: [properties, services, unified], default: properties }
+        - name: submissionId
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: providerId
+          in: query
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Descending nonempty financial periods, excluding cancelled and future records.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [gregorianYears, hijriYears, gregorianMonths, hijriMonths]
+                properties:
+                  gregorianYears: { type: array, items: { type: integer } }
+                  hijriYears: { type: array, items: { type: integer } }
+                  gregorianMonths: { type: array, items: { type: string } }
+                  hijriMonths: { type: array, items: { type: string } }
+        "400":
+          description: Invalid activity or identifier.
+        "401":
+          description: Authentication required.
+        "500":
+          description: Financial periods could not be loaded.
   /owner/service-revenue-summary:
     get:
       operationId: getOwnerServiceRevenueSummary

@@ -8,6 +8,24 @@
 import * as zod from 'zod';
 
 
+export const getOwnerFinancialPeriodsQueryActivityDefault = `properties`;
+
+
+
+export const GetOwnerFinancialPeriodsQueryParams = zod.object({
+  "activity": zod.enum(['properties', 'services', 'unified']).default(getOwnerFinancialPeriodsQueryActivityDefault),
+  "submissionId": zod.coerce.number().int().min(1).optional(),
+  "providerId": zod.coerce.number().int().min(1).optional()
+})
+
+export const GetOwnerFinancialPeriodsResponse = zod.object({
+  "gregorianYears": zod.array(zod.number().int()),
+  "hijriYears": zod.array(zod.number().int()),
+  "gregorianMonths": zod.array(zod.string()),
+  "hijriMonths": zod.array(zod.string())
+})
+
+
 export const getOwnerServiceRevenueSummaryQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
 export const getOwnerServiceRevenueSummaryQueryHijriYearMin = 1300;
 export const getOwnerServiceRevenueSummaryQueryHijriYearMax = 1600;

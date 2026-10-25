@@ -13,3 +13,15 @@ Always specify the calendar when formatting Gregorian Arabic dates; an Arabic Sa
 **Why:** Locale-only formatting can label a Gregorian month/year as Hijri and mislabel secondary dates with a Gregorian era suffix.
 
 **How to apply:** Use explicit gregory or islamic-umalqura in chart labels and report templates. For combined property/service reports, filter both sources by actual boundaries of the chosen calendar month; never present a Gregorian service total under a Hijri month label.
+
+Financial reports use year-first selection, followed by only that year's nonempty financial months, newest first. Do not retain an empty current month or year as an exception in this section.
+
+**Why:** The user explicitly asked to hide empty financial periods, including the previously retained current period, and avoid long mixed-year lists.
+
+**How to apply:** Scope financial periods to the selected property, service or unified activity. Exclude cancelled, zero-value and future records, include owner-wide property expenses, and reconcile an unavailable selection to the latest real period. This report-specific rule does not change other sections' current-month exceptions.
+
+Financial report print/PDF output uses the literal abbreviation «ر.س» in one nonwrapping, directionally isolated block beside its amount, with the footer «منصة تكيّة — تقرير مالي».
+
+**Why:** The user explicitly requested this currency presentation and a unified platform-only footer for financial reports.
+
+**How to apply:** Keep these report-specific choices separate from the platform's general riyal artwork convention. Zero page margins and empty page-margin boxes suppress native browser furniture where supported; never promise to override every browser's user-controlled header/footer setting.

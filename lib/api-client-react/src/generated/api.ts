@@ -64,6 +64,8 @@ import type {
   GetOwnerCrmHistoryParams,
   GetOwnerCrmProfileParams,
   GetOwnerDeposits200Item,
+  GetOwnerFinancialPeriods200,
+  GetOwnerFinancialPeriodsParams,
   GetOwnerPropertyPriceQuoteParams,
   GetOwnerServiceRevenueSummaryParams,
   GetOwnerWallet200,
@@ -193,6 +195,108 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetOwnerFinancialPeriodsUrl = (params?: GetOwnerFinancialPeriodsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/owner/report-years?${stringifiedParams}` : `/api/owner/report-years`
+}
+
+export const getOwnerFinancialPeriods = async (params?: GetOwnerFinancialPeriodsParams, options?: Parameters<typeof customFetch>[1]): Promise<GetOwnerFinancialPeriods200> => {
+
+  return customFetch<GetOwnerFinancialPeriods200>(getGetOwnerFinancialPeriodsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOwnerFinancialPeriodsQueryKey = (params?: GetOwnerFinancialPeriodsParams,) => {
+    return [
+    `/api/owner/report-years`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetOwnerFinancialPeriodsQueryOptions = <TData = Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError = ErrorType<void>>(params?: GetOwnerFinancialPeriodsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOwnerFinancialPeriodsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOwnerFinancialPeriods>>> = ({ signal }) => getOwnerFinancialPeriods(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOwnerFinancialPeriodsQueryResult = NonNullable<Awaited<ReturnType<typeof getOwnerFinancialPeriods>>>
+export type GetOwnerFinancialPeriodsQueryError = ErrorType<void>
+
+
+export function useGetOwnerFinancialPeriods<TData = Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError = ErrorType<void>>(
+ params: undefined |  GetOwnerFinancialPeriodsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerFinancialPeriods>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerFinancialPeriods>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerFinancialPeriods<TData = Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError = ErrorType<void>>(
+ params?: GetOwnerFinancialPeriodsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerFinancialPeriods>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerFinancialPeriods>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerFinancialPeriods<TData = Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError = ErrorType<void>>(
+ params?: GetOwnerFinancialPeriodsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetOwnerFinancialPeriods<TData = Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError = ErrorType<void>>(
+ params?: GetOwnerFinancialPeriodsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerFinancialPeriods>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOwnerFinancialPeriodsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetOwnerServiceRevenueSummaryUrl = (params?: GetOwnerServiceRevenueSummaryParams,) => {
   const normalizedParams = new URLSearchParams();

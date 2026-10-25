@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { buildActivitySummaryReportHtml, resolveReportCalendar } from "./financialReport";
+import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml } from "./financialReport";
 
 it("prioritizes the saved report preference over a stale calendar cache", () => {
   assert.equal(resolveReportCalendar("hijri", "gregorian"), "hijri");
@@ -22,4 +22,30 @@ it("uses the requested period and activity in both print and PDF summaries, esca
   }
   assert(!pdf.includes("window.print"));
   assert(print.includes("window.print"));
+});
+
+it("shows only real nonfuture months and years in descending order without inventing the current month", () => {
+  const options = financialPeriodOptions(["2025-04", "2026-01", "2025-12", "2025-04", "2030-01", "invalid"], "gregorian", new Date("2026-10-25T10:00:00Z"));
+  assert.deepEqual(options, { months: ["2026-01", "2025-12", "2025-04"], years: ["2026", "2025"] });
+  assert.deepEqual(financialPeriodOptions([], "hijri"), { months: [], years: [] });
+  assert.equal(reconcileFinancialMonth(options.months, "2025-10"), "2025-12");
+  assert.equal(reconcileFinancialMonth(options.months, "2024-12"), "2026-01");
+  assert.equal(reconcileFinancialMonth(options.months, "2025-04"), "2025-04");
+  assert.equal(reconcileFinancialMonth([], "2025-04"), undefined);
+});
+
+it("preserves Hijri years and excludes future Hijri months using Saudi local time", () => {
+  const options = financialPeriodOptions(["1447-09", "1446-12", "1499-01", "1447-08"], "hijri", new Date("2026-10-25T10:00:00Z"));
+  assert.deepEqual(options.months, ["1447-09", "1447-08", "1446-12"]);
+  assert.deepEqual(options.years, ["1447", "1446"]);
+});
+
+it("isolates entire currency blocks, retains negative accounting parentheses and suppresses browser margin boxes", () => {
+  const html = finalizeFinancialReportHtml('<html><head></head><body><p>١٬٢٠٠ ر.س</p><p>(٥٠ ر.س)</p><script>window.onload=function(){window.print();}</script></body></html>');
+  assert(html.includes('<bdi dir="ltr">١٬٢٠٠</bdi><bdi class="financial-currency" dir="rtl">ر.س</bdi>'));
+  assert(html.includes('<bdi dir="ltr">(٥٠)</bdi>'));
+  assert(html.includes("margin:0!important"));
+  assert(html.includes("@bottom-center{content:none}"));
+  assert(html.includes("await document.fonts.ready"));
+  assert(html.includes("white-space:nowrap"));
 });

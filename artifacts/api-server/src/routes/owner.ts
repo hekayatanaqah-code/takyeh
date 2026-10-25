@@ -4760,60 +4760,63 @@ router.get("/report-years", async (req, res) => {
   try {
     const allOwnerIds = await getOwnerIds(req);
     const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
-
-    // Include ALL bookings (active + cancelled) — we want any year with activity
+    const providerId = req.query.providerId ? Number(req.query.providerId) : undefined;
+    const activity = req.query.activity ?? "properties";
+    if (typeof activity !== "string" || !["properties", "services", "unified"].includes(activity)
+      || (req.query.submissionId !== undefined && (!Number.isSafeInteger(submissionId) || submissionId! <= 0))
+      || (req.query.providerId !== undefined && (!Number.isSafeInteger(providerId) || providerId! <= 0))) {
+      return res.status(400).json({ error: "اختر نشاطًا ومعرّفات صحيحة" });
+    }
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const allDates: string[] = [];
+    if (activity !== "services") {
     const bConds: any[] = [inArray(ownerBookingsTable.ownerId, allOwnerIds)];
     if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
     const bookingRows = await db
-      .select({ d: ownerBookingsTable.bookingDate })
+      .select({ d: ownerBookingsTable.bookingDate, cancelledAt: ownerBookingsTable.cancelledAt,
+        totalPrice: ownerBookingsTable.totalPrice, revenueAmount: ownerBookingsTable.revenueAmount,
+        depositPaid: ownerBookingsTable.depositPaid, insuranceFee: ownerBookingsTable.insuranceFee })
       .from(ownerBookingsTable)
       .where(and(...bConds));
 
     const eConds: any[] = [inArray(ownerExpensesTable.ownerId, allOwnerIds)];
-    if (submissionId) eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+    if (submissionId) eConds.push(or(eq(ownerExpensesTable.submissionId, submissionId), isNull(ownerExpensesTable.submissionId)));
     const expenseRows = await db
-      .select({ d: ownerExpensesTable.dateStr })
+      .select({ d: ownerExpensesTable.dateStr, amount: ownerExpensesTable.amount })
       .from(ownerExpensesTable)
       .where(and(...eConds));
-
-    const allDates = [
-      ...bookingRows.map(r => r.d),
-      ...expenseRows.map(r => r.d),
-    ].filter(Boolean) as string[];
-
-    console.log(`[report-years] ownerIds=${JSON.stringify(allOwnerIds)} bookings=${bookingRows.length} expenses=${expenseRows.length} totalDates=${allDates.length}`);
-
-    const gregYears = new Set<number>();
-    const hijriYears = new Set<number>();
-
-    for (const d of allDates) {
-      const gYear = parseInt(d.slice(0, 4), 10);
-      if (!isNaN(gYear)) gregYears.add(gYear);
-      const hym = getHijriYM(d);
-      if (hym.year) hijriYears.add(hym.year);
+    allDates.push(...bookingRows.filter(row => !row.cancelledAt && [row.totalPrice, row.revenueAmount, row.depositPaid, row.insuranceFee].some(value => Number(value) > 0)).map(row => row.d),
+      ...expenseRows.filter(row => Number(row.amount) > 0).map(row => row.d));
     }
-
-    // Always include the current year (Gregorian + Hijri) even if no data yet
-    const nowGreg = new Date().getFullYear();
-    gregYears.add(nowGreg);
-    const nowHijri = getHijriYM(new Date().toISOString().slice(0, 10));
-    if (nowHijri.year) hijriYears.add(nowHijri.year);
-
-    const result = {
-      gregorianYears: [...gregYears].sort((a, b) => b - a),
-      hijriYears: [...hijriYears].sort((a, b) => b - a),
-    };
-    console.log(`[report-years] result=`, JSON.stringify(result));
-    return res.json(result);
+    if (activity !== "properties") {
+      const providers = await db.select({ id: serviceProvidersTable.id }).from(serviceProvidersTable)
+        .where(and(inArray(serviceProvidersTable.ownerId, allOwnerIds), providerId ? eq(serviceProvidersTable.id, providerId) : undefined));
+      if (providers.length) {
+        const appointments = await db.select({ d: serviceAppointmentsTable.dateStr, amount: serviceAppointmentsTable.amount,
+          deposit: serviceAppointmentsTable.deposit, insurance: serviceAppointmentsTable.insuranceAmount })
+          .from(serviceAppointmentsTable).where(and(inArray(serviceAppointmentsTable.providerId, providers.map(provider => provider.id)),
+            ne(serviceAppointmentsTable.status, "cancelled")));
+        allDates.push(...appointments.filter(row => [row.amount, row.deposit, row.insurance].some(value => Number(value) > 0)).map(row => row.d));
+      }
+    }
+    const gregMonths = new Set<string>();
+    const hijriMonths = new Set<string>();
+    for (const d of allDates) {
+      if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d) || d > today) continue;
+      gregMonths.add(d.slice(0, 7));
+      const hym = getHijriYM(d);
+      if (hym.year) hijriMonths.add(`${hym.year}-${String(hym.month).padStart(2, "0")}`);
+    }
+    const gregorianMonths = [...gregMonths].sort().reverse();
+    const hijriMonthKeys = [...hijriMonths].sort().reverse();
+    return res.json({
+      gregorianYears: [...new Set(gregorianMonths.map(key => Number(key.slice(0, 4))))],
+      hijriYears: [...new Set(hijriMonthKeys.map(key => Number(key.slice(0, 4))))],
+      gregorianMonths, hijriMonths: hijriMonthKeys,
+    });
   } catch (err) {
     console.error("[report-years] error:", err);
-    // Fallback: return current year only so the UI doesn't break
-    const nowGreg = new Date().getFullYear();
-    const nowHijri = getHijriYM(new Date().toISOString().slice(0, 10));
-    return res.json({
-      gregorianYears: [nowGreg],
-      hijriYears: nowHijri.year ? [nowHijri.year] : [1448],
-    });
+    return res.status(500).json({ error: "تعذّر تحميل الفترات المالية" });
   }
 });
 

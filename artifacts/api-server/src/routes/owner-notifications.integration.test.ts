@@ -95,6 +95,9 @@ it("uses exact Umm al-Qura month boundaries for service reports without includin
     appointment(0, first, "100"), appointment(0, last, "200"),
     appointment(0, adjacentDate(first, -1), "400"), appointment(0, adjacentDate(last, 1), "800"),
     appointment(0, first, "10000", "cancelled"), appointment(1, first, "50000"),
+    appointment(0, "2023-01-10", "1000", "cancelled"),
+    appointment(0, "2020-01-10", "0"), appointment(0, "2045-01-10", "1000"),
+    appointment(1, "2019-01-10", "1000"),
   ]);
   const url = base.replace(/\/notifications$/, "/service-revenue-summary");
   const headers = { Cookie: `sid=${session}` };
@@ -108,6 +111,19 @@ it("uses exact Umm al-Qura month boundaries for service reports without includin
   const gregorian = await fetch(`${url}?month=${first.slice(0, 7)}`, { headers });
   assert.equal(gregorian.status, 200);
   assert.equal(GetOwnerServiceRevenueSummaryResponse.parse(await gregorian.json()).totalRevenue, 500);
+  const periodsUrl = base.replace(/\/notifications$/, "/report-years");
+  const periodsResponse = await fetch(`${periodsUrl}?activity=services&providerId=${providers[0].id}`, { headers });
+  assert.equal(periodsResponse.status, 200);
+  const periods = await periodsResponse.json() as { gregorianMonths: string[]; gregorianYears: number[]; hijriMonths: string[]; hijriYears: number[] };
+  assert.deepEqual(periods.gregorianMonths, ["2026-03", "2026-02"]);
+  assert.deepEqual(periods.gregorianYears, [2026]);
+  assert.deepEqual(periods.hijriMonths, ["1447-10", "1447-09", "1447-08"]);
+  assert.deepEqual(periods.hijriYears, [1447]);
+  const foreign = await fetch(`${periodsUrl}?activity=services&providerId=${providers[1].id}`, { headers });
+  assert.deepEqual((await foreign.json() as typeof periods).gregorianMonths, []);
+  assert.equal((await fetch(`${periodsUrl}?activity=invalid`, { headers })).status, 400);
+  assert.equal((await fetch(`${periodsUrl}?providerId=bad`, { headers })).status, 400);
+  assert.equal((await fetch(periodsUrl)).status, 401);
   for (const query of ["hijriYear=1447", "hijriYear=1447&hijriMonth=13", "hijriYear=1447&hijriMonth=9&month=2026-02", "month=2026-13"])
     assert.equal((await fetch(`${url}?${query}`, { headers })).status, 400, query);
   assert.equal((await fetch(url)).status, 401);
