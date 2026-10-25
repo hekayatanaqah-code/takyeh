@@ -1,4 +1,5 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FinancialMonthOption } from "./FinancialMonthOption";
 
 type Props = {
   months: string[];
@@ -38,9 +39,11 @@ export function FinancialPeriodControls(props: Props) {
       {!props.annual && <label className="flex items-center gap-2 text-xs font-semibold">
         الشهر
         <Select dir="rtl" value={months.includes(props.month) ? props.month : ""} onValueChange={props.onMonthChange} disabled={props.disabled || !months.length}>
-          <SelectTrigger className="h-9 w-40 text-sm" aria-label="شهر التقرير المالي" data-testid="financial-report-month"><SelectValue placeholder="لا توجد أشهر" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-40 text-sm" aria-label="شهر التقرير المالي" data-testid="financial-report-month"><SelectValue placeholder="لا توجد أشهر">{months.includes(props.month) ? props.monthNames[Number(props.month.slice(5)) - 1] : undefined}</SelectValue></SelectTrigger>
           <SelectContent dir="rtl">
-            {months.map(value => <SelectItem key={value} value={value}>{props.monthNames[Number(value.slice(5)) - 1]}</SelectItem>)}
+            {months.map(value => <SelectItem key={value} value={value} textValue={props.monthNames[Number(value.slice(5)) - 1]}>
+              <FinancialMonthOption name={props.monthNames[Number(value.slice(5)) - 1]} monthKey={value} hijri={props.hijri} />
+            </SelectItem>)}
           </SelectContent>
         </Select>
       </label>}

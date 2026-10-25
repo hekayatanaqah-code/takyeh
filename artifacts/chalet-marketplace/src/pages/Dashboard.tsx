@@ -38,6 +38,7 @@ import { Download } from "lucide-react";
 import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "@/lib/financialReport";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
+import { FinancialMonthOption } from "@/components/FinancialMonthOption";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
 import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport } from "@/lib/financialReportActivity";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
@@ -20676,7 +20677,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                   }
                 }}
               >
-                <SelectTrigger className="h-9 min-w-[90px] flex-1 text-sm" aria-label="شهر التقرير المالي" data-testid="financial-report-month"><SelectValue placeholder="لا توجد أشهر" /></SelectTrigger>
+                <SelectTrigger className="h-9 min-w-[90px] flex-1 text-sm" aria-label="شهر التقرير المالي" data-testid="financial-report-month"><SelectValue placeholder="لا توجد أشهر">{monthlyPeriodReady ? (isHijri ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR)[Number(activeSelectedMonth.slice(5)) - 1] : undefined}</SelectValue></SelectTrigger>
                 <SelectContent dir="rtl">
                   {Array.from({ length: 12 }, (_, i) => {
                     const mNum = 12 - i;
@@ -20688,12 +20689,13 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                     const hide = isFuture || !hasData;
                     return {
                       val: String(mNum),
+                      monthKey,
                       label: isHijri ? HIJRI_MONTHS_AR[mNum - 1] : GREGORIAN_MONTHS_AR[mNum - 1],
                       hide,
                     };
                   }).filter(o => !o.hide).map(o => (
-                    <SelectItem key={o.val} value={o.val}>
-                      {o.label}
+                    <SelectItem key={o.val} value={o.val} textValue={o.label}>
+                      <FinancialMonthOption name={o.label} monthKey={o.monthKey} hijri={isHijri} />
                     </SelectItem>
                   ))}
                 </SelectContent>

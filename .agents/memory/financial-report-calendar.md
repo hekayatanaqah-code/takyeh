@@ -31,3 +31,9 @@ The financial reports section has its own activity filter, initially «جميع 
 **Why:** The user explicitly requested activity-specific financial reports and matching titles inside the reports section.
 
 **How to apply:** Do not change the global dashboard activity to implement this filter. Keep published property IDs distinct from submission IDs, filter service totals by provider, and reset report-local export/share state when changing activity.
+
+Financial month dropdown options show a smaller, muted «يوافق:» subtitle listing the overlapping months of the other calendar, including their years and era labels.
+
+**Why:** The user requested bidirectional calendar correspondence under each month name, whether Hijri or Gregorian is primary.
+
+**How to apply:** Apply this to property, service and all-activity report selectors. Calculate correspondence from the entire selected month and year, not today's date or a midpoint; a Gregorian month can touch three Hijri months. Keep the collapsed selector compact with only its primary month name.
