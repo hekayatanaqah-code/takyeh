@@ -40,6 +40,7 @@ import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
 import { SubmissionDate } from "@/components/owner/SubmissionDate";
+import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
 import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport } from "@/lib/financialReportActivity";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
@@ -9362,87 +9363,15 @@ function ServiceSubmissionsTab({
           )}
           {submissions.map((sub, idx) => {
             const status = statusConfig[sub.status as keyof typeof statusConfig] ?? statusConfig.pending;
-            const mainPhoto = sub.galleryPhotos?.[0] ?? sub.logoUrl;
-            const canDelete = sub.status !== "approved";
             return (
               <motion.div
                 key={sub.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.08 }}
-                className="bg-card border border-border rounded-2xl p-5 md:p-6 shadow-sm hover:shadow-md transition-shadow"
               >
-                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                  {mainPhoto ? (
-                    <img src={mainPhoto} alt={sub.businessName} className="w-full sm:w-28 h-20 object-cover rounded-xl shrink-0" />
-                  ) : (
-                    <div className="w-full sm:w-28 h-20 bg-muted rounded-xl shrink-0 flex items-center justify-center text-3xl">
-                      {SERVICE_CATEGORY_LABELS[sub.category]?.split(" ")[0] ?? "✨"}
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <h3 className="text-lg font-bold text-foreground">{sub.businessName}</h3>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full ${status.className}`}>
-                          {status.icon}{status.label}
-                        </span>
-                        {(sub.status === "pending" || sub.status === "needs_revision") && (
-                          <Link href={`/add-service-provider?editSubmission=${sub.id}`}>
-                            <Button type="button" size="sm" variant="outline" className="text-xs gap-1.5">
-                              <Edit2 className="w-3.5 h-3.5" />
-                              تعديل البيانات
-                            </Button>
-                          </Link>
-                        )}
-                        {canDelete && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSubmission(sub.id)}
-                            disabled={deletingId === sub.id}
-                            title="حذف الطلب"
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-destructive bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors disabled:opacity-50"
-                          >
-                            {deletingId === sub.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2 text-sm text-muted-foreground">
-                      <span>{SERVICE_CATEGORY_LABELS[sub.category] ?? sub.category}</span>
-                      {sub.city && (
-                        <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{sub.city}</span>
-                      )}
-                      <SubmissionDate value={sub.createdAt} />
-                    </div>
-                    {sub.descriptionAr && (
-                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{sub.descriptionAr}</p>
-                    )}
-                    {(sub.status === "pending" || sub.status === "needs_revision") && (
-                      <p className="text-xs text-amber-700 dark:text-amber-400 mt-3 flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 shrink-0" />
-                        يتم تفعيل التقويم والحجوزات تلقائياً بعد اعتماد الخدمة من الإدارة.
-                      </p>
-                    )}
-                    {sub.adminNote && (sub.status === "rejected" || sub.status === "needs_revision") && (
-                      <div className={`mt-3 flex items-start gap-2.5 rounded-xl px-3.5 py-3 border ${
-                        sub.status === "needs_revision"
-                          ? "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800/40"
-                          : "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/40"
-                      }`}>
-                        <AlertTriangle className={`w-4 h-4 shrink-0 mt-0.5 ${sub.status === "needs_revision" ? "text-orange-500" : "text-red-500"}`} />
-                        <div>
-                          <p className={`text-xs font-bold mb-0.5 ${sub.status === "needs_revision" ? "text-orange-700 dark:text-orange-400" : "text-red-700 dark:text-red-400"}`}>
-                            {sub.status === "needs_revision" ? "ملاحظات الإدارة — يرجى التعديل والإعادة" : "سبب الرفض"}
-                          </p>
-                          <p className={`text-xs leading-relaxed ${sub.status === "needs_revision" ? "text-orange-800 dark:text-orange-300" : "text-red-800 dark:text-red-300"}`}>
-                            {sub.adminNote}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <ServiceSubmissionCard submission={sub} categoryLabel={SERVICE_CATEGORY_LABELS[sub.category] ?? sub.category}
+                  status={status} deleting={deletingId === sub.id} onDelete={() => handleDeleteSubmission(sub.id)} />
               </motion.div>
             );
           })}

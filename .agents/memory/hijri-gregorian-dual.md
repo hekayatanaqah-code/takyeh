@@ -15,8 +15,8 @@ Multi-date closure calendars must be passive when opened or navigated: only an e
 
 **How to apply:** Keep multi-date closure behavior opt-in so existing single-date consumers retain their behavior. Store the same Gregorian day regardless of the displayed calendar.
 
-Owner «متابعة الطلبات» cards use the same two-line submission date in property and service requests: Umm al-Qura Hijri plus explicit Gregorian, Eastern digits and a single era suffix for each.
+Owner «متابعة الطلبات» cards show Umm al-Qura Hijri plus explicit Gregorian, Eastern digits and a single era suffix for each. Property dates remain stacked; service dates share one clear row, wrapping only when needed on narrow screens.
 
-**Why:** The user asked to unify dates across service and property request cards and accepted displaying both calendars together as an alternative to a preferred-calendar-only view.
+**Why:** The user asked for both calendars in request cards, then specifically requested one full date row in the redesigned service request card.
 
 **How to apply:** Convert full timestamps to the Saudi-local day; do not slice the UTC date or rely on the locale's default calendar. Hide absent or invalid timestamps rather than inventing a date.
