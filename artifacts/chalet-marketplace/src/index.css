@@ -28,6 +28,36 @@ input, textarea, select, [contenteditable] {
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
+/* Financial reports: keep digit and separator glyphs on a consistent baseline. */
+.financial-reports {
+  font-family: Tahoma, Arial, "Noto Sans Arabic", sans-serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "sups" 0, "subs" 0, "onum" 0;
+}
+.financial-bookings-scroll {
+  max-height: 420px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.financial-report-number { white-space: nowrap; }
+.financial-reports .financial-thousands { position: relative; top: .18em; }
+.financial-bookings-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: hsl(var(--card));
+  box-shadow: 0 1px 0 #e5e7eb;
+}
+.financial-bookings-scroll:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+@media print {
+  .financial-bookings-scroll { max-height: none; overflow: visible; }
+  .financial-bookings-scroll thead th { position: static; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

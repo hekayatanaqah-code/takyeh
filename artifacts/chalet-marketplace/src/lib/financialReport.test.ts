@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml } from "./financialReport";
+import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "./financialReport";
 
 it("prioritizes the saved report preference over a stale calendar cache", () => {
   assert.equal(resolveReportCalendar("hijri", "gregorian"), "hijri");
@@ -18,7 +18,7 @@ it("uses the requested period and activity in both print and PDF summaries, esca
     assert(html.includes(base.period));
     assert(html.includes("إيرادات الخدمات"));
     assert(html.includes("&lt;script&gt;نشاط&lt;/script&gt;"));
-    assert(html.includes((1500).toLocaleString("ar-SA", { maximumFractionDigits: 2 })));
+    assert(html.replace(/<[^>]*>/g, "").includes((1500).toLocaleString("ar-SA", { maximumFractionDigits: 2 })));
   }
   assert(!pdf.includes("window.print"));
   assert(print.includes("window.print"));
@@ -40,12 +40,21 @@ it("preserves Hijri years and excludes future Hijri months using Saudi local tim
   assert.deepEqual(options.years, ["1447", "1446"]);
 });
 
-it("isolates entire currency blocks, retains negative accounting parentheses and suppresses browser margin boxes", () => {
+it("isolates entire currency blocks, converts legacy parentheses to a leading minus and suppresses browser margin boxes", () => {
   const html = finalizeFinancialReportHtml('<html><head></head><body><p>١٬٢٠٠ ر.س</p><p>(٥٠ ر.س)</p><script>window.onload=function(){window.print();}</script></body></html>');
-  assert(html.includes('<bdi dir="ltr">١٬٢٠٠</bdi><bdi class="financial-currency" dir="rtl">ر.س</bdi>'));
-  assert(html.includes('<bdi dir="ltr">(٥٠)</bdi>'));
+  assert(html.includes('<bdi dir="ltr">١<span class="financial-thousands">٬</span>٢٠٠</bdi><bdi class="financial-currency" dir="rtl">ر.س</bdi>'));
+  assert(html.includes('<bdi dir="ltr">-٥٠</bdi>'));
   assert(html.includes("margin:0!important"));
   assert(html.includes("@bottom-center{content:none}"));
   assert(html.includes("await document.fonts.ready"));
   assert(html.includes("white-space:nowrap"));
+});
+
+it("keeps the minus before Eastern digits in RTL and in print without parentheses", () => {
+  assert.equal(formatFinancialAmount(-11799), "\u2066-١١٬٧٩٩\u2069 ر.س");
+  assert.equal(formatFinancialAmount(0), "\u2066٠\u2069 ر.س");
+  const html = finalizeFinancialReportHtml(`<html><head></head><body>${formatFinancialAmount(-11799)}</body></html>`);
+  assert(html.includes('<bdi dir="ltr">-١١<span class="financial-thousands">٬</span>٧٩٩</bdi>'));
+  assert(!html.includes("(-"));
+  assert(html.includes('"sups" 0'));
 });

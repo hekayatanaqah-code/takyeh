@@ -6,7 +6,7 @@
 - [Print CSS header protection](print-css-header-protection.md) — use named class on header div, not structural selectors; add print-color-adjust: exact to preserve colors in PDF.
 - [WhatsApp phone display pattern](wa-phone-display.md) — display as Arabic-Indic (toArabicDigits on value), load as local 0xxx (strip 966 prefix), save via normalizeWaPhone which handles both digit types.
 - [Arabic percent sign ordering](arabic-percent-sign-ordering.md) — ٪ must come AFTER the number (`{n}٪`, not `٪{n}`), or parens/bidi mirroring visually break in RTL text.
-- [Negative currency accounting format](negative-currency-accounting-format.md) — `Intl` accounting sign is unreliable for `ar-SA`; build `(amount)` + red text manually, applied everywhere the value renders.
+- [Negative currency display](negative-currency-accounting-format.md) — financial reports explicitly use a leading minus; older non-report accounting conventions remain separate.
 - [Data-driven month/year select disabling](data-driven-month-disable.md) — disable past periods with zero data (not just future ones), except the current period; auto-jump selection off disabled options.
 - [Owner-level payroll expenses](salary-null-submissionid.md) — shared salaries stay visible across unit filters; confirmation creates one linked expense at the actual payment date.
 - [Safe Drizzle schema sync](safe-drizzle-schema-sync.md) — never force a push that proposes unrelated legacy-table/column drops; apply only reviewed additive dev changes and reconcile drift separately.

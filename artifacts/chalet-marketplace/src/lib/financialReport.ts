@@ -1,5 +1,11 @@
 export type FinancialReportCalendar = "hijri" | "gregorian";
 
+/** Isolate the sign and Eastern digits together so RTL cannot move the minus. */
+export function formatFinancialAmount(value: number) {
+  const digits = Math.abs(Math.round(value)).toLocaleString("ar-SA", { numberingSystem: "arab" });
+  return `\u2066${value < 0 ? "-" : ""}${digits}\u2069 ر.س`;
+}
+
 export function financialPeriodOptions(keys: string[], calendar: FinancialReportCalendar, today = new Date()) {
   const parts = new Intl.DateTimeFormat("en", {
     calendar: calendar === "hijri" ? "islamic-umalqura" : "gregory",
@@ -33,7 +39,8 @@ tr.total-row td,tr.financial-total td{background:#f3ebe3!important;font-weight:8
 tr.financial-net td{background:#efe4d8!important;font-weight:800!important;font-size:13.5px!important;border-top:2px solid #6f4a33!important;border-bottom:3px double #6f4a33!important;}
 .financial-summary-meta{display:flex;justify-content:space-between;font-size:11px;color:#7d6e63;margin:-8px 0 14px;}
 .financial-money{display:inline-flex;align-items:baseline;gap:.25em;white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;direction:rtl;unicode-bidi:isolate;letter-spacing:normal!important;font-variant-ligatures:normal;font-variant-numeric:tabular-nums;}
-.financial-money bdi{white-space:nowrap!important;word-break:keep-all!important;letter-spacing:normal!important;}
+.financial-money bdi{white-space:nowrap!important;word-break:keep-all!important;letter-spacing:normal!important;font-family:Tahoma,Arial,sans-serif!important;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"sups" 0,"subs" 0,"onum" 0;vertical-align:baseline;}
+.financial-thousands{position:relative;top:.18em;}
 .financial-money .financial-currency{direction:rtl;font-size:.85em;}
 .financial-money.financial-negative,.financial-money.financial-negative bdi{color:#b42318!important;}
 .footer{margin-top:auto;padding-top:12px;text-align:center;direction:rtl;flex-shrink:0;border-top:1px solid #e6d9cc;color:#8a7b70!important;font-size:11px!important;}
@@ -48,11 +55,11 @@ tr.financial-net td{background:#efe4d8!important;font-weight:800!important;font-
 /** Keep the Arabic currency abbreviation and the entire amount in one shaped, isolated run. */
 export function finalizeFinancialReportHtml(html: string) {
   return html.split(/(<[^>]*>)/g).map((part, index) => index % 2 ? part : part.replace(
-    /([(\-−\u061C\u200F]*[0-9٠-٩][0-9٠-٩٬٫.,]*-?)\s+ر\.س\.?(\)?)/g,
+    /([(\-−\u061C\u200F\u2066]*[0-9٠-٩][0-9٠-٩٬٫.,]*-?)\u2069?\s+ر\.س\.?(\)?)/g,
     (_, raw: string, closing: string) => {
-      const digits = raw.replace(/[(\-−\u061C\u200F]/g, "");
+      const digits = raw.replace(/[(\-−\u061C\u200F\u2066]/g, "");
       const negative = raw.includes("(") || /[-−]/.test(raw);
-      const shown = negative ? `(${digits})` : digits;
+      const shown = `${negative ? "-" : ""}${digits}`.replace(/٬/g, '<span class="financial-thousands">٬</span>');
       return `<span class="financial-money${negative ? " financial-negative" : ""}"><bdi dir="ltr">${shown}</bdi><bdi class="financial-currency" dir="rtl">ر.س</bdi></span>${negative || !closing ? "" : closing}`;
     },
   )).join("").replace("</head>", `<style>${FINANCIAL_PRINT_CSS}</style></head>`)
@@ -80,7 +87,7 @@ export function buildActivitySummaryReportHtml(options: {
     <table class="financial-summary-table"><thead><tr><th>البيان</th><th class="financial-amount-col">المبلغ</th></tr></thead><tbody>${options.rows.map(row => {
       const emphasis = row.emphasis ?? (/^(صافي|الصافي)/.test(row.label) ? "net" : /^(إجمالي|الإجمالي)/.test(row.label) ? "total" : "");
       const amount = Math.abs(row.amount).toLocaleString("ar-SA", { maximumFractionDigits: 2 });
-      return `<tr${emphasis ? ` class="financial-${emphasis}"` : ""}><td>${escape(row.label)}</td><td class="financial-amount-col">${row.amount < 0 ? `(${escape(amount)} ر.س)` : `${escape(amount)} ر.س`}</td></tr>`;
+      return `<tr${emphasis ? ` class="financial-${emphasis}"` : ""}><td>${escape(row.label)}</td><td class="financial-amount-col">${row.amount < 0 ? "-" : ""}${escape(amount)} ر.س</td></tr>`;
     }).join("")}</tbody></table>
     <footer class="footer">منصة تكيّة — تقرير مالي</footer></main>
     ${options.forPrint ? '<script>window.addEventListener("load",async()=>{await document.fonts.ready;setTimeout(()=>{window.focus();window.print()},250)})</script>' : ""}</body></html>`);

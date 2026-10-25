@@ -35,7 +35,7 @@ import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
-import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml } from "@/lib/financialReport";
+import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "@/lib/financialReport";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
@@ -15532,10 +15532,16 @@ function formatAmount(n: number) {
   return `${Math.round(n).toLocaleString("ar-SA")} ر.س`;
 }
 
-/* Accounting-style formatting: negative values shown as (١٬٢٣٤ ر.س.) instead of a barely-visible "-" sign. */
+/* Financial reports use an explicit leading minus, isolated from RTL labels. */
 function formatAmountSigned(n: number) {
-  const formatted = formatAmount(Math.abs(n));
-  return n < 0 ? `(${formatted})` : formatted;
+  return formatFinancialAmount(n);
+}
+
+function FinancialReportNumber({ value, currency = false, rounded = true }: { value: number; currency?: boolean; rounded?: boolean }) {
+  const digits = Math.abs(rounded ? Math.round(value) : value).toLocaleString("ar-SA", { numberingSystem: "arab" }).split("٬");
+  return <span className="financial-report-number"><bdi dir="ltr">{value < 0 ? "-" : ""}{digits.map((part, index) =>
+    <span key={index}>{index > 0 && <span className="financial-thousands">٬</span>}{part}</span>
+  )}</bdi>{currency && <> ر.س</>}</span>;
 }
 
 function formatWhatsAppAmount(n: number) {
@@ -20386,8 +20392,17 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     pending:  { label: "قيد التفعيل", className: "bg-amber-100 text-amber-700" },
   };
 
+  const downloadReportButton = (
+    <Button type="button" size="sm" variant="outline" className="gap-2"
+      disabled={!quickReportReady || !!quickAction}
+      onClick={() => void handleQuickReportAction("pdf")} data-testid="financial-report-download">
+      {quickAction === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+      تحميل كـ PDF
+    </Button>
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="financial-reports space-y-6">
 
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
@@ -20398,20 +20413,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           onChange={selectReportActivity} loading={activitiesLoading || !!quickAction} error={activitiesError} />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3" role="group" aria-label="إجراءات التقرير المالي">
-        <SectionGuideButton sectionKey="reports" />
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" size="sm" variant="outline" className="gap-2" disabled={!quickReportReady || !!quickAction} onClick={() => void handleQuickReportAction("print")} data-testid="financial-report-print">
-            {quickAction === "print" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}طباعة التقرير
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="gap-2" disabled={!quickReportReady || !!quickAction} onClick={() => void handleQuickReportAction("pdf")} data-testid="financial-report-download">
-            {quickAction === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}تحميل كـ PDF
-          </Button>
-          <Button type="button" size="sm" variant="outline" className="gap-2" disabled={!quickReportReady || !!quickAction} onClick={() => void handleQuickReportAction("share")} data-testid="financial-report-share">
-            {quickAction === "share" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}مشاركة أو إرسال
-          </Button>
-        </div>
-      </div>
+      <SectionGuideButton sectionKey="reports" />
       {isActivitySummary && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
           <span className="text-sm font-semibold">تقويم التقرير</span>
@@ -20449,17 +20451,17 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-card border border-green-200 rounded-2xl p-4 text-center">
                   <div className="text-xs text-muted-foreground mb-1">إجمالي الإيرادات</div>
-                  <div className="text-2xl font-bold text-green-600">{Math.round(svcRepSummary.totalRevenue).toLocaleString("ar-SA")}</div>
+                  <div className="text-2xl font-bold text-green-600"><FinancialReportNumber value={svcRepSummary.totalRevenue} /></div>
                   <div className="text-xs text-muted-foreground">ر.س</div>
                 </div>
                 <div className="bg-card border border-blue-200 rounded-2xl p-4 text-center">
                   <div className="text-xs text-muted-foreground mb-1">عربون محصّل</div>
-                  <div className="text-2xl font-bold text-blue-600">{Math.round(svcRepSummary.totalDeposits).toLocaleString("ar-SA")}</div>
+                  <div className="text-2xl font-bold text-blue-600"><FinancialReportNumber value={svcRepSummary.totalDeposits} /></div>
                   <div className="text-xs text-muted-foreground">ر.س</div>
                 </div>
                 <div className="bg-card border border-orange-200 rounded-2xl p-4 text-center">
                   <div className="text-xs text-muted-foreground mb-1">تأمينات</div>
-                  <div className="text-2xl font-bold text-orange-600">{Math.round(svcRepSummary.totalInsurance).toLocaleString("ar-SA")}</div>
+                  <div className="text-2xl font-bold text-orange-600"><FinancialReportNumber value={svcRepSummary.totalInsurance} /></div>
                   <div className="text-xs text-muted-foreground">ر.س</div>
                 </div>
               </div>
@@ -20474,10 +20476,10 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-sm text-foreground truncate">{p.name}</p>
-                      {p.deposits > 0 && <p className="text-xs text-muted-foreground">عربون: {Math.round(p.deposits).toLocaleString("ar-SA")} ر.س</p>}
+                      {p.deposits > 0 && <p className="text-xs text-muted-foreground">عربون: <FinancialReportNumber value={p.deposits} currency /></p>}
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-green-600">{Math.round(p.revenue).toLocaleString("ar-SA")} ر.س</p>
+                      <p className="font-bold text-green-600"><FinancialReportNumber value={p.revenue} currency /></p>
                     </div>
                   </div>
                 ))}
@@ -20504,19 +20506,19 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <Home className="w-3.5 h-3.5 text-primary" />إيرادات العقارات
               </div>
-              <div className="text-2xl font-bold text-primary">{Math.round(financial?.totalRevenue ?? 0).toLocaleString("ar-SA")} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <div className="text-2xl font-bold text-primary"><FinancialReportNumber value={financial?.totalRevenue ?? 0} /> <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
             </div>
             <div className="bg-card border border-amber-200 rounded-2xl p-4 space-y-1">
               <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                 <Activity className="w-3.5 h-3.5 text-amber-500" />إيرادات الخدمات
               </div>
-              <div className="text-2xl font-bold text-amber-600">{Math.round(svcRepSummary?.totalRevenue ?? 0).toLocaleString("ar-SA")} <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
+              <div className="text-2xl font-bold text-amber-600"><FinancialReportNumber value={svcRepSummary?.totalRevenue ?? 0} /> <span className="text-sm font-normal text-muted-foreground">ر.س</span></div>
             </div>
           </div>
           <div className="bg-gradient-to-l from-primary/5 to-amber-500/5 border border-primary/20 rounded-2xl p-4 text-center">
             <div className="text-xs text-muted-foreground mb-1">إجمالي الإيرادات الموحّدة</div>
-            <div className="text-3xl font-extrabold text-green-600">{Math.round((financial?.totalRevenue ?? 0) + (svcRepSummary?.totalRevenue ?? 0)).toLocaleString("ar-SA")} <span className="text-lg font-normal text-muted-foreground">ر.س</span></div>
-            {financial && <div className="text-xs text-muted-foreground mt-2">المصروفات: {Math.round(financial.totalExpenses).toLocaleString("ar-SA")} ر.س · صافي العقارات: {Math.round(financial.netProfit).toLocaleString("ar-SA")} ر.س</div>}
+            <div className="text-3xl font-extrabold text-green-600"><FinancialReportNumber value={(financial?.totalRevenue ?? 0) + (svcRepSummary?.totalRevenue ?? 0)} /> <span className="text-lg font-normal text-muted-foreground">ر.س</span></div>
+            {financial && <div className="text-xs text-muted-foreground mt-2">المصروفات: <FinancialReportNumber value={financial.totalExpenses} currency /> · صافي العقارات: <span className={financial.netProfit < 0 ? "text-red-600 dark:text-red-400" : ""}><FinancialReportNumber value={financial.netProfit} currency /></span></div>}
           </div>
         </div>
       )}
@@ -20738,9 +20740,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
               )}
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "إجمالي الإيرادات", value: formatAmount(activeYearly.totals.revenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", valueColor: "text-foreground" },
-                  { label: "إجمالي المصروفات", value: formatAmount(activeYearly.totals.expenses), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", valueColor: "text-foreground" },
-                  { label: "صافي الربح السنوي", value: formatAmountSigned(activeYearly.totals.netProfit), icon: <RiyalIcon className="w-4 h-4" />, color: activeYearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700", valueColor: activeYearly.totals.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
+                  { label: "إجمالي الإيرادات", value: <FinancialReportNumber value={activeYearly.totals.revenue} currency />, icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", valueColor: "text-foreground" },
+                  { label: "إجمالي المصروفات", value: <FinancialReportNumber value={activeYearly.totals.expenses} currency />, icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", valueColor: "text-foreground" },
+                  { label: "صافي الربح السنوي", value: <FinancialReportNumber value={activeYearly.totals.netProfit} currency />, icon: <RiyalIcon className="w-4 h-4" />, color: activeYearly.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700", valueColor: activeYearly.totals.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
                 ].map((s) => (
                   <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>{s.icon}</div>
@@ -20840,13 +20842,13 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                           <tr key={m.month} className={`border-b border-border/50 ${isEmpty ? "opacity-40" : ""}`}>
                             <td className="py-2 text-muted-foreground">{getMonthLabel(m)}</td>
                             <td className="py-2 font-medium text-green-600">
-                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <span className="tabular-nums">{formatAmount(m.revenue)}</span>}
+                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <FinancialReportNumber value={m.revenue} currency />}
                             </td>
                             <td className="py-2 font-medium text-red-600">
-                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <span className="tabular-nums">{formatAmount(m.expenses)}</span>}
+                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <FinancialReportNumber value={m.expenses} currency />}
                             </td>
                             <td className={`py-2 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>
-                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <span className="tabular-nums">{formatAmountSigned(m.netProfit)}</span>}
+                              {isEmpty ? <span className="text-muted-foreground/60 font-normal tabular-nums">—</span> : <FinancialReportNumber value={m.netProfit} currency />}
                             </td>
                           </tr>
                         );
@@ -20855,9 +20857,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                     <tfoot>
                       <tr className="border-t-2 border-border">
                         <td className="py-2 font-bold">الإجمالي</td>
-                        <td className="py-2 font-bold text-green-600">{formatAmount(activeYearly.totals.revenue)}</td>
-                        <td className="py-2 font-bold text-red-600">{formatAmount(activeYearly.totals.expenses)}</td>
-                        <td className={`py-2 font-bold ${activeYearly.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(activeYearly.totals.netProfit)}</td>
+                        <td className="py-2 font-bold text-green-600"><FinancialReportNumber value={activeYearly.totals.revenue} currency /></td>
+                        <td className="py-2 font-bold text-red-600"><FinancialReportNumber value={activeYearly.totals.expenses} currency /></td>
+                        <td className={`py-2 font-bold ${activeYearly.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}><FinancialReportNumber value={activeYearly.totals.netProfit} currency /></td>
                       </tr>
                     </tfoot>
                   </table>
@@ -20883,6 +20885,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 )} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
+                {downloadReportButton}
                 <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
                   <Button
                     type="button"
@@ -20997,9 +21000,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 {/* KPI cards */}
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: "إجمالي الإيرادات", value: formatAmount(activeCustomData.totals.revenue), color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: <TrendingUp className="w-5 h-5" />, valueColor: "text-foreground" },
-                    { label: "إجمالي المصروفات", value: formatAmount(activeCustomData.totals.expenses), color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: <TrendingDown className="w-5 h-5" />, valueColor: "text-foreground" },
-                    { label: "صافي الربح", value: formatAmountSigned(activeCustomData.totals.netProfit), color: activeCustomData.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700", icon: <RiyalIcon className="w-4 h-4" />, valueColor: activeCustomData.totals.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
+                    { label: "إجمالي الإيرادات", value: <FinancialReportNumber value={activeCustomData.totals.revenue} currency />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: <TrendingUp className="w-5 h-5" />, valueColor: "text-foreground" },
+                    { label: "إجمالي المصروفات", value: <FinancialReportNumber value={activeCustomData.totals.expenses} currency />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: <TrendingDown className="w-5 h-5" />, valueColor: "text-foreground" },
+                    { label: "صافي الربح", value: <FinancialReportNumber value={activeCustomData.totals.netProfit} currency />, color: activeCustomData.totals.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700", icon: <RiyalIcon className="w-4 h-4" />, valueColor: activeCustomData.totals.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
                   ].map((s) => (
                     <div key={s.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${s.color}`}>{s.icon}</div>
@@ -21028,18 +21031,18 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                         {activeCustomData.monthly.map((m) => (
                           <tr key={m.month} className="hover:bg-muted/30 transition-colors">
                             <td className="px-4 py-2.5">{fmtCustomMonth(m.month)}</td>
-                            <td className="px-4 py-2.5 text-green-600 font-medium">{formatAmount(m.revenue)}</td>
-                            <td className="px-4 py-2.5 text-red-600 font-medium">{formatAmount(m.expenses)}</td>
-                            <td className={`px-4 py-2.5 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(m.netProfit)}</td>
+                            <td className="px-4 py-2.5 text-green-600 font-medium"><FinancialReportNumber value={m.revenue} currency /></td>
+                            <td className="px-4 py-2.5 text-red-600 font-medium"><FinancialReportNumber value={m.expenses} currency /></td>
+                            <td className={`px-4 py-2.5 font-bold ${m.netProfit >= 0 ? "text-primary" : "text-destructive"}`}><FinancialReportNumber value={m.netProfit} currency /></td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="border-t-2 border-border">
                         <tr className="bg-muted/30">
                           <td className="px-4 py-2.5 font-bold">الإجمالي</td>
-                          <td className="px-4 py-2.5 font-bold text-green-600">{formatAmount(activeCustomData.totals.revenue)}</td>
-                          <td className="px-4 py-2.5 font-bold text-red-600">{formatAmount(activeCustomData.totals.expenses)}</td>
-                          <td className={`px-4 py-2.5 font-bold ${activeCustomData.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}>{formatAmountSigned(activeCustomData.totals.netProfit)}</td>
+                          <td className="px-4 py-2.5 font-bold text-green-600"><FinancialReportNumber value={activeCustomData.totals.revenue} currency /></td>
+                          <td className="px-4 py-2.5 font-bold text-red-600"><FinancialReportNumber value={activeCustomData.totals.expenses} currency /></td>
+                          <td className={`px-4 py-2.5 font-bold ${activeCustomData.totals.netProfit >= 0 ? "text-primary" : "text-destructive"}`}><FinancialReportNumber value={activeCustomData.totals.netProfit} currency /></td>
                         </tr>
                       </tfoot>
                     </table>
@@ -21067,6 +21070,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                   }} className="gap-2">
                     <FileText className="w-4 h-4" />طباعة التقرير
                   </Button>
+                  {downloadReportButton}
                   <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
                     <Button
                       type="button"
@@ -21111,7 +21115,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 <span>إجمالي الإيجار</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 900, color: "#1d4ed8", lineHeight: 1, marginTop: 4 }}>
-                {repBreakdown.totBase.toLocaleString("ar-SA")}
+                <FinancialReportNumber value={repBreakdown.totBase} rounded={false} />
               </div>
               <div style={{ fontSize: 12, color: "#3b82f6", marginTop: "auto" }}>ريال سعودي</div>
               <div style={{ fontSize: 11, color: "#6b7280" }}>مجموع قيمة الإيجار من الحجوزات</div>
@@ -21122,7 +21126,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 <span>إجمالي الخدمات</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 900, color: "#b45309", lineHeight: 1, marginTop: 4 }}>
-                {(repBreakdown.totSvc || 0).toLocaleString("ar-SA")}
+                <FinancialReportNumber value={repBreakdown.totSvc || 0} rounded={false} />
               </div>
               <div style={{ fontSize: 12, color: "#d97706", marginTop: "auto" }}>ريال سعودي</div>
               <div style={{ fontSize: 11, color: "#6b7280" }}>
@@ -21135,7 +21139,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 <span>صافي الدخل</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 900, color: "#15803d", lineHeight: 1, marginTop: 4 }}>
-                {repBreakdown.totTotal.toLocaleString("ar-SA")}
+                <FinancialReportNumber value={repBreakdown.totTotal} rounded={false} />
               </div>
               <div style={{ fontSize: 12, color: "#16a34a", marginTop: "auto" }}>ريال سعودي</div>
               <div style={{ fontSize: 11, color: "#6b7280" }}>إيجار + خدمات</div>
@@ -21155,7 +21159,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                   {repBreakdown.rows.length} حجز
                 </span>
               </div>
-              <div style={{ overflowX: "auto" }}>
+              <div className="financial-bookings-scroll" role="region" aria-label="تفاصيل الحجوزات — جدول قابل للتمرير" tabIndex={0} data-testid="financial-bookings-scroll">
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 500 }}>
                   <thead>
                     <tr style={{ borderBottom: "2px solid #e5e7eb" }}>
@@ -21176,13 +21180,13 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                             <div>{hijri}</div><div style={{ opacity: 0.7 }}>{gregorian}</div>
                           </td>
                           <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "#1d4ed8" }}>
-                            {row.base.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
+                            <FinancialReportNumber value={row.base} rounded={false} /> <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
                           </td>
                           <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 700, color: "#b45309" }}>
-                            {row.svc > 0 ? <>{row.svc.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
+                            {row.svc > 0 ? <><FinancialReportNumber value={row.svc} rounded={false} /> <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
                           </td>
                           <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#15803d" }}>
-                            {row.total.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
+                            <FinancialReportNumber value={row.total} rounded={false} /> <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
                           </td>
                         </tr>
                       );
@@ -21192,13 +21196,13 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                     <tr style={{ borderTop: "2px solid #d1d5db", background: "#f9fafb" }}>
                       <td colSpan={2} style={{ padding: "10px 12px", fontWeight: 700, fontSize: 13 }}>الإجمالي</td>
                       <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#1d4ed8" }}>
-                        {repBreakdown.totBase.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
+                        <FinancialReportNumber value={repBreakdown.totBase} rounded={false} /> <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#b45309" }}>
-                        {repBreakdown.totSvc > 0 ? <>{repBreakdown.totSvc.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
+                        {repBreakdown.totSvc > 0 ? <><FinancialReportNumber value={repBreakdown.totSvc} rounded={false} /> <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span></> : <span style={{ color: "#9ca3af" }}>—</span>}
                       </td>
                       <td style={{ padding: "10px 12px", textAlign: "left", fontWeight: 800, color: "#15803d" }}>
-                        {repBreakdown.totTotal.toLocaleString("ar-SA")} <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
+                        <FinancialReportNumber value={repBreakdown.totTotal} rounded={false} /> <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400 }}>ر.س</span>
                       </td>
                     </tr>
                   </tfoot>
@@ -21218,9 +21222,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
             <>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { label: "المبالغ المحصّلة فعلياً", value: formatAmount(financial.totalRevenue), icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "إجمالي ما دخل الحساب", valueColor: "text-foreground" },
-                  { label: "إجمالي المصروفات", value: (Number(financial.totalExpenses) ?? 0) <= 0 ? "٠ ر.س" : formatAmount(Number(financial.totalExpenses)), icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب", valueColor: "text-foreground" },
-                  { label: "صافي الربح", value: formatAmountSigned(financial.netProfit), icon: <RiyalIcon className="w-4 h-4" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات", valueColor: financial.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
+                  { label: "المبالغ المحصّلة فعلياً", value: <FinancialReportNumber value={financial.totalRevenue} currency />, icon: <TrendingUp className="w-5 h-5" />, color: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", note: "إجمالي ما دخل الحساب", valueColor: "text-foreground" },
+                  { label: "إجمالي المصروفات", value: <FinancialReportNumber value={Math.max(0, Number(financial.totalExpenses) || 0)} currency />, icon: <TrendingDown className="w-5 h-5" />, color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "مصروفات + رواتب", valueColor: "text-foreground" },
+                  { label: "صافي الربح", value: <FinancialReportNumber value={financial.netProfit} currency />, icon: <RiyalIcon className="w-4 h-4" />, color: financial.netProfit >= 0 ? "bg-primary/10 text-primary" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", note: "الإيرادات - المصروفات", valueColor: financial.netProfit >= 0 ? "text-foreground" : "text-red-600 dark:text-red-400" },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-2">
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${stat.color}`}>{stat.icon}</div>
@@ -21243,7 +21247,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                       <p className="text-[10px] text-red-600/70 dark:text-red-500/70">مخصومة من التأمين · محسوبة في الإيرادات</p>
                     </div>
                   </div>
-                  <p className="text-lg font-bold text-red-700 dark:text-red-400">{formatAmount(financial.totalInsuranceDeducted)}</p>
+                  <p className="text-lg font-bold text-red-700 dark:text-red-400"><FinancialReportNumber value={financial.totalInsuranceDeducted} currency /></p>
                 </div>
               )}
 
@@ -21259,7 +21263,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                       <p className="text-[10px] text-orange-600/70 dark:text-orange-500/70">غير محسوبة في الأرباح · قابلة للإعادة</p>
                     </div>
                   </div>
-                  <p className="text-lg font-bold text-orange-700 dark:text-orange-400">{formatAmount(financial.totalInsuranceHeld)}</p>
+                  <p className="text-lg font-bold text-orange-700 dark:text-orange-400"><FinancialReportNumber value={financial.totalInsuranceHeld} currency /></p>
                 </div>
               )}
 
@@ -21276,7 +21280,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                         <div key={key}>
                           <div className="flex items-center justify-between text-sm mb-1">
                             <span className="flex items-center gap-1.5 text-muted-foreground"><span>{cat.emoji}</span>{cat.label}</span>
-                            <span className="font-semibold">{formatAmount(amount)} <span className="text-xs text-muted-foreground" dir="rtl">({pct.toLocaleString("ar-SA")}٪)</span></span>
+                            <span className="font-semibold"><FinancialReportNumber value={amount} currency /> <span className="text-xs text-muted-foreground" dir="rtl">({pct.toLocaleString("ar-SA")}٪)</span></span>
                           </div>
                           <div className="w-full bg-muted rounded-full h-1.5">
                             <div className="h-1.5 rounded-full bg-destructive/70 transition-all" style={{ width: `${pct}%` }} />
@@ -21410,6 +21414,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 )} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
+                {downloadReportButton}
                 <div onClick={(e) => e.stopPropagation()} style={{ display: "contents" }}>
                   <Button
                     type="button"
@@ -21558,6 +21563,18 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       </div>
 
       </>)}
+
+      {isActivitySummary && (
+        <div className="flex flex-wrap justify-end gap-2 rounded-xl border border-border bg-card p-3" role="group" aria-label="إجراءات التقرير المالي">
+          <Button type="button" size="sm" variant="outline" className="gap-2" disabled={!quickReportReady || !!quickAction} onClick={() => void handleQuickReportAction("print")} data-testid="financial-report-print">
+            {quickAction === "print" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}طباعة التقرير
+          </Button>
+          {downloadReportButton}
+          <Button type="button" size="sm" variant="outline" className="gap-2" disabled={!quickReportReady || !!quickAction} onClick={() => void handleQuickReportAction("share")} data-testid="financial-report-share">
+            {quickAction === "share" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}مشاركة أو إرسال
+          </Button>
+        </div>
+      )}
 
     </div>
   );

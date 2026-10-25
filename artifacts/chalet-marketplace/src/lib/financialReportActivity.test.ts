@@ -37,6 +37,6 @@ it("exports the chosen activity title, clear totals and accounting losses in the
   assert(html.includes('class="financial-total"'));
   assert(html.includes('class="financial-net"'));
   assert(html.includes("financial-negative"));
-  assert(html.includes("<bdi dir=\"ltr\">(١٥٠)</bdi>"));
+  assert(html.includes("<bdi dir=\"ltr\">-١٥٠</bdi>"));
   assert(!html.includes("شاليه الياسمين"));
 });
