@@ -25,3 +25,9 @@ Financial report print/PDF output uses the literal abbreviation «ر.س» in one
 **Why:** The user explicitly requested this currency presentation and a unified platform-only footer for financial reports.
 
 **How to apply:** Keep these report-specific choices separate from the platform's general riyal artwork convention. Zero page margins and empty page-margin boxes suppress native browser furniture where supported; never promise to override every browser's user-controlled header/footer setting.
+
+The financial reports section has its own activity filter, initially «جميع الأنشطة». Selecting a property or service scopes its report and updates both the screen and PDF heading to «التقرير المالي - [اسم النشاط]».
+
+**Why:** The user explicitly requested activity-specific financial reports and matching titles inside the reports section.
+
+**How to apply:** Do not change the global dashboard activity to implement this filter. Keep published property IDs distinct from submission IDs, filter service totals by provider, and reset report-local export/share state when changing activity.

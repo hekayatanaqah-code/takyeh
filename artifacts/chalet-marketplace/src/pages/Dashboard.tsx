@@ -38,6 +38,8 @@ import { Download } from "lucide-react";
 import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml } from "@/lib/financialReport";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
+import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
+import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport } from "@/lib/financialReportActivity";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
@@ -16171,6 +16173,14 @@ export function ExpensesTab() {
   const { unit } = useAdminFinance();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
+  const { data: mySubmissions = [] } = useQuery<any[]>({
+    queryKey: ["my-submissions-for-report"],
+    queryFn: async () => {
+      const r = await apiFetch("/submissions/mine");
+      if (!r.ok) return [];
+      return r.json();
+    },
+  });
   const [expCalType, setExpCalType] = useState<"hijri" | "gregorian">("gregorian");
   const initialExpenseMonth = getCurrentFinanceMonth("gregorian");
   const [expYear, setExpYear] = useState<string>(() => initialExpenseMonth.split("-")[0]);
@@ -16231,15 +16241,6 @@ export function ExpensesTab() {
     staleTime: 0,
     refetchOnMount: "always",
     refetchInterval: 60_000,
-  });
-
-  const { data: mySubmissions = [] } = useQuery<any[]>({
-    queryKey: ["my-submissions-for-report"],
-    queryFn: async () => {
-      const r = await apiFetch("/submissions/mine");
-      if (!r.ok) return [];
-      return r.json();
-    },
   });
 
   const expYearOptions = useMemo(() => {
@@ -19276,7 +19277,7 @@ function buildMonthlyReportHtml(
 
 <div class="header">
 <div class="header-brand">${logoDataUrl ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />` : `<span style="font-size:26px;font-weight:900;color:#8C6246;font-family:Segoe UI,Tahoma,Arial,sans-serif;">تكية</span>`}</div>
-<div class="header-center"><div class="report-title">التقرير الشهري – ${monthStr}</div><div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
+<div class="header-center"><div class="report-title">التقرير المالي - ${escapeFinancialReportText(propertyName)}</div><div class="report-sub">التقرير الشهري · ${monthStr}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ إصدار التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 ${currentPeriodNotice}
 
@@ -19392,7 +19393,7 @@ function buildYearlyReportHtml(
 
 <div class="header">
 <div class="header-brand">${logoHtml}</div>
-<div class="header-center"><div class="report-title">${isCustom ? (isShortPeriod ? "تقرير حركة الفترة" : "التقرير المخصص") : "التقرير السنوي – " + toAr(year)}</div>${(() => { if (!isCustom) return ""; const parts = year.split(" ← "); const fromPart = parts[0]?.trim() ?? ""; const toPart = parts[1]?.trim() ?? ""; return parts.length === 2 ? `<div style="font-size:10.5px;color:#8C6246;font-weight:600;margin-top:5px;border:1px solid #e8e2d0;background:#faf9f6;border-radius:6px;padding:3px 10px;display:inline-block;">الفترة من: ${fromPart} إلى: ${toPart}</div>` : `<div style="font-size:10.5px;color:#555;margin-top:4px;">${year}</div>`; })()}<div style="font-size:16px;font-weight:800;color:#111;margin-top:6px;">${propertyName}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ طباعة التقرير: ${printDate}</div></div>
+<div class="header-center"><div class="report-title">التقرير المالي - ${escapeFinancialReportText(propertyName)}</div><div class="report-sub">${isCustom ? (isShortPeriod ? "تقرير حركة الفترة" : "التقرير المخصص") : "التقرير السنوي – " + toAr(year)}</div>${(() => { if (!isCustom) return ""; const parts = year.split(" ← "); const fromPart = parts[0]?.trim() ?? ""; const toPart = parts[1]?.trim() ?? ""; return parts.length === 2 ? `<div style="font-size:10.5px;color:#8C6246;font-weight:600;margin-top:5px;border:1px solid #e8e2d0;background:#faf9f6;border-radius:6px;padding:3px 10px;display:inline-block;">الفترة من: ${fromPart} إلى: ${toPart}</div>` : `<div style="font-size:10.5px;color:#555;margin-top:4px;">${year}</div>`; })()}<div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ إصدار التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 ${currentPeriodNotice}
 
@@ -19539,7 +19540,7 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
     // Mapping: contentWidthMm / canvas.width  →  mm per canvas-pixel.
     const A4_W_MM = 210;
     const A4_H_MM = 297;
-    const MARGIN_MM = 15;
+    const MARGIN_MM = 10;
     const contentWidthMm = A4_W_MM - MARGIN_MM * 2; // 180mm
     const contentHeightPerPageMm = A4_H_MM - MARGIN_MM * 2; // 267mm
     const mmPerCanvasPx = contentWidthMm / canvas.width; // e.g. 180/1500 = 0.12
@@ -19615,10 +19616,17 @@ async function generateAndUploadReportPdf(
   return uploadFile(file);
 }
 
-function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gregorian" } = {}) {
+function ReportsTab({ calendarPreference, properties, services, activitiesLoading, activitiesError }: {
+  calendarPreference?: "hijri" | "gregorian";
+  properties: ReportProperty[];
+  services: ReportService[];
+  activitiesLoading?: boolean;
+  activitiesError?: boolean;
+}) {
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
-  const { unit: repUnit, selectUnit: selectReportActivity } = useAdminFinance();
+  // This is a report-local filter: it never changes the owner's dashboard activity.
+  const [repUnit, setReportUnit] = useState<FinanceUnit>({ type: "all" });
   const _nowRep = new Date();
   const currentMonth = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}`;
   const currentYear = String(_nowRep.getFullYear());
@@ -19633,12 +19641,11 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
   } as Intl.DateTimeFormatOptions);
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly" | "custom">("monthly");
-  const [reportType, setReportType] = useState<"chalets" | "services" | "unified">(repUnit.type === "all" && selectReportActivity ? "unified" : "chalets");
+  const reportType = repUnit.type === "all" ? "unified" : repUnit.type === "service" ? "services" : "chalets";
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [localReportSubmissionId, setSelectedSubmissionId] = useState<string>("all");
   const selectedSubmissionId = repUnit.type === "chalet"
-    ? String(repUnit.submissionId ?? "none") : selectReportActivity ? "all" : localReportSubmissionId;
+    ? String(repUnit.submissionId ?? "none") : "all";
   const [isHijri, setIsHijri] = useState(() => resolveReportCalendar(calendarPreference, localStorage.getItem("revCalType")) === "hijri");
   const [isYearlyHijri, setIsYearlyHijri] = useState(() => resolveReportCalendar(calendarPreference, localStorage.getItem("revCalType")) === "hijri");
   useEffect(() => {
@@ -19670,22 +19677,6 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
   const qc = useQueryClient();
 
   useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType]);
-
-  const { data: mySubmissions = [] } = useQuery<any[]>({
-    queryKey: ["my-submissions-for-report"],
-    queryFn: async () => {
-      const r = await apiFetch("/submissions/mine");
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
-
-  /* Auto-select the only property when owner has exactly one submission */
-  useEffect(() => {
-    if (mySubmissions && mySubmissions.length > 0 && mySubmissions.length === 1 && selectedSubmissionId === "all") {
-      setSelectedSubmissionId(String(mySubmissions[0].id));
-    }
-  }, [mySubmissions?.length]);
 
   const hijriReportParsed = useMemo(() => {
     if (!isHijri || !selectedHijriMonthVal) return null;
@@ -19835,12 +19826,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
     },
     enabled: isActivitySummary && viewMode === "monthly" && monthlyPeriodReady,
   });
-  const svcRepSummary = rawSvcRepSummary && repUnit.type === "service" ? (() => {
-    const byProvider = rawSvcRepSummary.byProvider.filter(provider => provider.id === repUnit.id);
-    return { byProvider, totalRevenue: byProvider.reduce((sum, provider) => sum + provider.revenue, 0),
-      totalDeposits: byProvider.reduce((sum, provider) => sum + provider.deposits, 0),
-      totalInsurance: byProvider.reduce((sum, provider) => sum + provider.insurance, 0) };
-  })() : rawSvcRepSummary;
+  const svcRepSummary = scopeServiceFinancialReport(rawSvcRepSummary, repUnit);
 
   const archiveMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -20031,9 +20017,17 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
     unspecified: { icon: <Clock className="w-4 h-4" />,    label: "غير محدد" },
   };
 
-  const selectedPropertyName = selectedSubmissionId === "all"
-    ? "كل العقارات"
-    : mySubmissions.find((s: any) => String(s.id) === selectedSubmissionId)?.nameAr ?? `عقار #${selectedSubmissionId}`;
+  const selectedPropertyName = repUnit.type === "all" ? "جميع الأنشطة" : repUnit.name;
+  const reportHeading = financialReportTitle(repUnit);
+
+  function selectReportActivity(activity: FinanceUnit) {
+    setReportUnit(activity);
+    setViewMode("monthly");
+    setPdfUrl(null);
+    setArchiveSavedId(null);
+    setShowShare(false);
+    setShowArchive(false);
+  }
 
   const handleShareWhatsApp = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -20329,7 +20323,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
           { label: "التأمينات", amount: svcRepSummary.totalInsurance },
           ...svcRepSummary.byProvider.map(provider => ({ label: provider.name, amount: provider.revenue })),
         ];
-        html = buildActivitySummaryReportHtml({ title: unified ? "التقرير المالي الموحّد" : "تقرير الخدمات",
+        html = buildActivitySummaryReportHtml({ title: reportHeading,
           period: activeMonthLabel, activityName: repUnit.type === "service" ? repUnit.name : "جميع الأنشطة",
           fileName, rows, logo, css: REPORT_CSS, forPrint: action === "print" });
       } else if (viewMode === "monthly") {
@@ -20360,7 +20354,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       const { blob } = await htmlToPdfBlob(html, fileName);
       const file = new File([blob], fileName, { type: "application/pdf", lastModified: Date.now() });
       if (action === "share" && navigator.share && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({ files: [file], title: "التقرير المالي" });
+        await navigator.share({ files: [file], title: reportHeading });
       } else {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -20394,6 +20388,15 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
 
   return (
     <div className="space-y-6">
+
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-foreground" data-testid="financial-report-title">{reportHeading}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">اختر جميع الأنشطة أو نشاطًا محددًا لاستخراج تقريره المالي فقط.</p>
+        </div>
+        <FinancialReportActivitySelect value={repUnit} properties={properties} services={services}
+          onChange={selectReportActivity} loading={activitiesLoading || !!quickAction} error={activitiesError} />
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3" role="group" aria-label="إجراءات التقرير المالي">
         <SectionGuideButton sectionKey="reports" />
@@ -20434,32 +20437,12 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
       {periodsError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل السنوات والشهور المالية. أعد تحميل الصفحة للمحاولة مجددًا.</p>}
       {!periodsLoading && !periodsError && !activePeriods.months.length && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">لا توجد بيانات مالية فعلية ونشطة لهذا النشاط. ستظهر السنوات والشهور عند تسجيل بيانات مالية.</p>}
       {isActivitySummary && serviceReportError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل تقرير الخدمات. أعد تحميل الصفحة للمحاولة مجددًا؛ إجراءات التصدير متوقفة حتى تكتمل البيانات.</p>}
-      {repUnit.type === "all" && !selectReportActivity && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold text-muted-foreground">نوع التقرير:</span>
-          {([
-            { key: "chalets", label: "العقارات", icon: <Home className="w-3.5 h-3.5" /> },
-            { key: "services", label: "الخدمات", icon: <Activity className="w-3.5 h-3.5" /> },
-            { key: "unified", label: "موحّد إجمالي", icon: <Zap className="w-3.5 h-3.5" /> },
-          ] as const).map(({ key, label, icon }) => (
-            <button key={key} type="button" onClick={() => setReportType(key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-colors border ${reportType === key
-                ? key === "chalets" ? "bg-primary text-primary-foreground border-primary"
-                  : key === "services" ? "bg-amber-500 text-white border-amber-500"
-                  : "bg-slate-700 text-white border-slate-700 dark:bg-slate-200 dark:text-slate-900 dark:border-slate-200"
-                : "border-border text-muted-foreground hover:border-foreground"}`}>
-              {icon}{label}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* ── Services Report ── */}
       {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && monthlyPeriodReady && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Activity className="w-5 h-5 text-amber-500 shrink-0" />
-            <h2 className="text-lg font-bold text-foreground">تقرير الخدمات</h2>
+            <h2 className="text-lg font-bold text-foreground">{reportHeading}</h2>
           </div>
           {svcRepSummary && svcRepSummary.byProvider.length > 0 ? (
             <>
@@ -20514,7 +20497,7 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Zap className="w-5 h-5 text-primary shrink-0" />
-            <h2 className="text-lg font-bold text-foreground">التقرير الموحّد</h2>
+            <h2 className="text-lg font-bold text-foreground">{reportHeading}</h2>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-card border border-primary/20 rounded-2xl p-4 space-y-1">
@@ -20561,19 +20544,6 @@ function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gr
           </div>
 
           {/* ١. العقار — أقصى اليمين */}
-          {!selectReportActivity && <Select value={selectedSubmissionId} onValueChange={setSelectedSubmissionId}>
-            <SelectTrigger className="h-9 min-w-[130px] flex-1 text-sm">
-              <SelectValue placeholder={mySubmissions.length === 1 ? (mySubmissions[0]?.nameAr || mySubmissions[0]?.name) : "جميع العقارات"} />
-            </SelectTrigger>
-            <SelectContent>
-              {mySubmissions.length !== 1 && <SelectItem value="all">جميع العقارات</SelectItem>}
-              {mySubmissions.map((s: any) => (
-                <SelectItem key={s.id} value={String(s.id)}>{s.nameAr || s.name || `عقار #${s.id}`}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          }
           {/* ٢. نوع التقويم — أزرار التبديل (مخفي في وضع مخصص) */}
           {viewMode !== "custom" && <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
             {(["gregorian", "hijri"] as const).map((c) => (
@@ -26521,7 +26491,9 @@ export default function Dashboard() {
                 {adminFinanceTab === "expenses"      && <ExpensesTab />}
                 {adminFinanceTab === "staff"         && <StaffTab />}
                 {adminFinanceTab === "notifications" && <NotificationsTab />}
-                {adminFinanceTab === "reports"       && <ReportsTab calendarPreference={ownerProfile?.reportsCalPref === "hijri" ? "hijri" : ownerProfile?.reportsCalPref === "gregorian" ? "gregorian" : undefined} />}
+                {adminFinanceTab === "reports"       && <ReportsTab properties={ownerChalets} services={myApprovedProviders}
+                  activitiesLoading={ownerChaletsLoading || providersLoading} activitiesError={ownerChaletsError || providersError}
+                  calendarPreference={ownerProfile?.reportsCalPref === "hijri" ? "hijri" : ownerProfile?.reportsCalPref === "gregorian" ? "gregorian" : undefined} />}
                 {adminFinanceTab === "support"       && <OwnerSupportTab />}
                 {adminFinanceTab === "history"       && <TransactionHistoryTab />}
               </div>
