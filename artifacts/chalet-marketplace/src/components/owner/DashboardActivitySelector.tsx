@@ -1,5 +1,5 @@
 import { Building2, Layers, Star } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { activityKey, type DashboardActivity } from "@/lib/dashboardActivity";
 
 export function DashboardActivitySelector({ value, properties, services, onChange }: {
@@ -23,10 +23,28 @@ export function DashboardActivitySelector({ value, properties, services, onChang
       <SelectTrigger id="dashboard-activity" className="h-11 w-full rounded-xl text-right sm:w-80" data-testid="dashboard-activity-selector">
         <SelectValue />
       </SelectTrigger>
-      <SelectContent dir="rtl">
+      <SelectContent
+        dir="rtl"
+        position="popper"
+        sideOffset={6}
+        collisionPadding={12}
+        className="z-[100] rounded-xl shadow-[0_8px_24px_-6px_rgba(0,0,0,0.16)]"
+      >
         <SelectItem value="all"><span className="flex items-center gap-2"><Layers className="h-4 w-4" />جميع الأنشطة</span></SelectItem>
-        {properties.map(p => <SelectItem key={`chalet-${p.id}`} value={`chalet-${p.id}`}><span className="flex items-center gap-2"><Building2 className="h-4 w-4" />{p.nameAr || "عقار"}</span></SelectItem>)}
-        {services.map(s => <SelectItem key={`service-${s.id}`} value={`service-${s.id}`}><span className="flex items-center gap-2"><Star className="h-4 w-4" />{s.businessName || "خدمة"}</span></SelectItem>)}
+        {properties.length > 0 && <>
+          <SelectSeparator />
+          <SelectGroup>
+            <SelectLabel className="text-xs text-muted-foreground">العقارات</SelectLabel>
+            {properties.map(p => <SelectItem key={`chalet-${p.id}`} value={`chalet-${p.id}`}><span className="flex items-center gap-2"><Building2 className="h-4 w-4" />{p.nameAr || "عقار"}</span></SelectItem>)}
+          </SelectGroup>
+        </>}
+        {services.length > 0 && <>
+          <SelectSeparator />
+          <SelectGroup>
+            <SelectLabel className="text-xs text-muted-foreground">الخدمات الإضافية</SelectLabel>
+            {services.map(s => <SelectItem key={`service-${s.id}`} value={`service-${s.id}`}><span className="flex items-center gap-2"><Star className="h-4 w-4" />{s.businessName || "خدمة"}</span></SelectItem>)}
+          </SelectGroup>
+        </>}
       </SelectContent>
     </Select>
   </div>;
