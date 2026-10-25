@@ -14,3 +14,9 @@ Multi-date closure calendars must be passive when opened or navigated: only an e
 **Why:** Single-date pickers may initialize a selection on opening; applying that behavior to closures would silently block today without the photographer's intent.
 
 **How to apply:** Keep multi-date closure behavior opt-in so existing single-date consumers retain their behavior. Store the same Gregorian day regardless of the displayed calendar.
+
+Owner «متابعة الطلبات» cards use the same two-line submission date in property and service requests: Umm al-Qura Hijri plus explicit Gregorian, Eastern digits and a single era suffix for each.
+
+**Why:** The user asked to unify dates across service and property request cards and accepted displaying both calendars together as an alternative to a preferred-calendar-only view.
+
+**How to apply:** Convert full timestamps to the Saudi-local day; do not slice the UTC date or rely on the locale's default calendar. Hide absent or invalid timestamps rather than inventing a date.

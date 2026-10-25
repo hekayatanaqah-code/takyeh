@@ -39,6 +39,7 @@ import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodO
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
+import { SubmissionDate } from "@/components/owner/SubmissionDate";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
 import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport } from "@/lib/financialReportActivity";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
@@ -1728,17 +1729,7 @@ function ChaletsTab({ submissions, isLoading, ownerChalets, onRequestAddon, list
                       حسب الفترات
                     </span>
                   )}
-                  {sub.createdAt && (
-                    <span className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5" />
-                      {(() => {
-                        const d = new Date(sub.createdAt);
-                        const hijri = d.toLocaleDateString("ar-SA-u-ca-islamic", { day: "numeric", month: "long", year: "numeric" });
-                        const gregorian = d.toLocaleDateString("ar", { day: "numeric", month: "long", year: "numeric" });
-                        return `${hijri} هـ / ${gregorian} م`;
-                      })()}
-                    </span>
-                  )}
+                  <SubmissionDate value={sub.createdAt} />
                 </div>
                 <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{sub.descriptionAr}</p>
 
@@ -9422,12 +9413,7 @@ function ServiceSubmissionsTab({
                       {sub.city && (
                         <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{sub.city}</span>
                       )}
-                      {sub.createdAt && (
-                        <span className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5" />
-                          {new Date(sub.createdAt).toLocaleDateString("ar-SA")}
-                        </span>
-                      )}
+                      <SubmissionDate value={sub.createdAt} />
                     </div>
                     {sub.descriptionAr && (
                       <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{sub.descriptionAr}</p>
