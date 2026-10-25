@@ -4469,18 +4469,30 @@ router.get("/future-cash-summary", async (req, res) => {
 /* ── Service Revenue Summary (all providers combined) ────────── */
 
 router.get("/service-revenue-summary", async (req, res) => {
-  const ownerId = req.user!.id;
+  const ownerIds = await getOwnerIds(req);
+  const hasHijriPeriod = req.query.hijriYear !== undefined || req.query.hijriMonth !== undefined;
+  const hijriYear = Number(req.query.hijriYear);
+  const hijriMonth = Number(req.query.hijriMonth);
+  if (hasHijriPeriod && (!/^\d{4}$/.test(String(req.query.hijriYear)) || !Number.isInteger(hijriYear) || hijriYear < 1300 || hijriYear > 1600
+    || !/^\d{1,2}$/.test(String(req.query.hijriMonth)) || !Number.isInteger(hijriMonth) || hijriMonth < 1 || hijriMonth > 12
+    || req.query.month !== undefined))
+    return res.status(400).json({ error: "اختر سنة وشهرًا هجريين صحيحين دون خلط التقويمين" });
+  if (!hasHijriPeriod && req.query.month !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(req.query.month)))
+    return res.status(400).json({ error: "الشهر الميلادي غير صالح" });
   const selectedMonth = (typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month))
     ? req.query.month
     : new Date().toISOString().slice(0, 7);
+  const approximateYear = Math.floor(hijriYear * 354.367 / 365.25 + 622);
+  const fromDate = hasHijriPeriod ? `${approximateYear - 1}-01-01` : `${selectedMonth}-01`;
+  const toDate = hasHijriPeriod ? `${approximateYear + 1}-12-31` : `${selectedMonth}-31`;
 
   // Get all approved providers for this owner
   const providers = await db
     .select({ id: serviceProvidersTable.id, businessName: serviceProvidersTable.businessName })
     .from(serviceProvidersTable)
-    .where(eq(serviceProvidersTable.ownerId, ownerId));
+    .where(inArray(serviceProvidersTable.ownerId, ownerIds));
 
-  if (providers.length === 0) return res.json({ totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, byProvider: [] });
+  if (providers.length === 0) return res.json({ totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, totalPending: 0, byProvider: [] });
 
   const providerIds = providers.map(p => p.id);
 
@@ -4491,13 +4503,14 @@ router.get("/service-revenue-summary", async (req, res) => {
       deposit: serviceAppointmentsTable.deposit,
       insuranceAmount: serviceAppointmentsTable.insuranceAmount,
       status: serviceAppointmentsTable.status,
+      dateStr: serviceAppointmentsTable.dateStr,
     })
     .from(serviceAppointmentsTable)
     .where(
       and(
         inArray(serviceAppointmentsTable.providerId, providerIds),
-        gte(serviceAppointmentsTable.dateStr, `${selectedMonth}-01`),
-        lte(serviceAppointmentsTable.dateStr, `${selectedMonth}-31`),
+        gte(serviceAppointmentsTable.dateStr, fromDate),
+        lte(serviceAppointmentsTable.dateStr, toDate),
         ne(serviceAppointmentsTable.status, "cancelled"),
       )
     );
@@ -4506,6 +4519,10 @@ router.get("/service-revenue-summary", async (req, res) => {
   for (const p of providers) byProvider[p.id] = { name: p.businessName ?? `خدمة #${p.id}`, revenue: 0, deposits: 0, insurance: 0, pending: 0 };
 
   for (const a of appts) {
+    if (hasHijriPeriod) {
+      const date = getHijriYM(a.dateStr);
+      if (date.year !== hijriYear || date.month !== hijriMonth) continue;
+    }
     if (!byProvider[a.providerId]) continue;
     const amt = Number(a.amount ?? 0);
     const dep = Number(a.deposit ?? 0);

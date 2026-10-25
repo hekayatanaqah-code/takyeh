@@ -35,6 +35,7 @@ import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
+import { buildActivitySummaryReportHtml, resolveReportCalendar } from "@/lib/financialReport";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
@@ -19193,8 +19194,8 @@ function buildMonthlyBarChartSvg(
     } else {
       const dt = new Date((isDay ? m.month : m.month + "-15") + "T12:00:00");
       label = isDay
-        ? dt.toLocaleDateString("ar-SA", { day: "numeric", month: "short" })
-        : dt.toLocaleDateString("ar-SA", { month: "long" });
+        ? dt.toLocaleDateString("ar-SA", { day: "numeric", month: "short", calendar: "gregory" })
+        : dt.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
     }
     const cx = gx + groupW / 2;
     // All months: single line, −45° rotation from anchor point, text-anchor="end"
@@ -19228,11 +19229,11 @@ function buildMonthlyReportHtml(
   isCurrentPeriod = false,
   fileName = "0000.pdf",
 ): string {
-  const monthStr = toAr(monthTitle ?? new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long" }));
+  const monthStr = toAr(monthTitle ?? new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" }));
   const _now = new Date();
   const _hc = toHijriComponents(_now);
   const _hijriPrint = `${toAr(_hc.day)} ${HIJRI_MONTHS_AR[_hc.month - 1]} ${toAr(_hc.year)} هـ`;
-  const _gregPrint = toAr(_now.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" })) + " م";
+  const _gregPrint = toAr(_now.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" })) + " م";
   const printDate = `${_hijriPrint} | ${_gregPrint}`;
   const hijriYear = toAr(_hc.year);
   const gregYear = toAr(_now.getFullYear());
@@ -19320,7 +19321,7 @@ function buildYearlyReportHtml(
   const _nowY = new Date();
   const _hcY = toHijriComponents(_nowY);
   const _hijriPrintY = `${toAr(_hcY.day)} ${HIJRI_MONTHS_AR[_hcY.month - 1]} ${toAr(_hcY.year)} هـ`;
-  const _gregPrintY = toAr(_nowY.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric" })) + " م";
+  const _gregPrintY = toAr(_nowY.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" })) + " م";
   const printDate = `${_hijriPrintY} | ${_gregPrintY}`;
   const hijriYearY = toAr(_hcY.year);
   const gregYearY = toAr(_nowY.getFullYear());
@@ -19352,8 +19353,8 @@ function buildYearlyReportHtml(
     } else {
       const dt = new Date((isDay ? m.month : m.month + "-15") + "T12:00:00");
       label = isDay
-        ? dt.toLocaleDateString("ar-SA", { day: "numeric", month: "long" })
-        : dt.toLocaleDateString("ar-SA", { month: "long" });
+        ? dt.toLocaleDateString("ar-SA", { day: "numeric", month: "long", calendar: "gregory" })
+        : dt.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
     }
     const isEmpty = m.revenue === 0 && m.expenses === 0;
     const netCls = m.netProfit >= 0 ? "color:#16a34a;" : "color:#dc2626;";
@@ -19607,7 +19608,8 @@ async function generateAndUploadReportPdf(
   return uploadFile(file);
 }
 
-function ReportsTab() {
+function ReportsTab({ calendarPreference }: { calendarPreference?: "hijri" | "gregorian" } = {}) {
+  const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const { unit: repUnit, selectUnit: selectReportActivity } = useAdminFinance();
   const _nowRep = new Date();
@@ -19630,8 +19632,14 @@ function ReportsTab() {
   const [localReportSubmissionId, setSelectedSubmissionId] = useState<string>("all");
   const selectedSubmissionId = repUnit.type === "chalet"
     ? String(repUnit.submissionId ?? "none") : selectReportActivity ? "all" : localReportSubmissionId;
-  const [isHijri, setIsHijri] = useState(false);
-  const [isYearlyHijri, setIsYearlyHijri] = useState(false);
+  const [isHijri, setIsHijri] = useState(() => resolveReportCalendar(calendarPreference, localStorage.getItem("revCalType")) === "hijri");
+  const [isYearlyHijri, setIsYearlyHijri] = useState(() => resolveReportCalendar(calendarPreference, localStorage.getItem("revCalType")) === "hijri");
+  useEffect(() => {
+    if (!calendarPreference) return;
+    setIsHijri(calendarPreference === "hijri");
+    setIsYearlyHijri(calendarPreference === "hijri");
+  }, [calendarPreference]);
+  const isActivitySummary = repUnit.type === "service" || (repUnit.type === "all" && reportType !== "chalets");
   const [selectedHijriMonthVal, setSelectedHijriMonthVal] = useState<string>(() => {
     const { year, month } = getHijriYMClient(new Date());
     return year ? `${year}-${String(month).padStart(2, "0")}` : "";
@@ -19646,6 +19654,7 @@ function ReportsTab() {
   const [showArchive, setShowArchive] = useState(false);
   const [waLoading, setWaLoading] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
+  const [quickAction, setQuickAction] = useState<"print" | "pdf" | "share" | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveSavedId, setArchiveSavedId] = useState<number | null>(null);
@@ -19776,14 +19785,24 @@ function ReportsTab() {
   });
   const archivePagination = useListPagination(archive, archive.map((report: any) => report.id).join("|"));
 
-  const { data: svcRepSummary } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number }[] }>({
-    queryKey: ["owner", "service-revenue-summary-rep", selectedMonth],
+  const { data: rawSvcRepSummary, isLoading: serviceReportLoading, isError: serviceReportError } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number }[] }>({
+    queryKey: ["owner", "service-revenue-summary-rep", isHijri, isHijri ? selectedHijriMonthVal : selectedMonth],
     queryFn: async () => {
-      const r = await apiFetch(`/owner/service-revenue-summary?month=${selectedMonth}`);
-      return r.ok ? r.json() : { totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, byProvider: [] };
+      const params = isHijri
+        ? new URLSearchParams({ hijriYear: selectedHijriMonthVal.split("-")[0], hijriMonth: String(Number(selectedHijriMonthVal.split("-")[1])) })
+        : new URLSearchParams({ month: selectedMonth });
+      const r = await apiFetch(`/owner/service-revenue-summary?${params}`);
+      if (!r.ok) throw new Error("تعذّر تحميل تقرير الخدمات");
+      return r.json();
     },
-    enabled: (reportType === "services" || reportType === "unified") && viewMode === "monthly",
+    enabled: isActivitySummary && viewMode === "monthly",
   });
+  const svcRepSummary = rawSvcRepSummary && repUnit.type === "service" ? (() => {
+    const byProvider = rawSvcRepSummary.byProvider.filter(provider => provider.id === repUnit.id);
+    return { byProvider, totalRevenue: byProvider.reduce((sum, provider) => sum + provider.revenue, 0),
+      totalDeposits: byProvider.reduce((sum, provider) => sum + provider.deposits, 0),
+      totalInsurance: byProvider.reduce((sum, provider) => sum + provider.insurance, 0) };
+  })() : rawSvcRepSummary;
 
   const archiveMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -19808,7 +19827,7 @@ function ReportsTab() {
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long" });
+      const label = d.toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" });
       opts.push({ val, label });
     }
     return opts;
@@ -20111,7 +20130,7 @@ function ReportsTab() {
 ✨ منصة تكية لإدارة الحجوزات`;
       console.log("[WA-SHARE] bodyText:", bodyText);
     } else if (viewMode === "custom") {
-      const _waCal = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+      const _waCal = isHijri ? "hijri" : "gregorian";
       const _waData = _waCal === "hijri" ? customRangeDataHijri : customRangeData;
       if (!_waData) return;
       const waRangeLabel = customFrom && customTo
@@ -20134,7 +20153,7 @@ function ReportsTab() {
       ? (isYearlyHijri ? "hijri" : "gregorian")
       : viewMode === "monthly"
         ? (isHijri ? "hijri" : "gregorian")
-        : ((localStorage.getItem("revCalType") as ReportCalendarMode) ?? "gregorian");
+        : (isHijri ? "hijri" : "gregorian");
     const shareFileName = buildReportFileName({
       viewMode,
       calMode: shareCalMode,
@@ -20159,7 +20178,7 @@ function ReportsTab() {
         const logo = await getLogoDataUrl();
         htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo, false, shareFileName);
       } else if (viewMode === "custom") {
-        const _shareCalMode = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+        const _shareCalMode = isHijri ? "hijri" : "gregorian";
         const _shareData = _shareCalMode === "hijri" ? customRangeDataHijri : customRangeData;
         if (!_shareData) return;
         const logo = await getLogoDataUrl();
@@ -20328,6 +20347,93 @@ function ReportsTab() {
     }
   }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel]);
 
+  const quickReportReady = isActivitySummary
+    ? !!svcRepSummary && !serviceReportLoading && !serviceReportError && (reportType !== "unified" || repUnit.type === "service" || !!financial)
+    : viewMode === "monthly" ? !!report && !!financial && !isLoading
+      : viewMode === "yearly" ? !!(isYearlyHijri ? yearlyHijri : yearly) && !(isYearlyHijri ? yearlyHijriLoading : yearlyLoading)
+      : !!(isHijri ? customRangeDataHijri : customRangeData) && !!customFrom && !!customTo;
+
+  async function handleQuickReportAction(action: "print" | "pdf" | "share") {
+    if (!quickReportReady || quickAction) return;
+    // Open synchronously within the click to avoid browser popup blocking after PDF/font awaits.
+    const printWindow = action === "print" ? window.open("", "_blank", "width=900,height=1200") : null;
+    if (action === "print" && !printWindow) {
+      toast({ title: "تعذّر فتح نافذة الطباعة", description: "اسمح بالنوافذ المنبثقة لهذا الموقع ثم أعد المحاولة.", variant: "destructive" });
+      return;
+    }
+    setQuickAction(action);
+    try {
+      const calMode: ReportCalendarMode = viewMode === "yearly" ? (isYearlyHijri ? "hijri" : "gregorian") : (isHijri ? "hijri" : "gregorian");
+      const fileName = buildReportFileName({ viewMode, calMode, month: selectedMonth, hijriMonth: selectedHijriMonthVal,
+        year: selectedYear, hijriYear: selectedHijriYear, from: customFrom, to: customTo });
+      const logo = await getLogoDataUrl();
+      let html: string;
+      if (isActivitySummary && svcRepSummary) {
+        const unified = repUnit.type === "all" && reportType === "unified";
+        const rows = unified ? [
+          { label: "إيرادات العقارات", amount: financial?.totalRevenue ?? 0 },
+          { label: "إيرادات الخدمات", amount: svcRepSummary.totalRevenue },
+          { label: "إجمالي الإيرادات الموحّدة", amount: (financial?.totalRevenue ?? 0) + svcRepSummary.totalRevenue },
+          { label: "مصروفات العقارات", amount: financial?.totalExpenses ?? 0 },
+          { label: "صافي العقارات", amount: financial?.netProfit ?? 0 },
+        ] : [
+          { label: "إجمالي إيرادات الخدمات", amount: svcRepSummary.totalRevenue },
+          { label: "عربون محصّل", amount: svcRepSummary.totalDeposits },
+          { label: "التأمينات", amount: svcRepSummary.totalInsurance },
+          ...svcRepSummary.byProvider.map(provider => ({ label: provider.name, amount: provider.revenue })),
+        ];
+        html = buildActivitySummaryReportHtml({ title: unified ? "التقرير المالي الموحّد" : "تقرير الخدمات",
+          period: activeMonthLabel, activityName: repUnit.type === "service" ? repUnit.name : "جميع الأنشطة",
+          fileName, rows, logo, css: REPORT_CSS, forPrint: action === "print" });
+      } else if (viewMode === "monthly") {
+        const qr = await generateReportQrDataUrl("monthly", isHijri ? selectedHijriMonthVal : selectedMonth);
+        html = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, action === "print", qr,
+          repBreakdown, activeMonthLabel, logo, isCurrentMonthlyPeriod, fileName);
+      } else if (viewMode === "yearly") {
+        const activeYear = isYearlyHijri ? selectedHijriYear : selectedYear;
+        const qr = await generateReportQrDataUrl("yearly", activeYear);
+        html = buildYearlyReportHtml(activeYear, selectedPropertyName, (isYearlyHijri ? yearlyHijri : yearly)!,
+          action === "print", qr, logo, false, calMode, false, undefined,
+          isYearlyHijri ? Number(selectedHijriYear) === nowHijriYearNum : selectedYear === currentYear, fileName);
+      } else {
+        const activeCustomData = (isHijri ? customRangeDataHijri : customRangeData)!;
+        const formatDate = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("ar-SA", {
+          calendar: isHijri ? "islamic-umalqura" : "gregory", year: "numeric", month: "long", day: "numeric",
+        });
+        const range = `${formatDate(customFrom)} ← ${formatDate(customTo)}`;
+        const days = Math.round((new Date(`${customTo}T12:00:00`).getTime() - new Date(`${customFrom}T12:00:00`).getTime()) / 86400000) + 1;
+        html = buildYearlyReportHtml(range, selectedPropertyName, activeCustomData, action === "print", null,
+          logo, true, calMode, groupByDay, days, false, fileName);
+      }
+      if (printWindow) {
+        printWindow.document.write(html);
+        printWindow.document.close();
+        return;
+      }
+      const { blob } = await htmlToPdfBlob(html, fileName);
+      const file = new File([blob], fileName, { type: "application/pdf", lastModified: Date.now() });
+      if (action === "share" && navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: "التقرير المالي" });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        if (action === "share") toast({ title: "تم تنزيل التقرير للمشاركة", description: "المشاركة المباشرة غير متاحة في هذا المتصفح. أرفق ملف PDF المحمّل في واتساب أو البريد الإلكتروني." });
+      }
+    } catch (error) {
+      printWindow?.close();
+      if (!(error instanceof Error && error.name === "AbortError"))
+        toast({ title: "تعذّر تجهيز التقرير", description: "أعد المحاولة بعد اكتمال تحميل البيانات.", variant: "destructive" });
+    } finally {
+      setQuickAction(null);
+    }
+  }
+
   const planLabels: Record<string, string> = {
     trial: "تجريبي (30 يوم)",
     monthly: "شهري",
@@ -20342,9 +20448,44 @@ function ReportsTab() {
   return (
     <div className="space-y-6">
 
-      <SectionGuideButton sectionKey="reports" />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3" role="group" aria-label="إجراءات التقرير المالي">
+        <SectionGuideButton sectionKey="reports" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" size="sm" variant="outline" className="gap-2" disabled={!quickReportReady || !!quickAction} onClick={() => void handleQuickReportAction("print")} data-testid="financial-report-print">
+            {quickAction === "print" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}طباعة التقرير
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="gap-2" disabled={!quickReportReady || !!quickAction} onClick={() => void handleQuickReportAction("pdf")} data-testid="financial-report-download">
+            {quickAction === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}تحميل كـ PDF
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="gap-2" disabled={!quickReportReady || !!quickAction} onClick={() => void handleQuickReportAction("share")} data-testid="financial-report-share">
+            {quickAction === "share" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}مشاركة أو إرسال
+          </Button>
+        </div>
+      </div>
+      {isActivitySummary && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
+          <span className="text-sm font-semibold">تقويم التقرير</span>
+          <div className="flex rounded-lg border border-border p-0.5">
+            {(["hijri", "gregorian"] as const).map(calendar => (
+              <button type="button" key={calendar} aria-pressed={isHijri === (calendar === "hijri")} data-testid={`financial-report-calendar-${calendar}`}
+                onClick={() => { setIsHijri(calendar === "hijri"); setIsYearlyHijri(calendar === "hijri"); }}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold ${isHijri === (calendar === "hijri") ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"}`}>
+                {calendar === "hijri" ? "هجري" : "ميلادي"}
+              </button>
+            ))}
+          </div>
+          <Select dir="rtl" value={isHijri ? selectedHijriMonthVal : selectedMonth} onValueChange={isHijri ? setSelectedHijriMonthVal : setSelectedMonth}>
+            <SelectTrigger className="h-9 w-full sm:w-56" aria-label="شهر التقرير المالي"><SelectValue /></SelectTrigger>
+            <SelectContent dir="rtl">
+              {(isHijri ? hijriMonthOptions.filter(option => option.val <= `${nowHijriYearNum}-${String(nowHijriMonthNum).padStart(2, "0")}`) : monthOptions).map(option =>
+                <SelectItem key={option.val} value={option.val}>{option.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* ── Report Type Selector (only in "all" unit mode) ── */}
+      {isActivitySummary && serviceReportError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل تقرير الخدمات. أعد تحميل الصفحة للمحاولة مجددًا؛ إجراءات التصدير متوقفة حتى تكتمل البيانات.</p>}
       {repUnit.type === "all" && !selectReportActivity && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold text-muted-foreground">نوع التقرير:</span>
@@ -20366,19 +20507,11 @@ function ReportsTab() {
       )}
 
       {/* ── Services Report ── */}
-      {repUnit.type === "all" && reportType === "services" && viewMode === "monthly" && (
+      {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Activity className="w-5 h-5 text-amber-500 shrink-0" />
             <h2 className="text-lg font-bold text-foreground">تقرير الخدمات</h2>
-            <div className="ms-auto w-44">
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {filteredMonthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           {svcRepSummary && svcRepSummary.byProvider.length > 0 ? (
             <>
@@ -20434,14 +20567,6 @@ function ReportsTab() {
           <div className="flex items-center gap-3 flex-wrap">
             <Zap className="w-5 h-5 text-primary shrink-0" />
             <h2 className="text-lg font-bold text-foreground">التقرير الموحّد</h2>
-            <div className="ms-auto w-44">
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {filteredMonthOptions.map(o => <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-card border border-primary/20 rounded-2xl p-4 space-y-1">
@@ -20466,7 +20591,7 @@ function ReportsTab() {
       )}
 
       {/* Show standard report only for "chalets" type or when unit is not "all" */}
-      {(repUnit.type !== "all" || reportType === "chalets") && (<>
+      {!isActivitySummary && (<>
 
       {/* Subscription Card */}
       {/* Subscription card moved to profile header area — not shown in Reports */}
@@ -20505,12 +20630,16 @@ function ReportsTab() {
           {viewMode !== "custom" && <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
             {(["gregorian", "hijri"] as const).map((c) => (
               <button key={c} type="button"
+                aria-pressed={(viewMode === "monthly" ? isHijri : isYearlyHijri) === (c === "hijri")}
+                data-testid={`financial-report-calendar-${c}`}
                 onClick={() => {
                   if (viewMode === "monthly") {
                     setIsHijri(c === "hijri");
+                    setIsYearlyHijri(c === "hijri");
                   } else {
                     const toHijri = c === "hijri";
                     setIsYearlyHijri(toHijri);
+                    setIsHijri(toHijri);
                     /* ── Snap immediately to latest year of the new calendar ── */
                     if (toHijri && reportYears?.hijriYears?.length) {
                       setSelectedHijriYear(String(reportYears.hijriYears[0]));
@@ -20545,7 +20674,7 @@ function ReportsTab() {
                     compact
                     minDate={earliestTransactionDate}
                     maxDate={todayLocalDate}
-                    mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
+                    mode={isHijri ? "hijri" : "gregorian"}
                   />
                 </div>
               </div>
@@ -20564,7 +20693,7 @@ function ReportsTab() {
                     minDate={customFrom || earliestTransactionDate}
                     maxDate={todayLocalDate}
                     openingDate={customFrom || undefined}
-                    mode={(localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian"}
+                    mode={isHijri ? "hijri" : "gregorian"}
                   />
                 </div>
               </div>
@@ -20697,11 +20826,11 @@ function ReportsTab() {
         const getMonthLabel = (m: any) =>
           isYearlyHijri && (m as any).monthName
             ? (m as any).monthName
-            : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long" });
+            : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
         const getMonthShortLabel = (m: any) =>
           isYearlyHijri && (m as any).monthName
             ? (m as any).monthName.slice(0, 5)
-            : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" });
+            : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short", calendar: "gregory" });
         return (
         <>
           {activeYearlyLoading ? (
@@ -20740,7 +20869,7 @@ function ReportsTab() {
                 const getAxisLabel = (m: any) =>
                   isYearlyHijri && (m as any).monthName
                     ? (HIJRI_AXIS[(m as any).monthName] ?? (m as any).monthName.slice(0, 4))
-                    : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short" });
+                    : new Date(m.month + "-15").toLocaleDateString("ar-SA", { month: "short", calendar: "gregory" });
                 return (
                   <div className="bg-card border border-border rounded-2xl p-5">
                     <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
@@ -20915,7 +21044,7 @@ function ReportsTab() {
 
       {/* ── CUSTOM RANGE VIEW ── */}
       {viewMode === "custom" && (() => {
-        const customCalMode = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+        const customCalMode = isHijri ? "hijri" : "gregorian";
         // Pick the right grouped dataset: Hijri groups when calMode=hijri to avoid cross-month bleed
         const activeCustomData = customCalMode === "hijri" ? customRangeDataHijri : customRangeData;
         const fmtCustomDate = (d: string) => {
@@ -21027,7 +21156,7 @@ function ReportsTab() {
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-2 justify-end">
                   <Button variant="outline" size="sm" onClick={() => {
-                    const _cm = (localStorage.getItem("revCalType") as "hijri" | "gregorian") ?? "gregorian";
+                    const _cm = isHijri ? "hijri" : "gregorian";
                     const _fmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _cm === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
                     const rangeStr = customFrom && customTo ? `${_fmt(customFrom)} ← ${_fmt(customTo)}` : "مخصص";
                     const _diff = customFrom && customTo ? Math.round((new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000) + 1 : undefined;
@@ -21273,7 +21402,7 @@ function ReportsTab() {
                   </h3>
                   <ResponsiveContainer width="100%" height={220}>
                     <BarChart data={financial.trend.map((t) => ({
-                      name: new Date(t.month + "-15").toLocaleDateString("ar-SA", { month: "short" }),
+                      name: new Date(t.month + "-15").toLocaleDateString("ar-SA", { month: "short", calendar: isHijri ? "islamic-umalqura" : "gregory" }),
                       الإيرادات: t.revenue,
                       المصروفات: t.expenses,
                     }))} margin={{ top: 0, right: 0, left: -10, bottom: 20 }}>
@@ -26469,7 +26598,7 @@ export default function Dashboard() {
                 {adminFinanceTab === "expenses"      && <ExpensesTab />}
                 {adminFinanceTab === "staff"         && <StaffTab />}
                 {adminFinanceTab === "notifications" && <NotificationsTab />}
-                {adminFinanceTab === "reports"       && <ReportsTab />}
+                {adminFinanceTab === "reports"       && <ReportsTab calendarPreference={ownerProfile?.reportsCalPref === "hijri" ? "hijri" : ownerProfile?.reportsCalPref === "gregorian" ? "gregorian" : undefined} />}
                 {adminFinanceTab === "support"       && <OwnerSupportTab />}
                 {adminFinanceTab === "history"       && <TransactionHistoryTab />}
               </div>

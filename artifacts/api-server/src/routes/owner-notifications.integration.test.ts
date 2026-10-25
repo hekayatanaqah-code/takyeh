@@ -3,9 +3,10 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { after, before, it } from "node:test";
 import { eq, inArray } from "drizzle-orm";
-import { db, pool, ownerNotificationsTable, ownerBookingsTable, sessionsTable, chaletSubmissionsTable, ownerSubscriptionsTable } from "@workspace/db";
+import { db, pool, ownerNotificationsTable, ownerBookingsTable, sessionsTable, chaletSubmissionsTable, ownerSubscriptionsTable, serviceProvidersTable, serviceAppointmentsTable } from "@workspace/db";
 import app from "../app";
 import { createSession } from "../lib/auth";
+import { GetOwnerServiceRevenueSummaryResponse } from "@workspace/api-zod";
 
 const owner = `notification-search-test-${randomUUID()}`;
 const other = `notification-search-test-${randomUUID()}`;
@@ -44,6 +45,8 @@ after(async () => {
   await db.delete(ownerNotificationsTable).where(inArray(ownerNotificationsTable.ownerId, [owner, other]));
   await db.delete(ownerBookingsTable).where(eq(ownerBookingsTable.ownerId, owner));
   await db.delete(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.ownerId, owner));
+  await db.delete(serviceAppointmentsTable).where(inArray(serviceAppointmentsTable.ownerId, [owner, other]));
+  await db.delete(serviceProvidersTable).where(inArray(serviceProvidersTable.ownerId, [owner, other]));
   await db.delete(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, [owner, other]));
   if (sessions.length) await db.delete(sessionsTable).where(inArray(sessionsTable.sid, sessions));
   await pool.end();
@@ -68,6 +71,46 @@ it("returns complete authorized history and booking search metadata without chan
 it("requires authentication and rejects invalid history queries", async () => {
   assert.equal((await fetch(`${base}?history=true`)).status, 401);
   assert.equal((await fetch(`${base}?history=invalid`, { headers: { Cookie: `sid=${session}` } })).status, 400);
+});
+
+it("uses exact Umm al-Qura month boundaries for service reports without including other owners or cancelled bookings", async () => {
+  const formatter = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { year: "numeric", month: "numeric", timeZone: "Asia/Riyadh" });
+  const dates = Array.from({ length: 90 }, (_, index) => new Date(Date.UTC(2026, 1, 1 + index, 12)).toISOString().slice(0, 10))
+    .filter(date => {
+      const parts = formatter.formatToParts(new Date(`${date}T12:00:00Z`));
+      return parts.find(part => part.type === "year")?.value === "1447" && parts.find(part => part.type === "month")?.value === "9";
+    });
+  assert(dates.length >= 29 && dates[0].slice(0, 7) !== dates.at(-1)!.slice(0, 7));
+  const first = dates[0], last = dates.at(-1)!;
+  const adjacentDate = (date: string, days: number) => new Date(new Date(`${date}T12:00:00Z`).getTime() + days * 86400000).toISOString().slice(0, 10);
+  const providers = await db.insert(serviceProvidersTable).values([owner, other].map(ownerId => ({
+    ownerId, businessName: "اختبار فترة التقرير", category: "test", city: "الرياض", whatsappNumber: "0500000000",
+    galleryPhotos: [], coverageTags: [], customFeatureTags: [], photoCaptions: [], isActive: true,
+  }))).returning();
+  const appointment = (providerIndex: number, dateStr: string, deposit: string, status = "confirmed") => ({
+    providerId: providers[providerIndex].id, ownerId: providerIndex === 0 ? owner : other,
+    clientName: "عميل اختبار التقرير", dateStr, deposit, amount: deposit, status,
+  });
+  await db.insert(serviceAppointmentsTable).values([
+    appointment(0, first, "100"), appointment(0, last, "200"),
+    appointment(0, adjacentDate(first, -1), "400"), appointment(0, adjacentDate(last, 1), "800"),
+    appointment(0, first, "10000", "cancelled"), appointment(1, first, "50000"),
+  ]);
+  const url = base.replace(/\/notifications$/, "/service-revenue-summary");
+  const headers = { Cookie: `sid=${session}` };
+  const response = await fetch(`${url}?hijriYear=1447&hijriMonth=9`, { headers });
+  assert.equal(response.status, 200);
+  const summary = GetOwnerServiceRevenueSummaryResponse.parse(await response.json());
+  assert.equal(summary.totalRevenue, 300);
+  assert.equal(summary.totalDeposits, 300);
+  assert.equal(summary.byProvider.length, 1);
+  assert.equal(summary.byProvider[0].id, providers[0].id);
+  const gregorian = await fetch(`${url}?month=${first.slice(0, 7)}`, { headers });
+  assert.equal(gregorian.status, 200);
+  assert.equal(GetOwnerServiceRevenueSummaryResponse.parse(await gregorian.json()).totalRevenue, 500);
+  for (const query of ["hijriYear=1447", "hijriYear=1447&hijriMonth=13", "hijriYear=1447&hijriMonth=9&month=2026-02", "month=2026-13"])
+    assert.equal((await fetch(`${url}?${query}`, { headers })).status, 400, query);
+  assert.equal((await fetch(url)).status, 401);
 });
 
 it("marks only the selected property's notifications read, and never treats a service as all properties", async () => {

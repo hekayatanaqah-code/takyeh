@@ -5,6 +5,23 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface OwnerServiceRevenueProvider {
+  id: number;
+  name: string;
+  revenue: number;
+  deposits: number;
+  insurance: number;
+  pending: number;
+}
+
+export interface OwnerServiceRevenueSummary {
+  totalRevenue: number;
+  totalDeposits: number;
+  totalInsurance: number;
+  totalPending: number;
+  byProvider: OwnerServiceRevenueProvider[];
+}
+
 export interface OwnerNotificationScopeInput {
   /** @minimum 1 */
   chaletId?: number;
@@ -1289,6 +1306,24 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type GetOwnerServiceRevenueSummaryParams = {
+/**
+ * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+ */
+month?: string;
+/**
+ * Supply together with hijriMonth instead of month.
+ * @minimum 1300
+ * @maximum 1600
+ */
+hijriYear?: number;
+/**
+ * @minimum 1
+ * @maximum 12
+ */
+hijriMonth?: number;
+};
 
 export type ListOwnerNotificationHistoryParams = {
 /**

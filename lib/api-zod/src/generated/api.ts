@@ -8,6 +8,36 @@
 import * as zod from 'zod';
 
 
+export const getOwnerServiceRevenueSummaryQueryMonthRegExp = new RegExp('^\\d{4}-(0[1-9]|1[0-2])$');
+export const getOwnerServiceRevenueSummaryQueryHijriYearMin = 1300;
+export const getOwnerServiceRevenueSummaryQueryHijriYearMax = 1600;
+
+export const getOwnerServiceRevenueSummaryQueryHijriMonthMax = 12;
+
+
+
+export const GetOwnerServiceRevenueSummaryQueryParams = zod.object({
+  "month": zod.coerce.string().regex(getOwnerServiceRevenueSummaryQueryMonthRegExp).optional(),
+  "hijriYear": zod.coerce.number().int().min(getOwnerServiceRevenueSummaryQueryHijriYearMin).max(getOwnerServiceRevenueSummaryQueryHijriYearMax).optional().describe('Supply together with hijriMonth instead of month.'),
+  "hijriMonth": zod.coerce.number().int().min(1).max(getOwnerServiceRevenueSummaryQueryHijriMonthMax).optional()
+})
+
+export const GetOwnerServiceRevenueSummaryResponse = zod.object({
+  "totalRevenue": zod.number(),
+  "totalDeposits": zod.number(),
+  "totalInsurance": zod.number(),
+  "totalPending": zod.number(),
+  "byProvider": zod.array(zod.object({
+  "id": zod.number().int(),
+  "name": zod.string(),
+  "revenue": zod.number(),
+  "deposits": zod.number(),
+  "insurance": zod.number(),
+  "pending": zod.number()
+}))
+})
+
+
 export const listOwnerNotificationHistoryQueryHistoryDefault = false;
 
 export const ListOwnerNotificationHistoryQueryParams = zod.object({

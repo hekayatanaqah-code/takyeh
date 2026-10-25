@@ -21,6 +21,33 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/service-revenue-summary:
+    get:
+      operationId: getOwnerServiceRevenueSummary
+      tags: [owner]
+      parameters:
+        - name: month
+          in: query
+          schema: { type: string, pattern: '^\d{4}-(0[1-9]|1[0-2])$' }
+        - name: hijriYear
+          in: query
+          description: Supply together with hijriMonth instead of month.
+          schema: { type: integer, minimum: 1300, maximum: 1600 }
+        - name: hijriMonth
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 12 }
+      responses:
+        "200":
+          description: Collected service revenue in the requested Gregorian or Umm al-Qura month.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OwnerServiceRevenueSummary" }
+        "400":
+          description: Invalid or incomplete calendar period.
+        "401":
+          description: Authentication required.
+        "403":
+          description: Financial management subscription required.
   /owner/notifications:
     get:
       operationId: listOwnerNotificationHistory
@@ -1231,6 +1258,27 @@ components:
       schema:
         type: string
   schemas:
+    OwnerServiceRevenueSummary:
+      type: object
+      required: [totalRevenue, totalDeposits, totalInsurance, totalPending, byProvider]
+      properties:
+        totalRevenue: { type: number }
+        totalDeposits: { type: number }
+        totalInsurance: { type: number }
+        totalPending: { type: number }
+        byProvider:
+          type: array
+          items: { $ref: "#/components/schemas/OwnerServiceRevenueProvider" }
+    OwnerServiceRevenueProvider:
+      type: object
+      required: [id, name, revenue, deposits, insurance, pending]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        revenue: { type: number }
+        deposits: { type: number }
+        insurance: { type: number }
+        pending: { type: number }
     OwnerNotificationScopeInput:
       type: object
       properties:
