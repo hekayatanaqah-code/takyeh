@@ -41,6 +41,9 @@ import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
 import { SubmissionDate } from "@/components/owner/SubmissionDate";
 import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard";
+import { ServiceManagementNavigation } from "@/components/owner/ServiceManagementNavigation";
+import { ServiceCatalogPanel, ServiceOffersPanel } from "@/components/owner/ServiceCatalogPanels";
+import { hasServiceInsurance, serviceDashboardTabs } from "@/lib/serviceDashboardTabs";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
 import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport } from "@/lib/financialReportActivity";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
@@ -9531,6 +9534,8 @@ function ServiceDetailsTab() {
       if (!r.ok) throw new Error();
       const updatedProvider = await r.json();
       queryClient.setQueryData(["service-provider-detail", providerId], updatedProvider);
+      queryClient.setQueryData(["my-approved-providers"], (previous: any[] | undefined) =>
+        previous?.map(item => item.id === providerId ? { ...item, ...updatedProvider } : item));
       queryClient.invalidateQueries({ queryKey: ["service-provider-detail", providerId] });
       queryClient.invalidateQueries({ queryKey: ["my-approved-providers"] });
       toast({ title: "تم الحفظ ✓", description: "تم تحديث بيانات الخدمة بنجاح" });
@@ -25005,6 +25010,27 @@ function SubscriptionAccountBanner({
   );
 }
 
+function ServiceManagementContent({ provider, tab, calendarPreference }: {
+  provider: { id: number; businessName: string; requiresInsurance: boolean; insuranceAmount: string | null; requiresContract: boolean };
+  tab: string;
+  calendarPreference: "hijri" | "gregorian";
+}) {
+  const { isReadOnly } = useReadOnly();
+  if (tab === "details") return <ServiceDetailsTab />;
+  if (tab === "catalog") return <ServiceCatalogPanel providerId={provider.id} readOnly={isReadOnly} />;
+  if (tab === "offers") return <ServiceOffersPanel providerId={provider.id} readOnly={isReadOnly} />;
+  if (tab === "seasons") return <ServiceSeasonsTab />;
+  if (tab === "calendar") return <ServiceCalendarBookingsTab />;
+  if (tab === "insurance" && hasServiceInsurance(provider)) return <ServiceBookingInsurancesTab />;
+  if (tab === "digitalContracts" && provider.requiresContract) return <ServiceDigitalContractsTab />;
+  if (tab === "reviews") return <ServiceReviewsTab />;
+  if (tab === "customers") return <AdminFinanceCtx.Provider value={{ unit: { type: "service", id: provider.id, name: provider.businessName } }}>
+    <CustomersTab key={provider.id} calendarPreference={calendarPreference} />
+  </AdminFinanceCtx.Provider>;
+  if (tab === "messages") return <OwnerMessageSettingsTab establishmentName={provider.businessName} providerId={provider.id} />;
+  return null;
+}
+
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const search = useSearch();
@@ -25415,12 +25441,14 @@ export default function Dashboard() {
   }, [planLimits?.scope, dashMode, businessType]);
 
   useEffect(() => {
-    if (typeof selectedServiceId !== "number") return;
-    const provider = myApprovedProviders.find((item) => item.id === selectedServiceId);
-    if (!provider) return;
-    if (selectedServiceTab === "insurance" && !provider.requiresInsurance) setSelectedServiceTab("details");
-    if (selectedServiceTab === "digitalContracts" && !provider.requiresContract) setSelectedServiceTab("details");
-  }, [selectedServiceId, selectedServiceTab, myApprovedProviders]);
+    if (providersLoading || providersError) return;
+    const scoped = selectedFinanceUnit.type === "all"
+      ? myApprovedProviders
+      : myApprovedProviders.filter(item => item.id === selectedServiceId);
+    if (!serviceDashboardTabs(scoped).some(tab => tab.id === selectedServiceTab)) {
+      setSelectedServiceTab("details");
+    }
+  }, [selectedServiceId, selectedServiceTab, myApprovedProviders, selectedFinanceUnit.type, providersLoading, providersError]);
 
   /* One activity scope for every section; preserve all rather than auto-picking a property. */
   useEffect(() => {
@@ -25772,17 +25800,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      <Navbar
-        ownerDashboard={!actAsStaff && !isImpersonating}
-        returnToDashboard={!actAsStaff && !isImpersonating && (activeDashMode === "services" || activeDashMode === "owner-services")}
-        onReturnToDashboard={() => {
-          setAccountSettingsOpen(false);
-          setServiceView("manage");
-          setSelectedServiceTab("details");
-          setDashMode(canSeeServices ? "services" : "chalets");
-          window.scrollTo({ top: 0, behavior: "smooth" });
-        }}
-      />
+      <Navbar ownerDashboard={!actAsStaff && !isImpersonating} />
       {(actAsStaff || isImpersonating) && hasOperationalActivity && <div className="container mx-auto max-w-6xl px-4">
         <DashboardActivitySelector value={selectedFinanceUnit} properties={ownerChalets} services={myApprovedProviders} onChange={changeDashboardActivity} />
       </div>}
@@ -26221,17 +26239,18 @@ export default function Dashboard() {
                 {/* ── Service ERP Dashboard ─────────────────────────── */}
                 {selectedFinanceUnit.type === "all" && (
                   <div className="space-y-5">
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant={selectedServiceTab !== "seasons" ? "default" : "outline"} onClick={() => setSelectedServiceTab("calendar")}>التقويم والحجوزات — جميع الخدمات</Button>
-                      <Button variant={selectedServiceTab === "seasons" ? "default" : "outline"} onClick={() => setSelectedServiceTab("seasons")}>المواسم — جميع الخدمات</Button>
-                    </div>
-                    {myApprovedProviders.map(provider => <ServiceErpCtx.Provider key={provider.id} value={{ providerId: provider.id }}>
+                    <ServiceManagementNavigation providers={myApprovedProviders} value={selectedServiceTab} onChange={setSelectedServiceTab} />
+                    {myApprovedProviders.filter(provider =>
+                      selectedServiceTab === "insurance" ? hasServiceInsurance(provider) :
+                      selectedServiceTab === "digitalContracts" ? provider.requiresContract : true,
+                    ).map(provider => <ServiceErpCtx.Provider key={provider.id} value={{ providerId: provider.id }}>
                       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <h3 className="text-lg font-bold">{provider.businessName}</h3>
                           <Button variant="outline" onClick={() => changeDashboardActivity({ type: "service", id: provider.id, name: provider.businessName })}>إدارة هذه الخدمة</Button>
                         </div>
-                        {selectedServiceTab === "seasons" ? <ServiceSeasonsTab /> : <ServiceCalendarBookingsTab />}
+                        <ServiceManagementContent provider={provider} tab={selectedServiceTab}
+                          calendarPreference={ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"} />
                       </section>
                     </ServiceErpCtx.Provider>)}
                   </div>
@@ -26239,20 +26258,6 @@ export default function Dashboard() {
                 {selectedFinanceUnit.type !== "all" && selectedServiceId !== null && (() => {
                   const selectedProvider = myApprovedProviders.find(p => p.id === selectedServiceId);
                   if (!selectedProvider) return null;
-                    const serviceErpTabs = [
-                    { id: "details",   label: "تفاصيل الخدمة",    icon: <Edit2 className="w-3.5 h-3.5" /> },
-                    { id: "seasons",   label: "المواسم والأعياد",  icon: <Sunrise className="w-3.5 h-3.5" /> },
-                    { id: "calendar",  label: "التقويم والحجوزات", icon: <Calendar className="w-3.5 h-3.5" /> },
-                      ...(selectedProvider?.requiresInsurance ? [
-                       { id: "insurance", label: "إدارة التأمينات", icon: <Shield className="w-3.5 h-3.5" /> },
-                      ] : []),
-                      ...(selectedProvider?.requiresContract ? [
-                        { id: "digitalContracts", label: "العقود الرقمية", icon: <ScrollText className="w-3.5 h-3.5" /> },
-                      ] : []),
-                      { id: "reviews", label: "التقييمات", icon: <Star className="w-3.5 h-3.5" /> },
-                      { id: "customers", label: "قاعدة العملاء", icon: <UserCheck className="w-3.5 h-3.5" /> },
-                      { id: "messages", label: "إعدادات الرسائل", icon: <Send className="w-3.5 h-3.5" /> },
-                  ];
                   return (
                     <ServiceErpCtx.Provider key={selectedServiceId} value={{ providerId: selectedServiceId }}>
                       <section
@@ -26307,35 +26312,12 @@ export default function Dashboard() {
                       </div>
 
                       {/* ERP Tab bar */}
-                      <OwnerSubnav label="تبويبات إدارة الخدمة" className="gap-x-0.5 gap-y-1 pb-2 px-1">
-                        {serviceErpTabs.map(tab => (
-                          <button key={tab.id} type="button"
-                            onClick={() => setSelectedServiceTab(tab.id)}
-                            aria-pressed={selectedServiceTab === tab.id}
-                            className={`relative flex items-center gap-1.5 px-3.5 py-3 text-xs font-bold border-b-2 transition-colors whitespace-nowrap ${
-                              selectedServiceTab === tab.id
-                                ? "border-amber-500 text-amber-600 dark:text-amber-400"
-                                : "border-transparent text-muted-foreground hover:text-foreground"
-                            }`}>
-                            {tab.icon}{tab.label}
-                          </button>
-                        ))}
-                      </OwnerSubnav>
+                      <ServiceManagementNavigation providers={[selectedProvider]} value={selectedServiceTab} onChange={setSelectedServiceTab} />
 
                       {/* ERP Tab Content — core operations only */}
                       <div className="min-h-[300px]">
-                        {selectedServiceTab === "details"   && <ServiceDetailsTab />}
-                        {selectedServiceTab === "seasons"   && <ServiceSeasonsTab />}
-                        {selectedServiceTab === "calendar"  && <ServiceCalendarBookingsTab />}
-                        {selectedProvider?.requiresInsurance && selectedServiceTab === "insurance" && <ServiceBookingInsurancesTab />}
-                        {selectedProvider?.requiresContract && selectedServiceTab === "digitalContracts" && <ServiceDigitalContractsTab />}
-                        {selectedServiceTab === "reviews" && <ServiceReviewsTab />}
-                        {selectedServiceTab === "customers" && (
-                          <AdminFinanceCtx.Provider value={{ unit: { type: "service", id: selectedServiceId, name: selectedProvider?.businessName ?? "الخدمة" } }}>
-                            <CustomersTab key={selectedServiceId} calendarPreference={ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"} />
-                          </AdminFinanceCtx.Provider>
-                        )}
-                        {selectedServiceTab === "messages" && <OwnerMessageSettingsTab establishmentName={selectedProvider?.businessName} providerId={selectedServiceId} />}
+                        <ServiceManagementContent provider={selectedProvider} tab={selectedServiceTab}
+                          calendarPreference={ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"} />
                       </div>
                       {/* Shortcut to admin-finance */}
                       {isImpersonating && canAccessFinancialAdmin && <div className="mt-4 pt-4 border-t border-border">

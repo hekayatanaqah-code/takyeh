@@ -21,6 +21,116 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /providers/my/approved/{providerId}/catalog:
+    parameters:
+      - { name: providerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: getProviderCatalogItems
+      tags: [providers]
+      responses:
+        "200":
+          description: Service-scoped catalog
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ProviderCatalogItem" } }
+    post:
+      operationId: createProviderCatalogItem
+      tags: [providers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderCatalogItemInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderCatalogItem" }
+  /providers/my/approved/{providerId}/catalog/{itemId}:
+    parameters:
+      - { name: providerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      - { name: itemId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    patch:
+      operationId: updateProviderCatalogItem
+      tags: [providers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderCatalogItemInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderCatalogItem" }
+    delete:
+      operationId: deleteProviderCatalogItem
+      tags: [providers]
+      responses:
+        "204": { description: Removed from catalog }
+  /providers/my/approved/{providerId}/offers:
+    parameters:
+      - { name: providerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    get:
+      operationId: getProviderOffers
+      tags: [providers]
+      responses:
+        "200":
+          description: Service-scoped offers
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ProviderOffer" } }
+    post:
+      operationId: createProviderOffer
+      tags: [providers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderOfferInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOffer" }
+  /providers/my/approved/{providerId}/offers/{offerId}:
+    parameters:
+      - { name: providerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      - { name: offerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    patch:
+      operationId: updateProviderOffer
+      tags: [providers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderOfferInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderOffer" }
+    delete:
+      operationId: deleteProviderOffer
+      tags: [providers]
+      responses:
+        "204": { description: Deleted }
+  /providers/{providerId}/catalog:
+    get:
+      operationId: getPublicProviderCatalog
+      tags: [providers]
+      parameters:
+        - { name: providerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: Active products with the best current offer; no changes to past bookings
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PublicProviderCatalogItem" } }
   /owner/report-years:
     get:
       operationId: getOwnerFinancialPeriods
@@ -1291,6 +1401,51 @@ components:
       schema:
         type: string
   schemas:
+    ProviderCatalogItemInput:
+      type: object
+      required: [name, kind, price, pricingUnit, description, isActive]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 150 }
+        kind: { type: string, enum: [service, product] }
+        price: { type: number, exclusiveMinimum: 0, maximum: 1000000 }
+        pricingUnit: { type: string, enum: [per_request, per_hour, per_day, per_piece] }
+        description: { type: string, maxLength: 2000 }
+        isActive: { type: boolean }
+    ProviderCatalogItem:
+      allOf:
+        - { $ref: "#/components/schemas/ProviderCatalogItemInput" }
+        - type: object
+          required: [id, providerId]
+          properties:
+            id: { type: integer }
+            providerId: { type: integer }
+    ProviderOfferInput:
+      type: object
+      required: [name, itemId, discountType, value, startDate, endDate, isActive]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 150 }
+        itemId: { type: [integer, "null"], minimum: 1 }
+        discountType: { type: string, enum: [percentage, fixed] }
+        value: { type: number, exclusiveMinimum: 0, maximum: 1000000 }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        isActive: { type: boolean }
+    ProviderOffer:
+      allOf:
+        - { $ref: "#/components/schemas/ProviderOfferInput" }
+        - type: object
+          required: [id, providerId]
+          properties:
+            id: { type: integer }
+            providerId: { type: integer }
+    PublicProviderCatalogItem:
+      allOf:
+        - { $ref: "#/components/schemas/ProviderCatalogItem" }
+        - type: object
+          required: [finalPrice, offerName]
+          properties:
+            finalPrice: { type: number }
+            offerName: { type: [string, "null"] }
     OwnerServiceRevenueSummary:
       type: object
       required: [totalRevenue, totalDeposits, totalInsurance, totalPending, byProvider]

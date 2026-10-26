@@ -8,6 +8,326 @@
 import * as zod from 'zod';
 
 
+
+
+
+export const GetProviderCatalogItemsParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1)
+})
+
+export const getProviderCatalogItemsResponseOneNameMin = 2;
+export const getProviderCatalogItemsResponseOneNameMax = 150;
+
+export const getProviderCatalogItemsResponseOnePriceExclusiveMin = 0;
+export const getProviderCatalogItemsResponseOnePriceMax = 1000000;
+
+export const getProviderCatalogItemsResponseOneDescriptionMax = 2000;
+
+
+
+export const GetProviderCatalogItemsResponseItem = zod.object({
+  "name": zod.string().min(getProviderCatalogItemsResponseOneNameMin).max(getProviderCatalogItemsResponseOneNameMax),
+  "kind": zod.enum(['service', 'product']),
+  "price": zod.number().gt(getProviderCatalogItemsResponseOnePriceExclusiveMin).max(getProviderCatalogItemsResponseOnePriceMax),
+  "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
+  "description": zod.string().max(getProviderCatalogItemsResponseOneDescriptionMax),
+  "isActive": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int()
+}))
+export const GetProviderCatalogItemsResponse = zod.array(GetProviderCatalogItemsResponseItem)
+
+
+
+
+
+export const CreateProviderCatalogItemParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1)
+})
+
+export const createProviderCatalogItemBodyNameMin = 2;
+export const createProviderCatalogItemBodyNameMax = 150;
+
+export const createProviderCatalogItemBodyPriceExclusiveMin = 0;
+export const createProviderCatalogItemBodyPriceMax = 1000000;
+
+export const createProviderCatalogItemBodyDescriptionMax = 2000;
+
+
+
+export const CreateProviderCatalogItemBody = zod.object({
+  "name": zod.string().min(createProviderCatalogItemBodyNameMin).max(createProviderCatalogItemBodyNameMax),
+  "kind": zod.enum(['service', 'product']),
+  "price": zod.number().gt(createProviderCatalogItemBodyPriceExclusiveMin).max(createProviderCatalogItemBodyPriceMax),
+  "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
+  "description": zod.string().max(createProviderCatalogItemBodyDescriptionMax),
+  "isActive": zod.boolean()
+})
+
+export const createProviderCatalogItemResponseOneNameMin = 2;
+export const createProviderCatalogItemResponseOneNameMax = 150;
+
+export const createProviderCatalogItemResponseOnePriceExclusiveMin = 0;
+export const createProviderCatalogItemResponseOnePriceMax = 1000000;
+
+export const createProviderCatalogItemResponseOneDescriptionMax = 2000;
+
+
+
+export const CreateProviderCatalogItemResponse = zod.object({
+  "name": zod.string().min(createProviderCatalogItemResponseOneNameMin).max(createProviderCatalogItemResponseOneNameMax),
+  "kind": zod.enum(['service', 'product']),
+  "price": zod.number().gt(createProviderCatalogItemResponseOnePriceExclusiveMin).max(createProviderCatalogItemResponseOnePriceMax),
+  "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
+  "description": zod.string().max(createProviderCatalogItemResponseOneDescriptionMax),
+  "isActive": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int()
+}))
+
+
+
+
+
+
+export const UpdateProviderCatalogItemParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1),
+  "itemId": zod.coerce.number().int().min(1)
+})
+
+export const updateProviderCatalogItemBodyNameMin = 2;
+export const updateProviderCatalogItemBodyNameMax = 150;
+
+export const updateProviderCatalogItemBodyPriceExclusiveMin = 0;
+export const updateProviderCatalogItemBodyPriceMax = 1000000;
+
+export const updateProviderCatalogItemBodyDescriptionMax = 2000;
+
+
+
+export const UpdateProviderCatalogItemBody = zod.object({
+  "name": zod.string().min(updateProviderCatalogItemBodyNameMin).max(updateProviderCatalogItemBodyNameMax),
+  "kind": zod.enum(['service', 'product']),
+  "price": zod.number().gt(updateProviderCatalogItemBodyPriceExclusiveMin).max(updateProviderCatalogItemBodyPriceMax),
+  "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
+  "description": zod.string().max(updateProviderCatalogItemBodyDescriptionMax),
+  "isActive": zod.boolean()
+})
+
+export const updateProviderCatalogItemResponseOneNameMin = 2;
+export const updateProviderCatalogItemResponseOneNameMax = 150;
+
+export const updateProviderCatalogItemResponseOnePriceExclusiveMin = 0;
+export const updateProviderCatalogItemResponseOnePriceMax = 1000000;
+
+export const updateProviderCatalogItemResponseOneDescriptionMax = 2000;
+
+
+
+export const UpdateProviderCatalogItemResponse = zod.object({
+  "name": zod.string().min(updateProviderCatalogItemResponseOneNameMin).max(updateProviderCatalogItemResponseOneNameMax),
+  "kind": zod.enum(['service', 'product']),
+  "price": zod.number().gt(updateProviderCatalogItemResponseOnePriceExclusiveMin).max(updateProviderCatalogItemResponseOnePriceMax),
+  "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
+  "description": zod.string().max(updateProviderCatalogItemResponseOneDescriptionMax),
+  "isActive": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int()
+}))
+
+
+
+
+
+
+export const DeleteProviderCatalogItemParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1),
+  "itemId": zod.coerce.number().int().min(1)
+})
+
+export const DeleteProviderCatalogItemResponse = zod.void()
+
+
+
+
+
+export const GetProviderOffersParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1)
+})
+
+export const getProviderOffersResponseOneNameMin = 2;
+export const getProviderOffersResponseOneNameMax = 150;
+
+
+export const getProviderOffersResponseOneValueExclusiveMin = 0;
+export const getProviderOffersResponseOneValueMax = 1000000;
+
+
+
+export const GetProviderOffersResponseItem = zod.object({
+  "name": zod.string().min(getProviderOffersResponseOneNameMin).max(getProviderOffersResponseOneNameMax),
+  "itemId": zod.number().int().min(1).nullable(),
+  "discountType": zod.enum(['percentage', 'fixed']),
+  "value": zod.number().gt(getProviderOffersResponseOneValueExclusiveMin).max(getProviderOffersResponseOneValueMax),
+  "startDate": zod.date(),
+  "endDate": zod.date(),
+  "isActive": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int()
+}))
+export const GetProviderOffersResponse = zod.array(GetProviderOffersResponseItem)
+
+
+
+
+
+export const CreateProviderOfferParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1)
+})
+
+export const createProviderOfferBodyNameMin = 2;
+export const createProviderOfferBodyNameMax = 150;
+
+
+export const createProviderOfferBodyValueExclusiveMin = 0;
+export const createProviderOfferBodyValueMax = 1000000;
+
+
+
+export const CreateProviderOfferBody = zod.object({
+  "name": zod.string().min(createProviderOfferBodyNameMin).max(createProviderOfferBodyNameMax),
+  "itemId": zod.number().int().min(1).nullable(),
+  "discountType": zod.enum(['percentage', 'fixed']),
+  "value": zod.number().gt(createProviderOfferBodyValueExclusiveMin).max(createProviderOfferBodyValueMax),
+  "startDate": zod.date(),
+  "endDate": zod.date(),
+  "isActive": zod.boolean()
+})
+
+export const createProviderOfferResponseOneNameMin = 2;
+export const createProviderOfferResponseOneNameMax = 150;
+
+
+export const createProviderOfferResponseOneValueExclusiveMin = 0;
+export const createProviderOfferResponseOneValueMax = 1000000;
+
+
+
+export const CreateProviderOfferResponse = zod.object({
+  "name": zod.string().min(createProviderOfferResponseOneNameMin).max(createProviderOfferResponseOneNameMax),
+  "itemId": zod.number().int().min(1).nullable(),
+  "discountType": zod.enum(['percentage', 'fixed']),
+  "value": zod.number().gt(createProviderOfferResponseOneValueExclusiveMin).max(createProviderOfferResponseOneValueMax),
+  "startDate": zod.date(),
+  "endDate": zod.date(),
+  "isActive": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int()
+}))
+
+
+
+
+
+
+export const UpdateProviderOfferParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1),
+  "offerId": zod.coerce.number().int().min(1)
+})
+
+export const updateProviderOfferBodyNameMin = 2;
+export const updateProviderOfferBodyNameMax = 150;
+
+
+export const updateProviderOfferBodyValueExclusiveMin = 0;
+export const updateProviderOfferBodyValueMax = 1000000;
+
+
+
+export const UpdateProviderOfferBody = zod.object({
+  "name": zod.string().min(updateProviderOfferBodyNameMin).max(updateProviderOfferBodyNameMax),
+  "itemId": zod.number().int().min(1).nullable(),
+  "discountType": zod.enum(['percentage', 'fixed']),
+  "value": zod.number().gt(updateProviderOfferBodyValueExclusiveMin).max(updateProviderOfferBodyValueMax),
+  "startDate": zod.date(),
+  "endDate": zod.date(),
+  "isActive": zod.boolean()
+})
+
+export const updateProviderOfferResponseOneNameMin = 2;
+export const updateProviderOfferResponseOneNameMax = 150;
+
+
+export const updateProviderOfferResponseOneValueExclusiveMin = 0;
+export const updateProviderOfferResponseOneValueMax = 1000000;
+
+
+
+export const UpdateProviderOfferResponse = zod.object({
+  "name": zod.string().min(updateProviderOfferResponseOneNameMin).max(updateProviderOfferResponseOneNameMax),
+  "itemId": zod.number().int().min(1).nullable(),
+  "discountType": zod.enum(['percentage', 'fixed']),
+  "value": zod.number().gt(updateProviderOfferResponseOneValueExclusiveMin).max(updateProviderOfferResponseOneValueMax),
+  "startDate": zod.date(),
+  "endDate": zod.date(),
+  "isActive": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int()
+}))
+
+
+
+
+
+
+export const DeleteProviderOfferParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1),
+  "offerId": zod.coerce.number().int().min(1)
+})
+
+export const DeleteProviderOfferResponse = zod.void()
+
+
+
+
+
+export const GetPublicProviderCatalogParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1)
+})
+
+export const getPublicProviderCatalogResponseOneOneNameMin = 2;
+export const getPublicProviderCatalogResponseOneOneNameMax = 150;
+
+export const getPublicProviderCatalogResponseOneOnePriceExclusiveMin = 0;
+export const getPublicProviderCatalogResponseOneOnePriceMax = 1000000;
+
+export const getPublicProviderCatalogResponseOneOneDescriptionMax = 2000;
+
+
+
+export const GetPublicProviderCatalogResponseItem = zod.object({
+  "name": zod.string().min(getPublicProviderCatalogResponseOneOneNameMin).max(getPublicProviderCatalogResponseOneOneNameMax),
+  "kind": zod.enum(['service', 'product']),
+  "price": zod.number().gt(getPublicProviderCatalogResponseOneOnePriceExclusiveMin).max(getPublicProviderCatalogResponseOneOnePriceMax),
+  "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
+  "description": zod.string().max(getPublicProviderCatalogResponseOneOneDescriptionMax),
+  "isActive": zod.boolean()
+}).and(zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int()
+})).and(zod.object({
+  "finalPrice": zod.number(),
+  "offerName": zod.string().nullable()
+}))
+export const GetPublicProviderCatalogResponse = zod.array(GetPublicProviderCatalogResponseItem)
+
+
 export const getOwnerFinancialPeriodsQueryActivityDefault = `properties`;
 
 

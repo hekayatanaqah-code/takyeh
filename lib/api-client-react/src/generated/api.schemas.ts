@@ -5,6 +5,88 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type ProviderCatalogItemInputKind = typeof ProviderCatalogItemInputKind[keyof typeof ProviderCatalogItemInputKind];
+
+
+export const ProviderCatalogItemInputKind = {
+  service: 'service',
+  product: 'product',
+} as const;
+
+export type ProviderCatalogItemInputPricingUnit = typeof ProviderCatalogItemInputPricingUnit[keyof typeof ProviderCatalogItemInputPricingUnit];
+
+
+export const ProviderCatalogItemInputPricingUnit = {
+  per_request: 'per_request',
+  per_hour: 'per_hour',
+  per_day: 'per_day',
+  per_piece: 'per_piece',
+} as const;
+
+export interface ProviderCatalogItemInput {
+  /**
+     * @minLength 2
+     * @maxLength 150
+     */
+  name: string;
+  kind: ProviderCatalogItemInputKind;
+  /**
+     * @maximum 1000000
+     * @exclusiveMinimum 0
+     */
+  price: number;
+  pricingUnit: ProviderCatalogItemInputPricingUnit;
+  /** @maxLength 2000 */
+  description: string;
+  isActive: boolean;
+}
+
+export type ProviderCatalogItem = ProviderCatalogItemInput & {
+  id: number;
+  providerId: number;
+};
+
+export type ProviderOfferInputDiscountType = typeof ProviderOfferInputDiscountType[keyof typeof ProviderOfferInputDiscountType];
+
+
+export const ProviderOfferInputDiscountType = {
+  percentage: 'percentage',
+  fixed: 'fixed',
+} as const;
+
+export interface ProviderOfferInput {
+  /**
+     * @minLength 2
+     * @maxLength 150
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @nullable
+     */
+  itemId: number | null;
+  discountType: ProviderOfferInputDiscountType;
+  /**
+     * @maximum 1000000
+     * @exclusiveMinimum 0
+     */
+  value: number;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+}
+
+export type ProviderOffer = ProviderOfferInput & {
+  id: number;
+  providerId: number;
+};
+
+export type PublicProviderCatalogItem = ProviderCatalogItem & ({
+  finalPrice: number;
+  /** @nullable */
+  offerName: string | null;
+});
+
 export interface OwnerServiceRevenueProvider {
   id: number;
   name: string;

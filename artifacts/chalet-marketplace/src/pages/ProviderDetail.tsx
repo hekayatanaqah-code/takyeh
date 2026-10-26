@@ -9,6 +9,7 @@ import { useState, useMemo } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
+import { PublicServiceCatalog } from "@/components/owner/ServiceCatalogPanels";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -357,6 +358,9 @@ export default function ProviderDetail() {
         </a>
       </div>
 
+      <div className="container mx-auto max-w-6xl px-4 pb-10">
+        <PublicServiceCatalog providerId={provider.id} />
+      </div>
       <Footer />
     </div>
   );

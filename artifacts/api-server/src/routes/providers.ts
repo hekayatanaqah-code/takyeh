@@ -23,11 +23,13 @@ import { eq, and, ne, desc, isNull, gte, sql, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 import { CreateServiceSeasonBody, UpdateServiceSeasonBody } from "@workspace/api-zod";
 import { randomBytes } from "crypto";
+import providerCatalogRouter, { getPublicCatalog } from "./provider-catalog";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
 import { activeOwnersWithFreeAccess, isSubscriptionActive, ownerPlanAccess, preferredOwnerSubscription } from "../lib/subscription-access";
 
 const router = Router();
+router.use("/my/approved", providerCatalogRouter);
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
 
 async function activeInventoryOwnerIds(ownerIds: Array<string | null | undefined>) {
@@ -189,6 +191,16 @@ router.post("/service-contract/:appointmentId/sign", async (req, res) => {
 });
 
 /* ── Public: list approved providers ─────────────── */
+router.get("/:providerId/catalog", async (req, res) => {
+  const id = Number(req.params.providerId);
+  if (!Number.isSafeInteger(id) || id <= 0 || id > 2147483647) return res.status(400).json({ error: "معرّف الخدمة غير صالح" });
+  const [provider] = await db.select({ id: serviceProvidersTable.id, ownerId: serviceProvidersTable.ownerId })
+    .from(serviceProvidersTable).where(and(eq(serviceProvidersTable.id, id), eq(serviceProvidersTable.isActive, true))).limit(1);
+  if (!provider || !provider.ownerId || !(await activeInventoryOwnerIds([provider.ownerId])).has(provider.ownerId)) {
+    return res.status(404).json({ error: "الخدمة غير متاحة" });
+  }
+  return res.json(await getPublicCatalog(id));
+});
 router.get("/", async (req, res) => {
   const category = typeof req.query.category === "string" ? req.query.category : undefined;
   const city = typeof req.query.city === "string" ? req.query.city.trim() : undefined;

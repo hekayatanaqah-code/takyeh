@@ -78,3 +78,4 @@
 - [Revenue month alignment](revenue-month-alignment.md) — Gregorian month labels and secondary dates must share the Hijri menu’s right alignment; preserve accepted financial behavior.
 - [Bank ledger accounting](bank-ledger-accounting.md) — full-history balance differs from filtered subtotals; registered expenses are red, explicitly signed debits.
 - [Notification display boundary](notification-display-boundary.md) — hide internal markers in presentation, not storage; preserve action URLs while unifying Arabic formatting across filters.
+- [Service catalog policy](service-catalog-policy.md) — independent provider products/offers; complete all-service navigation and positive enabled insurance gate.

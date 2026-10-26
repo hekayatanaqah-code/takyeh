@@ -9,9 +9,9 @@ There must be no independent intermediate Hub page. A service owner enters the a
 
 **How to apply:** Prefer an active service for ordinary default entry, but preserve an explicitly selected owned service across reloads and browser navigation. Keep activity switching inside the dashboard and settings, subscriptions, and registration requests account-wide. Preserve property-only, staff, and administrator-impersonation management paths. Reuse existing subscription capacity checks when adding activities. Use a single account-wide requests action labeled «متابعة الطلبات».
 
-ترويسة صفحات تعديل وإدارة الخدمات تعرض زرًا واضحًا «العودة إلى لوحة التحكم» مع أيقونة رجوع، ظاهرًا على الجوال أيضًا، ويعيد المزود مباشرة إلى لوحة المالك دون المرور بواجهة العملاء.
+زر «العودة إلى لوحة التحكم» يظهر في الصفحات الإدارية الفرعية فقط، مثل تعديل البيانات وإضافة الخدمة، ويُخفى تمامًا داخل لوحة التحكم الرئيسية، بما فيها قسم إدارة الخدمات. يبقى ظاهرًا على الجوال في الصفحات الفرعية.
 
-**Why:** المستخدم طلب مسار رجوع مباشر من صفحات تعديل وإدارة الخدمات بدل الاضطرار للخروج إلى الواجهة العامة.
+**Why:** المستخدم صحّح نطاق الزر صراحةً: للصفحات الفرعية فقط، وليس داخل لوحة التحكم نفسها.
 
 **How to apply:** ميّز زر الرجوع إلى لوحة المالك عن رابط تصفح المنصة؛ حافظ على مسارات الموظفين وانتحال الإدارة دون تغيير.
 

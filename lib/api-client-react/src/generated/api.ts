@@ -134,6 +134,11 @@ import type {
   PropertyPriceQuote,
   PropertySocialAccountInput,
   PropertySocialAccountResult,
+  ProviderCatalogItem,
+  ProviderCatalogItemInput,
+  ProviderOffer,
+  ProviderOfferInput,
+  PublicProviderCatalogItem,
   RatePhotographySession200,
   ReadPhotographyOperationalAlert200,
   ReceiptCompleteInput,
@@ -195,6 +200,767 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetProviderCatalogItemsUrl = (providerId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/catalog`
+}
+
+export const getProviderCatalogItems = async (providerId: number, options?: Parameters<typeof customFetch>[1]): Promise<ProviderCatalogItem[]> => {
+
+  return customFetch<ProviderCatalogItem[]>(getGetProviderCatalogItemsUrl(providerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProviderCatalogItemsQueryKey = (providerId: number,) => {
+    return [
+    `/api/providers/my/approved/${providerId}/catalog`
+    ] as const;
+    }
+
+
+export const getGetProviderCatalogItemsQueryOptions = <TData = Awaited<ReturnType<typeof getProviderCatalogItems>>, TError = ErrorType<unknown>>(providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderCatalogItems>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProviderCatalogItemsQueryKey(providerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProviderCatalogItems>>> = ({ signal }) => getProviderCatalogItems(providerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: providerId !== null && providerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProviderCatalogItems>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetProviderCatalogItemsQueryResult = NonNullable<Awaited<ReturnType<typeof getProviderCatalogItems>>>
+export type GetProviderCatalogItemsQueryError = ErrorType<unknown>
+
+
+export function useGetProviderCatalogItems<TData = Awaited<ReturnType<typeof getProviderCatalogItems>>, TError = ErrorType<unknown>>(
+ providerId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderCatalogItems>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProviderCatalogItems>>,
+          TError,
+          Awaited<ReturnType<typeof getProviderCatalogItems>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProviderCatalogItems<TData = Awaited<ReturnType<typeof getProviderCatalogItems>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderCatalogItems>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProviderCatalogItems>>,
+          TError,
+          Awaited<ReturnType<typeof getProviderCatalogItems>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProviderCatalogItems<TData = Awaited<ReturnType<typeof getProviderCatalogItems>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderCatalogItems>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetProviderCatalogItems<TData = Awaited<ReturnType<typeof getProviderCatalogItems>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderCatalogItems>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetProviderCatalogItemsQueryOptions(providerId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProviderCatalogItemUrl = (providerId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/catalog`
+}
+
+export const createProviderCatalogItem = async (providerId: number,
+    providerCatalogItemInput: ProviderCatalogItemInput, options?: Parameters<typeof customFetch>[1]): Promise<ProviderCatalogItem> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProviderCatalogItem>(getCreateProviderCatalogItemUrl(providerId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(providerCatalogItemInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProviderCatalogItemMutationKey = () => ['createProviderCatalogItem'] as const;
+
+export const getCreateProviderCatalogItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProviderCatalogItem>>, TError,CreateProviderCatalogItemMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProviderCatalogItem>>, TError,CreateProviderCatalogItemMutationVariables, TContext> => {
+
+const mutationKey = getCreateProviderCatalogItemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProviderCatalogItem>>, CreateProviderCatalogItemMutationVariables> = (props) => {
+          const {providerId,data} = props ?? {};
+
+          return  createProviderCatalogItem(providerId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProviderCatalogItemMutationResult = NonNullable<Awaited<ReturnType<typeof createProviderCatalogItem>>>
+    export type CreateProviderCatalogItemMutationBody = BodyType<ProviderCatalogItemInput>
+    export type CreateProviderCatalogItemMutationError = ErrorType<unknown>
+    export type CreateProviderCatalogItemMutationVariables = {providerId: number;data: BodyType<ProviderCatalogItemInput>}
+
+    export const useCreateProviderCatalogItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProviderCatalogItem>>, TError,CreateProviderCatalogItemMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createProviderCatalogItem>>,
+        TError,
+        CreateProviderCatalogItemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProviderCatalogItemMutationOptions(options), queryClient);
+    }
+
+export const getUpdateProviderCatalogItemUrl = (providerId: number,
+    itemId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/catalog/${itemId}`
+}
+
+export const updateProviderCatalogItem = async (providerId: number,
+    itemId: number,
+    providerCatalogItemInput: ProviderCatalogItemInput, options?: Parameters<typeof customFetch>[1]): Promise<ProviderCatalogItem> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProviderCatalogItem>(getUpdateProviderCatalogItemUrl(providerId,itemId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(providerCatalogItemInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProviderCatalogItemMutationKey = () => ['updateProviderCatalogItem'] as const;
+
+export const getUpdateProviderCatalogItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProviderCatalogItem>>, TError,UpdateProviderCatalogItemMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProviderCatalogItem>>, TError,UpdateProviderCatalogItemMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProviderCatalogItemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProviderCatalogItem>>, UpdateProviderCatalogItemMutationVariables> = (props) => {
+          const {providerId,itemId,data} = props ?? {};
+
+          return  updateProviderCatalogItem(providerId,itemId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProviderCatalogItemMutationResult = NonNullable<Awaited<ReturnType<typeof updateProviderCatalogItem>>>
+    export type UpdateProviderCatalogItemMutationBody = BodyType<ProviderCatalogItemInput>
+    export type UpdateProviderCatalogItemMutationError = ErrorType<unknown>
+    export type UpdateProviderCatalogItemMutationVariables = {providerId: number;itemId: number;data: BodyType<ProviderCatalogItemInput>}
+
+    export const useUpdateProviderCatalogItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProviderCatalogItem>>, TError,UpdateProviderCatalogItemMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateProviderCatalogItem>>,
+        TError,
+        UpdateProviderCatalogItemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProviderCatalogItemMutationOptions(options), queryClient);
+    }
+
+export const getDeleteProviderCatalogItemUrl = (providerId: number,
+    itemId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/catalog/${itemId}`
+}
+
+export const deleteProviderCatalogItem = async (providerId: number,
+    itemId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteProviderCatalogItemUrl(providerId,itemId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteProviderCatalogItemMutationKey = () => ['deleteProviderCatalogItem'] as const;
+
+export const getDeleteProviderCatalogItemMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProviderCatalogItem>>, TError,DeleteProviderCatalogItemMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteProviderCatalogItem>>, TError,DeleteProviderCatalogItemMutationVariables, TContext> => {
+
+const mutationKey = getDeleteProviderCatalogItemMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteProviderCatalogItem>>, DeleteProviderCatalogItemMutationVariables> = (props) => {
+          const {providerId,itemId} = props ?? {};
+
+          return  deleteProviderCatalogItem(providerId,itemId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteProviderCatalogItemMutationResult = NonNullable<Awaited<ReturnType<typeof deleteProviderCatalogItem>>>
+
+    export type DeleteProviderCatalogItemMutationError = ErrorType<unknown>
+    export type DeleteProviderCatalogItemMutationVariables = {providerId: number;itemId: number}
+
+    export const useDeleteProviderCatalogItem = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProviderCatalogItem>>, TError,DeleteProviderCatalogItemMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteProviderCatalogItem>>,
+        TError,
+        DeleteProviderCatalogItemMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteProviderCatalogItemMutationOptions(options), queryClient);
+    }
+
+export const getGetProviderOffersUrl = (providerId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/offers`
+}
+
+export const getProviderOffers = async (providerId: number, options?: Parameters<typeof customFetch>[1]): Promise<ProviderOffer[]> => {
+
+  return customFetch<ProviderOffer[]>(getGetProviderOffersUrl(providerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProviderOffersQueryKey = (providerId: number,) => {
+    return [
+    `/api/providers/my/approved/${providerId}/offers`
+    ] as const;
+    }
+
+
+export const getGetProviderOffersQueryOptions = <TData = Awaited<ReturnType<typeof getProviderOffers>>, TError = ErrorType<unknown>>(providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderOffers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProviderOffersQueryKey(providerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProviderOffers>>> = ({ signal }) => getProviderOffers(providerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: providerId !== null && providerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProviderOffers>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetProviderOffersQueryResult = NonNullable<Awaited<ReturnType<typeof getProviderOffers>>>
+export type GetProviderOffersQueryError = ErrorType<unknown>
+
+
+export function useGetProviderOffers<TData = Awaited<ReturnType<typeof getProviderOffers>>, TError = ErrorType<unknown>>(
+ providerId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderOffers>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProviderOffers>>,
+          TError,
+          Awaited<ReturnType<typeof getProviderOffers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProviderOffers<TData = Awaited<ReturnType<typeof getProviderOffers>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderOffers>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getProviderOffers>>,
+          TError,
+          Awaited<ReturnType<typeof getProviderOffers>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetProviderOffers<TData = Awaited<ReturnType<typeof getProviderOffers>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderOffers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetProviderOffers<TData = Awaited<ReturnType<typeof getProviderOffers>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getProviderOffers>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetProviderOffersQueryOptions(providerId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateProviderOfferUrl = (providerId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/offers`
+}
+
+export const createProviderOffer = async (providerId: number,
+    providerOfferInput: ProviderOfferInput, options?: Parameters<typeof customFetch>[1]): Promise<ProviderOffer> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProviderOffer>(getCreateProviderOfferUrl(providerId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(providerOfferInput)
+  }
+);}
+
+
+
+
+
+export const getCreateProviderOfferMutationKey = () => ['createProviderOffer'] as const;
+
+export const getCreateProviderOfferMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProviderOffer>>, TError,CreateProviderOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProviderOffer>>, TError,CreateProviderOfferMutationVariables, TContext> => {
+
+const mutationKey = getCreateProviderOfferMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProviderOffer>>, CreateProviderOfferMutationVariables> = (props) => {
+          const {providerId,data} = props ?? {};
+
+          return  createProviderOffer(providerId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProviderOfferMutationResult = NonNullable<Awaited<ReturnType<typeof createProviderOffer>>>
+    export type CreateProviderOfferMutationBody = BodyType<ProviderOfferInput>
+    export type CreateProviderOfferMutationError = ErrorType<unknown>
+    export type CreateProviderOfferMutationVariables = {providerId: number;data: BodyType<ProviderOfferInput>}
+
+    export const useCreateProviderOffer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProviderOffer>>, TError,CreateProviderOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createProviderOffer>>,
+        TError,
+        CreateProviderOfferMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateProviderOfferMutationOptions(options), queryClient);
+    }
+
+export const getUpdateProviderOfferUrl = (providerId: number,
+    offerId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/offers/${offerId}`
+}
+
+export const updateProviderOffer = async (providerId: number,
+    offerId: number,
+    providerOfferInput: ProviderOfferInput, options?: Parameters<typeof customFetch>[1]): Promise<ProviderOffer> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ProviderOffer>(getUpdateProviderOfferUrl(providerId,offerId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(providerOfferInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateProviderOfferMutationKey = () => ['updateProviderOffer'] as const;
+
+export const getUpdateProviderOfferMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProviderOffer>>, TError,UpdateProviderOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProviderOffer>>, TError,UpdateProviderOfferMutationVariables, TContext> => {
+
+const mutationKey = getUpdateProviderOfferMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProviderOffer>>, UpdateProviderOfferMutationVariables> = (props) => {
+          const {providerId,offerId,data} = props ?? {};
+
+          return  updateProviderOffer(providerId,offerId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProviderOfferMutationResult = NonNullable<Awaited<ReturnType<typeof updateProviderOffer>>>
+    export type UpdateProviderOfferMutationBody = BodyType<ProviderOfferInput>
+    export type UpdateProviderOfferMutationError = ErrorType<unknown>
+    export type UpdateProviderOfferMutationVariables = {providerId: number;offerId: number;data: BodyType<ProviderOfferInput>}
+
+    export const useUpdateProviderOffer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProviderOffer>>, TError,UpdateProviderOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateProviderOffer>>,
+        TError,
+        UpdateProviderOfferMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateProviderOfferMutationOptions(options), queryClient);
+    }
+
+export const getDeleteProviderOfferUrl = (providerId: number,
+    offerId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/offers/${offerId}`
+}
+
+export const deleteProviderOffer = async (providerId: number,
+    offerId: number, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteProviderOfferUrl(providerId,offerId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteProviderOfferMutationKey = () => ['deleteProviderOffer'] as const;
+
+export const getDeleteProviderOfferMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProviderOffer>>, TError,DeleteProviderOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteProviderOffer>>, TError,DeleteProviderOfferMutationVariables, TContext> => {
+
+const mutationKey = getDeleteProviderOfferMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteProviderOffer>>, DeleteProviderOfferMutationVariables> = (props) => {
+          const {providerId,offerId} = props ?? {};
+
+          return  deleteProviderOffer(providerId,offerId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteProviderOfferMutationResult = NonNullable<Awaited<ReturnType<typeof deleteProviderOffer>>>
+
+    export type DeleteProviderOfferMutationError = ErrorType<unknown>
+    export type DeleteProviderOfferMutationVariables = {providerId: number;offerId: number}
+
+    export const useDeleteProviderOffer = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProviderOffer>>, TError,DeleteProviderOfferMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteProviderOffer>>,
+        TError,
+        DeleteProviderOfferMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteProviderOfferMutationOptions(options), queryClient);
+    }
+
+export const getGetPublicProviderCatalogUrl = (providerId: number,) => {
+
+
+
+
+  return `/api/providers/${providerId}/catalog`
+}
+
+export const getPublicProviderCatalog = async (providerId: number, options?: Parameters<typeof customFetch>[1]): Promise<PublicProviderCatalogItem[]> => {
+
+  return customFetch<PublicProviderCatalogItem[]>(getGetPublicProviderCatalogUrl(providerId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPublicProviderCatalogQueryKey = (providerId: number,) => {
+    return [
+    `/api/providers/${providerId}/catalog`
+    ] as const;
+    }
+
+
+export const getGetPublicProviderCatalogQueryOptions = <TData = Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError = ErrorType<unknown>>(providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPublicProviderCatalogQueryKey(providerId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPublicProviderCatalog>>> = ({ signal }) => getPublicProviderCatalog(providerId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: providerId !== null && providerId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetPublicProviderCatalogQueryResult = NonNullable<Awaited<ReturnType<typeof getPublicProviderCatalog>>>
+export type GetPublicProviderCatalogQueryError = ErrorType<unknown>
+
+
+export function useGetPublicProviderCatalog<TData = Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError = ErrorType<unknown>>(
+ providerId: number, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPublicProviderCatalog>>,
+          TError,
+          Awaited<ReturnType<typeof getPublicProviderCatalog>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPublicProviderCatalog<TData = Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getPublicProviderCatalog>>,
+          TError,
+          Awaited<ReturnType<typeof getPublicProviderCatalog>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetPublicProviderCatalog<TData = Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetPublicProviderCatalog<TData = Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError = ErrorType<unknown>>(
+ providerId: number, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublicProviderCatalog>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetPublicProviderCatalogQueryOptions(providerId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetOwnerFinancialPeriodsUrl = (params?: GetOwnerFinancialPeriodsParams,) => {
   const normalizedParams = new URLSearchParams();

@@ -15,7 +15,8 @@
     "test:salary-expenses": "NODE_ENV=production tsx --test --test-force-exit src/routes/salary-expenses.integration.test.ts",
     "test:property-quota": "NODE_ENV=production tsx --test src/routes/property-quota.integration.test.ts",
     "test:dynamic-catalog": "NODE_ENV=production tsx --test src/routes/dynamic-catalog.integration.test.ts",
-    "test:service-seasons": "NODE_ENV=production tsx --test src/routes/service-seasons.integration.test.ts"
+    "test:service-seasons": "NODE_ENV=production tsx --test src/routes/service-seasons.integration.test.ts",
+    "test:provider-catalog": "NODE_ENV=production tsx --test src/routes/provider-catalog.integration.test.ts"
   },
   "dependencies": {
     "@workspace/booking-time": "workspace:*",

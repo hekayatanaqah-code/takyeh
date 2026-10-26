@@ -15,8 +15,9 @@ export function RiyalIcon({ className = "w-5 h-5" }: RiyalIconProps) {
       aria-label="ريال سعودي"
       className={`inline-block bg-current shrink-0 ${className}`}
       style={{
-        WebkitMaskImage: `url(${riyalSymbol})`,
-        maskImage: `url(${riyalSymbol})`,
+        // Vite may inline this SVG as a data URL containing quotes/parentheses.
+        WebkitMaskImage: `url("${riyalSymbol}")`,
+        maskImage: `url("${riyalSymbol}")`,
         WebkitMaskRepeat: "no-repeat",
         maskRepeat: "no-repeat",
         WebkitMaskPosition: "center",
