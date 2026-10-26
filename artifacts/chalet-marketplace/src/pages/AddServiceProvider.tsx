@@ -583,7 +583,7 @@ export default function AddServiceProvider() {
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col bg-background" dir="rtl">
-        <Navbar />
+        <Navbar returnToDashboard />
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center max-w-sm">
             <div className="text-6xl mb-4">🔐</div>
@@ -599,7 +599,7 @@ export default function AddServiceProvider() {
   if (submitted) {
     return (
       <div className="min-h-screen flex flex-col bg-background" dir="rtl">
-        <Navbar />
+        <Navbar returnToDashboard />
         <div className="flex-1 flex items-center justify-center p-8">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -629,7 +629,7 @@ export default function AddServiceProvider() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background" dir="rtl">
-      <Navbar />
+      <Navbar returnToDashboard />
       <main className="flex-1 py-10 px-4">
         <div className="container mx-auto max-w-2xl">
 

@@ -9,6 +9,12 @@ There must be no independent intermediate Hub page. A service owner enters the a
 
 **How to apply:** Prefer an active service for ordinary default entry, but preserve an explicitly selected owned service across reloads and browser navigation. Keep activity switching inside the dashboard and settings, subscriptions, and registration requests account-wide. Preserve property-only, staff, and administrator-impersonation management paths. Reuse existing subscription capacity checks when adding activities. Use a single account-wide requests action labeled «متابعة الطلبات».
 
+ترويسة صفحات تعديل وإدارة الخدمات تعرض زرًا واضحًا «العودة إلى لوحة التحكم» مع أيقونة رجوع، ظاهرًا على الجوال أيضًا، ويعيد المزود مباشرة إلى لوحة المالك دون المرور بواجهة العملاء.
+
+**Why:** المستخدم طلب مسار رجوع مباشر من صفحات تعديل وإدارة الخدمات بدل الاضطرار للخروج إلى الواجهة العامة.
+
+**How to apply:** ميّز زر الرجوع إلى لوحة المالك عن رابط تصفح المنصة؛ حافظ على مسارات الموظفين وانتحال الإدارة دون تغيير.
+
 The entire owner dashboard must keep the platform's primary header above the owner's greeting box: platform logo/name and one “الرئيسية / تصفح المنصة” control. The greeting box below it contains account actions only. For owners with an added activity, property/service management and “الشؤون الإدارية والمالية” are distinct primary sections below the greeting, not mixed among account actions. Do not repeat those primary choices elsewhere or duplicate the platform-home link inside the greeting. Do not show separate “اختر الخدمة التي تريد إدارتها” cards above an already displayed activity. The shared “العقار/النشاط الحالي” area above the tab navigation is a static name/icon card for exactly one property or service, without an arrow or “جميع الأنشطة”. With multiple activities it becomes a dropdown including “جميع الأنشطة” and internal “العقارات” / “الخدمات” groups.
 
 **Why:** After consolidating navigation, the user explicitly requested separating the major management sections from simple account controls while preserving the branded platform header and direct section transitions.

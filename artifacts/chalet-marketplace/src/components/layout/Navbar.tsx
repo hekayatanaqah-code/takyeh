@@ -1,13 +1,17 @@
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { MapPin, LayoutDashboard, Settings } from "lucide-react";
+import { ArrowRight, MapPin, LayoutDashboard, Settings } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { useQuery } from "@tanstack/react-query";
 import { useStaffAuth } from "@/lib/useStaffAuth";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-export function Navbar({ ownerDashboard = false }: { ownerDashboard?: boolean }) {
+export function Navbar({ ownerDashboard = false, returnToDashboard = false, onReturnToDashboard }: {
+  ownerDashboard?: boolean;
+  returnToDashboard?: boolean;
+  onReturnToDashboard?: () => void;
+}) {
   const [location] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
   const { isStaff } = useStaffAuth();
@@ -29,9 +33,9 @@ export function Navbar({ ownerDashboard = false }: { ownerDashboard?: boolean })
   return (
     <>
       <header data-testid="platform-navbar" className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className={`container mx-auto px-4 min-h-16 flex items-center justify-between gap-3 ${ownerDashboard ? "max-w-6xl py-2" : "h-16"}`}>
+        <div className={`container mx-auto px-4 min-h-16 flex flex-wrap items-center justify-between gap-3 ${ownerDashboard ? "max-w-6xl py-2" : returnToDashboard ? "py-2" : "h-16"}`}>
 
-          <div className={`flex items-center gap-3 ${ownerDashboard ? "w-full justify-between min-w-0" : ""}`}>
+          <div className={`flex items-center gap-3 ${ownerDashboard ? "w-full flex-wrap justify-between min-w-0" : ""}`}>
             {/* Logo */}
             <Link href="/" className="flex min-w-0 items-center gap-2 group">
               {logoUrl ? (
@@ -48,7 +52,18 @@ export function Navbar({ ownerDashboard = false }: { ownerDashboard?: boolean })
               <span className="text-xl font-bold text-foreground tracking-tight">{siteTitle}</span>
             </Link>
 
-            {location !== "/" && (
+            {returnToDashboard && (
+              <Link
+                href="/dashboard"
+                onClick={onReturnToDashboard}
+                data-testid="header-back-dashboard"
+                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                العودة إلى لوحة التحكم
+              </Link>
+            )}
+            {(!returnToDashboard || ownerDashboard) && location !== "/" && (
               <Link
                 href="/"
                 className="shrink-0 rounded-full border border-border bg-background px-3 py-1.5 text-xs sm:text-sm font-bold text-foreground shadow-sm transition-colors hover:bg-accent"
@@ -59,7 +74,7 @@ export function Navbar({ ownerDashboard = false }: { ownerDashboard?: boolean })
           </div>
 
           {/* Desktop actions */}
-          {!ownerDashboard && <div className="hidden md:flex items-center gap-3">
+          {!ownerDashboard && !returnToDashboard && <div className="hidden md:flex items-center gap-3">
             {!isLoading && (
               isAuthenticated ? (
                 <div className="flex items-center gap-1">

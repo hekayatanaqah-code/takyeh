@@ -25772,7 +25772,17 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      <Navbar ownerDashboard={!actAsStaff && !isImpersonating} />
+      <Navbar
+        ownerDashboard={!actAsStaff && !isImpersonating}
+        returnToDashboard={!actAsStaff && !isImpersonating && (activeDashMode === "services" || activeDashMode === "owner-services")}
+        onReturnToDashboard={() => {
+          setAccountSettingsOpen(false);
+          setServiceView("manage");
+          setSelectedServiceTab("details");
+          setDashMode(canSeeServices ? "services" : "chalets");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+      />
       {(actAsStaff || isImpersonating) && hasOperationalActivity && <div className="container mx-auto max-w-6xl px-4">
         <DashboardActivitySelector value={selectedFinanceUnit} properties={ownerChalets} services={myApprovedProviders} onChange={changeDashboardActivity} />
       </div>}
