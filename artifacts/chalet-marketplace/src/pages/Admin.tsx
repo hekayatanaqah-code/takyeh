@@ -4396,7 +4396,7 @@ function ProviderReviewModal({
         {/* Admin Note */}
         <div className="space-y-1.5">
           <label className="text-sm font-semibold text-foreground">
-            ملاحظة للمزود (تُرسل عند الرفض/التعديل)
+            ملاحظة للمزود (إلزامية للرفض أو طلب التعديل فقط؛ القبول لا يتطلب ملاحظة)
             {step !== "view" && <span className="text-red-500"> *</span>}
           </label>
           <Textarea

@@ -2134,7 +2134,12 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
               coverageTags: submission.coverageTags ?? [],
               customFeatureTags: submission.customFeatureTags ?? [],
               isActive: true,
-            }).onConflictDoNothing({ target: serviceProvidersTable.submissionId });
+            }).onConflictDoNothing({
+              target: serviceProvidersTable.submissionId,
+              // Legacy databases use a partial unique index for non-null links.
+              // The predicate also works with a full unique constraint.
+              where: sql`${serviceProvidersTable.submissionId} IS NOT NULL`,
+            });
           }
         }
       }

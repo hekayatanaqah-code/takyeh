@@ -47,15 +47,19 @@ async function createSubmission() {
   return submission;
 }
 
-async function approve(submissionId: number) {
+async function decide(submissionId: number, status: string, adminNote?: string) {
   return fetch(`${baseUrl}/api/admin/service-submissions/${submissionId}/status`, {
     method: "PATCH",
     headers: {
       authorization: `Bearer ${sessionId}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ status: "approved" }),
+    body: JSON.stringify({ status, adminNote }),
   });
+}
+
+async function approve(submissionId: number) {
+  return decide(submissionId, "approved");
 }
 
 before(async () => {
@@ -99,6 +103,62 @@ after(async () => {
 });
 
 describe("service provider approval idempotency", () => {
+  it("approves with an empty note and preserves the submitted service fields", async () => {
+    const submission = await createSubmission();
+    await db.update(serviceProviderSubmissionsTable).set({
+      logoUrl: "/test-service-logo.webp",
+      galleryPhotos: ["/test-service-gallery.webp"],
+      dailyCapacity: 3,
+      requiresInsurance: true,
+      insuranceAmount: "100.00",
+      coverageTags: ["الرس"],
+      customFeatureTags: ["تركيب"],
+    }).where(eq(serviceProviderSubmissionsTable.id, submission.id));
+
+    const response = await decide(submission.id, "approved", "");
+    assert.equal(response.status, 200, await response.text());
+    const [provider] = await db.select().from(serviceProvidersTable)
+      .where(eq(serviceProvidersTable.submissionId, submission.id));
+    assert.ok(provider);
+    providerIds.push(provider.id);
+    assert.equal(provider.logoUrl, "/test-service-logo.webp");
+    assert.deepEqual(provider.galleryPhotos, ["/test-service-gallery.webp"]);
+    assert.equal(provider.dailyCapacity, 3);
+    assert.equal(provider.insuranceAmount, "100.00");
+    assert.deepEqual(provider.coverageTags, ["الرس"]);
+    assert.deepEqual(provider.customFeatureTags, ["تركيب"]);
+    assert.equal(provider.isActive, true);
+    const [updated] = await db.select().from(serviceProviderSubmissionsTable)
+      .where(eq(serviceProviderSubmissionsTable.id, submission.id));
+    assert.equal(updated.status, "approved");
+    assert.equal(updated.adminNote, null);
+  });
+
+  for (const status of ["rejected", "needs_revision"]) {
+    it(`requires a meaningful note for ${status} without changing the request on validation failure`, async () => {
+      const submission = await createSubmission();
+      for (const note of [undefined, "", "   "]) {
+        const response = await decide(submission.id, status, note);
+        assert.equal(response.status, 400);
+        const payload = await response.json() as { error: string };
+        assert.equal(payload.error, "يجب كتابة سبب الرفض أو طلب التعديل");
+      }
+      const [unchanged] = await db.select().from(serviceProviderSubmissionsTable)
+        .where(eq(serviceProviderSubmissionsTable.id, submission.id));
+      assert.equal(unchanged.status, "pending");
+      const providers = await db.select().from(serviceProvidersTable)
+        .where(eq(serviceProvidersTable.submissionId, submission.id));
+      assert.equal(providers.length, 0);
+
+      const response = await decide(submission.id, status, "  يرجى مراجعة البيانات  ");
+      assert.equal(response.status, 200);
+      const [updated] = await db.select().from(serviceProviderSubmissionsTable)
+        .where(eq(serviceProviderSubmissionsTable.id, submission.id));
+      assert.equal(updated.status, status);
+      assert.equal(updated.adminNote, "يرجى مراجعة البيانات");
+    });
+  }
+
   it("creates one provider when the same approval is submitted concurrently", async () => {
     const submission = await createSubmission();
     const responses = await Promise.all([
