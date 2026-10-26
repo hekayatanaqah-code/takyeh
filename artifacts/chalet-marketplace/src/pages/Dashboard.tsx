@@ -26347,10 +26347,7 @@ export default function Dashboard() {
                       selectedServiceTab === "digitalContracts" ? provider.requiresContract : true,
                     ).map(provider => <ServiceErpCtx.Provider key={provider.id} value={{ providerId: provider.id }}>
                       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h3 className="text-lg font-bold">{provider.businessName}</h3>
-                          <Button variant="outline" onClick={() => changeDashboardActivity({ type: "service", id: provider.id, name: provider.businessName })}>إدارة هذه الخدمة</Button>
-                        </div>
+                        <h3 className="text-lg font-bold">{provider.businessName}</h3>
                         <ServiceManagementContent provider={provider} tab={selectedServiceTab}
                           calendarPreference={ownerProfile?.bookingsCalPref === "gregorian" ? "gregorian" : "hijri"} />
                       </section>
