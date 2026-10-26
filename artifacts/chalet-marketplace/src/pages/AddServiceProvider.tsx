@@ -24,6 +24,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 const MAX_GALLERY = 10;
 const ALL_KINGDOM_COVERAGE = "جميع مناطق المملكة";
+const EMPTY_CATALOG: never[] = [];
 interface ServiceRegion { id: number; name: string; isActive: boolean }
 interface ServiceCity { id: number; name: string; regionId: number; isActive: boolean }
 
@@ -147,8 +148,9 @@ export default function AddServiceProvider() {
   const [regionSelectVal, setRegionSelectVal] = useState("");
   const [citySelectVal, setCitySelectVal] = useState("");
   const [customCity, setCustomCity] = useState("");
+  const [initializedSubmissionId, setInitializedSubmissionId] = useState<number | null>(null);
 
-  const { data: serviceCategories = [] } = useQuery<{ id: number; key: string; labelAr: string; emoji: string }[]>({
+  const { data: serviceCategories = EMPTY_CATALOG } = useQuery<{ id: number; key: string; labelAr: string; emoji: string }[]>({
     queryKey: ["catalog", "service-categories"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/service-categories`, { credentials: "include" });
@@ -157,16 +159,9 @@ export default function AddServiceProvider() {
     },
     staleTime: 5 * 60 * 1000,
   });
-  const { data: serviceRegions = [] } = useQuery<ServiceRegion[]>({
+  const { data: serviceRegions = EMPTY_CATALOG } = useQuery<ServiceRegion[]>({
     queryKey: ["service-locations", "regions"],
     queryFn: async () => { const r = await fetch(`${BASE}/api/service-regions`); return r.ok ? r.json() : []; },
-    staleTime: 0,
-    refetchOnMount: "always",
-  });
-  const { data: serviceCities = [] } = useQuery<ServiceCity[]>({
-    queryKey: ["service-locations", "cities", regionSelectVal],
-    queryFn: async () => { const r = await fetch(`${BASE}/api/service-cities?regionId=${encodeURIComponent(regionSelectVal)}`); return r.ok ? r.json() : []; },
-    enabled: !!regionSelectVal,
     staleTime: 0,
     refetchOnMount: "always",
   });
@@ -177,6 +172,19 @@ export default function AddServiceProvider() {
       return r.ok ? r.json() : null;
     },
     enabled: !!editSubmissionId,
+  });
+  // Load the saved region's cities before hydrating; later region changes belong
+  // to the user and must never reinitialize the rest of the form.
+  const savedRegion = serviceRegions.find((region) => region.id === editingSubmission?.serviceRegionId);
+  const cityQueryRegionId = editSubmissionId && initializedSubmissionId !== editSubmissionId
+    ? (savedRegion ? String(savedRegion.id) : "")
+    : regionSelectVal;
+  const { data: serviceCities = EMPTY_CATALOG, isSuccess: serviceCitiesLoaded } = useQuery<ServiceCity[]>({
+    queryKey: ["service-locations", "cities", cityQueryRegionId],
+    queryFn: async () => { const r = await fetch(`${BASE}/api/service-cities?regionId=${encodeURIComponent(cityQueryRegionId)}`); return r.ok ? r.json() : []; },
+    enabled: !!cityQueryRegionId,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const otherCategory = serviceCategories.find(
@@ -202,15 +210,18 @@ export default function AddServiceProvider() {
   };
 
   useEffect(() => {
-    if (!editingSubmission || serviceCategories.length === 0 || serviceRegions.length === 0) return;
+    if (!editSubmissionId || initializedSubmissionId === editSubmissionId ||
+        !editingSubmission || serviceCategories.length === 0 || serviceRegions.length === 0) return;
     const submissionCategory = String(editingSubmission.category ?? "");
     const isKnownCategory = serviceCategories.some((category) => category.key === submissionCategory);
     const submissionCity = String(editingSubmission.city ?? "");
     const matchedRegionRecord = serviceRegions.find((region) => region.id === editingSubmission.serviceRegionId);
     const matchedRegion = matchedRegionRecord ? String(matchedRegionRecord.id) : "";
+    if (matchedRegion && (cityQueryRegionId !== matchedRegion || !serviceCitiesLoaded)) return;
     const submissionTags = Array.isArray(editingSubmission.coverageTags) ? editingSubmission.coverageTags : [];
-    const matchedRegionCities = matchedRegionRecord && matchedRegion === regionSelectVal ? serviceCities.map((city) => city.name) : [];
+    const matchedRegionCities = matchedRegionRecord ? serviceCities.map((city) => city.name) : [];
 
+    setInitializedSubmissionId(editSubmissionId);
     setForm({
       businessName: editingSubmission.businessName ?? "",
       category: isKnownCategory ? submissionCategory : "other",
@@ -223,7 +234,7 @@ export default function AddServiceProvider() {
       requiresInsurance: Boolean(editingSubmission.requiresInsurance),
       insuranceAmount: editingSubmission.insuranceAmount == null ? "" : String(editingSubmission.insuranceAmount),
     });
-    if (!isKnownCategory) setCustomCategory(submissionCategory);
+    setCustomCategory(isKnownCategory ? "" : submissionCategory);
     setRegionSelectVal(matchedRegion);
     setCitySelectVal(matchedRegion && matchedRegionCities.includes(submissionCity) ? submissionCity : "__other__");
     setCustomCity(matchedRegion && matchedRegionCities.includes(submissionCity) ? "" : submissionCity);
@@ -245,7 +256,7 @@ export default function AddServiceProvider() {
     );
     setVideo(editingSubmission.videoUrl ? { url: editingSubmission.videoUrl, name: "الفيديو الحالي", preview: editingSubmission.videoUrl } : null);
     setLegalAccepted(true);
-  }, [editingSubmission, serviceCategories, serviceRegions, serviceCities, regionSelectVal]);
+  }, [editSubmissionId, initializedSubmissionId, editingSubmission, serviceCategories, serviceRegions, serviceCities, cityQueryRegionId, serviceCitiesLoaded]);
 
   const handleChange = (field: string, value: string | boolean) =>
     setForm((p) => ({ ...p, [field]: value }));

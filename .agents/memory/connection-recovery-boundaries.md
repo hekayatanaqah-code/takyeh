@@ -13,3 +13,9 @@ Customer-note autosaves must not activate the foreground loading overlay. Keep t
 **Why:** Browser verification showed that a slow note save made the whole app inert, preventing the owner from continuing to type while the save was in flight.
 
 **How to apply:** Exempt only the customer-note autosave from foreground loading accounting, not from connection-error handling. Retain normal loading behavior for all other requests.
+
+Edit-service forms must hydrate once per request identity, after the saved region's cities are available. Subsequent catalog/submission refetches and user region changes must not rehydrate the form.
+
+**Why:** Reinitializing from changing query dependencies caused an infinite update loop with an unloaded city catalog and could overwrite unsaved edits when the region changed.
+
+**How to apply:** Use stable empty query fallbacks, a per-request initialization guard, and load dependent location data before the initial form fill. Do not remove necessary effect dependencies to suppress the loop.
