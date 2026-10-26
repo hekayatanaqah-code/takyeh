@@ -6,7 +6,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { toAr } from "@/lib/utils";
-import { toHijri } from "@/lib/hijri";
+import { formatDateWithHijri, toHijri } from "@/lib/hijri";
 import { resolveAmenity } from "@/lib/amenityUtils";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -70,7 +70,7 @@ function toDateWithDay(dateStr: string): string {
   try {
     const d = new Date(dateStr + "T12:00:00");
     const day  = new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(d);
-    const full = new Intl.DateTimeFormat("ar-SA", { day: "numeric", month: "long", year: "numeric" }).format(d);
+    const full = formatDateWithHijri(d);
     return `${day}، ${full}`;
   } catch { return toAr(dateStr); }
 }
@@ -784,7 +784,7 @@ export default function ChaletDetail() {
                         )
                       )}
                       <span style={{ marginRight: "auto", fontSize: 12, color: "#9ca3af" }}>
-                        {new Date(rev.createdAt).toLocaleDateString("ar-SA")}
+                        {formatDateWithHijri(rev.createdAt)}
                       </span>
                     </div>
                     {/* Comment */}

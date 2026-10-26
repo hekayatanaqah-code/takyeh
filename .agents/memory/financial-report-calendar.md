@@ -2,11 +2,11 @@
 name: Financial report calendar
 description: Saved financial calendar preference, temporary switching, explicit locale calendars and service period boundaries.
 ---
-The user's saved primary financial-report calendar governs the initial report, month lists and annual view. A local calendar switch is temporary and must not silently change the saved account preference. Exports use the currently displayed calendar, period and activity.
+The platform's authoritative initial calendar is now Hijri, including financial reports, month lists and annual views. Legacy saved Gregorian display preferences must not override it. A local calendar switch remains temporary. Exports use the currently displayed calendar, period and activity, and dates show the corresponding other calendar.
 
-**Why:** The user explicitly requested financial reports to follow account settings while retaining a flexible switch to the other calendar.
+**Why:** The user's platform-wide calendar unification request supersedes the earlier choice of independent default report calendars. Temporary exploration of the other calendar remains separate from the authoritative default.
 
-**How to apply:** Read the saved preference before the local cache, apply asynchronous preference changes, and share the active calendar across filters, custom-range grouping, print, PDF and sharing.
+**How to apply:** Start in Hijri even with legacy Gregorian preferences, and share the active calendar across filters, custom-range grouping, print, PDF and sharing. Do not reinterpret stored ISO dates or change contractual payroll cycles merely to change date presentation.
 
 Always specify the calendar when formatting Gregorian Arabic dates; an Arabic Saudi locale can default to Umm al-Qura even when the underlying Date was constructed from a Gregorian month.
 

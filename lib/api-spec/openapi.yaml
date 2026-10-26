@@ -21,6 +21,72 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /providers/my/approved/{id}/reviews/{reviewId}/report:
+    post:
+      operationId: submitServiceReviewObjection
+      tags: [providers]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+        - { in: path, name: reviewId, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        "200":
+          description: Objection submitted for administrative review
+        "409":
+          description: Review already has a pending objection
+  /admin/service-reviews:
+    get:
+      operationId: listAdminServiceReviewObjections
+      tags: [admin]
+      responses:
+        "200":
+          description: Service reviews including pending objections
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, providerId, kind, rating, createdAt]
+                  properties:
+                    id: { type: integer }
+                    providerId: { type: integer }
+                    kind: { type: string, enum: [service] }
+                    chaletName: { type: [string, "null"] }
+                    rating: { type: integer }
+                    comment: { type: [string, "null"] }
+                    reportedBy: { type: [string, "null"] }
+                    reportedAt: { type: [string, "null"], format: date-time }
+                    reportReason: { type: [string, "null"] }
+                    createdAt: { type: string, format: date-time }
+  /admin/service-reviews/{id}/decision:
+    post:
+      operationId: decideServiceReviewObjection
+      tags: [admin]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [keep, delete] }
+      responses:
+        "200":
+          description: Decision applied and owner notified
+        "409":
+          description: Objection no longer pending
   /providers/my/approved/{providerId}/catalog-media:
     parameters:
       - { name: providerId, in: path, required: true, schema: { type: integer, minimum: 1 } }

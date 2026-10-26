@@ -1,3 +1,4 @@
+import { formatDateWithHijri } from "@/lib/hijri";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -187,13 +188,13 @@ export default function AddonCheckoutPage() {
                         </p>
                         {quote.remainingDays != null && quote.billingDays != null && (
                           <p className="mt-1 text-xs text-muted-foreground">
-                            محسوباً عن {quote.remainingDays} من {quote.billingDays} يوماً حتى نهاية الفترة {quote.periodEnd ? new Date(quote.periodEnd).toLocaleDateString("ar-SA") : "الحالية"}.
+                            محسوباً عن {quote.remainingDays} من {quote.billingDays} يوماً حتى نهاية الفترة {quote.periodEnd ? formatDateWithHijri(quote.periodEnd) : "الحالية"}.
                           </p>
                         )}
                         {pending.consentToRecurring === true && quote.nextChargeHalala != null && (
                           <>
                             <p className="mt-2 font-semibold">إجمالي الفاتورة الموحدة {quote.billingDays === 30 ? "عند التجديد الشهري" : `لدورة التجديد (${quote.billingDays} يوم)`}: {(quote.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ⃁</p>
-                            {quote.nextBillingAt && <p className="mt-1 text-xs text-muted-foreground">موعد التجديد التالي: {new Date(quote.nextBillingAt).toLocaleDateString("ar-SA")}</p>}
+                            {quote.nextBillingAt && <p className="mt-1 text-xs text-muted-foreground">موعد التجديد التالي: {formatDateWithHijri(quote.nextBillingAt)}</p>}
                           </>
                         )}
                       </>

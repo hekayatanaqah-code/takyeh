@@ -8,6 +8,48 @@
 import * as zod from 'zod';
 
 
+export const SubmitServiceReviewObjectionParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "reviewId": zod.coerce.number().int()
+})
+
+export const submitServiceReviewObjectionBodyReasonMax = 500;
+
+
+
+export const SubmitServiceReviewObjectionBody = zod.object({
+  "reason": zod.string().min(1).max(submitServiceReviewObjectionBodyReasonMax)
+})
+
+export const SubmitServiceReviewObjectionResponse = zod.unknown()
+
+
+export const ListAdminServiceReviewObjectionsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "kind": zod.enum(['service']),
+  "chaletName": zod.string().nullish(),
+  "rating": zod.number().int(),
+  "comment": zod.string().nullish(),
+  "reportedBy": zod.string().nullish(),
+  "reportedAt": zod.date().nullish(),
+  "reportReason": zod.string().nullish(),
+  "createdAt": zod.date()
+})
+export const ListAdminServiceReviewObjectionsResponse = zod.array(ListAdminServiceReviewObjectionsResponseItem)
+
+
+export const DecideServiceReviewObjectionParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const DecideServiceReviewObjectionBody = zod.object({
+  "decision": zod.enum(['keep', 'delete'])
+})
+
+export const DecideServiceReviewObjectionResponse = zod.unknown()
+
+
 /**
  * Owner-scoped catalog image upload. JPEG, PNG or WebP up to 2 MiB, converted to WebP.
  */

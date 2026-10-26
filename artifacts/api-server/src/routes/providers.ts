@@ -694,6 +694,23 @@ router.patch("/my/approved/:id", requireAuth, async (req: any, res) => {
 });
 
 /* ── Owner: provider-scoped review management ────────── */
+router.post("/my/approved/:id/reviews/:reviewId/report", requireAuth, async (req, res) => {
+  const providerId = Number(req.params.id);
+  const reviewId = Number(req.params.reviewId);
+  if (!Number.isSafeInteger(providerId) || !Number.isSafeInteger(reviewId)) return res.status(400).json({ error: "معرّف غير صحيح" });
+  const parsed = z.object({ reason: z.string().trim().min(1).max(500) }).safeParse(req.body);
+  if (!parsed.success) return res.status(422).json({ error: "اكتب سبب الاعتراض (حتى ٥٠٠ حرف)" });
+  const [provider] = await db.select({ id: serviceProvidersTable.id }).from(serviceProvidersTable)
+    .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user!.id))).limit(1);
+  if (!provider) return res.status(404).json({ error: "الخدمة غير موجودة" });
+  const [updated] = await db.update(serviceReviewsTable)
+    .set({ reportedBy: req.user!.id, reportedAt: new Date(), reportReason: parsed.data.reason })
+    .where(and(eq(serviceReviewsTable.id, reviewId), eq(serviceReviewsTable.providerId, providerId), sql`${serviceReviewsTable.reportedAt} IS NULL`))
+    .returning({ id: serviceReviewsTable.id });
+  if (!updated) return res.status(409).json({ error: "التقييم غير موجود أو لديه اعتراض قيد المراجعة" });
+  return res.json({ ok: true });
+});
+
 router.get("/my/approved/:id/reviews", requireAuth, async (req: any, res) => {
   const providerId = Number(req.params.id);
   const [provider] = await db.select({ id: serviceProvidersTable.id })

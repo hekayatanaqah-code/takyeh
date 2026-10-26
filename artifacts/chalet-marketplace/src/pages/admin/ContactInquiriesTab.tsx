@@ -1,3 +1,4 @@
+import { formatDateWithHijri } from "@/lib/hijri";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Mail, Loader2, ChevronDown, MessageSquare, Clock, CheckCircle } from "lucide-react";
@@ -115,7 +116,7 @@ export function ContactInquiriesTab() {
                   <div className="flex items-center gap-3 shrink-0">
                     <div className="text-left hidden sm:block">
                       <p className="text-[10px] text-slate-500 mb-0.5">تاريخ الإرسال</p>
-                      <p className="text-xs text-slate-400 font-mono">{new Date(inq.createdAt || inq.updatedAt).toLocaleDateString("ar-SA")}</p>
+                      <p className="text-xs text-slate-400">{formatDateWithHijri(inq.createdAt || inq.updatedAt)}</p>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
                   </div>

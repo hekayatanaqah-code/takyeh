@@ -51,6 +51,7 @@ import type {
   CrmCustomerPage,
   CrmCustomerSummary,
   CrmHistoryPage,
+  DecideServiceReviewObjectionBody,
   DeclinePhotographySession200,
   DeleteServiceSeason200,
   DeliverPhotographySession200,
@@ -85,6 +86,7 @@ import type {
   HealthStatus,
   InvitePhotographer200,
   InvitePhotographerBody,
+  ListAdminServiceReviewObjections200Item,
   ListOwnerNotificationHistoryParams,
   ListPropertyOffersParams,
   LoginPhotographer200,
@@ -165,6 +167,7 @@ import type {
   StaffHolding,
   StaffHoldingInput,
   SubmissionResponse,
+  SubmitServiceReviewObjectionBody,
   UpdateAdminPhotographerProfile200,
   UpdatePhotographyPackage200,
   UpdatePhotographyPackageBody,
@@ -202,6 +205,269 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getSubmitServiceReviewObjectionUrl = (id: number,
+    reviewId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${id}/reviews/${reviewId}/report`
+}
+
+export const submitServiceReviewObjection = async (id: number,
+    reviewId: number,
+    submitServiceReviewObjectionBody: SubmitServiceReviewObjectionBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getSubmitServiceReviewObjectionUrl(id,reviewId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(submitServiceReviewObjectionBody)
+  }
+);}
+
+
+
+
+
+export const getSubmitServiceReviewObjectionMutationKey = () => ['submitServiceReviewObjection'] as const;
+
+export const getSubmitServiceReviewObjectionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitServiceReviewObjection>>, TError,SubmitServiceReviewObjectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitServiceReviewObjection>>, TError,SubmitServiceReviewObjectionMutationVariables, TContext> => {
+
+const mutationKey = getSubmitServiceReviewObjectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitServiceReviewObjection>>, SubmitServiceReviewObjectionMutationVariables> = (props) => {
+          const {id,reviewId,data} = props ?? {};
+
+          return  submitServiceReviewObjection(id,reviewId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitServiceReviewObjectionMutationResult = NonNullable<Awaited<ReturnType<typeof submitServiceReviewObjection>>>
+    export type SubmitServiceReviewObjectionMutationBody = BodyType<SubmitServiceReviewObjectionBody>
+    export type SubmitServiceReviewObjectionMutationError = ErrorType<void>
+    export type SubmitServiceReviewObjectionMutationVariables = {id: number;reviewId: number;data: BodyType<SubmitServiceReviewObjectionBody>}
+
+    export const useSubmitServiceReviewObjection = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitServiceReviewObjection>>, TError,SubmitServiceReviewObjectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof submitServiceReviewObjection>>,
+        TError,
+        SubmitServiceReviewObjectionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitServiceReviewObjectionMutationOptions(options), queryClient);
+    }
+
+export const getListAdminServiceReviewObjectionsUrl = () => {
+
+
+
+
+  return `/api/admin/service-reviews`
+}
+
+export const listAdminServiceReviewObjections = async ( options?: Parameters<typeof customFetch>[1]): Promise<ListAdminServiceReviewObjections200Item[]> => {
+
+  return customFetch<ListAdminServiceReviewObjections200Item[]>(getListAdminServiceReviewObjectionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminServiceReviewObjectionsQueryKey = () => {
+    return [
+    `/api/admin/service-reviews`
+    ] as const;
+    }
+
+
+export const getListAdminServiceReviewObjectionsQueryOptions = <TData = Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminServiceReviewObjectionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminServiceReviewObjections>>> = ({ signal }) => listAdminServiceReviewObjections({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAdminServiceReviewObjectionsQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminServiceReviewObjections>>>
+export type ListAdminServiceReviewObjectionsQueryError = ErrorType<unknown>
+
+
+export function useListAdminServiceReviewObjections<TData = Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminServiceReviewObjections>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminServiceReviewObjections>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAdminServiceReviewObjections<TData = Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAdminServiceReviewObjections>>,
+          TError,
+          Awaited<ReturnType<typeof listAdminServiceReviewObjections>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAdminServiceReviewObjections<TData = Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListAdminServiceReviewObjections<TData = Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAdminServiceReviewObjections>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAdminServiceReviewObjectionsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDecideServiceReviewObjectionUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/service-reviews/${id}/decision`
+}
+
+export const decideServiceReviewObjection = async (id: number,
+    decideServiceReviewObjectionBody: DecideServiceReviewObjectionBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<void>(getDecideServiceReviewObjectionUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(decideServiceReviewObjectionBody)
+  }
+);}
+
+
+
+
+
+export const getDecideServiceReviewObjectionMutationKey = () => ['decideServiceReviewObjection'] as const;
+
+export const getDecideServiceReviewObjectionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideServiceReviewObjection>>, TError,DecideServiceReviewObjectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof decideServiceReviewObjection>>, TError,DecideServiceReviewObjectionMutationVariables, TContext> => {
+
+const mutationKey = getDecideServiceReviewObjectionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof decideServiceReviewObjection>>, DecideServiceReviewObjectionMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  decideServiceReviewObjection(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DecideServiceReviewObjectionMutationResult = NonNullable<Awaited<ReturnType<typeof decideServiceReviewObjection>>>
+    export type DecideServiceReviewObjectionMutationBody = BodyType<DecideServiceReviewObjectionBody>
+    export type DecideServiceReviewObjectionMutationError = ErrorType<void>
+    export type DecideServiceReviewObjectionMutationVariables = {id: number;data: BodyType<DecideServiceReviewObjectionBody>}
+
+    export const useDecideServiceReviewObjection = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof decideServiceReviewObjection>>, TError,DecideServiceReviewObjectionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof decideServiceReviewObjection>>,
+        TError,
+        DecideServiceReviewObjectionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDecideServiceReviewObjectionMutationOptions(options), queryClient);
+    }
 
 export const getUploadProviderCatalogImageUrl = (providerId: number,) => {
 

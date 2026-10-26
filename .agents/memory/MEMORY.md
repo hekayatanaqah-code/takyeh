@@ -80,3 +80,4 @@
 - [Notification display boundary](notification-display-boundary.md) — hide internal markers in presentation, not storage; preserve action URLs while unifying Arabic formatting across filters.
 - [Service catalog policy](service-catalog-policy.md) — independent provider products/offers; complete all-service navigation and positive enabled insurance gate.
 - [Service details approved design](service-details-rollout.md) — permanent accordions and sticky save approved for all service activities; no temporary preview login.
+- [Review objections and unified dates](review-objections-policy.md) — owner objections cover properties and services; Hijri is authoritative, Gregorian secondary, without rewriting history.

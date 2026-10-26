@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { formatDateWithHijri } from "@/lib/hijri";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetProviderCatalogItems, useCreateProviderCatalogItem, useUpdateProviderCatalogItem, useDeleteProviderCatalogItem,
@@ -401,7 +402,7 @@ function offerStatus(o: ProviderOffer, today: string) {
 
 const fmtDate = (s: string) => {
   const d = new Date(`${s.slice(0, 10)}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString("ar-SA-u-ca-gregory-nu-arab", { day: "numeric", month: "short", year: "numeric" });
+  return Number.isNaN(d.getTime()) ? s : formatDateWithHijri(d);
 };
 
 export function ServiceOffersPanel({ providerId, readOnly = false }: PanelProps) {

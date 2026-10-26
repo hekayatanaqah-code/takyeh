@@ -12,7 +12,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { useAuth } from "@workspace/replit-auth-web";
 import { PaymentModal } from "@/components/PaymentModal";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
-import { formatDualDate } from "@/lib/hijri";
+import { formatDateWithHijri, formatDualDate } from "@/lib/hijri";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 async function apiFetch(path: string, options?: RequestInit) {
@@ -354,7 +354,7 @@ export default function SubscriptionPage() {
                 );
               })()}
               <div className="flex justify-between text-xs opacity-70 mt-1">
-                <span>بدأ: {new Date((hasFreeAccess ? freeAccessStartsAt : sub?.createdAt)!).toLocaleDateString("ar-SA")}</span>
+                <span>بدأ: {formatDateWithHijri((hasFreeAccess ? freeAccessStartsAt : sub?.createdAt)!)}</span>
                 <span>{hasFreeAccess ? "تنتهي الصلاحية" : "ينتهي الاشتراك"}: {expiryInBothCalendars((hasFreeAccess ? freeAccessEndsAt : sub?.expiresAt)!)}</span>
               </div>
             </div>
@@ -462,7 +462,7 @@ export default function SubscriptionPage() {
                   ? null
                   : Math.round(addon.monthlyUnitPriceHalala * addon.quantity * billingCycleDays / 30);
                 const paidThrough = addon.paidThroughAt
-                  ? new Date(addon.paidThroughAt).toLocaleDateString("ar-SA")
+                  ? formatDateWithHijri(addon.paidThroughAt)
                   : "غير محدد";
                 return (
                   <article key={addon.id} data-testid={`card-subscription-addon-${addon.id}`} className="rounded-xl border border-border p-4">
@@ -632,7 +632,7 @@ export default function SubscriptionPage() {
                 {sub.nextBillingAt && (
                   <>
                     <dt className="text-muted-foreground">{billingCycleDays === 30 ? "موعد التجديد الشهري" : billingCycleDays != null ? `موعد الدورة التالية (${billingCycleDays} يوم)` : "موعد الدورة التالية"}</dt>
-                    <dd className="font-semibold text-end">{new Date(sub.nextBillingAt).toLocaleDateString("ar-SA")}</dd>
+                    <dd className="font-semibold text-end">{formatDateWithHijri(sub.nextBillingAt)}</dd>
                   </>
                 )}
                 {sub.nextChargeHalala != null && (

@@ -152,13 +152,14 @@ export function formatDateWithHijri(date: Date | string): string {
   try {
     const d = typeof date === "string" ? new Date(date) : date;
     if (isNaN(d.getTime())) return "";
-    const gregorian = d.toLocaleDateString("ar-SA");
+    const gregorian = d.toLocaleDateString("ar-SA-u-ca-gregory", { timeZone: "Asia/Riyadh", year: "numeric", month: "long", day: "numeric" });
     const hijri = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", {
       year: "numeric",
       month: "long",
       day: "numeric",
+      timeZone: "Asia/Riyadh",
     }).format(d);
-    return `${gregorian} — ${hijri}`;
+    return `${hijri} — ${gregorian} م`;
   } catch {
     return "";
   }

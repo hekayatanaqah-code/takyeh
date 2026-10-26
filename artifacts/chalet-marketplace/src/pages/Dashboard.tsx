@@ -44,6 +44,7 @@ import { SubmissionDate } from "@/components/owner/SubmissionDate";
 import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard";
 import { ServiceManagementNavigation } from "@/components/owner/ServiceManagementNavigation";
 import { ServiceCatalogPanel, ServiceOffersPanel } from "@/components/owner/ServiceCatalogPanels";
+import { ReviewObjection } from "@/components/owner/ReviewObjection";
 import { hasServiceInsurance, serviceDashboardTabs } from "@/lib/serviceDashboardTabs";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
 import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport } from "@/lib/financialReportActivity";
@@ -84,7 +85,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
-import { formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
+import { formatDateWithHijri, formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import { CustomerDate } from "@/components/owner/CustomerDate";
 import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
@@ -8343,7 +8344,7 @@ function BookingCalendarTab({
           onSent={(finalMsg, wasEdited) => {
             if (wasEdited) {
               const bk   = waCancelPreview.booking;
-              const date = new Date().toLocaleDateString("ar-SA");
+              const date = formatDateWithHijri(new Date());
               const tag  = `[رسالة إلغاء مُرسلة — ${date}]:\n${finalMsg}`;
               const prev = bk.notes?.trim() ? bk.notes.trim() + "\n\n" : "";
               appendBookingNotes.mutate({ id: bk.id, notes: prev + tag });
@@ -13456,8 +13457,8 @@ function getHijriYMClient(date: Date): { year: number; month: number } {
 export function BankLedgerTab() {
   const { unit } = useAdminFinance();
   const [activeTab, setActiveTab] = useState<"all" | "revenue" | "insurance" | "cash_deposit" | "expense">("all");
-  const [bankCalType, setBankCalType] = useState<"hijri" | "gregorian">("gregorian");
-  const initialBankMonth = getCurrentFinanceMonth("gregorian");
+  const [bankCalType, setBankCalType] = useState<"hijri" | "gregorian">("hijri");
+  const initialBankMonth = getCurrentFinanceMonth("hijri");
   const [bankYear, setBankYear] = useState<string>(() => initialBankMonth.split("-")[0]);
   const [bankMonth, setBankMonth] = useState<string>(() => initialBankMonth);
   const fmtN = formatBankAmount;
@@ -13768,11 +13769,11 @@ function RevenueTab() {
   const _nowRev = new Date();
   const currentMonth = `${_nowRev.getFullYear()}-${String(_nowRev.getMonth() + 1).padStart(2, "0")}`;
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
-  const [calType, setCalType]                 = useState<"gregorian" | "hijri">(() => (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian");
+  const [calType, setCalType]                 = useState<"gregorian" | "hijri">("hijri");
   const [selectedHijriMonth, setSelectedHijriMonth] = useState(() => getCurrentFinanceMonth("hijri"));
   const [serviceSelectedMonth, setServiceSelectedMonth] = useState(currentMonth);
-  const [serviceSelectedHijriMonth, setServiceSelectedHijriMonth] = useState("");
-  const [serviceRevenueYear, setServiceRevenueYear] = useState(() => String(new Date().getFullYear()));
+  const [serviceSelectedHijriMonth, setServiceSelectedHijriMonth] = useState(() => getCurrentFinanceMonth("hijri"));
+  const [serviceRevenueYear, setServiceRevenueYear] = useState(() => String(toHijriComponents(new Date()).year));
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation" | "refund" | "insurance">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
@@ -13825,12 +13826,12 @@ function RevenueTab() {
   const [revSubTab, setRevSubTab] = useState<"monthly" | "receivables">("monthly");
   const showAllFuture = revSubTab === "receivables";
   const [pendingFilterMonth, setPendingFilterMonth] = useState<string>("");
-  const [pendingCalType, setPendingCalType] = useState<"hijri" | "gregorian">("gregorian");
+  const [pendingCalType, setPendingCalType] = useState<"hijri" | "gregorian">("hijri");
   const [revYear, setRevYear] = useState<string>(() => {
-    const mode = (localStorage.getItem("revCalType") as "gregorian" | "hijri") ?? "gregorian";
+    const mode = "hijri";
     return mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
   });
-  const [pendingYear, setPendingYear] = useState<string>(() => String(new Date().getFullYear()));
+  const [pendingYear, setPendingYear] = useState<string>(() => String(toHijriComponents(new Date()).year));
   const revenuePeriod = useMemo(() => ({
     calendar: calType,
     year: revYear,
@@ -15848,8 +15849,8 @@ function TransactionHistoryTab() {
   const { unit } = useAdminFinance();
   const qcHist = useQueryClient();
   const { toast } = useToast();
-  const [histCalType, setHistCalType] = useState<"hijri" | "gregorian">("gregorian");
-  const initialHistMonth = getCurrentFinanceMonth("gregorian");
+  const [histCalType, setHistCalType] = useState<"hijri" | "gregorian">("hijri");
+  const initialHistMonth = getCurrentFinanceMonth("hijri");
   const [histYear, setHistYear] = useState<string>(() => initialHistMonth.split("-")[0]);
   const [histMonth, setHistMonth] = useState<string>(() => initialHistMonth);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -16210,8 +16211,8 @@ export function ExpensesTab() {
       return r.json();
     },
   });
-  const [expCalType, setExpCalType] = useState<"hijri" | "gregorian">("gregorian");
-  const initialExpenseMonth = getCurrentFinanceMonth("gregorian");
+  const [expCalType, setExpCalType] = useState<"hijri" | "gregorian">("hijri");
+  const initialExpenseMonth = getCurrentFinanceMonth("hijri");
   const [expYear, setExpYear] = useState<string>(() => initialExpenseMonth.split("-")[0]);
   const [expMonth, setExpMonth] = useState<string>(() => initialExpenseMonth);
   const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "", submissionId: "" });
@@ -16929,12 +16930,7 @@ function fmtMonthForPrint(ym: string, calMode: "hijri" | "gregorian"): string {
 }
 
 function fmtDateForPrint(iso: string, calMode: "hijri" | "gregorian"): string {
-  const d = new Date(iso);
-  if (calMode === "hijri") {
-    const h = toHijriComponents(d);
-    return `${toArN(h.day)} ${HIJRI_MONTHS_AR[h.month - 1]} ${toArN(h.year)} هـ`;
-  }
-  return d.toLocaleDateString("ar-SA", { day: "numeric", month: "long", year: "numeric", calendar: "gregory" });
+  return formatDateWithHijri(iso);
 }
 
 function buildSalaryVoucherHtml(v: VoucherData, calMode: "hijri" | "gregorian"): string {
@@ -19665,9 +19661,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const nowHijriYearNum  = _nowHijri.year;
   const nowHijriMonthNum = _nowHijri.month;
   const todayLocalDate = archiveToday();
-  const todayReportLabel = _nowRep.toLocaleDateString("ar-SA", {
-    day: "numeric", month: "long", year: "numeric", calendar: "gregory",
-  } as Intl.DateTimeFormatOptions);
+  const todayReportLabel = formatDateWithHijri(_nowRep);
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly" | "custom">("monthly");
   const reportType = repUnit.type === "all" ? "unified" : repUnit.type === "service" ? "services" : "chalets";
@@ -20150,7 +20144,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
         const _shareData = _shareCalMode === "hijri" ? customRangeDataHijri : customRangeData;
         if (!_shareData) return;
         const logo = await getLogoDataUrl();
-        const _shareFmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _shareCalMode === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
+        const _shareFmt = (d: string) => formatDateWithHijri(`${d}T12:00:00+03:00`);
         const rangeLabel = customFrom && customTo ? `${_shareFmt(customFrom)} ← ${_shareFmt(customTo)}` : "فترة مخصصة";
         const _shareDiff = customFrom && customTo ? Math.round((new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000) + 1 : undefined;
         htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode, groupByDay, _shareDiff, false, shareFileName);
@@ -20367,9 +20361,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           isYearlyHijri ? Number(selectedHijriYear) === nowHijriYearNum : selectedYear === currentYear, fileName);
       } else {
         const activeCustomData = (isHijri ? customRangeDataHijri : customRangeData)!;
-        const formatDate = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("ar-SA", {
-          calendar: isHijri ? "islamic-umalqura" : "gregory", year: "numeric", month: "long", day: "numeric",
-        });
+        const formatDate = (date: string) => formatDateWithHijri(`${date}T12:00:00+03:00`);
         const range = `${formatDate(customFrom)} ← ${formatDate(customTo)}`;
         const days = Math.round((new Date(`${customTo}T12:00:00`).getTime() - new Date(`${customFrom}T12:00:00`).getTime()) / 86400000) + 1;
         html = buildYearlyReportHtml(range, selectedPropertyName, activeCustomData, action === "print", null,
@@ -21077,7 +21069,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 <div className="flex flex-wrap gap-2 justify-end">
                   <Button variant="outline" size="sm" onClick={() => {
                     const _cm = isHijri ? "hijri" : "gregorian";
-                    const _fmt = (d: string) => { try { const dt = new Date(d + "T12:00:00"); return _cm === "hijri" ? dt.toLocaleDateString("ar-SA-u-ca-islamic-umalqura", { year: "numeric", month: "long", day: "numeric" }) : dt.toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric", calendar: "gregory" } as Intl.DateTimeFormatOptions); } catch { return d; } };
+                    const _fmt = (d: string) => formatDateWithHijri(`${d}T12:00:00+03:00`);
                     const rangeStr = customFrom && customTo ? `${_fmt(customFrom)} ← ${_fmt(customTo)}` : "مخصص";
                     const _diff = customFrom && customTo ? Math.round((new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000) + 1 : undefined;
                     printYearlyReport(
@@ -21544,7 +21536,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                       <p className="text-sm font-semibold text-foreground">
                         {a.reportType === "yearly" ? "تقرير سنوي" : "تقرير شهري"} – {a.reportPeriod}
                       </p>
-                      <p className="text-xs text-muted-foreground">{a.propertyName} · {new Date(a.createdAt).toLocaleDateString("ar-SA")}</p>
+                      <p className="text-xs text-muted-foreground">{a.propertyName} · {formatDateWithHijri(a.createdAt)}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {a.pdfUrl ? (
@@ -21770,15 +21762,8 @@ function fmtDT(iso: string): string {
   try {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
-    const { year: hy, month: hm, day: hd } = toHijriComponents(d);
-    const pad = (n: number) => toArN(String(n).padStart(2, "0"));
-    const hijriStr = `${toArN(hy)}/${pad(hm)}/${pad(hd)} هـ`;
-    const gy = d.getFullYear(); const gm = d.getMonth() + 1; const gd = d.getDate();
-    const gregStr = `${toArN(gy)}/${pad(gm)}/${pad(gd)} م`;
-    const hours = d.getHours(); const mins = d.getMinutes();
-    const isPM = hours >= 12; const h12 = hours % 12 || 12;
-    const timeStr = `${pad(h12)}:${pad(mins)} ${isPM ? "م" : "ص"}`;
-    return `${hijriStr} - ${gregStr} (${timeStr})`;
+    const time = d.toLocaleTimeString("ar-SA", { timeZone: "Asia/Riyadh", hour: "numeric", minute: "2-digit", hour12: true });
+    return `${formatDateWithHijri(d)} (${time})`;
   } catch { return iso; }
 }
 
@@ -21892,13 +21877,15 @@ function ServiceReviewsTab() {
   const [replyDraft, setReplyDraft] = useState<Record<number, string>>({});
   const [replyingId, setReplyingId] = useState<number | null>(null);
 
-  const { data: reviews = [], isLoading } = useQuery<any[]>({
+  const { data: reviews = [], isLoading, isError: serviceReviewsError, refetch: refetchServiceReviews } = useQuery<any[]>({
     queryKey: ["service-reviews", providerId],
     queryFn: async () => {
       const r = await apiFetch(`/providers/my/approved/${providerId}/reviews`);
-      return r.ok ? r.json() : [];
+      if (!r.ok) throw new Error("تعذر تحميل تقييمات الخدمة");
+      return r.json();
     },
     enabled: !!providerId,
+    refetchInterval: 30_000,
   });
 
   const invite = useMutation({
@@ -21954,7 +21941,12 @@ function ServiceReviewsTab() {
         )}
       </div>
 
-      {isLoading ? (
+      {serviceReviewsError ? (
+        <div role="alert" className="rounded-xl border border-red-300 p-4 text-red-600">
+          تعذر تحميل تقييمات الخدمة.
+          <Button variant="outline" size="sm" className="mr-2" onClick={() => void refetchServiceReviews()}>إعادة المحاولة</Button>
+        </div>
+      ) : isLoading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
       ) : reviews.length === 0 ? (
         <div className="bg-card border border-border rounded-2xl p-10 text-center text-muted-foreground">
@@ -21971,7 +21963,7 @@ function ServiceReviewsTab() {
                   <p className="font-bold text-amber-500" dir="ltr">{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</p>
                   <p className="text-xs text-muted-foreground mt-1">{review.isAnonymous ? "عميل مجهول" : (review.guestName || "عميل الخدمة")}</p>
                 </div>
-                <span className="text-xs text-muted-foreground">{new Date(review.createdAt).toLocaleDateString("ar-SA")}</span>
+                <span className="text-xs text-muted-foreground">{fmtDT(review.createdAt)}</span>
               </div>
               {review.comment && <p className="text-sm text-foreground leading-relaxed">{review.comment}</p>}
               {review.ownerReply ? (
@@ -21987,6 +21979,8 @@ function ServiceReviewsTab() {
               ) : (
                 <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setReplyingId(review.id)}>الرد على التقييم</Button>
               )}
+              <ReviewObjection endpoint={`/providers/my/approved/${providerId}/reviews/${review.id}/report`}
+                reportedAt={review.reportedAt} request={apiFetch} refreshKey={["service-reviews", providerId]} />
             </div>
           ))}
         </div>
@@ -22004,10 +21998,8 @@ function ReviewsTab() {
   const [templateSaved, setTemplateSaved] = useState<number | null>(null);
   const [replyDraft, setReplyDraft] = useState<Record<number, string>>({});
   const [replyingId, setReplyingId] = useState<number | null>(null);
-  const [reportConfirmId, setReportConfirmId] = useState<number | null>(null);
-  const [reportReasonDraft, setReportReasonDraft] = useState("");
-  const [reviewCalType, setReviewCalType] = useState<"gregorian" | "hijri">("gregorian");
-  const [reviewYear, setReviewYear] = useState<string>(String(new Date().getFullYear()));
+  const [reviewCalType, setReviewCalType] = useState<"gregorian" | "hijri">("hijri");
+  const [reviewYear, setReviewYear] = useState<string>(String(toHijriComponents(new Date()).year));
   const [reviewMonth, setReviewMonth] = useState<string>("");
 
   const { data: siteSettings = {} } = useQuery<Record<string, string>>({
@@ -22089,9 +22081,10 @@ function ReviewsTab() {
     queryKey: ["owner", "reviews"],
     queryFn: async () => {
       const r = await apiFetch("/owner/reviews");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذر تحميل التقييمات");
       return r.json();
     },
+    refetchInterval: 30_000,
   });
 
   const replyMutation = useMutation({
@@ -22106,21 +22099,6 @@ function ReviewsTab() {
       qc.invalidateQueries({ queryKey: ["owner", "reviews"] });
       setReplyingId(null);
       setReplyDraft((prev) => { const next = { ...prev }; delete next[reviewId]; return next; });
-    },
-  });
-
-  const reportMutation = useMutation({
-    mutationFn: async ({ reviewId, reason }: { reviewId: number; reason: string }) => {
-      const r = await apiFetch(`/owner/reviews/${reviewId}/report`, {
-        method: "POST",
-        body: JSON.stringify({ reason }),
-      });
-      if (!r.ok) throw new Error("failed");
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["owner", "reviews"] });
-      setReportConfirmId(null);
-      setReportReasonDraft("");
     },
   });
 
@@ -22532,7 +22510,7 @@ function ReviewsTab() {
                       )}
                       {rev.reportedAt && !rev.isHidden && (
                         <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full font-medium">
-                          تم الإبلاغ
+                          اعتراض قيد المراجعة
                         </span>
                       )}
                       <span className="text-[11px] text-muted-foreground mr-auto leading-relaxed">
@@ -22603,43 +22581,8 @@ function ReviewsTab() {
                       </button>
                     ) : null}
 
-                    {/* Report button (only if not already reported and not hidden) */}
-                    {!rev.reportedAt && !rev.isHidden && (
-                      reportConfirmId === rev.id ? (
-                        <div className="flex flex-col gap-2 text-sm border border-amber-200 dark:border-amber-700 rounded-lg p-3 bg-amber-50 dark:bg-amber-900/10">
-                          <span className="text-amber-700 dark:text-amber-400 font-medium">سبب الإبلاغ عن هذا التقييم:</span>
-                          <Textarea
-                            value={reportReasonDraft}
-                            onChange={(e) => setReportReasonDraft(e.target.value)}
-                            placeholder="اذكر سبب الإبلاغ بوضوح..."
-                            rows={2}
-                            className="text-sm resize-none"
-                          />
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              disabled={reportMutation.isPending || !reportReasonDraft.trim()}
-                              onClick={() => {
-                                if (!reportReasonDraft.trim()) return;
-                                reportMutation.mutate({ reviewId: rev.id, reason: reportReasonDraft.trim() });
-                              }}
-                            >
-                              {reportMutation.isPending ? "جاري..." : "إرسال البلاغ"}
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => { setReportConfirmId(null); setReportReasonDraft(""); }}>إلغاء</Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setReportConfirmId(rev.id); setReportReasonDraft(""); }}
-                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-amber-600 dark:hover:text-amber-400 transition-colors"
-                        >
-                          <AlertTriangle className="w-3.5 h-3.5" />
-                          الإبلاغ عن هذا التقييم
-                        </button>
-                      )
-                    )}
+                    <ReviewObjection endpoint={`/owner/reviews/${rev.id}/report`}
+                      reportedAt={rev.reportedAt} request={apiFetch} refreshKey={["owner", "reviews"]} />
                   </div>
                 ))}
               </div>
@@ -25090,7 +25033,7 @@ function SubscriptionAccountBanner({
       {subscription.freeAccess?.active ? (
         <span className="text-xs font-medium text-emerald-800 dark:text-emerald-200">
           {subscription.freeAccess.expiresAt
-            ? `الصلاحية حتى ${new Date(subscription.freeAccess.expiresAt).toLocaleDateString("ar-SA")}`
+            ? `الصلاحية حتى ${formatDateWithHijri(subscription.freeAccess.expiresAt)}`
             : "الصلاحية مفتوحة"}
         </span>
       ) : days !== null && (
@@ -28636,13 +28579,13 @@ function OwnerProfileTab() {
               <p className="text-sm font-bold text-foreground">تفضيلات التقويم</p>
             </div>
             <p className="text-xs text-muted-foreground -mt-2">
-              اختر نوع التقويم الافتراضي لكل قسم عند تسجيل الدخول. يمكنك دائماً التبديل لحظياً من داخل كل قسم.
+              التقويم الهجري هو الأساسي المعتمد للحجوزات والتقارير والتواريخ، ويظهر الميلادي بجانبه كتاريخ ثانوي. التبديل داخل الأقسام مؤقت ولا يغيّر التقويم المعتمد.
             </p>
             {/* Calendar default: Booking grid */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">التقويم الأساسي للحجوزات</label>
               <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
-                {(["hijri", "gregorian"] as const).map(v => (
+                {(["hijri"] as const).map(v => (
                   <button
                     key={v}
                     type="button"
@@ -28662,7 +28605,7 @@ function OwnerProfileTab() {
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">التقويم الأساسي للتقارير المالية</label>
               <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
-                {(["gregorian", "hijri"] as const).map(v => (
+                {(["hijri"] as const).map(v => (
                   <button
                     key={v}
                     type="button"
@@ -28680,7 +28623,7 @@ function OwnerProfileTab() {
             </div>
             {/* Salary calendar preference */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold">نظام الرواتب المعتمد</label>
+              <label className="text-sm font-semibold">دورة احتساب الرواتب (مستقلة عن عرض التواريخ)</label>
               <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
                 {(["gregorian", "hijri"] as const).map(v => (
                   <button

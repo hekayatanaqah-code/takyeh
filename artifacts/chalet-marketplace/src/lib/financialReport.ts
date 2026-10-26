@@ -67,8 +67,8 @@ export function finalizeFinancialReportHtml(html: string) {
 }
 
 export function resolveReportCalendar(preference?: string | null, cachedPreference?: string | null): FinancialReportCalendar {
-  if (preference === "hijri" || preference === "gregorian") return preference;
-  return cachedPreference === "hijri" ? "hijri" : "gregorian";
+  // Stored legacy Gregorian preferences must not override the platform default.
+  return "hijri";
 }
 
 export function buildActivitySummaryReportHtml(options: {

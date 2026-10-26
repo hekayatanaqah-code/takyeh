@@ -7,23 +7,13 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
-import { toGregorianStr } from "@/lib/hijri";
+import { formatDateWithHijri, toGregorianStr } from "@/lib/hijri";
 import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 function toHijri(date: Date): string {
-  try {
-    const h = new Intl.DateTimeFormat("ar-SA-u-ca-islamic", {
-      day: "numeric", month: "long", year: "numeric",
-    }).format(date);
-    const g = new Intl.DateTimeFormat("ar-SA", {
-      day: "numeric", month: "long", year: "numeric",
-    }).format(date);
-    return `${h} — ${g}`;
-  } catch {
-    return date.toLocaleDateString("ar-SA");
-  }
+  return formatDateWithHijri(date);
 }
 
 function fmt(v: string | number | null | undefined) {

@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "./financialReport";
 
-it("prioritizes the saved report preference over a stale calendar cache", () => {
+it("uses the platform Hijri default even for legacy Gregorian preferences", () => {
   assert.equal(resolveReportCalendar("hijri", "gregorian"), "hijri");
-  assert.equal(resolveReportCalendar("gregorian", "hijri"), "gregorian");
+  assert.equal(resolveReportCalendar("gregorian", "hijri"), "hijri");
   assert.equal(resolveReportCalendar(undefined, "hijri"), "hijri");
-  assert.equal(resolveReportCalendar(undefined, "invalid"), "gregorian");
+  assert.equal(resolveReportCalendar(undefined, "invalid"), "hijri");
 });
 
 it("uses the requested period and activity in both print and PDF summaries, escaping names", () => {

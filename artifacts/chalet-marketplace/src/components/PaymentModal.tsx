@@ -1,3 +1,4 @@
+import { formatDateWithHijri } from "@/lib/hijri";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -173,8 +174,8 @@ function comparablePlanQuote(quote: PlanQuote) {
       amountHalala: line.amountHalala ?? (line.amount != null ? Math.round(line.amount * 100) : null),
     })),
     nextChargeHalala: quote.nextChargeHalala ?? null,
-    nextBillingAt: quote.nextBillingAt ? new Date(quote.nextBillingAt).toLocaleDateString("ar-SA") : null,
-    periodEnd: quote.periodEnd ? new Date(quote.periodEnd).toLocaleDateString("ar-SA") : null,
+    nextBillingAt: quote.nextBillingAt ? formatDateWithHijri(quote.nextBillingAt) : null,
+    periodEnd: quote.periodEnd ? formatDateWithHijri(quote.periodEnd) : null,
     recurringConfigured: quote.recurringConfigured === true,
     canSavePaymentMethod: quote.canSavePaymentMethod === true,
   };
@@ -199,9 +200,9 @@ function downloadInvoice(inv: Invoice) {
     ...(inv.recurring && inv.nextChargeHalala != null
       ? [`رسوم ${inv.cycleDays === 30 ? "الدورة الشهرية" : `الدورة (${inv.cycleDays ?? "—"} يوم)`} التالية: ${(inv.nextChargeHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2 })} ${inv.currency}`]
       : []),
-    ...(inv.nextBillingAt ? [`موعد التجديد التالي: ${new Date(inv.nextBillingAt).toLocaleDateString("ar-SA")}`] : []),
-    `تاريخ الدفع: ${new Date(inv.paidAt).toLocaleDateString("ar-SA")}`,
-    `صالح حتى: ${new Date(inv.expiresAt).toLocaleDateString("ar-SA")}`,
+    ...(inv.nextBillingAt ? [`موعد التجديد التالي: ${formatDateWithHijri(inv.nextBillingAt)}`] : []),
+    `تاريخ الدفع: ${formatDateWithHijri(inv.paidAt)}`,
+    `صالح حتى: ${formatDateWithHijri(inv.expiresAt)}`,
     ``,
     `شكراً لاشتراكك في منصة حكاية أناقة`,
   ];
@@ -955,10 +956,10 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                         )}
                       </div>
                       {planQuote.nextBillingAt && (
-                        <p className="text-xs text-muted-foreground">موعد التجديد التالي: {new Date(planQuote.nextBillingAt).toLocaleDateString("ar-SA")}</p>
+                        <p className="text-xs text-muted-foreground">موعد التجديد التالي: {formatDateWithHijri(planQuote.nextBillingAt)}</p>
                       )}
                       {planQuote.periodEnd && (
-                        <p className="text-xs text-muted-foreground">نهاية الفترة: {new Date(planQuote.periodEnd).toLocaleDateString("ar-SA")}</p>
+                        <p className="text-xs text-muted-foreground">نهاية الفترة: {formatDateWithHijri(planQuote.periodEnd)}</p>
                       )}
                     </>
                   )}
@@ -1089,10 +1090,10 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                     <p className="mt-1">إجمالي الفاتورة عند التجديد {cycleLabel(initiateData.days)}: {formatPrice(initiateData.nextChargeHalala)}</p>
                   )}
                   {initiateData.nextBillingAt && (
-                    <p className="mt-1 text-xs text-muted-foreground">موعد التجديد التالي: {new Date(initiateData.nextBillingAt).toLocaleDateString("ar-SA")}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">موعد التجديد التالي: {formatDateWithHijri(initiateData.nextBillingAt)}</p>
                   )}
                   {initiateData.periodEnd && (
-                    <p className="mt-1 text-xs text-muted-foreground">نهاية الفترة الحالية: {new Date(initiateData.periodEnd).toLocaleDateString("ar-SA")}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">نهاية الفترة الحالية: {formatDateWithHijri(initiateData.periodEnd)}</p>
                   )}
                   <p className="mt-2 text-xs text-muted-foreground">لن يُفعّل التجديد ما لم تُحفظ وسيلة الدفع وتُؤكد صلاحيتها من النظام.</p>
                 </div>
@@ -1182,7 +1183,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                   {invoice.nextChargeHalala != null
                     ? <p className="mt-1">إجمالي رسوم الدورة التالية: {formatPrice(invoice.nextChargeHalala)}</p>
                     : <p className="mt-1">لم يرسل الخادم مبلغ التجديد التالي.</p>}
-                  {invoice.nextBillingAt && <p className="mt-1">موعد التجديد التالي: {new Date(invoice.nextBillingAt).toLocaleDateString("ar-SA")}</p>}
+                  {invoice.nextBillingAt && <p className="mt-1">موعد التجديد التالي: {formatDateWithHijri(invoice.nextBillingAt)}</p>}
                 </div>
               )}
               {paidByWallet && (
@@ -1201,7 +1202,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">تاريخ الدفع</span>
-                <span className="font-medium">{new Date(invoice.paidAt).toLocaleDateString("ar-SA")}</span>
+                <span className="font-medium">{formatDateWithHijri(invoice.paidAt)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground flex items-center gap-1">
@@ -1209,7 +1210,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                   صالح حتى
                 </span>
                 <span className="font-semibold text-primary">
-                  {new Date(invoice.expiresAt).toLocaleDateString("ar-SA")}
+                  {formatDateWithHijri(invoice.expiresAt)}
                 </span>
               </div>
               <div className="flex justify-between">

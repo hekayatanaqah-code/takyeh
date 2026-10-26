@@ -21,6 +21,48 @@ import { requireAdmin, requireAdminOrAdminStaff, requireSuperAdmin, requireSuppo
 
 const router = Router();
 
+/* Service disputes use the same staff permission and audited admin boundary
+   as property disputes. Lock the review before a decision to avoid double decisions. */
+router.get("/admin/service-reviews", requireAdminOrAdminStaff, requireSupportDisputesAdmin, async (_req, res) => {
+  const rows = await db.select({
+    id: serviceReviewsTable.id, providerId: serviceReviewsTable.providerId,
+    chaletName: serviceProvidersTable.businessName,
+    rating: serviceReviewsTable.rating, comment: serviceReviewsTable.comment,
+    photoUrls: serviceReviewsTable.photoUrls, isVerified: serviceReviewsTable.isVerified,
+    isHidden: serviceReviewsTable.isHidden, ownerReply: serviceReviewsTable.ownerReply,
+    ownerReplyAt: serviceReviewsTable.ownerReplyAt, reportedBy: serviceReviewsTable.reportedBy,
+    reportedAt: serviceReviewsTable.reportedAt, reportReason: serviceReviewsTable.reportReason,
+    createdAt: serviceReviewsTable.createdAt,
+  }).from(serviceReviewsTable).leftJoin(serviceProvidersTable, eq(serviceProvidersTable.id, serviceReviewsTable.providerId))
+    .orderBy(desc(serviceReviewsTable.createdAt));
+  return res.json(rows.map(row => ({ ...row, kind: "service" })));
+});
+
+router.post("/admin/service-reviews/:id/decision", requireAdminOrAdminStaff, requireSupportDisputesAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const body = z.object({ decision: z.enum(["keep", "delete"]) }).safeParse(req.body);
+  if (!Number.isSafeInteger(id) || !body.success) return res.status(400).json({ error: "قرار غير صحيح" });
+  const result = await db.transaction(async tx => {
+    const [review] = await tx.select().from(serviceReviewsTable).where(eq(serviceReviewsTable.id, id)).for("update");
+    if (!review?.reportedAt) return false;
+    const [provider] = await tx.select({ name: serviceProvidersTable.businessName }).from(serviceProvidersTable)
+      .where(eq(serviceProvidersTable.id, review.providerId));
+    if (body.data.decision === "delete") {
+      await tx.delete(serviceReviewsTable).where(eq(serviceReviewsTable.id, id));
+    } else {
+      await tx.update(serviceReviewsTable).set({ reportedAt: null, reportedBy: null, reportReason: null })
+        .where(eq(serviceReviewsTable.id, id));
+    }
+    if (review.reportedBy) await tx.insert(ownerNotificationsTable).values({
+      ownerId: review.reportedBy, type: "review_dispute_decision",
+      message: `راجعت الإدارة اعتراضك على تقييم "${provider?.name ?? "الخدمة"}" وقررت ${body.data.decision === "delete" ? "حذف التقييم" : "إبقاء التقييم"}.`,
+    });
+    return true;
+  });
+  if (!result) return res.status(409).json({ error: "الاعتراض غير موجود أو تمت مراجعته" });
+  return res.json({ ok: true });
+});
+
 function getRouteParam(value: string | string[]) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -346,19 +388,10 @@ router.post("/admin/reviews/:id/dismiss-report", requireAdminOrAdminStaff, requi
   const reviewId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
 
-  const [review] = await db
-    .select({
-      id: reviewsTable.id,
-      chaletId: reviewsTable.chaletId,
-      reportedBy: reviewsTable.reportedBy,
-    })
-    .from(reviewsTable)
-    .where(eq(reviewsTable.id, reviewId))
-    .limit(1);
-
-  if (!review) return res.status(404).json({ error: "not found" });
-
-  await db.transaction(async (tx) => {
+  const decided = await db.transaction(async (tx) => {
+    const [review] = await tx.select().from(reviewsTable)
+      .where(eq(reviewsTable.id, reviewId)).for("update");
+    if (!review?.reportedAt) return false;
     await tx
       .update(reviewsTable)
       .set({ reportedBy: null, reportedAt: null, reportReason: null })
@@ -377,10 +410,12 @@ router.post("/admin/reviews/:id/dismiss-report", requireAdminOrAdminStaff, requi
         type: "report_dismissed",
         chaletId: review.chaletId,
         reviewId: reviewId,
-        message: `تم رفض بلاغك على تقييم شاليه "${chalet?.nameAr ?? ""}" من قبل الإدارة — التقييم سيبقى منشوراً.`,
+        message: `راجعت الإدارة اعتراضك على تقييم "${chalet?.nameAr ?? ""}" وقررت إبقاء التقييم.`,
       });
     }
+    return true;
   });
+  if (!decided) return res.status(409).json({ error: "الاعتراض غير موجود أو تمت مراجعته" });
 
   return res.json({ ok: true });
 });
@@ -391,10 +426,19 @@ router.delete("/admin/reviews/:id", requireAdminOrAdminStaff, requireSupportDisp
   const reviewId = parseInt(getRouteParam(req.params.id), 10);
   if (isNaN(reviewId)) return res.status(400).json({ error: "invalid id" });
 
-  const [deleted] = await db
-    .delete(reviewsTable)
-    .where(eq(reviewsTable.id, reviewId))
-    .returning({ id: reviewsTable.id });
+  const deleted = await db.transaction(async tx => {
+    const [review] = await tx.select().from(reviewsTable).where(eq(reviewsTable.id, reviewId)).for("update");
+    if (!review) return false;
+    if (review.reportedBy) {
+      const [chalet] = await tx.select({ name: chaletsTable.nameAr }).from(chaletsTable).where(eq(chaletsTable.id, review.chaletId));
+      await tx.insert(ownerNotificationsTable).values({
+        ownerId: review.reportedBy, type: "review_dispute_decision", chaletId: review.chaletId,
+        message: `راجعت الإدارة اعتراضك على تقييم "${chalet?.name ?? "العقار"}" وقررت حذف التقييم.`,
+      });
+    }
+    await tx.delete(reviewsTable).where(eq(reviewsTable.id, reviewId));
+    return true;
+  });
 
   if (!deleted) return res.status(404).json({ error: "not found" });
   return res.json({ ok: true });

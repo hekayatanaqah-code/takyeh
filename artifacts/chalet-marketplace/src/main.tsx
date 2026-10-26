@@ -5,6 +5,14 @@ import { installConnectionMonitor } from "./lib/connection-monitor";
 
 installConnectionMonitor();
 
+// Display defaults are independent of ISO storage and historical payroll terms.
+try {
+  localStorage.setItem("dashCalDefaultType", "hijri");
+  localStorage.setItem("revCalType", "hijri");
+} catch {
+  // Storage may be unavailable; individual screens also default to Hijri.
+}
+
 const MOBILE_UI_CACHE_RELEASE = "partners-mobile-ui-2026-09";
 
 async function clearLegacyFrontendCaches() {

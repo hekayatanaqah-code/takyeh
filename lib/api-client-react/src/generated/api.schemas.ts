@@ -1411,6 +1411,51 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type SubmitServiceReviewObjectionBody = {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  reason: string;
+};
+
+export type ListAdminServiceReviewObjections200ItemKind = typeof ListAdminServiceReviewObjections200ItemKind[keyof typeof ListAdminServiceReviewObjections200ItemKind];
+
+
+export const ListAdminServiceReviewObjections200ItemKind = {
+  service: 'service',
+} as const;
+
+export type ListAdminServiceReviewObjections200Item = {
+  id: number;
+  providerId: number;
+  kind: ListAdminServiceReviewObjections200ItemKind;
+  /** @nullable */
+  chaletName?: string | null;
+  rating: number;
+  /** @nullable */
+  comment?: string | null;
+  /** @nullable */
+  reportedBy?: string | null;
+  /** @nullable */
+  reportedAt?: string | null;
+  /** @nullable */
+  reportReason?: string | null;
+  createdAt: string;
+};
+
+export type DecideServiceReviewObjectionBodyDecision = typeof DecideServiceReviewObjectionBodyDecision[keyof typeof DecideServiceReviewObjectionBodyDecision];
+
+
+export const DecideServiceReviewObjectionBodyDecision = {
+  keep: 'keep',
+  delete: 'delete',
+} as const;
+
+export type DecideServiceReviewObjectionBody = {
+  decision: DecideServiceReviewObjectionBodyDecision;
+};
+
 export type GetOwnerFinancialPeriodsParams = {
 activity?: GetOwnerFinancialPeriodsActivity;
 /**

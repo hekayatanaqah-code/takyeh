@@ -1,3 +1,4 @@
+import { formatDateWithHijri } from "@/lib/hijri";
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -615,7 +616,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                              <p>السعر المرجعي للوحدة لكل 30 يوماً: {(preview.monthlyUnitPriceHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ⃁</p>
                              <p className="mt-2 font-bold">المستحق الآن للفترة المتبقية: {(preview.amountHalala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ⃁</p>
                              <p className="mt-1 text-xs text-muted-foreground">
-                               محسوباً عن {preview.remainingDays} من {preview.billingDays} يوماً حتى نهاية الفترة {new Date(preview.periodEndAt).toLocaleDateString("ar-SA")}.
+                               محسوباً عن {preview.remainingDays} من {preview.billingDays} يوماً حتى نهاية الفترة {formatDateWithHijri(preview.periodEndAt)}.
                              </p>
                              {preview.nextChargeHalala != null && (
                                <p className="mt-2 font-semibold">
@@ -623,7 +624,7 @@ export function AddonPaymentModal({ open, onClose, addonType, selectableType = f
                                </p>
                              )}
                              {preview.nextBillingAt && (
-                               <p className="mt-1 text-xs text-muted-foreground">{currentLimits?.plan === "trial" ? "تنتهي التجربة في" : "موعد التجديد التالي"}: {new Date(preview.nextBillingAt).toLocaleDateString("ar-SA")}</p>
+                               <p className="mt-1 text-xs text-muted-foreground">{currentLimits?.plan === "trial" ? "تنتهي التجربة في" : "موعد التجديد التالي"}: {formatDateWithHijri(preview.nextBillingAt)}</p>
                              )}
                              {currentLimits?.plan === "trial" ? (
                                <p className="mt-1 text-xs text-muted-foreground">لا تُخصم رسوم تجديد عند نهاية التجربة تلقائياً. اختر باقة مدفوعة أولاً؛ سيضاف سعرها إلى رسوم الإضافات في فاتورة واحدة قبل الدفع.</p>

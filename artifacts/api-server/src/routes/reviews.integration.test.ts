@@ -26,6 +26,7 @@ import {
   serviceReviewInvitationsTable,
   serviceReviewsTable,
   sessionsTable,
+  adminAuditLogsTable,
 } from "@workspace/db";
 
 type Json = Record<string, unknown> | unknown[];
@@ -295,6 +296,61 @@ after(async () => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
   await pool.end();
+});
+
+it("requires a reason, scopes objections to their owner, and lets administration keep or delete both kinds", async () => {
+  const owner = await createOwner();
+  const outsider = await createOwner();
+  const admin = await createOwner();
+  const providerId = await createProvider(owner.ownerId, "اعتراض");
+  const otherProviderId = await createProvider(outsider.ownerId, "نشاط آخر");
+  const [serviceReview] = await db.insert(serviceReviewsTable).values({ providerId, rating: 2, comment: "اختبار اعتراض" }).returning();
+  serviceReviewIds.push(serviceReview.id);
+  const path = `/providers/my/approved/${providerId}/reviews/${serviceReview.id}/report`;
+  const post = (reason: string) => ({ method: "POST", body: JSON.stringify({ reason }) });
+  assert.equal((await request(path, "invalid-session", post("سبب"))).response.status, 401);
+  assert.equal((await request(path, outsider.sessionId, post("سبب"))).response.status, 404);
+  assert.equal((await request(path, owner.sessionId, post("   "))).response.status, 422);
+  assert.equal((await request(path, owner.sessionId, post("ا".repeat(501)))).response.status, 422);
+  assert.equal((await request(`/providers/my/approved/${otherProviderId}/reviews/${serviceReview.id}/report`, outsider.sessionId, post("سبب"))).response.status, 409);
+  assert.equal((await request(path, owner.sessionId, post("التقييم مخالف"))).response.status, 200);
+  assert.equal((await request(path, owner.sessionId, post("استبدال السبب"))).response.status, 409);
+  const [pending] = await db.select().from(serviceReviewsTable).where(eq(serviceReviewsTable.id, serviceReview.id));
+  assert.equal(pending.reportReason, "التقييم مخالف");
+  assert.equal(pending.isHidden, false);
+  assert.equal((await request("/admin/service-reviews", owner.sessionId)).response.status, 401);
+  const previousAdmin = process.env.ADMIN_USER_ID;
+  process.env.ADMIN_USER_ID = admin.ownerId;
+  try {
+    const listed = await request("/admin/service-reviews", admin.sessionId);
+    assert.equal(listed.response.status, 200);
+    assert(listed.json.some((r: any) => r.id === serviceReview.id && r.reportReason === "التقييم مخالف"));
+    const decisionPath = `/admin/service-reviews/${serviceReview.id}/decision`;
+    const decide = (decision: string) => ({ method: "POST", body: JSON.stringify({ decision }) });
+    assert.equal((await request(decisionPath, admin.sessionId, decide("keep"))).response.status, 200);
+    const [kept] = await db.select().from(serviceReviewsTable).where(eq(serviceReviewsTable.id, serviceReview.id));
+    assert.equal(kept.reportedAt, null);
+    assert.equal((await request(decisionPath, admin.sessionId, decide("delete"))).response.status, 409);
+    assert.equal((await request(path, owner.sessionId, post("اعتراض جديد"))).response.status, 200);
+    assert.equal((await request(decisionPath, admin.sessionId, decide("delete"))).response.status, 200);
+    assert.equal((await db.select().from(serviceReviewsTable).where(eq(serviceReviewsTable.id, serviceReview.id))).length, 0);
+    const chaletId = await createChalet(owner.ownerId);
+    const [propertyReview] = await db.insert(reviewsTable).values({ chaletId, rating: 1, comment: "تقييم عقار" }).returning();
+    reviewIds.push(propertyReview.id);
+    const propertyPath = `/owner/reviews/${propertyReview.id}/report`;
+    assert.equal((await request(propertyPath, owner.sessionId, post(""))).response.status, 400);
+    assert.equal((await request(propertyPath, owner.sessionId, post("تقييم غير منصف"))).response.status, 200);
+    assert.equal((await request(`/admin/reviews/${propertyReview.id}/dismiss-report`, admin.sessionId, { method: "POST" })).response.status, 200);
+    assert.equal((await request(propertyPath, owner.sessionId, post("طلب مراجعة"))).response.status, 200);
+    assert.equal((await request(`/admin/reviews/${propertyReview.id}`, admin.sessionId, { method: "DELETE" })).response.status, 200);
+    const notices = await db.select().from(ownerNotificationsTable).where(eq(ownerNotificationsTable.ownerId, owner.ownerId));
+    assert(notices.some(n => n.message.includes("حذف التقييم")));
+    assert(notices.some(n => n.message.includes("إبقاء التقييم")));
+  } finally {
+    if (previousAdmin === undefined) delete process.env.ADMIN_USER_ID;
+    else process.env.ADMIN_USER_ID = previousAdmin;
+    await db.delete(adminAuditLogsTable).where(eq(adminAuditLogsTable.actorId, admin.ownerId));
+  }
 });
 
 describe("owner product isolation for service-only and mixed accounts", () => {

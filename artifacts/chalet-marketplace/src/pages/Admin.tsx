@@ -8437,8 +8437,8 @@ function WaSubscribersTab() {
       const chalet  = `"${(r.chalet_name ?? "").replace(/"/g, '""')}"`;
       const phone   = r.whatsapp_number ?? "";
       const date    = r.whatsapp_subscribed_at
-        ? new Date(r.whatsapp_subscribed_at).toLocaleDateString("ar-SA")
-        : new Date(r.created_at).toLocaleDateString("ar-SA");
+        ? fmtDate(r.whatsapp_subscribed_at)
+        : fmtDate(r.created_at);
       const status  = r.whatsapp_news_subscribe ? "نشط" : "ملغى";
       return [name, chalet, phone, date, status].join(",");
     });
@@ -8887,6 +8887,7 @@ const ADMIN_NAV_GROUPS: Array<{
    ══════════════════════════════════════════════════════════════ */
 interface ReviewChalet { id: number; nameAr: string; photos: string[] }
 interface AdminReviewRow {
+  kind?: "service";
   id: number;
   chaletId: number;
   chaletName: string | null;
@@ -8939,13 +8940,16 @@ function ReviewsTab() {
     },
   });
 
-  const { data: allReviews = [] } = useQuery<AdminReviewRow[]>({
+  const { data: allReviews = [], isError: reviewsError, refetch: refetchReviews } = useQuery<AdminReviewRow[]>({
     queryKey: ["admin", "all-reviews"],
     queryFn: async () => {
-      const r = await fetch(`${API}/admin/reviews`, { credentials: "include" });
-      if (!r.ok) throw new Error("failed");
-      return r.json();
+      const responses = await Promise.all(["reviews", "service-reviews"].map(path =>
+        fetch(`${API}/admin/${path}`, { credentials: "include" })));
+      if (responses.some(r => !r.ok)) throw new Error("تعذر تحميل التقييمات");
+      const [properties, services] = await Promise.all(responses.map(r => r.json()));
+      return [...properties, ...services];
     },
+    refetchInterval: 30_000,
   });
 
   const generateLink = useMutation({
@@ -8975,10 +8979,12 @@ function ReviewsTab() {
   }
 
   const dismissReport = useMutation({
-    mutationFn: async (reviewId: number) => {
-      const r = await fetch(`${API}/admin/reviews/${reviewId}/dismiss-report`, {
+    mutationFn: async (review: AdminReviewRow) => {
+      const r = await fetch(review.kind === "service" ? `${API}/admin/service-reviews/${review.id}/decision` : `${API}/admin/reviews/${review.id}/dismiss-report`, {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: review.kind === "service" ? JSON.stringify({ decision: "keep" }) : undefined,
       });
       if (!r.ok) throw new Error("failed");
     },
@@ -8986,10 +8992,12 @@ function ReviewsTab() {
   });
 
   const deleteReviewDispute = useMutation({
-    mutationFn: async (reviewId: number) => {
-      const r = await fetch(`${API}/admin/reviews/${reviewId}`, {
-        method: "DELETE",
+    mutationFn: async (review: AdminReviewRow) => {
+      const r = await fetch(review.kind === "service" ? `${API}/admin/service-reviews/${review.id}/decision` : `${API}/admin/reviews/${review.id}`, {
+        method: review.kind === "service" ? "POST" : "DELETE",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: review.kind === "service" ? JSON.stringify({ decision: "delete" }) : undefined,
       });
       if (!r.ok) throw new Error("failed");
     },
@@ -9024,6 +9032,12 @@ function ReviewsTab() {
       </div>
 
       {/* ══ Dispute Center ══ */}
+      {(reviewsError || dismissReport.isError || deleteReviewDispute.isError) && (
+        <div role="alert" className="rounded-xl border border-red-700 p-4 text-red-300">
+          تعذر تحميل التقييمات أو تنفيذ القرار. لم نؤكد نجاح العملية.
+          <Button variant="outline" size="sm" className="mr-3" onClick={() => { dismissReport.reset(); deleteReviewDispute.reset(); void refetchReviews(); }}>إعادة التحميل</Button>
+        </div>
+      )}
       {reportedReviews.length > 0 && (
         <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-3 border-b border-amber-800/40">
@@ -9031,13 +9045,13 @@ function ReviewsTab() {
               <AlertTriangle className="w-4 h-4 text-amber-400" />
             </div>
             <div className="flex-1">
-              <span className="text-white font-semibold text-sm">مركز الشكاوى</span>
-              <span className="text-amber-400 text-xs mr-2">{reportedReviews.length} بلاغ معلق</span>
+              <span className="text-white font-semibold text-sm">اعتراضات التقييمات — العقارات والخدمات</span>
+              <span className="text-amber-400 text-xs mr-2">{reportedReviews.length} اعتراض قيد المراجعة</span>
             </div>
           </div>
           <div className="divide-y divide-amber-900/30">
             {reportedReviews.map((rev) => (
-              <div key={rev.id} className="px-5 py-4 space-y-2">
+              <div key={`${rev.kind ?? "property"}-${rev.id}`} className="px-5 py-4 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-slate-300 text-sm font-semibold">{rev.chaletName ?? `شاليه #${rev.chaletId}`}</span>
                   <div className="flex gap-0.5" dir="ltr">
@@ -9054,7 +9068,7 @@ function ReviewsTab() {
                 {rev.reportReason && (
                   <div className="flex items-start gap-1.5 bg-amber-900/20 border border-amber-800/40 rounded-lg px-3 py-2">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
-                    <p className="text-amber-300 text-xs leading-relaxed"><span className="font-semibold">سبب البلاغ:</span> {rev.reportReason}</p>
+                    <p className="text-amber-300 text-xs leading-relaxed"><span className="font-semibold">سبب الاعتراض:</span> {rev.reportReason}</p>
                   </div>
                 )}
                 {rev.isHidden && <span className="text-xs bg-red-900/40 text-red-400 px-2 py-0.5 rounded-full">مخفي بالفعل</span>}
@@ -9063,19 +9077,19 @@ function ReviewsTab() {
                     size="sm"
                     variant="outline"
                     className="text-xs h-7 px-3 border-green-800 text-green-400 hover:bg-green-900/30"
-                    disabled={dismissReport.isPending}
-                    onClick={() => dismissReport.mutate(rev.id)}
+                    disabled={dismissReport.isPending || deleteReviewDispute.isPending}
+                    onClick={() => dismissReport.mutate(rev)}
                   >
-                    رفض البلاغ
+                    إبقاء التقييم
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     className="text-xs h-7 px-3 border-red-800 text-red-400 hover:bg-red-900/30"
-                    disabled={deleteReviewDispute.isPending}
+                    disabled={deleteReviewDispute.isPending || dismissReport.isPending}
                     onClick={() => {
                       if (window.confirm("هل أنت متأكد من حذف هذا التقييم نهائياً؟")) {
-                        deleteReviewDispute.mutate(rev.id);
+                        deleteReviewDispute.mutate(rev);
                       }
                     }}
                   >
@@ -9172,7 +9186,7 @@ function ReviewsTab() {
                 )}
 
                 {/* Reviews list (expandable) */}
-                {isExpanded && <ChaletReviewsList chaletId={c.id} reviews={allReviews.filter((r) => r.chaletId === c.id)} />}
+                {isExpanded && <ChaletReviewsList chaletId={c.id} reviews={allReviews.filter((r) => !r.kind && r.chaletId === c.id)} />}
               </div>
             );
           })}

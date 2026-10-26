@@ -53,7 +53,9 @@ const fmtAmount = (v: string | number) => numFmt.format(Number(v) || 0);
 function fmtDate(d: string | null) {
   if (!d) return "—";
   const [y, m, day] = d.slice(0, 10).split("-").map(Number);
-  return new Intl.DateTimeFormat("ar-SA-u-ca-gregory", { numberingSystem: "arab", year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, day)));
+  const date = new Date(Date.UTC(y, m - 1, day));
+  const options: Intl.DateTimeFormatOptions = { numberingSystem: "arab", year: "numeric", month: "long", day: "numeric", timeZone: "Asia/Riyadh" };
+  return `${new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", options).format(date)} — ${new Intl.DateTimeFormat("ar-SA-u-ca-gregory", options).format(date)} م`;
 }
 
 async function throwIfBad(res: Response): Promise<Response> {
