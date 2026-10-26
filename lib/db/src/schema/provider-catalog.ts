@@ -8,6 +8,8 @@ export const providerCatalogItemsTable = pgTable("provider_catalog_items", {
   name: text("name").notNull(),
   kind: text("kind").$type<"service" | "product">().notNull(),
   description: text("description").notNull().default(""),
+  thumbnailUrl: text("thumbnail_url"),
+  galleryPhotos: text("gallery_photos").array().notNull().default([]),
   price: numeric("price", { precision: 12, scale: 2 }).notNull(),
   pricingUnit: text("pricing_unit").$type<"per_request" | "per_hour" | "per_day" | "per_piece">().notNull(),
   isActive: boolean("is_active").notNull().default(true),

@@ -21,6 +21,32 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /providers/my/approved/{providerId}/catalog-media:
+    parameters:
+      - { name: providerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
+    post:
+      operationId: uploadProviderCatalogImage
+      tags: [providers]
+      description: Owner-scoped catalog image upload. JPEG, PNG or WebP up to 2 MiB, converted to WebP.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/ProviderCatalogImageUploadInput" }
+      responses:
+        "200":
+          description: Stored public item image
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderCatalogImageUploadResult" }
+        "400":
+          description: Invalid image
+        "401":
+          description: Authentication required
+        "404":
+          description: Provider not owned by this account
+        "413":
+          description: Image exceeds 2 MiB
   /providers/my/approved/{providerId}/catalog:
     parameters:
       - { name: providerId, in: path, required: true, schema: { type: integer, minimum: 1 } }
@@ -1401,6 +1427,16 @@ components:
       schema:
         type: string
   schemas:
+    ProviderCatalogImageUploadInput:
+      type: object
+      required: [file]
+      properties:
+        file: { type: string, format: binary }
+    ProviderCatalogImageUploadResult:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
     ProviderCatalogItemInput:
       type: object
       required: [name, kind, price, pricingUnit, description, isActive]
@@ -1411,6 +1447,20 @@ components:
         pricingUnit: { type: string, enum: [per_request, per_hour, per_day, per_piece] }
         description: { type: string, maxLength: 2000 }
         isActive: { type: boolean }
+        thumbnailUrl:
+          type: [string, "null"]
+          maxLength: 500
+          pattern: '^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\.(webp|png|jpe?g)$'
+          description: Main image for this item only. Null clears it; omission preserves it on edit.
+        galleryPhotos:
+          type: array
+          maxItems: 3
+          uniqueItems: true
+          description: Optional additional item images. Empty array clears them; omission preserves them on edit.
+          items:
+            type: string
+            maxLength: 500
+            pattern: '^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\.(webp|png|jpe?g)$'
     ProviderCatalogItem:
       allOf:
         - { $ref: "#/components/schemas/ProviderCatalogItemInput" }

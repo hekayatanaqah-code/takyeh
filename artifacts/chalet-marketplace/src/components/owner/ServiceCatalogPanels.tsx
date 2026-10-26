@@ -24,6 +24,7 @@ import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { useToast } from "@/hooks/use-toast";
 import { cn, toAr, fromAr } from "@/lib/utils";
+import { CatalogMediaEditor, CatalogItemDetailsDialog, ItemThumb, readMedia, type CatalogMedia } from "./CatalogItemMedia";
 
 type PanelProps = { providerId: number; readOnly?: boolean };
 
@@ -166,8 +167,15 @@ function ConfirmDelete({ open, onOpenChange, title, onConfirm, pending }: {
 type ItemForm = { name: string; kind: "service" | "product"; description: string; price: string; pricingUnit: keyof typeof UNIT_LABEL; isActive: boolean };
 const emptyItem: ItemForm = { name: "", kind: "service", description: "", price: "", pricingUnit: "per_request", isActive: true };
 
+type MediaInput = { thumbnailUrl: string | null; galleryPhotos: string[] };
+
+function withMedia(base: ProviderCatalogItemInput, m: MediaInput): ProviderCatalogItemInput {
+  const full: ProviderCatalogItemInput & MediaInput = { ...base, thumbnailUrl: m.thumbnailUrl, galleryPhotos: m.galleryPhotos };
+  return full;
+}
+
 function itemToInput(i: ProviderCatalogItem): ProviderCatalogItemInput {
-  return { name: i.name, kind: i.kind, description: i.description ?? "", price: i.price, pricingUnit: i.pricingUnit, isActive: i.isActive };
+  return withMedia({ name: i.name, kind: i.kind, description: i.description ?? "", price: i.price, pricingUnit: i.pricingUnit, isActive: i.isActive }, readMedia(i));
 }
 
 function validateItem(f: ItemForm): { errors: Partial<Record<keyof ItemForm, string>>; input?: ProviderCatalogItemInput } {
@@ -199,24 +207,28 @@ export function ServiceCatalogPanel({ providerId, readOnly = false }: PanelProps
   const [errors, setErrors] = useState<Partial<Record<keyof ItemForm, string>>>({});
   const [toDelete, setToDelete] = useState<ProviderCatalogItem | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [media, setMedia] = useState<MediaInput>({ thumbnailUrl: null, galleryPhotos: [] });
+  const [uploading, setUploading] = useState(false);
 
   const items = q.data ?? [];
   const fail = (e: unknown) => toast({ title: "لم يتم الحفظ", description: errText(e), variant: "destructive" });
 
   // Form state is snapshotted only on open; background refetches never touch it.
-  const openNew = () => { if (readOnly) return; setEditId(null); setForm(emptyItem); setErrors({}); setOpen(true); };
+  const openNew = () => { if (readOnly) return; setEditId(null); setForm(emptyItem); setMedia({ thumbnailUrl: null, galleryPhotos: [] }); setErrors({}); setOpen(true); };
   const openEdit = (i: ProviderCatalogItem) => {
     if (readOnly) return;
     setEditId(i.id);
     setForm({ name: i.name, kind: i.kind, description: i.description ?? "", price: toAr(i.price), pricingUnit: i.pricingUnit, isActive: i.isActive });
+    setMedia(readMedia(i));
     setErrors({}); setOpen(true);
   };
 
   const submit = () => {
-    if (readOnly) return;
-    const { errors: errs, input } = validateItem(form);
+    if (readOnly || uploading) return;
+    const { errors: errs, input: base } = validateItem(form);
     setErrors(errs);
-    if (!input) return;
+    if (!base) return;
+    const input = withMedia(base, media);
     const done = { onSuccess: () => { invalidate(); setOpen(false); toast({ title: editId ? "تم تحديث العنصر" : "تمت إضافة العنصر" }); }, onError: fail };
     if (editId) update.mutate({ providerId, itemId: editId, data: input }, done);
     else create.mutate({ providerId, data: input }, done);
@@ -240,6 +252,7 @@ export function ServiceCatalogPanel({ providerId, readOnly = false }: PanelProps
   };
 
   const saving = create.isPending || update.isPending;
+  const locked = saving || uploading;
   const set = <K extends keyof ItemForm>(k: K, v: ItemForm[K]) => setForm(f => ({ ...f, [k]: v }));
 
   return (
@@ -261,13 +274,17 @@ export function ServiceCatalogPanel({ providerId, readOnly = false }: PanelProps
             {items.map(i => (
               <li key={i.id} data-testid={`card-catalog-item-${i.id}`}
                 className={cn("rounded-xl border border-border p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3 transition-opacity", !i.isActive && "opacity-60 bg-muted/40")}>
-                <div className="flex-1 min-w-0">
+                <ItemThumb url={readMedia(i).thumbnailUrl} alt={i.name} className="w-14 h-14 hidden sm:flex" />
+                <div className="flex-1 min-w-0 flex gap-3">
+                  <ItemThumb url={readMedia(i).thumbnailUrl} alt={i.name} className="w-12 h-12 sm:hidden" />
+                  <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold truncate" data-testid={`text-item-name-${i.id}`}>{i.name}</span>
                     <span className={i.kind === "service" ? "chip-primary" : "chip"}>{KIND_LABEL[i.kind]}</span>
                     {!i.isActive && <span className="chip">موقوف</span>}
                   </div>
                   {i.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{i.description}</p>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 justify-between sm:justify-end">
                   <div className="text-left">
@@ -286,8 +303,9 @@ export function ServiceCatalogPanel({ providerId, readOnly = false }: PanelProps
           </ul>
         )}
 
-      <Dialog open={open} onOpenChange={o => { if (!saving) setOpen(o); }}>
-        <DialogContent dir="rtl" className="max-w-lg max-h-[90dvh] overflow-y-auto">
+      <Dialog open={open} onOpenChange={o => { if (!locked) setOpen(o); }}>
+        <DialogContent dir="rtl" className="max-w-lg max-h-[90dvh] overflow-y-auto"
+          onEscapeKeyDown={e => { if (locked) e.preventDefault(); }} onInteractOutside={e => { if (locked) e.preventDefault(); }}>
           <DialogHeader className="text-right">
             <DialogTitle>{editId ? "تعديل عنصر" : "عنصر جديد"}</DialogTitle>
             <DialogDescription>السعر الأساسي قبل أي عرض أو خصم.</DialogDescription>
@@ -327,13 +345,15 @@ export function ServiceCatalogPanel({ providerId, readOnly = false }: PanelProps
               <Textarea id="ci-desc" rows={3} value={form.description} onChange={e => set("description", e.target.value)} data-testid="input-item-description" />
               <div className="flex justify-between"><FieldErr msg={errors.description} /><span className="text-[11px] text-muted-foreground mr-auto">{toAr(form.description.length)} / ٢٠٠٠</span></div>
             </div>
+            <CatalogMediaEditor providerId={providerId} thumbnailUrl={media.thumbnailUrl} galleryPhotos={media.galleryPhotos}
+              onChange={setMedia} onBusyChange={setUploading} disabled={saving || readOnly} />
             <label className="flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2.5 cursor-pointer">
               <span className="text-sm font-medium">ظاهر للعملاء</span>
               <Switch checked={form.isActive} onCheckedChange={v => set("isActive", v)} data-testid="switch-item-form-active" />
             </label>
             <DialogFooter className="gap-2">
-              <Button type="button" variant="outline" disabled={saving} onClick={() => setOpen(false)} data-testid="button-cancel-item">إلغاء</Button>
-              <Button type="submit" disabled={saving || readOnly} data-testid="button-save-item">{saving ? "جارٍ الحفظ..." : "حفظ"}</Button>
+              <Button type="button" variant="outline" disabled={locked} onClick={() => setOpen(false)} data-testid="button-cancel-item">إلغاء</Button>
+              <Button type="submit" disabled={locked || readOnly} data-testid="button-save-item">{saving ? "جارٍ الحفظ..." : uploading ? "جارٍ رفع الصورة..." : "حفظ"}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -585,6 +605,7 @@ export function ServiceOffersPanel({ providerId, readOnly = false }: PanelProps)
 /* ── Public ────────────────────────────────────────────────── */
 
 export function PublicServiceCatalog({ providerId }: { providerId: number }) {
+  const [detailsId, setDetailsId] = useState<number | null>(null);
   const q = useGetPublicProviderCatalog(providerId, {
     query: { queryKey: getGetPublicProviderCatalogQueryKey(providerId), enabled: providerId > 0, staleTime: STALE, refetchOnMount: true },
   });
@@ -607,6 +628,7 @@ export function PublicServiceCatalog({ providerId }: { providerId: number }) {
   }
   const items = q.data ?? [];
   if (items.length === 0) return null;
+  const detailsItem = items.find(i => i.id === detailsId) ?? null;
 
   return (
     <section data-testid="section-public-catalog">
@@ -617,6 +639,7 @@ export function PublicServiceCatalog({ providerId }: { providerId: number }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {items.map(i => {
           const discounted = i.finalPrice < i.price;
+          const thumb = readMedia(i).thumbnailUrl;
           return (
             <article key={i.id} data-testid={`card-public-item-${i.id}`}
               className="relative rounded-xl border border-card-border bg-card p-4 flex flex-col gap-2 overflow-hidden">
@@ -625,20 +648,33 @@ export function PublicServiceCatalog({ providerId }: { providerId: number }) {
                   <Sparkles className="w-3 h-3" />{i.offerName}
                 </span>
               )}
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-semibold">{i.name}</h3>
-                <span className="chip">{KIND_LABEL[i.kind]}</span>
-              </div>
-              {i.description && <p className="text-sm text-muted-foreground line-clamp-3">{i.description}</p>}
+              <button type="button" className="flex gap-3 text-right rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onClick={() => setDetailsId(i.id)} aria-label={`صور وتفاصيل ${i.name}`} data-testid={`button-item-preview-${i.id}`}>
+                <ItemThumb url={thumb} alt={i.name} className="w-16 h-16 rounded-xl" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold">{i.name}</h3>
+                    <span className="chip">{KIND_LABEL[i.kind]}</span>
+                  </div>
+                  {i.description && <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{i.description}</p>}
+                </div>
+              </button>
               <div className="mt-auto pt-2 flex items-baseline gap-2 flex-wrap border-t border-border/60">
                 <Price value={discounted ? i.finalPrice : i.price} className="text-lg font-extrabold text-primary" />
                 {discounted && <Price value={i.price} className="text-sm text-muted-foreground line-through" />}
                 <span className="text-xs text-muted-foreground">{UNIT_LABEL[i.pricingUnit]}</span>
+                <Button type="button" size="sm" variant="ghost" className="mr-auto h-8 text-primary" onClick={() => setDetailsId(i.id)}
+                  aria-label={`عرض تفاصيل ${i.name}`} data-testid={`button-item-details-${i.id}`}>التفاصيل</Button>
               </div>
             </article>
           );
         })}
       </div>
+      <CatalogItemDetailsDialog
+        item={detailsItem as (typeof detailsItem & CatalogMedia) | null}
+        onOpenChange={o => { if (!o) setDetailsId(null); }}
+        kindLabel={detailsItem ? KIND_LABEL[detailsItem.kind] : undefined}
+        unitLabel={detailsItem ? UNIT_LABEL[detailsItem.pricingUnit] : undefined} />
     </section>
   );
 }

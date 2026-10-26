@@ -174,6 +174,8 @@ export * from './propertySearchPricePeriod';
 export * from './propertySocialAccountInput';
 export * from './propertySocialAccountResult';
 export * from './propertySocialAccountResultFieldErrors';
+export * from './providerCatalogImageUploadInput';
+export * from './providerCatalogImageUploadResult';
 export * from './providerCatalogItem';
 export * from './providerCatalogItemInput';
 export * from './providerCatalogItemInputKind';

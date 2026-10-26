@@ -24,3 +24,8 @@ CREATE TABLE IF NOT EXISTS provider_offers (
   CHECK (start_date <= end_date)
 );
 CREATE INDEX IF NOT EXISTS provider_offers_provider_idx ON provider_offers(provider_id);
+
+-- Item media is independent from the provider's logo and gallery.
+-- Safe for existing installations and repeated post-merge runs.
+ALTER TABLE provider_catalog_items ADD COLUMN IF NOT EXISTS thumbnail_url TEXT;
+ALTER TABLE provider_catalog_items ADD COLUMN IF NOT EXISTS gallery_photos TEXT[] NOT NULL DEFAULT '{}';

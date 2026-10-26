@@ -8,6 +8,25 @@
 import * as zod from 'zod';
 
 
+/**
+ * Owner-scoped catalog image upload. JPEG, PNG or WebP up to 2 MiB, converted to WebP.
+ */
+
+
+
+export const UploadProviderCatalogImageParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1)
+})
+
+export const UploadProviderCatalogImageBody = zod.object({
+  "file": zod.instanceof(Blob)
+})
+
+export const UploadProviderCatalogImageResponse = zod.object({
+  "url": zod.string()
+})
+
+
 
 
 
@@ -23,6 +42,16 @@ export const getProviderCatalogItemsResponseOnePriceMax = 1000000;
 
 export const getProviderCatalogItemsResponseOneDescriptionMax = 2000;
 
+export const getProviderCatalogItemsResponseOneThumbnailUrlMax = 500;
+
+
+export const getProviderCatalogItemsResponseOneThumbnailUrlRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const getProviderCatalogItemsResponseOneGalleryPhotosItemMax = 500;
+
+
+export const getProviderCatalogItemsResponseOneGalleryPhotosItemRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const getProviderCatalogItemsResponseOneGalleryPhotosMax = 3;
+
 
 
 export const GetProviderCatalogItemsResponseItem = zod.object({
@@ -31,7 +60,9 @@ export const GetProviderCatalogItemsResponseItem = zod.object({
   "price": zod.number().gt(getProviderCatalogItemsResponseOnePriceExclusiveMin).max(getProviderCatalogItemsResponseOnePriceMax),
   "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
   "description": zod.string().max(getProviderCatalogItemsResponseOneDescriptionMax),
-  "isActive": zod.boolean()
+  "isActive": zod.boolean(),
+  "thumbnailUrl": zod.string().max(getProviderCatalogItemsResponseOneThumbnailUrlMax).regex(getProviderCatalogItemsResponseOneThumbnailUrlRegExp).nullish().describe('Main image for this item only. Null clears it; omission preserves it on edit.'),
+  "galleryPhotos": zod.array(zod.string().max(getProviderCatalogItemsResponseOneGalleryPhotosItemMax).regex(getProviderCatalogItemsResponseOneGalleryPhotosItemRegExp)).max(getProviderCatalogItemsResponseOneGalleryPhotosMax).optional().describe('Optional additional item images. Empty array clears them; omission preserves them on edit.')
 }).and(zod.object({
   "id": zod.number().int(),
   "providerId": zod.number().int()
@@ -54,6 +85,16 @@ export const createProviderCatalogItemBodyPriceMax = 1000000;
 
 export const createProviderCatalogItemBodyDescriptionMax = 2000;
 
+export const createProviderCatalogItemBodyThumbnailUrlMax = 500;
+
+
+export const createProviderCatalogItemBodyThumbnailUrlRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const createProviderCatalogItemBodyGalleryPhotosItemMax = 500;
+
+
+export const createProviderCatalogItemBodyGalleryPhotosItemRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const createProviderCatalogItemBodyGalleryPhotosMax = 3;
+
 
 
 export const CreateProviderCatalogItemBody = zod.object({
@@ -62,7 +103,9 @@ export const CreateProviderCatalogItemBody = zod.object({
   "price": zod.number().gt(createProviderCatalogItemBodyPriceExclusiveMin).max(createProviderCatalogItemBodyPriceMax),
   "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
   "description": zod.string().max(createProviderCatalogItemBodyDescriptionMax),
-  "isActive": zod.boolean()
+  "isActive": zod.boolean(),
+  "thumbnailUrl": zod.string().max(createProviderCatalogItemBodyThumbnailUrlMax).regex(createProviderCatalogItemBodyThumbnailUrlRegExp).nullish().describe('Main image for this item only. Null clears it; omission preserves it on edit.'),
+  "galleryPhotos": zod.array(zod.string().max(createProviderCatalogItemBodyGalleryPhotosItemMax).regex(createProviderCatalogItemBodyGalleryPhotosItemRegExp)).max(createProviderCatalogItemBodyGalleryPhotosMax).optional().describe('Optional additional item images. Empty array clears them; omission preserves them on edit.')
 })
 
 export const createProviderCatalogItemResponseOneNameMin = 2;
@@ -73,6 +116,16 @@ export const createProviderCatalogItemResponseOnePriceMax = 1000000;
 
 export const createProviderCatalogItemResponseOneDescriptionMax = 2000;
 
+export const createProviderCatalogItemResponseOneThumbnailUrlMax = 500;
+
+
+export const createProviderCatalogItemResponseOneThumbnailUrlRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const createProviderCatalogItemResponseOneGalleryPhotosItemMax = 500;
+
+
+export const createProviderCatalogItemResponseOneGalleryPhotosItemRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const createProviderCatalogItemResponseOneGalleryPhotosMax = 3;
+
 
 
 export const CreateProviderCatalogItemResponse = zod.object({
@@ -81,7 +134,9 @@ export const CreateProviderCatalogItemResponse = zod.object({
   "price": zod.number().gt(createProviderCatalogItemResponseOnePriceExclusiveMin).max(createProviderCatalogItemResponseOnePriceMax),
   "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
   "description": zod.string().max(createProviderCatalogItemResponseOneDescriptionMax),
-  "isActive": zod.boolean()
+  "isActive": zod.boolean(),
+  "thumbnailUrl": zod.string().max(createProviderCatalogItemResponseOneThumbnailUrlMax).regex(createProviderCatalogItemResponseOneThumbnailUrlRegExp).nullish().describe('Main image for this item only. Null clears it; omission preserves it on edit.'),
+  "galleryPhotos": zod.array(zod.string().max(createProviderCatalogItemResponseOneGalleryPhotosItemMax).regex(createProviderCatalogItemResponseOneGalleryPhotosItemRegExp)).max(createProviderCatalogItemResponseOneGalleryPhotosMax).optional().describe('Optional additional item images. Empty array clears them; omission preserves them on edit.')
 }).and(zod.object({
   "id": zod.number().int(),
   "providerId": zod.number().int()
@@ -105,6 +160,16 @@ export const updateProviderCatalogItemBodyPriceMax = 1000000;
 
 export const updateProviderCatalogItemBodyDescriptionMax = 2000;
 
+export const updateProviderCatalogItemBodyThumbnailUrlMax = 500;
+
+
+export const updateProviderCatalogItemBodyThumbnailUrlRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const updateProviderCatalogItemBodyGalleryPhotosItemMax = 500;
+
+
+export const updateProviderCatalogItemBodyGalleryPhotosItemRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const updateProviderCatalogItemBodyGalleryPhotosMax = 3;
+
 
 
 export const UpdateProviderCatalogItemBody = zod.object({
@@ -113,7 +178,9 @@ export const UpdateProviderCatalogItemBody = zod.object({
   "price": zod.number().gt(updateProviderCatalogItemBodyPriceExclusiveMin).max(updateProviderCatalogItemBodyPriceMax),
   "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
   "description": zod.string().max(updateProviderCatalogItemBodyDescriptionMax),
-  "isActive": zod.boolean()
+  "isActive": zod.boolean(),
+  "thumbnailUrl": zod.string().max(updateProviderCatalogItemBodyThumbnailUrlMax).regex(updateProviderCatalogItemBodyThumbnailUrlRegExp).nullish().describe('Main image for this item only. Null clears it; omission preserves it on edit.'),
+  "galleryPhotos": zod.array(zod.string().max(updateProviderCatalogItemBodyGalleryPhotosItemMax).regex(updateProviderCatalogItemBodyGalleryPhotosItemRegExp)).max(updateProviderCatalogItemBodyGalleryPhotosMax).optional().describe('Optional additional item images. Empty array clears them; omission preserves them on edit.')
 })
 
 export const updateProviderCatalogItemResponseOneNameMin = 2;
@@ -124,6 +191,16 @@ export const updateProviderCatalogItemResponseOnePriceMax = 1000000;
 
 export const updateProviderCatalogItemResponseOneDescriptionMax = 2000;
 
+export const updateProviderCatalogItemResponseOneThumbnailUrlMax = 500;
+
+
+export const updateProviderCatalogItemResponseOneThumbnailUrlRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const updateProviderCatalogItemResponseOneGalleryPhotosItemMax = 500;
+
+
+export const updateProviderCatalogItemResponseOneGalleryPhotosItemRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const updateProviderCatalogItemResponseOneGalleryPhotosMax = 3;
+
 
 
 export const UpdateProviderCatalogItemResponse = zod.object({
@@ -132,7 +209,9 @@ export const UpdateProviderCatalogItemResponse = zod.object({
   "price": zod.number().gt(updateProviderCatalogItemResponseOnePriceExclusiveMin).max(updateProviderCatalogItemResponseOnePriceMax),
   "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
   "description": zod.string().max(updateProviderCatalogItemResponseOneDescriptionMax),
-  "isActive": zod.boolean()
+  "isActive": zod.boolean(),
+  "thumbnailUrl": zod.string().max(updateProviderCatalogItemResponseOneThumbnailUrlMax).regex(updateProviderCatalogItemResponseOneThumbnailUrlRegExp).nullish().describe('Main image for this item only. Null clears it; omission preserves it on edit.'),
+  "galleryPhotos": zod.array(zod.string().max(updateProviderCatalogItemResponseOneGalleryPhotosItemMax).regex(updateProviderCatalogItemResponseOneGalleryPhotosItemRegExp)).max(updateProviderCatalogItemResponseOneGalleryPhotosMax).optional().describe('Optional additional item images. Empty array clears them; omission preserves them on edit.')
 }).and(zod.object({
   "id": zod.number().int(),
   "providerId": zod.number().int()
@@ -309,6 +388,16 @@ export const getPublicProviderCatalogResponseOneOnePriceMax = 1000000;
 
 export const getPublicProviderCatalogResponseOneOneDescriptionMax = 2000;
 
+export const getPublicProviderCatalogResponseOneOneThumbnailUrlMax = 500;
+
+
+export const getPublicProviderCatalogResponseOneOneThumbnailUrlRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const getPublicProviderCatalogResponseOneOneGalleryPhotosItemMax = 500;
+
+
+export const getPublicProviderCatalogResponseOneOneGalleryPhotosItemRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpe?g)$');
+export const getPublicProviderCatalogResponseOneOneGalleryPhotosMax = 3;
+
 
 
 export const GetPublicProviderCatalogResponseItem = zod.object({
@@ -317,7 +406,9 @@ export const GetPublicProviderCatalogResponseItem = zod.object({
   "price": zod.number().gt(getPublicProviderCatalogResponseOneOnePriceExclusiveMin).max(getPublicProviderCatalogResponseOneOnePriceMax),
   "pricingUnit": zod.enum(['per_request', 'per_hour', 'per_day', 'per_piece']),
   "description": zod.string().max(getPublicProviderCatalogResponseOneOneDescriptionMax),
-  "isActive": zod.boolean()
+  "isActive": zod.boolean(),
+  "thumbnailUrl": zod.string().max(getPublicProviderCatalogResponseOneOneThumbnailUrlMax).regex(getPublicProviderCatalogResponseOneOneThumbnailUrlRegExp).nullish().describe('Main image for this item only. Null clears it; omission preserves it on edit.'),
+  "galleryPhotos": zod.array(zod.string().max(getPublicProviderCatalogResponseOneOneGalleryPhotosItemMax).regex(getPublicProviderCatalogResponseOneOneGalleryPhotosItemRegExp)).max(getPublicProviderCatalogResponseOneOneGalleryPhotosMax).optional().describe('Optional additional item images. Empty array clears them; omission preserves them on edit.')
 }).and(zod.object({
   "id": zod.number().int(),
   "providerId": zod.number().int()

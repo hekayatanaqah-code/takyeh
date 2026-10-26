@@ -134,6 +134,8 @@ import type {
   PropertyPriceQuote,
   PropertySocialAccountInput,
   PropertySocialAccountResult,
+  ProviderCatalogImageUploadInput,
+  ProviderCatalogImageUploadResult,
   ProviderCatalogItem,
   ProviderCatalogItemInput,
   ProviderOffer,
@@ -200,6 +202,80 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getUploadProviderCatalogImageUrl = (providerId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${providerId}/catalog-media`
+}
+
+/**
+ * Owner-scoped catalog image upload. JPEG, PNG or WebP up to 2 MiB, converted to WebP.
+ */
+export const uploadProviderCatalogImage = async (providerId: number,
+    providerCatalogImageUploadInput: ProviderCatalogImageUploadInput, options?: Parameters<typeof customFetch>[1]): Promise<ProviderCatalogImageUploadResult> => {
+    const formData = new FormData();
+formData.append(`file`, providerCatalogImageUploadInput.file);
+
+  return customFetch<ProviderCatalogImageUploadResult>(getUploadProviderCatalogImageUrl(providerId),
+  {
+    ...options,
+    method: 'POST'
+    ,
+    body: formData
+  }
+);}
+
+
+
+
+
+export const getUploadProviderCatalogImageMutationKey = () => ['uploadProviderCatalogImage'] as const;
+
+export const getUploadProviderCatalogImageMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadProviderCatalogImage>>, TError,UploadProviderCatalogImageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadProviderCatalogImage>>, TError,UploadProviderCatalogImageMutationVariables, TContext> => {
+
+const mutationKey = getUploadProviderCatalogImageMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadProviderCatalogImage>>, UploadProviderCatalogImageMutationVariables> = (props) => {
+          const {providerId,data} = props ?? {};
+
+          return  uploadProviderCatalogImage(providerId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadProviderCatalogImageMutationResult = NonNullable<Awaited<ReturnType<typeof uploadProviderCatalogImage>>>
+    export type UploadProviderCatalogImageMutationBody = BodyType<ProviderCatalogImageUploadInput>
+    export type UploadProviderCatalogImageMutationError = ErrorType<void>
+    export type UploadProviderCatalogImageMutationVariables = {providerId: number;data: BodyType<ProviderCatalogImageUploadInput>}
+
+    export const useUploadProviderCatalogImage = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadProviderCatalogImage>>, TError,UploadProviderCatalogImageMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof uploadProviderCatalogImage>>,
+        TError,
+        UploadProviderCatalogImageMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUploadProviderCatalogImageMutationOptions(options), queryClient);
+    }
 
 export const getGetProviderCatalogItemsUrl = (providerId: number,) => {
 

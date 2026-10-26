@@ -76,6 +76,69 @@ it("rejects invalid product prices, names and invalid offer dates/percentages", 
   }
 });
 
+it("persists independent item media, preserves omitted fields and clears explicit removals", async () => {
+  const thumbnailUrl = `/api/storage/objects/uploads/${randomUUID()}.webp`;
+  const galleryPhotos = Array.from({ length: 3 }, () => `/api/storage/objects/uploads/${randomUUID()}.webp`);
+  const created = await request(`${path()}/catalog`, "POST", { ...item, thumbnailUrl, galleryPhotos });
+  assert.equal(created.status, 201);
+  const itemPath = `${path()}/catalog/${created.json.id}`;
+  assert.equal(created.json.thumbnailUrl, thumbnailUrl);
+  assert.deepEqual(created.json.galleryPhotos, galleryPhotos);
+  const list = await request(`${path()}/catalog`);
+  assert.equal(list.json.find((row: any) => row.id === created.json.id).thumbnailUrl, thumbnailUrl);
+  const published = await request(`/${providerIds[0]}/catalog`, "GET", undefined, false);
+  assert.deepEqual(published.json.find((row: any) => row.id === created.json.id).galleryPhotos, galleryPhotos);
+  const other = await request(`${path(1)}/catalog`, "POST", { ...item, name: "عنصر مستقل" });
+  assert.equal(other.json.thumbnailUrl, null);
+  assert.deepEqual(other.json.galleryPhotos, []);
+  assert.equal((await request(`${path(1)}/catalog/${created.json.id}`, "PATCH", { ...item, thumbnailUrl: null, galleryPhotos: [] })).status, 404);
+  const edited = await request(itemPath, "PATCH", { ...item, name: "عنصر مصور معدّل" });
+  assert.equal(edited.json.thumbnailUrl, thumbnailUrl);
+  assert.deepEqual(edited.json.galleryPhotos, galleryPhotos);
+  assert.equal((await request(itemPath, "PATCH", { ...item, isActive: false })).status, 200);
+  assert.equal((await request(`/${providerIds[0]}/catalog`, "GET", undefined, false)).json.some((row: any) => row.id === created.json.id), false);
+  const cleared = await request(itemPath, "PATCH", { ...item, thumbnailUrl: null, galleryPhotos: [] });
+  assert.equal(cleared.json.thumbnailUrl, null);
+  assert.deepEqual(cleared.json.galleryPhotos, []);
+  await request(itemPath, "DELETE");
+  await request(`${path(1)}/catalog/${other.json.id}`, "DELETE");
+});
+
+it("rejects oversized galleries, duplicates and untrusted or non-image media URLs", async () => {
+  const image = `/api/storage/objects/uploads/${randomUUID()}.webp`;
+  const invalid = [
+    { galleryPhotos: Array.from({ length: 4 }, () => `/api/storage/objects/uploads/${randomUUID()}.webp`) },
+    { galleryPhotos: [image, image] },
+    { galleryPhotos: ["https://untrusted.example/image.jpg"] },
+    { thumbnailUrl: "javascript:alert(1)" },
+    { thumbnailUrl: "/api/storage/objects/uploads/../secret.png" },
+    { thumbnailUrl: "/api/storage/objects/uploads/video.mp4" },
+    { thumbnailUrl: "" },
+  ];
+  for (const change of invalid) {
+    assert.equal((await request(`${path()}/catalog`, "POST", { ...item, ...change })).status, 400);
+  }
+});
+
+it("guards catalog uploads before reading files and rejects missing or invalid image contents", async () => {
+  const uploadPath = `${path()}/catalog-media`;
+  assert.equal((await request(uploadPath, "POST", undefined, false)).status, 401);
+  assert.equal((await request(`${path(2)}/catalog-media`, "POST")).status, 404);
+  assert.equal((await request(uploadPath, "POST")).status, 400);
+  for (const file of [
+    new Blob(["not an image"], { type: "text/plain" }),
+    new Blob(["not an image"], { type: "image/png" }),
+    new Blob([new Uint8Array(2 * 1024 * 1024 + 1)], { type: "image/png" }),
+  ]) {
+    const form = new FormData();
+    form.append("file", file, "fixture.png");
+    const response = await fetch(`${base}/api/providers${uploadPath}`, {
+      method: "POST", headers: { authorization: `Bearer ${sessionId}` }, body: form,
+    });
+    assert.equal(response.status, file.size > 2 * 1024 * 1024 ? 413 : 400);
+  }
+});
+
 it("publishes only active catalog items with one best offer and retains scope when editing/removing", async () => {
   const product = (await request(`${path()}/catalog`, "POST", item)).json;
   const hidden = (await request(`${path()}/catalog`, "POST", { ...item, name: "عنصر متوقف", isActive: false })).json;

@@ -1,13 +1,23 @@
 import { Router } from "express";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
+import multer from "multer";
+import sharp from "sharp";
 import { db, providerCatalogItemsTable as items, providerOffersTable as offers, serviceProvidersTable as providers } from "@workspace/db";
 import { CreateProviderCatalogItemBody, CreateProviderOfferBody } from "@workspace/api-zod";
 import { catalogItemJson, currentCatalogDay, providerOfferJson, publicCatalogItem } from "../lib/provider-catalog";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const router = Router();
+const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 } }).single("file");
+const objectStorage = new ObjectStorageService();
 const idInput = z.coerce.number().int().positive().max(2147483647);
-const itemInput = CreateProviderCatalogItemBody.extend({ name: z.string().trim().min(2).max(150) })
+const itemImagePath = z.string().max(500).regex(/^\/api\/storage\/objects\/uploads\/[a-zA-Z0-9_-]+\.(webp|png|jpe?g)$/);
+const itemInput = CreateProviderCatalogItemBody.extend({
+  name: z.string().trim().min(2).max(150),
+  thumbnailUrl: itemImagePath.nullable().optional(),
+  galleryPhotos: z.array(itemImagePath).max(3).refine(paths => new Set(paths).size === paths.length, "صور المعرض مكررة").optional(),
+})
   .refine(v => v.price >= 0.01 && Math.abs(v.price * 100 - Math.round(v.price * 100)) < 0.000001, "السعر يدعم منزلتين عشريتين فقط");
 const realDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => {
   const date = new Date(`${v}T12:00:00Z`);
@@ -37,6 +47,40 @@ router.get("/:providerId/catalog", async (_req, res) => {
   const rows = await db.select().from(items)
     .where(and(eq(items.providerId, res.locals.catalogProviderId), isNull(items.deletedAt))).orderBy(desc(items.id));
   res.json(rows.map(catalogItemJson));
+});
+// Ownership middleware runs before multipart parsing, so unrelated accounts cannot upload.
+router.post("/:providerId/catalog-media", (req, res, next) => {
+  imageUpload(req, res, error => {
+    if (error) {
+      return res.status(error.code === "LIMIT_FILE_SIZE" ? 413 : 400).json({
+        error: error.code === "LIMIT_FILE_SIZE" ? "حجم الصورة يتجاوز ٢ ميجابايت" : "اختر صورة واحدة للرفع",
+      });
+    }
+    return next();
+  });
+}, async (req, res) => {
+  if (!req.file || !["image/jpeg", "image/png", "image/webp"].includes(req.file.mimetype)) {
+    return res.status(400).json({ error: "اختر صورة بصيغة JPEG أو PNG أو WebP" });
+  }
+  let buffer: Buffer;
+  try {
+    const image = sharp(req.file.buffer, { limitInputPixels: 40_000_000 });
+    const metadata = await image.metadata();
+    if (!["jpeg", "png", "webp"].includes(metadata.format ?? "")) {
+      return res.status(400).json({ error: "محتوى الملف ليس صورة مدعومة" });
+    }
+    buffer = await image.rotate().resize({ width: 2048, height: 2048, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 }).toBuffer();
+  } catch {
+    return res.status(400).json({ error: "تعذر قراءة الصورة، اختر ملفًا صالحًا" });
+  }
+  try {
+    const url = await objectStorage.uploadBuffer(buffer, "image/webp", "webp");
+    return res.json({ url });
+  } catch (error) {
+    req.log.error({ err: error }, "Catalog image upload failed");
+    return res.status(500).json({ error: "تعذر حفظ الصورة، أعد المحاولة" });
+  }
 });
 router.post("/:providerId/catalog", async (req, res) => {
   const body = itemInput.safeParse(req.body);

@@ -5,6 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ProviderCatalogImageUploadInput {
+  file: Blob | File;
+}
+
+export interface ProviderCatalogImageUploadResult {
+  url: string;
+}
+
 export type ProviderCatalogItemInputKind = typeof ProviderCatalogItemInputKind[keyof typeof ProviderCatalogItemInputKind];
 
 
@@ -39,6 +47,20 @@ export interface ProviderCatalogItemInput {
   /** @maxLength 2000 */
   description: string;
   isActive: boolean;
+  /**
+     * Main image for this item only. Null clears it; omission preserves it on edit.
+     * @maxLength 500
+     * @nullable
+     * @pattern ^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\.(webp|png|jpe?g)$
+     */
+  thumbnailUrl?: string | null;
+  /**
+     * Optional additional item images. Empty array clears them; omission preserves them on edit.
+     * @maxItems 3
+     * @items.maxLength 500
+     * @items.pattern ^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\.(webp|png|jpe?g)$
+     */
+  galleryPhotos?: string[];
 }
 
 export type ProviderCatalogItem = ProviderCatalogItemInput & {
