@@ -5,8 +5,6 @@ import { cn } from "@/lib/utils";
 type Tone = "default" | "danger";
 
 interface SectionProps {
-  /** When false, children render untouched (legacy layout, no wrapper markup). */
-  enabled: boolean;
   id: string;
   title: string;
   hint?: string;
@@ -18,12 +16,11 @@ interface SectionProps {
 }
 
 /**
- * Collapsible section for the service-details pilot. Content stays mounted
+ * Collapsible section shared by all service activity-details pages. Content stays mounted
  * when collapsed (hidden attribute only), so form state is never reset.
  */
-export function ServiceActivityDetailsSection({ enabled, id, title, hint, index, open, onOpenChange, tone = "default", children }: SectionProps) {
+export function ServiceActivityDetailsSection({ id, title, hint, index, open, onOpenChange, tone = "default", children }: SectionProps) {
   const uid = useId();
-  if (!enabled) return <>{children}</>;
   const danger = tone === "danger";
   const contentId = `${uid}-content`;
   const triggerId = `${uid}-trigger`;
@@ -92,7 +89,7 @@ interface StickySaveProps {
   onSave: () => void;
 }
 
-/** Sticky save bar pinned directly under the platform navbar (pilot only). */
+/** Sticky save bar pinned directly under the platform navbar. */
 export function ServiceDetailsStickySave({ businessName, saving, uploading, readOnly, onSave }: StickySaveProps) {
   const [offset, setOffset] = useState(64);
   useEffect(() => {
@@ -110,7 +107,7 @@ export function ServiceDetailsStickySave({ businessName, saving, uploading, read
   const status = readOnly
     ? "وضع القراءة فقط — لا يمكن حفظ التعديلات"
     : saving ? "جارٍ حفظ التعديلات..."
-    : uploading ? "انتظر اكتمال رفع الصور قبل الحفظ"
+    : uploading ? "انتظر اكتمال رفع الوسائط قبل الحفظ"
     : "راجع الأقسام ثم احفظ تعديلاتك";
 
   return (

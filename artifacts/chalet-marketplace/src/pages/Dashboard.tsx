@@ -26,7 +26,6 @@ import { filterOwnerNotifications, type NotificationFilters } from "@/lib/ownerN
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
 import { PropertyOffersTab } from "@/components/owner/PropertyOffersTab";
 import { Tag } from "lucide-react";
-import { isServiceDetailsPilot } from "@/lib/serviceDetailsPilot";
 import { ServiceActivityDetailsSection, ServiceDetailsStickySave } from "@/components/owner/ServiceActivityDetailsSection";
 import { OfferPrice } from "@/components/chalet/PropertyOfferPrice";
 import type { PropertyPriceQuote } from "@workspace/api-client-react";
@@ -9408,7 +9407,7 @@ function ServiceIntegrationBanner({ isCrossOwner }: { isCrossOwner: boolean }) {
 }
 
 /* ── Service Details Tab ──────────────────────────────────── */
-type PilotSectionKey = "basic" | "coverage" | "media" | "danger";
+type ServiceDetailsSectionKey = "basic" | "coverage" | "media" | "danger";
 
 function ServiceDetailsTab() {
   const { providerId } = useServiceErp();
@@ -9430,8 +9429,7 @@ function ServiceDetailsTab() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
-  const pilot = isServiceDetailsPilot(providerId);
-  const [openSections, setOpenSections] = useState<Record<PilotSectionKey, boolean>>({ basic: true, coverage: false, media: false, danger: false });
+  const [openSections, setOpenSections] = useState<Record<ServiceDetailsSectionKey, boolean>>({ basic: true, coverage: false, media: false, danger: false });
 
   const { data: serviceCities = [], isLoading: citiesLoading, isError: citiesError, refetch: reloadCities } = useQuery<{ id: number; name: string; regionId: number }[]>({
     queryKey: ["service-locations", "cities", "all"],
@@ -9492,7 +9490,7 @@ function ServiceDetailsTab() {
         contractText: provider.contractText ?? "",
         includeElectronicSignature: provider.includeElectronicSignature !== false,
         insuranceAmount: provider.insuranceAmount == null ? "" : String(provider.insuranceAmount),
-        ...(isServiceDetailsPilot(providerId) ? { videoUrl: provider.videoUrl ?? "" } : {}),
+        videoUrl: provider.videoUrl ?? "",
       });
       setCoverageTags([...new Set<string>(provider.coverageTags ?? [])]);
       setFeatureTags((provider.customFeatureTags ?? []).map((tag: string) => toAr(tag)));
@@ -9514,14 +9512,15 @@ function ServiceDetailsTab() {
 
   async function handleSave() {
     if (isReadOnly) return onBlockedEdit();
+    if (saving || uploadingLogo || uploadingGallery || uploadingVideo) return;
     const currentForm = form!;
     if (!currentForm.city?.trim()) {
-      if (pilot) setOpenSections(prev => ({ ...prev, basic: true }));
+      setOpenSections(prev => ({ ...prev, basic: true }));
       toast({ title: "المدينة الرئيسية مطلوبة", description: "اختر المدينة الرئيسية لنشاطك", variant: "destructive" });
       return;
     }
     if (currentForm.requiresInsurance && (!currentForm.insuranceAmount || Number(currentForm.insuranceAmount) <= 0)) {
-      if (pilot) setOpenSections(prev => ({ ...prev, basic: true }));
+      setOpenSections(prev => ({ ...prev, basic: true }));
       toast({ title: "قيمة التأمين مطلوبة", description: "أدخل قيمة أكبر من صفر للتأمين المسترد", variant: "destructive" });
       return;
     }
@@ -9539,7 +9538,7 @@ function ServiceDetailsTab() {
           logoUrl: logoUrl || null,
           galleryPhotos,
           photoCaptions,
-          ...(pilot ? { videoUrl: currentForm.videoUrl || null } : {}),
+          videoUrl: currentForm.videoUrl || null,
         }),
       });
       if (!r.ok) throw new Error();
@@ -9908,17 +9907,6 @@ function ServiceDetailsTab() {
       <p className="text-xs text-muted-foreground">اختر الصورة الرئيسية لتظهر أولًا كغلاف للمعرض، ثم اضغط «حفظ التعديلات». تبقى الأوصاف مرتبطة بصورها، ولا يتغير شعار الخدمة.</p>
     </>
   );
-  const saveBlock = (
-    <>
-      {/* Save */}
-      <div className="flex justify-end pt-2">
-        <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 min-w-[140px] bg-amber-500 hover:bg-amber-600 text-white">
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-          حفظ التعديلات
-        </Button>
-      </div>
-    </>
-  );
   const dangerBlock = (
     <>
       {/* ── Danger Zone: Delete Service ── */}
@@ -9957,32 +9945,13 @@ function ServiceDetailsTab() {
     </>
   );
 
-  if (!pilot) {
-    return (
-      <div className="space-y-6 pt-2">
-        {bannerBlock}
-        {logoBlock}
-        {basicGridBlock}
-        {insuranceBlock}
-        {contractBlock}
-        {descriptionBlock}
-        {coverageBlock}
-        {featuresBlock}
-        {mediaBlock}
-        {noteBlock}
-        {saveBlock}
-        {dangerBlock}
-      </div>
-    );
-  }
-
-  const toggleSection = (key: PilotSectionKey) => (open: boolean) => setOpenSections(prev => ({ ...prev, [key]: open }));
+  const toggleSection = (key: ServiceDetailsSectionKey) => (open: boolean) => setOpenSections(prev => ({ ...prev, [key]: open }));
   return (
-    <div className="space-y-4 pt-2" dir="rtl" data-testid="service-details-pilot">
+    <div className="space-y-4 pt-2" dir="rtl" data-testid="service-activity-details">
       <ServiceDetailsStickySave businessName={form.businessName} saving={saving} uploading={uploadingLogo || uploadingGallery || uploadingVideo}
         readOnly={isReadOnly} onSave={() => { if (uploadingLogo || uploadingGallery || uploadingVideo) return; void handleSave(); }} />
       {bannerBlock}
-      <ServiceActivityDetailsSection enabled id="basic" index={1} title="المعلومات الأساسية والتأمين"
+      <ServiceActivityDetailsSection id="basic" index={1} title="المعلومات الأساسية والتأمين"
         hint="الاسم والتواصل والمدينة والوصف والخبرة والتأمين المسترد وإعداد العقود"
         open={openSections.basic} onOpenChange={toggleSection("basic")}>
         {basicGridBlock}
@@ -9990,13 +9959,13 @@ function ServiceDetailsTab() {
         {insuranceBlock}
         {contractBlock}
       </ServiceActivityDetailsSection>
-      <ServiceActivityDetailsSection enabled id="coverage" index={2} title="نطاق التغطية والمميزات"
+      <ServiceActivityDetailsSection id="coverage" index={2} title="نطاق التغطية والمميزات"
         hint="المناطق والمدن التي تخدمها ومميزات تظهر في صفحة الخدمة"
         open={openSections.coverage} onOpenChange={toggleSection("coverage")}>
         {coverageBlock}
         {featuresBlock}
       </ServiceActivityDetailsSection>
-      <ServiceActivityDetailsSection enabled id="media" index={3} title="الصور والوسائط"
+      <ServiceActivityDetailsSection id="media" index={3} title="الصور والوسائط"
         hint="الشعار ومعرض الصور وأوصافها والصورة الرئيسية والفيديو"
         open={openSections.media} onOpenChange={toggleSection("media")}>
         {logoBlock}
@@ -10020,7 +9989,7 @@ function ServiceDetailsTab() {
         </div>
         {noteBlock}
       </ServiceActivityDetailsSection>
-      <ServiceActivityDetailsSection enabled id="danger" index={4} tone="danger" title="منطقة الخطر"
+      <ServiceActivityDetailsSection id="danger" index={4} tone="danger" title="منطقة الخطر"
         hint="حذف الخدمة نهائياً — يتطلب تأكيداً"
         open={openSections.danger} onOpenChange={toggleSection("danger")}>
         {dangerBlock}

@@ -79,4 +79,4 @@
 - [Bank ledger accounting](bank-ledger-accounting.md) — full-history balance differs from filtered subtotals; registered expenses are red, explicitly signed debits.
 - [Notification display boundary](notification-display-boundary.md) — hide internal markers in presentation, not storage; preserve action URLs while unifying Arabic formatting across filters.
 - [Service catalog policy](service-catalog-policy.md) — independent provider products/offers; complete all-service navigation and positive enabled insurance gate.
-- [Service details pilot](service-details-rollout.md) — accordion and sticky-save trial is limited to نطيطات غيث pending approval to expand.
+- [Service details approved design](service-details-rollout.md) — permanent accordions and sticky save approved for all service activities; no temporary preview login.

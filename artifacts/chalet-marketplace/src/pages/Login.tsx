@@ -5,15 +5,10 @@ import AuthBrand from "@/components/AuthBrand";
 import { AUTH_LABELS, normalizeIdentifier } from "@/lib/authLabels";
 import { Eye, EyeOff, ShieldAlert, Info } from "lucide-react";
 import LoginRoleSelector, { type LoginRole } from "@/components/LoginRoleSelector";
-import PilotPreviewLogin from "@/components/owner/PilotPreviewLogin";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Login() {
-  const [location] = useLocation();
-  if (import.meta.env.DEV && location === "/login" && !new URLSearchParams(window.location.search).has("standard")) {
-    return <PilotPreviewLogin />;
-  }
   return <PasswordLogin />;
 }
 
