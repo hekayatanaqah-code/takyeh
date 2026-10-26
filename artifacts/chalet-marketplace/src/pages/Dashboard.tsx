@@ -26,6 +26,8 @@ import { filterOwnerNotifications, type NotificationFilters } from "@/lib/ownerN
 import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
 import { PropertyOffersTab } from "@/components/owner/PropertyOffersTab";
 import { Tag } from "lucide-react";
+import { isServiceDetailsPilot } from "@/lib/serviceDetailsPilot";
+import { ServiceActivityDetailsSection, ServiceDetailsStickySave } from "@/components/owner/ServiceActivityDetailsSection";
 import { OfferPrice } from "@/components/chalet/PropertyOfferPrice";
 import type { PropertyPriceQuote } from "@workspace/api-client-react";
 import { ReceivablesMonthSelect } from "@/components/owner/ReceivablesMonthSelect";
@@ -9406,6 +9408,8 @@ function ServiceIntegrationBanner({ isCrossOwner }: { isCrossOwner: boolean }) {
 }
 
 /* ── Service Details Tab ──────────────────────────────────── */
+type PilotSectionKey = "basic" | "coverage" | "media" | "danger";
+
 function ServiceDetailsTab() {
   const { providerId } = useServiceErp();
   const queryClient = useQueryClient();
@@ -9425,6 +9429,9 @@ function ServiceDetailsTab() {
   const [photoCaptions, setPhotoCaptions] = useState<string[]>([]);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const pilot = isServiceDetailsPilot(providerId);
+  const [openSections, setOpenSections] = useState<Record<PilotSectionKey, boolean>>({ basic: true, coverage: false, media: false, danger: false });
 
   const { data: serviceCities = [], isLoading: citiesLoading, isError: citiesError, refetch: reloadCities } = useQuery<{ id: number; name: string; regionId: number }[]>({
     queryKey: ["service-locations", "cities", "all"],
@@ -9485,6 +9492,7 @@ function ServiceDetailsTab() {
         contractText: provider.contractText ?? "",
         includeElectronicSignature: provider.includeElectronicSignature !== false,
         insuranceAmount: provider.insuranceAmount == null ? "" : String(provider.insuranceAmount),
+        ...(isServiceDetailsPilot(providerId) ? { videoUrl: provider.videoUrl ?? "" } : {}),
       });
       setCoverageTags([...new Set<string>(provider.coverageTags ?? [])]);
       setFeatureTags((provider.customFeatureTags ?? []).map((tag: string) => toAr(tag)));
@@ -9508,10 +9516,12 @@ function ServiceDetailsTab() {
     if (isReadOnly) return onBlockedEdit();
     const currentForm = form!;
     if (!currentForm.city?.trim()) {
+      if (pilot) setOpenSections(prev => ({ ...prev, basic: true }));
       toast({ title: "المدينة الرئيسية مطلوبة", description: "اختر المدينة الرئيسية لنشاطك", variant: "destructive" });
       return;
     }
     if (currentForm.requiresInsurance && (!currentForm.insuranceAmount || Number(currentForm.insuranceAmount) <= 0)) {
+      if (pilot) setOpenSections(prev => ({ ...prev, basic: true }));
       toast({ title: "قيمة التأمين مطلوبة", description: "أدخل قيمة أكبر من صفر للتأمين المسترد", variant: "destructive" });
       return;
     }
@@ -9529,6 +9539,7 @@ function ServiceDetailsTab() {
           logoUrl: logoUrl || null,
           galleryPhotos,
           photoCaptions,
+          ...(pilot ? { videoUrl: currentForm.videoUrl || null } : {}),
         }),
       });
       if (!r.ok) throw new Error();
@@ -9618,8 +9629,26 @@ function ServiceDetailsTab() {
     setPhotoCaptions(order.map(index => photoCaptions[index] ?? ""));
   }
 
-  return (
-    <div className="space-y-6 pt-2">
+  async function handleActivityVideoUpload(file: File) {
+    if (isReadOnly) return onBlockedEdit();
+    if (!file.type.startsWith("video/") || file.size > 15 * 1024 * 1024) {
+      toast({ title: "تعذر رفع الفيديو", description: "اختر ملف فيديو بحجم لا يتجاوز ١٥ ميجابايت.", variant: "destructive" });
+      return;
+    }
+    setUploadingVideo(true);
+    try {
+      const url = await uploadFile(file);
+      if (!url) throw new Error("Upload failed");
+      setForm(previous => previous ? { ...previous, videoUrl: url } : previous);
+    } catch {
+      toast({ title: "تعذر رفع الفيديو", description: "بقي الفيديو السابق دون تغيير. حاول مجددًا.", variant: "destructive" });
+    } finally {
+      setUploadingVideo(false);
+    }
+  }
+
+  const bannerBlock = (
+    <>
       {/* Activate / Deactivate Banner */}
       <div className={`flex items-center justify-between gap-4 rounded-2xl px-5 py-3 border ${provider.isActive ? "bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40" : "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40"}`}>
         <div>
@@ -9633,7 +9662,10 @@ function ServiceDetailsTab() {
           {toggling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : provider.isActive ? <><X className="w-3.5 h-3.5" />إيقاف الخدمة</> : <><CheckCircle className="w-3.5 h-3.5" />تفعيل الخدمة</>}
         </Button>
       </div>
-
+    </>
+  );
+  const logoBlock = (
+    <>
       <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3" data-testid="service-logo-section">
         <h3 className="text-sm font-bold text-foreground">شعار الخدمة (الصورة الرئيسية للنشاط)</h3>
         <div className="flex items-center gap-4 flex-wrap">
@@ -9658,7 +9690,10 @@ function ServiceDetailsTab() {
         </div>
         <p className="text-xs text-muted-foreground">الشعار مستقل عن غلاف معرض الصور؛ لا يتغير عند اختيار صورة رئيسية للمعرض أو حذف صوره.</p>
       </div>
-
+    </>
+  );
+  const basicGridBlock = (
+    <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Business Name */}
         <div className="space-y-1.5">
@@ -9697,7 +9732,10 @@ function ServiceDetailsTab() {
           <Input type="number" min={0} value={form.yearsOfExperience} onChange={e => setForm({ ...form, yearsOfExperience: e.target.value })} className="rounded-xl" />
         </div>
       </div>
-
+    </>
+  );
+  const insuranceBlock = (
+    <>
       {/* Refundable insurance settings */}
       <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -9741,7 +9779,10 @@ function ServiceDetailsTab() {
           </div>
         )}
       </div>
-
+    </>
+  );
+  const contractBlock = (
+    <>
       <div className="rounded-2xl border border-border bg-muted/30 p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -9751,13 +9792,19 @@ function ServiceDetailsTab() {
           <Switch checked={Boolean(form.requiresContract)} onCheckedChange={checked => setForm({ ...form, requiresContract: checked })} />
         </div>
       </div>
-
+    </>
+  );
+  const descriptionBlock = (
+    <>
       {/* Description */}
       <div className="space-y-1.5">
         <label className="text-sm font-semibold text-foreground">وصف الخدمة</label>
         <Textarea value={form.descriptionAr} onChange={e => setForm({ ...form, descriptionAr: e.target.value })} rows={4} className="rounded-xl resize-none" />
       </div>
-
+    </>
+  );
+  const coverageBlock = (
+    <>
       {/* Coverage Tags */}
       <ServiceCoverageEditor
         regions={serviceRegions}
@@ -9768,7 +9815,10 @@ function ServiceDetailsTab() {
         error={citiesError || regionsError}
         onRetry={() => { void reloadCities(); void reloadRegions(); }}
       />
-
+    </>
+  );
+  const featuresBlock = (
+    <>
       {/* Feature Tags */}
       <div className="space-y-2" dir="rtl">
         <label className="text-sm font-semibold text-foreground">مميزات الخدمة</label>
@@ -9792,7 +9842,10 @@ function ServiceDetailsTab() {
           </Button>
         </div>
       </div>
-
+    </>
+  );
+  const mediaBlock = (
+    <>
       {/* ── MEDIA SECTION ── */}
       <div className="space-y-4 border-t border-border pt-5">
         <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
@@ -9848,9 +9901,15 @@ function ServiceDetailsTab() {
           )}
         </div>
       </div>
-
+    </>
+  );
+  const noteBlock = (
+    <>
       <p className="text-xs text-muted-foreground">اختر الصورة الرئيسية لتظهر أولًا كغلاف للمعرض، ثم اضغط «حفظ التعديلات». تبقى الأوصاف مرتبطة بصورها، ولا يتغير شعار الخدمة.</p>
-
+    </>
+  );
+  const saveBlock = (
+    <>
       {/* Save */}
       <div className="flex justify-end pt-2">
         <Button onClick={handleSave} disabled={saving} className="rounded-xl gap-2 min-w-[140px] bg-amber-500 hover:bg-amber-600 text-white">
@@ -9858,7 +9917,10 @@ function ServiceDetailsTab() {
           حفظ التعديلات
         </Button>
       </div>
-
+    </>
+  );
+  const dangerBlock = (
+    <>
       {/* ── Danger Zone: Delete Service ── */}
       <div className="border border-destructive/30 rounded-2xl p-4 space-y-3 bg-destructive/5">
         <div className="flex items-center gap-2">
@@ -9892,6 +9954,77 @@ function ServiceDetailsTab() {
           </div>
         )}
       </div>
+    </>
+  );
+
+  if (!pilot) {
+    return (
+      <div className="space-y-6 pt-2">
+        {bannerBlock}
+        {logoBlock}
+        {basicGridBlock}
+        {insuranceBlock}
+        {contractBlock}
+        {descriptionBlock}
+        {coverageBlock}
+        {featuresBlock}
+        {mediaBlock}
+        {noteBlock}
+        {saveBlock}
+        {dangerBlock}
+      </div>
+    );
+  }
+
+  const toggleSection = (key: PilotSectionKey) => (open: boolean) => setOpenSections(prev => ({ ...prev, [key]: open }));
+  return (
+    <div className="space-y-4 pt-2" dir="rtl" data-testid="service-details-pilot">
+      <ServiceDetailsStickySave businessName={form.businessName} saving={saving} uploading={uploadingLogo || uploadingGallery || uploadingVideo}
+        readOnly={isReadOnly} onSave={() => { if (uploadingLogo || uploadingGallery || uploadingVideo) return; void handleSave(); }} />
+      {bannerBlock}
+      <ServiceActivityDetailsSection enabled id="basic" index={1} title="المعلومات الأساسية والتأمين"
+        hint="الاسم والتواصل والمدينة والوصف والخبرة والتأمين المسترد وإعداد العقود"
+        open={openSections.basic} onOpenChange={toggleSection("basic")}>
+        {basicGridBlock}
+        {descriptionBlock}
+        {insuranceBlock}
+        {contractBlock}
+      </ServiceActivityDetailsSection>
+      <ServiceActivityDetailsSection enabled id="coverage" index={2} title="نطاق التغطية والمميزات"
+        hint="المناطق والمدن التي تخدمها ومميزات تظهر في صفحة الخدمة"
+        open={openSections.coverage} onOpenChange={toggleSection("coverage")}>
+        {coverageBlock}
+        {featuresBlock}
+      </ServiceActivityDetailsSection>
+      <ServiceActivityDetailsSection enabled id="media" index={3} title="الصور والوسائط"
+        hint="الشعار ومعرض الصور وأوصافها والصورة الرئيسية والفيديو"
+        open={openSections.media} onOpenChange={toggleSection("media")}>
+        {logoBlock}
+        {mediaBlock}
+        <div className="space-y-3">
+          <label htmlFor={`activity-video-${providerId}`} className="text-sm font-semibold">فيديو النشاط</label>
+          <p className="text-xs text-muted-foreground">مقطع اختياري حتى ٣٠ ثانية، بحجم لا يتجاوز ١٥ ميجابايت. يُحفظ التغيير عند الضغط على حفظ التعديلات.</p>
+          {form.videoUrl && <div className="space-y-2">
+            <video src={form.videoUrl} controls preload="metadata" className="w-full max-h-64 rounded-xl bg-black" data-testid="activity-video-preview" />
+            <Button type="button" variant="outline" size="sm" disabled={isReadOnly || saving || uploadingVideo}
+              onClick={() => setForm(previous => previous ? { ...previous, videoUrl: "" } : previous)}>إزالة الفيديو</Button>
+          </div>}
+          <Input id={`activity-video-${providerId}`} type="file" accept="video/*" data-testid="input-activity-video"
+            aria-label="رفع فيديو النشاط" disabled={isReadOnly || saving || uploadingVideo}
+            onChange={event => {
+              const file = event.target.files?.[0];
+              event.target.value = "";
+              if (file) void handleActivityVideoUpload(file);
+            }} />
+          {uploadingVideo && <p role="status" className="text-xs text-muted-foreground">جارٍ تجهيز الفيديو ورفعه…</p>}
+        </div>
+        {noteBlock}
+      </ServiceActivityDetailsSection>
+      <ServiceActivityDetailsSection enabled id="danger" index={4} tone="danger" title="منطقة الخطر"
+        hint="حذف الخدمة نهائياً — يتطلب تأكيداً"
+        open={openSections.danger} onOpenChange={toggleSection("danger")}>
+        {dangerBlock}
+      </ServiceActivityDetailsSection>
     </div>
   );
 }
