@@ -10441,6 +10441,7 @@ function ServiceCalendarBookingsTab() {
     serviceDeliveryMethod: "",
     clientIdNumber: "",
     dateStr: "",
+    startTime: "",
     duration: "",
     durationUnit: "hours",
     status: "confirmed",
@@ -10488,7 +10489,15 @@ function ServiceCalendarBookingsTab() {
       return r.ok ? r.json() : [];
     },
     enabled: !!providerId,
+    refetchInterval: 30_000,
   });
+
+  // Keep an open receipt aligned with the same persisted booking as the calendar.
+  useEffect(() => {
+    setReceiptAppointment((current: any) => current
+      ? appointments.find(appointment => appointment.id === current.id) ?? null
+      : null);
+  }, [appointments]);
 
   const { data: messageSettings = DEFAULT_OWNER_MESSAGE_SETTINGS } = useQuery<OwnerMessageSettings>({
     queryKey: ["owner", "message-settings"],
@@ -10661,6 +10670,7 @@ function ServiceCalendarBookingsTab() {
           serviceAddress: form.serviceAddress.trim() || null,
           serviceDeliveryMethod: form.serviceDeliveryMethod,
           notes: form.notes.trim(),
+          startTime: form.startTime || null,
           clientIdNumber: provider?.requiresInsurance ? (form.clientIdNumber.trim() || null) : null,
           amount: form.amount || null,
           deposit: form.deposit || null,
@@ -10694,6 +10704,7 @@ function ServiceCalendarBookingsTab() {
       serviceDeliveryMethod: appointment.serviceDeliveryMethod ?? "",
       clientIdNumber: appointment.clientIdNumber ?? "",
       dateStr: appointment.dateStr ?? "",
+      startTime: appointment.startTime ?? "",
       duration: appointment.duration ?? "",
       durationUnit: appointment.durationUnit ?? "hours",
       status: appointment.status === "cancelled" ? "pending" : appointment.status,
@@ -11016,6 +11027,8 @@ function ServiceCalendarBookingsTab() {
       ``,
       `• رقم الإيصال: ${serviceReceiptNumber(receiptAppointment)}`,
       `• تاريخ الخدمة: ${serviceHijriDate} هـ (${serviceGregorianDate} م)`,
+      ...(receiptAppointment.startTime ? [`• وقت الموعد: ${toAr(receiptAppointment.startTime)}`] : []),
+      ...(receiptAppointment.notes ? [`• تفاصيل العنصر / الخدمة والملاحظات:\n${receiptAppointment.notes}`] : []),
       `• المبلغ الإجمالي: ${serviceReceiptMoney(total)}`,
       `• العربون المدفوع: ${serviceReceiptMoney(deposit)}`,
       `• المتبقي: ${serviceReceiptMoney(remaining)}`,
@@ -11534,11 +11547,14 @@ function ServiceCalendarBookingsTab() {
                               </p>
                             ) : (
                               <p className="font-semibold">
-                                تم إعادة جدولة الموعد من تاريخ غير متوفر في السجل السابق إلى {formatDualDate(appointment.editedDateStr || appointment.dateStr).hijri}
+                                تم تعديل بيانات الحجز
                               </p>
                             )}
                             {appointment.editReason && (
                               <p className="mt-1 text-[11px] opacity-80">السبب: {appointment.editReason}</p>
+                            )}
+                            {appointment.previousStartTime && (
+                              <p className="mt-1 text-[11px] opacity-80">تم تعديل الوقت من <bdi>{toAr(appointment.previousStartTime)}</bdi> إلى <bdi>{appointment.startTime ? toAr(appointment.startTime) : "غير محدد"}</bdi></p>
                             )}
                             {appointment.previousAmount !== null && appointment.previousAmount !== undefined && (
                               <p className="mt-1 text-[11px] opacity-80">
@@ -11602,7 +11618,8 @@ function ServiceCalendarBookingsTab() {
                           <div className="rounded-xl bg-background/70 border border-border/50 p-2.5 space-y-1 text-xs">
                             {appointment.serviceAddress && <p className="flex items-start gap-1.5"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />{appointment.serviceAddress}</p>}
                             {durationLabel && <p className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />{durationLabel}</p>}
-                            {appointment.notes && <p className="text-muted-foreground">{appointment.notes}</p>}
+                            {appointment.startTime && <p className="font-semibold">وقت الموعد: <bdi>{toAr(appointment.startTime)}</bdi></p>}
+                            {appointment.notes && <p className="text-muted-foreground whitespace-pre-wrap break-words">{appointment.notes}</p>}
                           </div>
                         )}
 
@@ -11709,6 +11726,13 @@ function ServiceCalendarBookingsTab() {
                             )}
                           </div>
                           {appointment.status !== "cancelled" && (
+                            <div className="col-span-full grid grid-cols-2 gap-1.5">
+                            <Button size="sm" variant="outline"
+                              className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap"
+                              data-testid={`service-reschedule-${appointment.id}`}
+                              onClick={() => { setSummaryDate(null); startEditingAppointment(appointment); }}>
+                              <Clock className="w-3.5 h-3.5" />تعديل الموعد
+                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -11718,6 +11742,7 @@ function ServiceCalendarBookingsTab() {
                             >
                               <XCircle className="w-3.5 h-3.5" />إلغاء الحجز
                             </Button>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -11778,7 +11803,7 @@ function ServiceCalendarBookingsTab() {
         >
           <DialogHeader>
             <DialogTitle className="text-right text-base">
-              {editingAppointmentId ? "تعديل الحجز" : "إضافة حجز يدوي"}
+              {editingAppointmentId ? "تعديل الحجز / الموعد" : "إضافة حجز يدوي"}
             </DialogTitle>
             <DialogDescription className="text-right">
               تسجيل حجز مباشر للخدمة المحددة مع بيانات العميل والدفع.
@@ -11976,6 +12001,13 @@ function ServiceCalendarBookingsTab() {
                   </div>
                 </div>
               )}
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="service-appointment-time" className="text-xs font-semibold text-muted-foreground">وقت الموعد (اختياري — بتوقيت السعودية)</label>
+              <Input id="service-appointment-time" type="time" dir="ltr"
+                value={form.startTime}
+                onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))}
+                className="rounded-xl" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المدة</label>
@@ -12261,6 +12293,7 @@ function ServiceCalendarBookingsTab() {
                   <div>
                     <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
                     <p className="text-xs text-muted-foreground">{dual.gregorian} م</p>
+                    {a.startTime && <p className="text-xs text-foreground mt-0.5">الوقت: <bdi>{toAr(a.startTime)}</bdi></p>}
                     {a.duration && <p className="text-[11px] text-muted-foreground mt-0.5">{serviceDurationLabel(a.duration, a.durationUnit)}</p>}
                   </div>
                   <div className="text-xs">
@@ -12306,6 +12339,12 @@ function ServiceCalendarBookingsTab() {
                           >
                             {cancellingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                             تأكيد الحجز
+                          </DropdownMenuItem>
+                        )}
+                        {a.status !== "cancelled" && (
+                          <DropdownMenuItem onSelect={() => startEditingAppointment(a)}
+                            data-testid={`service-list-reschedule-${a.id}`}>
+                            <Clock className="w-4 h-4" />تعديل الموعد
                           </DropdownMenuItem>
                         )}
                         {a.status !== "cancelled" && (
@@ -12431,6 +12470,18 @@ function ServiceCalendarBookingsTab() {
                           <div className="bg-white p-4 min-h-[4.25rem] flex flex-col justify-center text-right sm:col-span-2">
                             <span className="block text-[11px] text-[#777066] mb-1.5">موقع / عنوان تقديم الخدمة</span>
                             <strong className="block text-sm leading-relaxed break-words">{receiptAppointment.serviceAddress}</strong>
+                          </div>
+                        )}
+                        {receiptAppointment.startTime && (
+                          <div className="bg-white p-4 text-right">
+                            <span className="block text-[11px] text-[#777066] mb-1.5">وقت الموعد — بتوقيت السعودية</span>
+                            <strong className="text-sm"><bdi>{toAr(receiptAppointment.startTime)}</bdi></strong>
+                          </div>
+                        )}
+                        {receiptAppointment.notes && (
+                          <div className="bg-white p-4 text-right sm:col-span-2" data-testid="service-receipt-details">
+                            <span className="block text-[11px] text-[#777066] mb-1.5">تفاصيل العنصر / الخدمة والملاحظات</span>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{toAr(receiptAppointment.notes)}</p>
                           </div>
                         )}
                       </div>

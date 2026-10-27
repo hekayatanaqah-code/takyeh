@@ -183,6 +183,47 @@ after(async () => {
 });
 
 describe("service appointment capacity and isolation", () => {
+  it("reschedules the same booking while preserving its product details and financial values", async () => {
+    const notes = "كيك رقم ٠١\nالملاحظات: بدون مكسرات، وكتابة مبروك";
+    const created = await requestAppointment(providerId, "POST", "", appointmentBody(TEST_DATES.available, {
+      startTime: "09:30", notes, amount: "480", deposit: "120", duration: "2",
+    }));
+    assert.equal(created.response.status, 201);
+    assert.equal(created.json.startTime, "09:30");
+    const id = created.json.id;
+    const movedTime = await requestAppointment(providerId, "PATCH", `/${id}`, {
+      startTime: "13:45", editReason: "طلب العميل تعديل وقت الموعد",
+    });
+    assert.equal(movedTime.response.status, 200);
+    assert.equal(movedTime.json.id, id);
+    assert.equal(movedTime.json.dateStr, TEST_DATES.available);
+    assert.equal(movedTime.json.startTime, "13:45");
+    assert.equal(movedTime.json.previousStartTime, "09:30");
+    assert.equal(movedTime.json.notes, notes);
+    assert.equal(movedTime.json.amount, "480.00");
+    assert.equal(movedTime.json.deposit, "120.00");
+    assert.equal(movedTime.json.duration, "2");
+    assert.equal(movedTime.json.cancelledAt, null);
+
+    for (const startTime of ["25:00", "12:60", "9:30", "invalid"]) {
+      assert.equal((await requestAppointment(providerId, "PATCH", `/${id}`, { startTime })).response.status, 422);
+    }
+    const movedDay = await requestAppointment(providerId, "PATCH", `/${id}`, {
+      dateStr: TEST_DATES.full, editReason: "تغيير تاريخ الموعد",
+    });
+    assert.equal(movedDay.response.status, 200);
+    assert.equal(movedDay.json.startTime, "13:45");
+    assert.equal(movedDay.json.notes, notes);
+    assert.equal(movedDay.json.previousDateStr, TEST_DATES.available);
+    const listed = await requestAppointment(providerId, "GET");
+    assert.equal(listed.json.length, 1);
+    assert.equal(listed.json[0].id, id);
+    assert.equal(listed.json[0].dateStr, TEST_DATES.full);
+    assert.equal(listed.json[0].startTime, "13:45");
+    assert.equal(listed.json[0].notes, notes);
+    assert.equal((await requestAppointment(providerId, "PATCH", `/${id}`, { startTime: null })).json.startTime, null);
+  });
+
   it("persists receipt client details and clears identity when insurance is disabled", async () => {
     await db
       .update(serviceProvidersTable)

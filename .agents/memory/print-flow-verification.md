@@ -8,3 +8,9 @@ For service receipts, the visible receipt DOM is the only rendering source. Nati
 **Why:** A separate receipt template repeatedly drifted from the approved on-screen design and produced clipped attachments. WhatsApp URL links cannot attach a local file, so file-capable Web Share is required, with a manual-download fallback.
 
 **How to apply:** Resolve the exact visible receipt container by its stable DOM id for both print and WhatsApp. On every WhatsApp click, run a new DOM capture and construct new Blob and File objects; never retain an object URL or generated file between clicks. Give each attachment a cache-busting Western filename containing the receipt serial, click timestamp, and per-session counter. Wait for fonts and images, capture without changing CSS or width, and center it on one A4 page. Stub native print during automation, inspect print-media rendering, and validate the shared file's name, MIME type, `%PDF` signature, page count, rendered first page, and object identity across consecutive clicks. Use an Arabic underscore-separated document title for browser saving. Share exactly one generated file through Web Share, falling back to downloading that same blob plus opening the WhatsApp text.
+
+Service receipts must show the booked item identifier and its recorded service details and notes, not just the provider's business name.
+
+**Why:** The user explicitly requested that identifiers such as «كيك رقم ٠١» and notes match the saved booking in the customer's receipt.
+
+**How to apply:** Use the booking's recorded text rather than looking up the latest catalog name. Preserve multiline details in the visible receipt so printing and exported attachments inherit them.

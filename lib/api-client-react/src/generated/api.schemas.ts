@@ -5,6 +5,114 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type ServiceAppointmentUpdateServiceDeliveryMethod = typeof ServiceAppointmentUpdateServiceDeliveryMethod[keyof typeof ServiceAppointmentUpdateServiceDeliveryMethod];
+
+
+export const ServiceAppointmentUpdateServiceDeliveryMethod = {
+  delivery_installation: 'delivery_installation',
+  customer_pickup: 'customer_pickup',
+} as const;
+
+export type ServiceAppointmentUpdateDurationUnit = typeof ServiceAppointmentUpdateDurationUnit[keyof typeof ServiceAppointmentUpdateDurationUnit];
+
+
+export const ServiceAppointmentUpdateDurationUnit = {
+  hours: 'hours',
+  days: 'days',
+} as const;
+
+export type ServiceAppointmentUpdateStatus = typeof ServiceAppointmentUpdateStatus[keyof typeof ServiceAppointmentUpdateStatus];
+
+
+export const ServiceAppointmentUpdateStatus = {
+  confirmed: 'confirmed',
+  pending: 'pending',
+  cancelled: 'cancelled',
+} as const;
+
+export type ServiceAppointmentUpdateSource = typeof ServiceAppointmentUpdateSource[keyof typeof ServiceAppointmentUpdateSource];
+
+
+export const ServiceAppointmentUpdateSource = {
+  platform: 'platform',
+  whatsapp: 'whatsapp',
+  phone: 'phone',
+  walk_in: 'walk_in',
+  external: 'external',
+} as const;
+
+export type ServiceAppointmentUpdatePaymentMethod = typeof ServiceAppointmentUpdatePaymentMethod[keyof typeof ServiceAppointmentUpdatePaymentMethod];
+
+
+export const ServiceAppointmentUpdatePaymentMethod = {
+  cash: 'cash',
+  transfer: 'transfer',
+  pos: 'pos',
+} as const;
+
+export interface ServiceAppointmentUpdate {
+  /** @minLength 1 */
+  clientName?: string;
+  /** @minLength 1 */
+  clientPhone?: string;
+  /** @nullable */
+  serviceAddress?: string | null;
+  serviceDeliveryMethod?: ServiceAppointmentUpdateServiceDeliveryMethod;
+  /** @nullable */
+  clientIdNumber?: string | null;
+  dateStr?: string;
+  /**
+     * Saudi local wall-clock time in HH:mm; null clears the time
+     * @nullable
+     * @pattern ^([01][0-9]|2[0-3]):[0-5][0-9]$
+     */
+  startTime?: string | null;
+  /** @nullable */
+  duration?: string | null;
+  durationUnit?: ServiceAppointmentUpdateDurationUnit;
+  status?: ServiceAppointmentUpdateStatus;
+  /** @minLength 1 */
+  notes?: string;
+  /** @nullable */
+  amount?: string | null;
+  /** @nullable */
+  deposit?: string | null;
+  /** @nullable */
+  insuranceAmount?: string | null;
+  source?: ServiceAppointmentUpdateSource;
+  paymentMethod?: ServiceAppointmentUpdatePaymentMethod;
+  /** @nullable */
+  paymentReceiptUrl?: string | null;
+  cashDeposited?: boolean;
+  contractSigned?: boolean;
+  /** @nullable */
+  cancelReason?: string | null;
+  /** @nullable */
+  cancelRefundAmount?: string | null;
+  /** @nullable */
+  editReason?: string | null;
+}
+
+export interface ServiceAppointmentRecord {
+  id: number;
+  providerId: number;
+  dateStr: string;
+  /** @nullable */
+  startTime?: string | null;
+  /** @nullable */
+  previousStartTime?: string | null;
+  status: string;
+  /** @nullable */
+  notes?: string | null;
+  clientName?: string;
+  /** @nullable */
+  clientPhone?: string | null;
+  /** @nullable */
+  amount?: string | null;
+  /** @nullable */
+  deposit?: string | null;
+}
+
 export interface ProviderCatalogImageUploadInput {
   file: Blob | File;
 }

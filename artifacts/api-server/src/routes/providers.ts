@@ -953,6 +953,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
     serviceDeliveryMethod: z.enum(["delivery_installation", "customer_pickup"]),
     clientIdNumber: z.string().optional().nullable(),
     dateStr: canonicalGregorianDate,
+    startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
     duration: z.string().optional().nullable(),
     durationUnit: z.enum(["hours", "days"]).optional(),
     status: z.enum(["confirmed", "pending", "cancelled"]).default("confirmed"),
@@ -1074,6 +1075,7 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
     serviceDeliveryMethod: z.enum(["delivery_installation", "customer_pickup"]).optional(),
     clientIdNumber: z.string().optional().nullable(),
     dateStr: canonicalGregorianDate.optional(),
+    startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional(),
     duration: z.string().optional().nullable(),
     durationUnit: z.enum(["hours", "days"]).optional(),
     status: z.enum(["confirmed", "pending", "cancelled"]).optional(),
@@ -1099,8 +1101,14 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const targetDate = parsed.data.dateStr ?? row.dateStr;
   const targetStatus = parsed.data.status ?? row.status;
   const updates: Record<string, any> = { ...parsed.data };
+  if (parsed.data.startTime !== undefined && parsed.data.startTime !== row.startTime) {
+    updates.previousStartTime = row.startTime;
+    updates.lastEditedAt = new Date();
+  }
   if (parsed.data.editReason?.trim()) {
     updates.lastEditedAt = new Date();
+    updates.previousStartTime = parsed.data.startTime !== undefined && parsed.data.startTime !== row.startTime
+      ? row.startTime : null;
     const dateChanged = targetDate !== row.dateStr;
     updates.previousDateStr = dateChanged ? row.dateStr : null;
     updates.editedDateStr = dateChanged ? targetDate : null;

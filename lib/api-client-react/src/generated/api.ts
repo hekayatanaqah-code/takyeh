@@ -161,6 +161,8 @@ import type {
   RoleLoginBody,
   SelectLoginRole200,
   SelectLoginRoleBody,
+  ServiceAppointmentRecord,
+  ServiceAppointmentUpdate,
   ServiceGlobalSeason,
   ServiceSeason,
   SettleStaffHoldingBody,
@@ -205,6 +207,97 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getUpdateServiceAppointmentUrl = (id: number,
+    apptId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${id}/appointments/${apptId}`
+}
+
+/**
+ * @summary Update an owned service booking without replacing it
+ */
+export const updateServiceAppointment = async (id: number,
+    apptId: number,
+    serviceAppointmentUpdate: ServiceAppointmentUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ServiceAppointmentRecord> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ServiceAppointmentRecord>(getUpdateServiceAppointmentUrl(id,apptId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(serviceAppointmentUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateServiceAppointmentMutationKey = () => ['updateServiceAppointment'] as const;
+
+export const getUpdateServiceAppointmentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceAppointment>>, TError,UpdateServiceAppointmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateServiceAppointment>>, TError,UpdateServiceAppointmentMutationVariables, TContext> => {
+
+const mutationKey = getUpdateServiceAppointmentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateServiceAppointment>>, UpdateServiceAppointmentMutationVariables> = (props) => {
+          const {id,apptId,data} = props ?? {};
+
+          return  updateServiceAppointment(id,apptId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateServiceAppointmentMutationResult = NonNullable<Awaited<ReturnType<typeof updateServiceAppointment>>>
+    export type UpdateServiceAppointmentMutationBody = BodyType<ServiceAppointmentUpdate>
+    export type UpdateServiceAppointmentMutationError = ErrorType<void>
+    export type UpdateServiceAppointmentMutationVariables = {id: number;apptId: number;data: BodyType<ServiceAppointmentUpdate>}
+
+    /**
+ * @summary Update an owned service booking without replacing it
+ */
+export const useUpdateServiceAppointment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceAppointment>>, TError,UpdateServiceAppointmentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateServiceAppointment>>,
+        TError,
+        UpdateServiceAppointmentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateServiceAppointmentMutationOptions(options), queryClient);
+    }
 
 export const getSubmitServiceReviewObjectionUrl = (id: number,
     reviewId: number,) => {

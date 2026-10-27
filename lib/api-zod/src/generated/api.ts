@@ -8,6 +8,60 @@
 import * as zod from 'zod';
 
 
+/**
+ * @summary Update an owned service booking without replacing it
+ */
+export const UpdateServiceAppointmentParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "apptId": zod.coerce.number().int()
+})
+
+
+
+export const updateServiceAppointmentBodyStartTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+
+
+
+export const UpdateServiceAppointmentBody = zod.object({
+  "clientName": zod.string().min(1).optional(),
+  "clientPhone": zod.string().min(1).optional(),
+  "serviceAddress": zod.string().nullish(),
+  "serviceDeliveryMethod": zod.enum(['delivery_installation', 'customer_pickup']).optional(),
+  "clientIdNumber": zod.string().nullish(),
+  "dateStr": zod.date().optional(),
+  "startTime": zod.string().regex(updateServiceAppointmentBodyStartTimeRegExp).nullish().describe('Saudi local wall-clock time in HH:mm; null clears the time'),
+  "duration": zod.string().nullish(),
+  "durationUnit": zod.enum(['hours', 'days']).optional(),
+  "status": zod.enum(['confirmed', 'pending', 'cancelled']).optional(),
+  "notes": zod.string().min(1).optional(),
+  "amount": zod.string().nullish(),
+  "deposit": zod.string().nullish(),
+  "insuranceAmount": zod.string().nullish(),
+  "source": zod.enum(['platform', 'whatsapp', 'phone', 'walk_in', 'external']).optional(),
+  "paymentMethod": zod.enum(['cash', 'transfer', 'pos']).optional(),
+  "paymentReceiptUrl": zod.string().nullish(),
+  "cashDeposited": zod.boolean().optional(),
+  "contractSigned": zod.boolean().optional(),
+  "cancelReason": zod.string().nullish(),
+  "cancelRefundAmount": zod.string().nullish(),
+  "editReason": zod.string().nullish()
+})
+
+export const UpdateServiceAppointmentResponse = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "dateStr": zod.date(),
+  "startTime": zod.string().nullish(),
+  "previousStartTime": zod.string().nullish(),
+  "status": zod.string(),
+  "notes": zod.string().nullish(),
+  "clientName": zod.string().optional(),
+  "clientPhone": zod.string().nullish(),
+  "amount": zod.string().nullish(),
+  "deposit": zod.string().nullish()
+})
+
+
 export const SubmitServiceReviewObjectionParams = zod.object({
   "id": zod.coerce.number().int(),
   "reviewId": zod.coerce.number().int()
