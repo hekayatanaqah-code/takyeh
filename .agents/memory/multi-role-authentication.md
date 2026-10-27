@@ -13,3 +13,9 @@ Owner and photographer sessions must coexist; logging out of either must not inv
 **Why:** The user requested session isolation. Both directions of independent login/logout were confirmed in a real browser.
 
 **How to apply:** Retain role-specific session scopes, clear role-specific client state on identity changes, and keep password-owner logout local instead of invoking external SSO logout. Preserve ordinary owner identities via durable account links, not email equality; privileged identities cannot be inherited by choosing the owner role.
+
+Purely numeric login passwords accept equivalent Western, Eastern Arabic and Persian digits. Do not transliterate letters-and-digits passwords or trim password whitespace; retain exact verification for historical credentials.
+
+**Why:** The user required Arabic and English digit entry to work for numeric credentials. Treating every Unicode digit in every password as interchangeable would change unrelated passwords and break existing credential semantics.
+
+**How to apply:** Apply the same verification rule at initial login and when a selected role requires its own password. Keep role proofs and session authorization independent of shared contact information.

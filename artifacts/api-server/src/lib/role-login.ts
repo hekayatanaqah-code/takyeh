@@ -19,6 +19,20 @@ const cookieOptions = (req: Request) => ({ httpOnly: true, secure: req.secure ||
 export const roleLoginBody = RoleLoginBody;
 export const roleSelectBody = SelectLoginRoleBody;
 
+/** Numeric passwords accept equivalent digit scripts; other passwords remain exact. */
+export function normalizeNumericLoginPassword(value: string): string {
+  if (!/^[0-9٠-٩۰-۹]+$/.test(value)) return value;
+  return value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+    .replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
+}
+
+async function verifyLoginPassword(value: string, hash: string): Promise<boolean> {
+  // Keep historical exact-script passwords valid before trying canonical digits.
+  if (await bcrypt.compare(value, hash)) return true;
+  const normalized = normalizeNumericLoginPassword(value);
+  return normalized !== value && await bcrypt.compare(normalized, hash);
+}
+
 export function normalizeRolePhone(value: string) {
   const digits = value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
     .replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))).replace(/[\s()+-]/g, "")
@@ -121,7 +135,7 @@ export async function loginWithRoles(req: Request, res: Response) {
   if (!body.success) { res.status(400).json({ error: "أدخل الجوال أو البريد أو اسم المستخدم وكلمة المرور" }); return; }
   const list = await candidates(body.data.identifier);
   const proofs: Proof[] = [];
-  for (const c of list) proofs.push({ key: keyOf(c), fingerprint: fingerprint(c), verified: await bcrypt.compare(body.data.password, c.password_hash) });
+  for (const c of list) proofs.push({ key: keyOf(c), fingerprint: fingerprint(c), verified: await verifyLoginPassword(body.data.password, c.password_hash) });
   if (!proofs.some(p => p.verified)) { res.status(401).json({ error: "بيانات الدخول غير صحيحة" }); return; }
   await clearChallenge(req, res);
   if (list.length === 1) { res.json(await issueSession(req, res, list[0], !!body.data.rememberMe)); return; }
@@ -144,7 +158,7 @@ export async function selectLoginRole(req: Request, res: Response) {
     const proof = challenge.proofs.find(p => p.key === parsed.data.key);
     const candidate = (await candidates(challenge.identifier)).find(c => keyOf(c) === parsed.data.key);
     if (!proof || !candidate || proof.fingerprint !== fingerprint(candidate)) return null;
-    if (!proof.verified && (!parsed.data.password || !await bcrypt.compare(parsed.data.password, candidate.password_hash))) {
+    if (!proof.verified && (!parsed.data.password || !await verifyLoginPassword(parsed.data.password, candidate.password_hash))) {
       await tx.update(sessionsTable).set({ sess: { ...challenge, attempts: challenge.attempts + 1 } }).where(eq(sessionsTable.sid, token));
       return "password" as const;
     }

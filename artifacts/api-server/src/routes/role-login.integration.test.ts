@@ -8,7 +8,7 @@ import bcrypt from "bcryptjs";
 import { db, pool, photographersTable, adminStaffTable, ownerStaffTable, sessionsTable, photographerSessionsTable, adminSessionsTable, staffSessionsTable, usersTable, ownerAccountLinksTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import roleRouter from "./role-login";
-import { normalizeRolePhone } from "../lib/role-login";
+import { normalizeNumericLoginPassword, normalizeRolePhone } from "../lib/role-login";
 import { getSession } from "../lib/auth";
 
 const prefix = `qa-roles-${randomBytes(5).toString("hex")}`;
@@ -70,6 +70,40 @@ after(async () => {
 test("Saudi identifiers normalize both Arabic digit sets", () => {
   for (const p of ["٠٥٩١٢٣٤٥٦٧", "۰۵۹۱۲۳۴۵۶۷", "+966 59 123 4567", "00966591234567"]) assert.equal(normalizeRolePhone(p), "591234567");
   assert.equal(normalizeRolePhone("name@example.invalid"), "");
+});
+test("only purely numeric passwords normalize without trimming or altering mixed passwords", () => {
+  assert.equal(normalizeNumericLoginPassword("١٢٣٤٥٦٧٨٩"), "123456789");
+  assert.equal(normalizeNumericLoginPassword("۱۲۳۴۵۶۷۸۹"), "123456789");
+  assert.equal(normalizeNumericLoginPassword("1٢3٤5٦7٨9"), "123456789");
+  for (const exact of ["Pass١٢٣!", " ١٢٣٤٥٦٧٨٩", "١٢٣٤٥٦٧٨٩ ", "١٢٣-٤٥٦"]) {
+    assert.equal(normalizeNumericLoginPassword(exact), exact);
+  }
+});
+test("numeric owner credentials accept English, Eastern and mixed digits but reject a different password", async () => {
+  const numericPassword = String(randomInt(100000000, 999999999));
+  const numericPhone = `058${randomInt(1000000, 9999999)}`;
+  const eastern = (value: string) => value.replace(/[0-9]/g, d => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
+  const hash = await bcrypt.hash(numericPassword, 4);
+  const inserted = await db.execute(sql`INSERT INTO owner_applications(full_name,business_name,business_type,phone,email,password_hash,status,email_verified)
+    VALUES(${prefix},${prefix},'chalet',${numericPhone},${`${prefix}-numeric@example.invalid`},${hash},'approved',true) RETURNING id`);
+  const id = Number(inserted.rows[0].id);
+  try {
+    for (const identifier of [numericPhone, eastern(numericPhone)]) {
+      for (const password of [numericPassword, eastern(numericPassword)]) {
+        const response = await request("/auth/role-login", { identifier, password });
+        assert.equal(response.status, 200);
+        assert.equal(response.data.redirect, "/dashboard");
+        const sessionCookie = response.cookies.find(c => c.startsWith("sid="))!;
+        assert.equal((await getSession(sessionCookie.split(";")[0].slice(4)))?.ownerApplicationId, id);
+      }
+    }
+    const bad = numericPassword.slice(0, -1) + ((Number(numericPassword.at(-1)) + 1) % 10);
+    assert.equal((await request("/auth/role-login", { identifier: numericPhone, password: bad })).status, 401);
+    assert.equal((await request("/auth/role-login", { identifier: numericPhone, password: `${numericPassword} ` })).status, 401);
+  } finally {
+    await db.execute(sql`DELETE FROM sessions WHERE sess->>'ownerApplicationId'=${String(id)}`);
+    await db.execute(sql`DELETE FROM owner_applications WHERE id=${id} AND full_name=${prefix}`);
+  }
 });
 test("shared phone and email reveal all roles only after valid credentials", async () => {
   assert.equal((await request("/auth/role-login", { identifier: phone, password: "wrong" })).status, 401);
