@@ -161,6 +161,7 @@ import type {
   RoleLoginBody,
   SelectLoginRole200,
   SelectLoginRoleBody,
+  ServiceAppointmentPaymentInput,
   ServiceAppointmentRecord,
   ServiceAppointmentUpdate,
   ServiceGlobalSeason,
@@ -207,6 +208,97 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getRecordServiceAppointmentPaymentUrl = (id: number,
+    apptId: number,) => {
+
+
+
+
+  return `/api/providers/my/approved/${id}/appointments/${apptId}/payments`
+}
+
+/**
+ * @summary Record an additional payment using the booking's existing payment method and custody status
+ */
+export const recordServiceAppointmentPayment = async (id: number,
+    apptId: number,
+    serviceAppointmentPaymentInput: ServiceAppointmentPaymentInput, options?: Parameters<typeof customFetch>[1]): Promise<ServiceAppointmentRecord> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ServiceAppointmentRecord>(getRecordServiceAppointmentPaymentUrl(id,apptId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(serviceAppointmentPaymentInput)
+  }
+);}
+
+
+
+
+
+export const getRecordServiceAppointmentPaymentMutationKey = () => ['recordServiceAppointmentPayment'] as const;
+
+export const getRecordServiceAppointmentPaymentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordServiceAppointmentPayment>>, TError,RecordServiceAppointmentPaymentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof recordServiceAppointmentPayment>>, TError,RecordServiceAppointmentPaymentMutationVariables, TContext> => {
+
+const mutationKey = getRecordServiceAppointmentPaymentMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof recordServiceAppointmentPayment>>, RecordServiceAppointmentPaymentMutationVariables> = (props) => {
+          const {id,apptId,data} = props ?? {};
+
+          return  recordServiceAppointmentPayment(id,apptId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RecordServiceAppointmentPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof recordServiceAppointmentPayment>>>
+    export type RecordServiceAppointmentPaymentMutationBody = BodyType<ServiceAppointmentPaymentInput>
+    export type RecordServiceAppointmentPaymentMutationError = ErrorType<void>
+    export type RecordServiceAppointmentPaymentMutationVariables = {id: number;apptId: number;data: BodyType<ServiceAppointmentPaymentInput>}
+
+    /**
+ * @summary Record an additional payment using the booking's existing payment method and custody status
+ */
+export const useRecordServiceAppointmentPayment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof recordServiceAppointmentPayment>>, TError,RecordServiceAppointmentPaymentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof recordServiceAppointmentPayment>>,
+        TError,
+        RecordServiceAppointmentPaymentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRecordServiceAppointmentPaymentMutationOptions(options), queryClient);
+    }
 
 export const getUpdateServiceAppointmentUrl = (id: number,
     apptId: number,) => {

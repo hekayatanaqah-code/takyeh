@@ -81,3 +81,4 @@
 - [Service catalog policy](service-catalog-policy.md) — independent provider products/offers; complete all-service navigation and positive enabled insurance gate.
 - [Service details approved design](service-details-rollout.md) — permanent accordions and sticky save approved for all service activities; no temporary preview login.
 - [Review objections and unified dates](review-objections-policy.md) — owner objections cover properties and services; Hijri is authoritative, Gregorian secondary, without rewriting history.
+- [Service booking cards](service-booking-cards.md) — match property cards without property data; additional payments must preserve existing collection and custody classifications.

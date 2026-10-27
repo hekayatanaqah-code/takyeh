@@ -5,6 +5,24 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type ServiceAppointmentPaymentInputExpectedPaymentMethod = typeof ServiceAppointmentPaymentInputExpectedPaymentMethod[keyof typeof ServiceAppointmentPaymentInputExpectedPaymentMethod];
+
+
+export const ServiceAppointmentPaymentInputExpectedPaymentMethod = {
+  cash: 'cash',
+  transfer: 'transfer',
+  pos: 'pos',
+} as const;
+
+export interface ServiceAppointmentPaymentInput {
+  /** @pattern ^\d{1,10}(\.\d{1,2})?$ */
+  amount: string;
+  /** @pattern ^\d{1,10}(\.\d{1,2})?$ */
+  expectedDeposit: string;
+  expectedPaymentMethod: ServiceAppointmentPaymentInputExpectedPaymentMethod;
+  expectedCashDeposited: boolean;
+}
+
 export type ServiceAppointmentUpdateServiceDeliveryMethod = typeof ServiceAppointmentUpdateServiceDeliveryMethod[keyof typeof ServiceAppointmentUpdateServiceDeliveryMethod];
 
 

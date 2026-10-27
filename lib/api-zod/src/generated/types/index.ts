@@ -214,6 +214,8 @@ export * from './selectLoginRole200Role';
 export * from './selectLoginRole200RolesItem';
 export * from './selectLoginRole200RolesItemRole';
 export * from './selectLoginRoleBody';
+export * from './serviceAppointmentPaymentInput';
+export * from './serviceAppointmentPaymentInputExpectedPaymentMethod';
 export * from './serviceAppointmentRecord';
 export * from './serviceAppointmentUpdate';
 export * from './serviceAppointmentUpdateDurationUnit';

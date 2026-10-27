@@ -183,6 +183,42 @@ after(async () => {
 });
 
 describe("service appointment capacity and isolation", () => {
+  it("adds a payment atomically without replacing booking or custody details", async () => {
+    const created = await requestAppointment(providerId, "POST", "", appointmentBody(TEST_DATES.available, {
+      amount: "500.50", deposit: "100.10", paymentMethod: "cash", cashDeposited: false,
+    }));
+    assert.equal(created.response.status, 201);
+    const body = { amount: "50.25", expectedDeposit: "100.10", expectedPaymentMethod: "cash", expectedCashDeposited: false };
+    const path = `/${created.json.id}/payments`;
+    const results = await Promise.all([
+      requestAppointment(providerId, "POST", path, body),
+      requestAppointment(providerId, "POST", path, body),
+    ]);
+    assert.deepEqual(results.map(r => r.response.status).sort(), [200, 409]);
+    const updated = results.find(r => r.response.ok)!.json;
+    assert.equal(Number(updated.deposit), 150.35);
+    assert.equal(updated.dateStr, created.json.dateStr);
+    assert.equal(updated.paymentMethod, "cash");
+    assert.equal(updated.cashDeposited, false);
+    assert.equal(updated.notes, created.json.notes);
+    const overpaid = await requestAppointment(providerId, "POST", path, { ...body, expectedDeposit: "150.35", amount: "400" });
+    assert.equal(overpaid.response.status, 422);
+    const changedMethod = await requestAppointment(providerId, "POST", path, { ...body, expectedDeposit: "150.35", expectedPaymentMethod: "transfer" });
+    assert.equal(changedMethod.response.status, 409);
+    for (const amount of ["0", "-1", "NaN", "1.001"]) {
+      const invalid = await requestAppointment(providerId, "POST", path, { ...body, expectedDeposit: "150.35", amount });
+      assert.equal(invalid.response.status, 422);
+    }
+    const otherProvider = await createProvider();
+    assert.equal((await requestAppointment(otherProvider, "POST", path, body)).response.status, 404);
+    const completed = await requestAppointment(providerId, "POST", path, { ...body, expectedDeposit: "150.35", amount: "350.15" });
+    assert.equal(completed.response.status, 200);
+    assert.equal(Number(completed.json.deposit), 500.50);
+    assert.equal((await requestAppointment(providerId, "POST", path, { ...body, expectedDeposit: "500.50", amount: "0.01" })).response.status, 422);
+    await requestAppointment(providerId, "PATCH", `/${created.json.id}`, { status: "cancelled" });
+    assert.equal((await requestAppointment(providerId, "POST", path, { ...body, expectedDeposit: "500.50" })).response.status, 409);
+  });
+
   it("reschedules the same booking while preserving its product details and financial values", async () => {
     const notes = "كيك رقم ٠١\nالملاحظات: بدون مكسرات، وكتابة مبروك";
     const created = await requestAppointment(providerId, "POST", "", appointmentBody(TEST_DATES.available, {

@@ -21,7 +21,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, ne, desc, isNull, gte, sql, inArray, or } from "drizzle-orm";
 import { z } from "zod";
-import { CreateServiceSeasonBody, UpdateServiceSeasonBody } from "@workspace/api-zod";
+import { CreateServiceSeasonBody, UpdateServiceSeasonBody, RecordServiceAppointmentPaymentBody } from "@workspace/api-zod";
 import { randomBytes } from "crypto";
 import providerCatalogRouter, { getPublicCatalog } from "./provider-catalog";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
@@ -1045,6 +1045,48 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
   }
   const row = result.row;
   return res.status(201).json(row);
+});
+
+router.post("/my/approved/:id/appointments/:apptId/payments", requireAuth, async (req: any, res) => {
+  const providerId = Number(req.params.id);
+  const apptId = Number(req.params.apptId);
+  const parsed = RecordServiceAppointmentPaymentBody.safeParse(req.body);
+  if (!Number.isSafeInteger(providerId) || !Number.isSafeInteger(apptId) || !parsed.success) {
+    return res.status(422).json({ error: "بيانات الدفعة غير صحيحة" });
+  }
+  // Work in halalas, and serialize competing additions on the actual booking row.
+  const halalas = (value: string | number | null) => Math.round(Number(value ?? 0) * 100);
+  const added = halalas(parsed.data.amount);
+  if (added <= 0) return res.status(422).json({ error: "أدخل مبلغ دفعة أكبر من صفر" });
+  const result = await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(serviceAppointmentsTable)
+      .where(and(
+        eq(serviceAppointmentsTable.id, apptId),
+        eq(serviceAppointmentsTable.providerId, providerId),
+        eq(serviceAppointmentsTable.ownerId, req.user.id),
+      )).for("update");
+    const [provider] = await tx.select({ id: serviceProvidersTable.id }).from(serviceProvidersTable)
+      .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user.id))).limit(1);
+    if (!row || !provider) return { status: 404, error: "الحجز غير موجود" };
+    if (row.status === "cancelled") return { status: 409, error: "لا يمكن تسجيل دفعة لحجز ملغي" };
+    const paid = halalas(row.deposit);
+    const total = halalas(row.amount);
+    if (!Number.isSafeInteger(paid) || !Number.isSafeInteger(total) || paid < 0 || total < 0) {
+      return { status: 422, error: "راجع مبالغ الحجز قبل تسجيل دفعة" };
+    }
+    if (paid !== halalas(parsed.data.expectedDeposit)
+      || (row.paymentMethod || "cash") !== parsed.data.expectedPaymentMethod
+      || !!row.cashDeposited !== parsed.data.expectedCashDeposited) {
+      return { status: 409, error: "تغيّرت بيانات الدفع. حدّث الحجز وأعد فتح إضافة الدفعة." };
+    }
+    if (added > total - paid) return { status: 422, error: "مبلغ الدفعة يتجاوز المتبقي على الحجز" };
+    const [updated] = await tx.update(serviceAppointmentsTable)
+      .set({ deposit: ((paid + added) / 100).toFixed(2) })
+      .where(eq(serviceAppointmentsTable.id, row.id)).returning();
+    return { status: 200, updated };
+  });
+  if (result.status !== 200) return res.status(result.status).json({ error: result.error });
+  return res.json(result.updated);
 });
 
 router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: any, res) => {

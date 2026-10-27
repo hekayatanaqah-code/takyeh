@@ -9,6 +9,40 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Record an additional payment using the booking's existing payment method and custody status
+ */
+export const RecordServiceAppointmentPaymentParams = zod.object({
+  "id": zod.coerce.number().int(),
+  "apptId": zod.coerce.number().int()
+})
+
+export const recordServiceAppointmentPaymentBodyAmountRegExp = new RegExp('^\\d{1,10}(\\.\\d{1,2})?$');
+export const recordServiceAppointmentPaymentBodyExpectedDepositRegExp = new RegExp('^\\d{1,10}(\\.\\d{1,2})?$');
+
+
+export const RecordServiceAppointmentPaymentBody = zod.object({
+  "amount": zod.string().regex(recordServiceAppointmentPaymentBodyAmountRegExp),
+  "expectedDeposit": zod.string().regex(recordServiceAppointmentPaymentBodyExpectedDepositRegExp),
+  "expectedPaymentMethod": zod.enum(['cash', 'transfer', 'pos']),
+  "expectedCashDeposited": zod.boolean()
+})
+
+export const RecordServiceAppointmentPaymentResponse = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "dateStr": zod.date(),
+  "startTime": zod.string().nullish(),
+  "previousStartTime": zod.string().nullish(),
+  "status": zod.string(),
+  "notes": zod.string().nullish(),
+  "clientName": zod.string().optional(),
+  "clientPhone": zod.string().nullish(),
+  "amount": zod.string().nullish(),
+  "deposit": zod.string().nullish()
+})
+
+
+/**
  * @summary Update an owned service booking without replacing it
  */
 export const UpdateServiceAppointmentParams = zod.object({

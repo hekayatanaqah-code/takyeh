@@ -21,6 +21,32 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /providers/my/approved/{id}/appointments/{apptId}/payments:
+    post:
+      operationId: recordServiceAppointmentPayment
+      summary: Record an additional payment using the booking's existing payment method and custody status
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: apptId, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceAppointmentPaymentInput"
+      responses:
+        "200":
+          description: Updated booking with cumulative paid amount
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceAppointmentRecord"
+        "404":
+          description: Booking or provider not owned by authenticated user
+        "409":
+          description: Booking cancelled or payment snapshot changed
+        "422":
+          description: Invalid amount or amount exceeds current remaining balance
   /providers/my/approved/{id}/appointments/{apptId}:
     patch:
       operationId: updateServiceAppointment
@@ -1519,6 +1545,14 @@ components:
       schema:
         type: string
   schemas:
+    ServiceAppointmentPaymentInput:
+      type: object
+      required: [amount, expectedDeposit, expectedPaymentMethod, expectedCashDeposited]
+      properties:
+        amount: { type: string, pattern: '^\d{1,10}(\.\d{1,2})?$' }
+        expectedDeposit: { type: string, pattern: '^\d{1,10}(\.\d{1,2})?$' }
+        expectedPaymentMethod: { type: string, enum: [cash, transfer, pos] }
+        expectedCashDeposited: { type: boolean }
     ServiceAppointmentUpdate:
       type: object
       properties:

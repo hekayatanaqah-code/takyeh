@@ -42,6 +42,9 @@ import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
 import { SubmissionDate } from "@/components/owner/SubmissionDate";
 import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard";
+import { ServiceBookingCard, serviceFinancialState } from "@/components/owner/ServiceBookingCard";
+import { ServiceBookingPaymentDialog } from "@/components/owner/ServiceBookingPaymentDialog";
+import { useRecordServiceAppointmentPayment } from "@workspace/api-client-react";
 import { ServiceManagementNavigation } from "@/components/owner/ServiceManagementNavigation";
 import { ServiceCatalogPanel, ServiceOffersPanel } from "@/components/owner/ServiceCatalogPanels";
 import { ReviewObjection } from "@/components/owner/ReviewObjection";
@@ -10431,6 +10434,10 @@ function ServiceCalendarBookingsTab() {
   const [reviewSentIds, setReviewSentIds] = useState<Set<number>>(new Set());
   const [openServiceMessageMenuId, setOpenServiceMessageMenuId] = useState<number | null>(null);
   const [receiptAppointment, setReceiptAppointment] = useState<any | null>(null);
+  const [paymentAppointment, setPaymentAppointment] = useState<any | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const paymentSubmittingRef = useRef(false);
+  const recordServicePayment = useRecordServiceAppointmentPayment();
   const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
   const [contractPreviewAppointment, setContractPreviewAppointment] = useState<any | null>(null);
   const receiptPdfExportNonceRef = useRef(0);
@@ -10783,6 +10790,67 @@ function ServiceCalendarBookingsTab() {
       });
     } finally {
       setUpdatingAppointmentId(null);
+    }
+  }
+
+  function sendServiceContractWhatsApp(appointment: any) {
+    const whatsappPhone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
+    if (!whatsappPhone) return;
+    const dual = formatDualDate(appointment.dateStr);
+    const contractUrl = publicContractUrl(appointment.id, "service", BASE);
+    const message = [
+      `مرحباً ${appointment.clientName}،`,
+      `نرفق لك عقد تقديم الخدمة للحجز بتاريخ ${withHijriEra(dual.hijri)} (${dual.gregorian} م).`,
+      "يرجى مراجعة بيانات العقد وتوقيعه إلكترونياً من خلال الرابط التالي:",
+      contractUrl,
+    ].join("\n\n");
+    window.open(`https://wa.me/${whatsappPhone}?text=${encodeWhatsAppText(message)}`, "_blank", "noopener,noreferrer");
+  }
+
+  function openServicePaymentDialog(appointment: any) {
+    const { canCollect } = serviceFinancialState(appointment);
+    if (!canCollect) return;
+    setPaymentError(null);
+    setPaymentAppointment(appointment);
+  }
+
+  async function submitServicePayment(amount: string) {
+    const appointment = paymentAppointment;
+    const targetProviderId = providerId;
+    if (!appointment || !targetProviderId || paymentSubmittingRef.current) return;
+    paymentSubmittingRef.current = true;
+    setPaymentError(null);
+    try {
+      const updated = await recordServicePayment.mutateAsync({
+        id: targetProviderId,
+        apptId: appointment.id,
+        data: {
+          amount,
+          expectedDeposit: String(appointment.deposit ?? "0"),
+          expectedPaymentMethod: appointment.paymentMethod || "cash",
+          expectedCashDeposited: !!appointment.cashDeposited,
+        },
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["service-appointments", targetProviderId] }),
+        queryClient.invalidateQueries({ queryKey: ["owner", "bank-ledger-services"] }),
+        queryClient.invalidateQueries({ queryKey: ["owner", "service-revenue-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["owner", "service-revenue-summary-rep"] }),
+      ]);
+      setReceiptAppointment((current: any) => current && current.id === appointment.id ? { ...current, ...(updated as any) } : current);
+      setPaymentAppointment(null);
+      toast({ title: "تم تسجيل الدفعة" });
+    } catch (error: any) {
+      const status = error?.status ?? error?.response?.status;
+      const serverMessage = error?.data?.error ?? (error instanceof Error ? error.message : "");
+      setPaymentError(
+        status === 409 ? "تغيّرت بيانات الدفع لهذا الحجز من مكان آخر. أغلق النافذة وأعد المحاولة بعد تحديث البيانات."
+        : status === 422 ? serverMessage || "تحقق من مبلغ الدفعة والمتبقي على الحجز."
+        : serverMessage || "تعذر تسجيل الدفعة، حاول مرة أخرى.",
+      );
+      if (status === 409) queryClient.invalidateQueries({ queryKey: ["service-appointments", targetProviderId] });
+    } finally {
+      paymentSubmittingRef.current = false;
     }
   }
 
@@ -11479,268 +11547,34 @@ function ServiceCalendarBookingsTab() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  {summaryAppointments.map((appointment) => {
-                    const total = Number(appointment.amount ?? 0);
-                    const deposit = Number(appointment.deposit ?? 0);
-                    const remaining = Math.max(0, total - deposit);
-                    const whatsappPhone = normalizeServiceWhatsAppPhone(appointment.clientPhone);
-                    const templates = serviceMessageTemplates(appointment);
-                    const isUpdating = updatingAppointmentId === appointment.id;
-                    const durationLabel = serviceDurationLabel(appointment.duration, appointment.durationUnit);
-                    const sendContractWhatsApp = () => {
-                      if (!whatsappPhone) return;
-                      const dual = formatDualDate(appointment.dateStr);
-                      const contractUrl = publicContractUrl(appointment.id, "service", BASE);
-                      const message = [
-                        `مرحباً ${appointment.clientName}،`,
-                        `نرفق لك عقد تقديم الخدمة للحجز بتاريخ ${dual.gregorian}.`,
-                        "يرجى مراجعة بيانات العقد وتوقيعه إلكترونياً من خلال الرابط التالي:",
-                        contractUrl,
-                      ].join("\n\n");
-                      window.open(`https://wa.me/${whatsappPhone}?text=${encodeWhatsAppText(message)}`, "_blank", "noopener,noreferrer");
-                    };
-                    return (
-                      <div
+                  {summaryAppointments.map((appointment) => (
+                      <ServiceBookingCard
                         key={appointment.id}
-                        className={`rounded-2xl border p-3 space-y-2 ${
-                          appointment.status === "cancelled"
-                            ? "border-red-200 bg-red-50/40 dark:border-red-900 dark:bg-red-950/10"
-                            : appointment.status === "pending"
-                              ? "border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/10"
-                              : "border-emerald-200 bg-emerald-50/30 dark:border-emerald-900 dark:bg-emerald-950/10"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3 flex-wrap">
-                          <div className="min-w-0">
-                            <p className="font-extrabold text-foreground">{appointment.clientName}</p>
-                            {appointment.clientPhone ? (
-                              <a
-                                href={`https://wa.me/${whatsappPhone}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
-                                dir="ltr"
-                              >
-                                <Phone className="w-3 h-3" />
-                                {toAr(appointment.clientPhone)}
-                              </a>
-                            ) : (
-                              <p className="text-xs text-muted-foreground mt-1">لا يوجد رقم تواصل</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className={`inline-flex text-xs px-2.5 py-1 rounded-full font-bold ${statusBadge[appointment.status] ?? "bg-muted text-muted-foreground"}`}>
-                              {statusLabel[appointment.status] ?? appointment.status}
-                            </span>
-                            {(appointment.editReason || appointment.lastEditedAt) && (
-                              <span className="inline-flex text-[10px] px-2 py-1 rounded-full font-bold border border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-300">
-                                {appointment.previousDateStr && appointment.editedDateStr ? "مُعاد جدولته" : "مُعدَّل"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {(appointment.editReason || appointment.lastEditedAt) && (
-                          <div className="rounded-xl border border-violet-200 bg-violet-50/70 px-3 py-2 text-xs text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/20 dark:text-violet-200">
-                            {appointment.previousDateStr && appointment.editedDateStr ? (
-                              <p className="font-semibold">
-                                تم إعادة جدولة الموعد من {formatDualDate(appointment.previousDateStr).hijri} إلى {formatDualDate(appointment.editedDateStr).hijri}
-                              </p>
-                            ) : (
-                              <p className="font-semibold">
-                                تم تعديل بيانات الحجز
-                              </p>
-                            )}
-                            {appointment.editReason && (
-                              <p className="mt-1 text-[11px] opacity-80">السبب: {appointment.editReason}</p>
-                            )}
-                            {appointment.previousStartTime && (
-                              <p className="mt-1 text-[11px] opacity-80">تم تعديل الوقت من <bdi>{toAr(appointment.previousStartTime)}</bdi> إلى <bdi>{appointment.startTime ? toAr(appointment.startTime) : "غير محدد"}</bdi></p>
-                            )}
-                            {appointment.previousAmount !== null && appointment.previousAmount !== undefined && (
-                              <p className="mt-1 text-[11px] opacity-80">
-                                تم تعديل السعر من {serviceReceiptMoney(Number(appointment.previousAmount))} إلى {serviceReceiptMoney(Number(appointment.amount ?? 0))}
-                              </p>
-                            )}
-                            {appointment.previousDurationUnit !== null && appointment.previousDurationUnit !== undefined && (
-                              <p className="mt-1 text-[11px] opacity-80">
-                                تم تعديل المدة من {serviceDurationLabel(appointment.previousDuration, appointment.previousDurationUnit) ?? "—"} إلى {serviceDurationLabel(appointment.duration, appointment.durationUnit) ?? "—"}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                          <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">
-                            <p className="text-muted-foreground">المبلغ الإجمالي</p>
-                            <p className="font-bold mt-1">{serviceReceiptMoney(total)}</p>
-                          </div>
-                          <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">
-                            <p className="text-muted-foreground">العربون</p>
-                            <p className="font-bold mt-1">{serviceReceiptMoney(deposit)}</p>
-                          </div>
-                          <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">
-                            <p className="text-muted-foreground">المتبقي</p>
-                            <p className="font-bold mt-1">{serviceReceiptMoney(remaining)}</p>
-                          </div>
-                          <div className="rounded-xl border border-border/60 bg-background/80 p-2.5">
-                            <p className="text-muted-foreground">مصدر الحجز</p>
-                            <p className="font-bold mt-1">{SOURCE_LABELS[appointment.source] ?? appointment.source ?? "غير محدد"}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 text-[11px]">
-                          <span className="rounded-full border border-border bg-background px-2.5 py-1">
-                            {servicePaymentMethodLabel(appointment.paymentMethod)}
-                          </span>
-                          {appointment.paymentMethod === "cash" && deposit > 0 ? (
-                            <span className={`rounded-full border px-2.5 py-1 font-semibold ${
-                              appointment.cashDeposited
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-400"
-                                : "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-400"
-                            }`}>
-                              {appointment.cashDeposited ? "أُودع النقد في البنك" : "النقد لم يُودع بعد"}
-                            </span>
-                          ) : (
-                            <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 font-semibold text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-400">
-                              {deposit > 0 ? "دفعة إلكترونية" : "لا توجد دفعة مسجلة"}
-                            </span>
-                          )}
-                          {provider?.requiresContract && <span className={`rounded-full border px-2.5 py-1 font-semibold ${
-                            appointment.contractSigned
-                              ? "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-400"
-                              : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300"
-                          }`}>
-                            {appointment.contractSigned ? "العقد موقّع" : "العقد غير موقّع"}
-                          </span>}
-                        </div>
-
-                        {(appointment.serviceAddress || durationLabel || appointment.notes) && (
-                          <div className="rounded-xl bg-background/70 border border-border/50 p-2.5 space-y-1 text-xs">
-                            {appointment.serviceAddress && <p className="flex items-start gap-1.5"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />{appointment.serviceAddress}</p>}
-                            {durationLabel && <p className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />{durationLabel}</p>}
-                            {appointment.startTime && <p className="font-semibold">وقت الموعد: <bdi>{toAr(appointment.startTime)}</bdi></p>}
-                            {appointment.notes && <p className="text-muted-foreground whitespace-pre-wrap break-words">{appointment.notes}</p>}
-                          </div>
-                        )}
-
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-2 border-t border-border/50">
-                          <Button size="sm" variant="outline" className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap" onClick={() => setReceiptAppointment(appointment)}>
-                            <Receipt className="w-3.5 h-3.5" />الإيصال
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap"
-                            onClick={() => {
-                              setSummaryDate(null);
-                              startEditingAppointment(appointment);
-                            }}
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />تعديل
-                          </Button>
-                          {appointment.status === "pending" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={cancellingId === appointment.id}
-                              className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-green-700"
-                              onClick={() => handleStatusChange(appointment.id, "confirmed")}
-                            >
-                              <CheckCircle className="w-3.5 h-3.5" />تأكيد
-                            </Button>
-                          )}
-                          {provider?.requiresContract && appointment.status !== "cancelled" && (
-                            <>
-                              <Button size="sm" variant="outline" className="h-8 rounded-xl text-xs" onClick={() => setContractPreviewAppointment(appointment)}>
-                                <Eye className="w-3.5 h-3.5" />معاينة العقد
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={!whatsappPhone}
-                                title={whatsappPhone ? "إرسال رابط العقد للعميل عبر واتساب" : "لا يوجد رقم واتساب للعميل"}
-                                className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-green-700 border-green-200 hover:bg-green-50"
-                                onClick={sendContractWhatsApp}
-                              >
-                                <MessageCircle className="w-3.5 h-3.5 fill-green-100" />إرسال العقد
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={isUpdating}
-                                className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-violet-700"
-                                onClick={() => updateServiceAppointmentFlags(appointment, { contractSigned: !appointment.contractSigned })}
-                              >
-                                <ScrollText className="w-3.5 h-3.5" />
-                                {appointment.contractSigned ? "إلغاء اعتماد التوقيع" : "تحديد كموقّع"}
-                              </Button>
-                              {appointment.paymentMethod === "cash" && deposit > 0 && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={isUpdating}
-                                  className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-orange-700"
-                                  onClick={() => updateServiceAppointmentFlags(appointment, { cashDeposited: !appointment.cashDeposited })}
-                                >
-                                  <Banknote className="w-3.5 h-3.5" />
-                                  {appointment.cashDeposited ? "إرجاعه كغير مودع" : "تأكيد الإيداع"}
-                                </Button>
-                              )}
-                            </>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={reviewSendingId === appointment.id || reviewSentIds.has(appointment.id)}
-                            className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-teal-700"
-                            onClick={() => sendServiceReviewRequest(appointment)}
-                          >
-                            {reviewSendingId === appointment.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Star className="w-3.5 h-3.5" />}
-                            {reviewSentIds.has(appointment.id) ? "تم فتح رابط التقييم" : "إرسال رابط التقييم"}
-                          </Button>
-                          <div className="relative">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-green-700"
-                              onClick={() => setOpenServiceMessageMenuId(openServiceMessageMenuId === appointment.id ? null : appointment.id)}
-                            >
-                              <MessageSquare className="w-3.5 h-3.5" />رسالة مخصصة
-                              <ChevronDown className="w-3 h-3" />
-                            </Button>
-                            {openServiceMessageMenuId === appointment.id && (
-                              <div className="absolute right-0 top-full mt-1 z-50 min-w-60 rounded-xl border border-border bg-card shadow-xl p-1.5">
-                                {templates.length > 0 ? templates.map((template) => (
-                                  <button
-                                    key={template.id}
-                                    type="button"
-                                    onClick={() => sendServiceCustomMessage(appointment, template.body)}
-                                    className="w-full text-right rounded-lg px-3 py-2 text-xs font-medium hover:bg-muted transition-colors"
-                                  >
-                                    {template.title}
-                                  </button>
-                                )) : (
-                                  <p className="px-3 py-2 text-xs text-muted-foreground">فعّل واتساب أو أضف قالباً من إعدادات الرسائل.</p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          {appointment.status !== "cancelled" && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={cancellingId === appointment.id}
-                              className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap text-red-600"
-                              onClick={() => setCancelAppointment(appointment)}
-                            >
-                              <XCircle className="w-3.5 h-3.5" />إلغاء الحجز
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+                        appointment={appointment}
+                        serviceName={provider?.businessName ?? "الخدمة"}
+                        sourceLabel={SOURCE_LABELS[appointment.source] ?? appointment.source ?? "غير محدد"}
+                        durationLabel={serviceDurationLabel(appointment.duration, appointment.durationUnit)}
+                        requiresContract={!!provider?.requiresContract}
+                        templates={serviceMessageTemplates(appointment)}
+                        messageMenuOpen={openServiceMessageMenuId === appointment.id}
+                        isUpdating={updatingAppointmentId === appointment.id}
+                        isStatusBusy={cancellingId === appointment.id}
+                        reviewSending={reviewSendingId === appointment.id}
+                        reviewSent={reviewSentIds.has(appointment.id)}
+                        onToggleMessageMenu={() => setOpenServiceMessageMenuId(openServiceMessageMenuId === appointment.id ? null : appointment.id)}
+                        onSendTemplate={(body) => sendServiceCustomMessage(appointment, body)}
+                        onReceipt={() => setReceiptAppointment(appointment)}
+                        onAddPayment={() => openServicePaymentDialog(appointment)}
+                        onConfirm={() => handleStatusChange(appointment.id, "confirmed")}
+                        onCancel={() => setCancelAppointment(appointment)}
+                        onPreviewContract={() => setContractPreviewAppointment(appointment)}
+                        onSendContract={() => sendServiceContractWhatsApp(appointment)}
+                        onToggleContractSigned={() => updateServiceAppointmentFlags(appointment, { contractSigned: !appointment.contractSigned })}
+                        onToggleCashDeposited={() => updateServiceAppointmentFlags(appointment, { cashDeposited: !appointment.cashDeposited })}
+                        onSendReview={() => sendServiceReviewRequest(appointment)}
+                        onEdit={() => { setSummaryDate(null); startEditingAppointment(appointment); }}
+                      />
+                  ))}
                 </div>
               )}
 
@@ -12180,6 +12014,13 @@ function ServiceCalendarBookingsTab() {
       />
 
       <ServiceContractPreviewDialog appointment={contractPreviewAppointment} onClose={() => setContractPreviewAppointment(null)} />
+      <ServiceBookingPaymentDialog
+        appointment={paymentAppointment}
+        submitting={recordServicePayment.isPending}
+        error={paymentError}
+        onClose={() => { if (!recordServicePayment.isPending) { setPaymentAppointment(null); setPaymentError(null); } }}
+        onSubmit={submitServicePayment}
+      />
 
       {/* ── APPOINTMENTS LIST ── */}
       <div className="space-y-3">
@@ -12203,122 +12044,37 @@ function ServiceCalendarBookingsTab() {
             <p className="font-medium">لا توجد حجوزات بعد</p>
           </div>
         ) : (
-          <div className="rounded-2xl border border-border overflow-hidden bg-card">
-            <div className="hidden md:grid md:grid-cols-[1.25fr_1fr_.9fr_.8fr_auto] gap-3 bg-muted/60 px-4 py-2.5 text-xs font-bold text-muted-foreground">
-              <span>العميل والتواصل</span>
-              <span>التاريخ</span>
-              <span>القيمة والمصدر</span>
-              <span>الحالة</span>
-              <span>الإجراءات</span>
-            </div>
-            {filteredAppts.map((a: any) => {
-              const dual = formatDualDate(a.dateStr);
-              const phoneDigits = String(a.clientPhone ?? "").replace(/\D/g, "");
-              const whatsappPhone = phoneDigits.startsWith("0") ? `966${phoneDigits.slice(1)}` : phoneDigits;
-              return (
-                <div
-                  key={a.id}
-                  className="grid grid-cols-1 md:grid-cols-[1.25fr_1fr_.9fr_.8fr_auto] gap-3 px-4 py-3.5 border-t border-border first:border-t-0 md:first:border-t items-center"
-                >
-                  <div className="min-w-0">
-                    <p className="font-bold text-foreground truncate">{a.clientName}</p>
-                    {a.clientPhone ? (
-                      <a
-                        href={whatsappPhone ? `https://wa.me/${whatsappPhone}` : undefined}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-primary hover:underline inline-flex items-center gap-1 mt-0.5"
-                        dir="ltr"
-                      >
-                        <Phone className="w-3 h-3" />
-                        {toAr(a.clientPhone)}
-                      </a>
-                    ) : (
-                      <p className="text-xs text-muted-foreground mt-0.5">لا يوجد رقم تواصل</p>
-                    )}
-                    {a.serviceAddress && (
-                      <p className="text-[11px] text-muted-foreground mt-1 truncate flex items-center gap-1">
-                        <MapPin className="w-3 h-3 shrink-0" />
-                        {a.serviceAddress}
-                      </p>
-                    )}
-                    {a.notes && <p className="text-[11px] text-muted-foreground mt-1 truncate">{a.notes}</p>}
-                  </div>
-                  <div>
-                    <p className="text-xs text-primary font-semibold">{withHijriEra(dual.hijri)}</p>
-                    <p className="text-xs text-muted-foreground">{dual.gregorian} م</p>
-                    {a.startTime && <p className="text-xs text-foreground mt-0.5">الوقت: <bdi>{toAr(a.startTime)}</bdi></p>}
-                    {a.duration && <p className="text-[11px] text-muted-foreground mt-0.5">{serviceDurationLabel(a.duration, a.durationUnit)}</p>}
-                  </div>
-                  <div className="text-xs">
-                    <p className="font-bold text-foreground">
-                      {a.amount ? `${toArN(Number(a.amount).toLocaleString())} ر.س` : "—"}
-                    </p>
-                    <p className="text-muted-foreground mt-0.5">{SOURCE_LABELS[a.source] ?? a.source ?? "غير محدد"}</p>
-                    {a.deposit && Number(a.deposit) > 0 && <p className="text-[11px] text-amber-600 mt-0.5">عربون: {toArN(Number(a.deposit).toLocaleString())}</p>}
-                  </div>
-                  <div>
-                    <span className={`inline-flex text-xs px-2 py-0.5 rounded-full font-semibold ${statusBadge[a.status] ?? ""}`}>
-                      {statusLabel[a.status] ?? a.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center md:justify-end">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8 rounded-lg"
-                          aria-label={`خيارات الحجز ${a.id}`}
-                          title="خيارات الحجز"
-                          data-testid={`service-booking-actions-${a.id}`}
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48" style={{ direction: "rtl" }}>
-                        <DropdownMenuItem onSelect={() => setReceiptAppointment(a)} data-testid={`service-receipt-${a.id}`}>
-                          <Receipt className="w-4 h-4 text-amber-600" />
-                          الإيصال
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => startEditingAppointment(a)}>
-                          <Edit2 className="w-4 h-4" />
-                          تعديل
-                        </DropdownMenuItem>
-                        {a.status === "pending" && (
-                          <DropdownMenuItem
-                            onSelect={() => handleStatusChange(a.id, "confirmed")}
-                            disabled={cancellingId === a.id}
-                            className="text-green-700 focus:text-green-700"
-                          >
-                            {cancellingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                            تأكيد الحجز
-                          </DropdownMenuItem>
-                        )}
-                        {a.status !== "cancelled" && (
-                          <DropdownMenuItem
-                            onSelect={() => setCancelAppointment(a)}
-                            disabled={cancellingId === a.id}
-                            className="text-red-600 focus:text-red-600"
-                          >
-                            {cancellingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                            إلغاء الحجز
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          onSelect={() => handleDeleteAppointment(a.id)}
-                          disabled={deletingAppointmentId === a.id}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          {deletingAppointmentId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                          حذف السجل
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {filteredAppts.map((a: any) => (
+                      <ServiceBookingCard
+                        key={a.id}
+                        appointment={a}
+                        serviceName={provider?.businessName ?? "الخدمة"}
+                        sourceLabel={SOURCE_LABELS[a.source] ?? a.source ?? "غير محدد"}
+                        durationLabel={serviceDurationLabel(a.duration, a.durationUnit)}
+                        requiresContract={!!provider?.requiresContract}
+                        templates={serviceMessageTemplates(a)}
+                        messageMenuOpen={openServiceMessageMenuId === a.id}
+                        isUpdating={updatingAppointmentId === a.id}
+                        isStatusBusy={cancellingId === a.id}
+                        reviewSending={reviewSendingId === a.id}
+                        reviewSent={reviewSentIds.has(a.id)}
+                        onToggleMessageMenu={() => setOpenServiceMessageMenuId(openServiceMessageMenuId === a.id ? null : a.id)}
+                        onSendTemplate={(body) => sendServiceCustomMessage(a, body)}
+                        onReceipt={() => setReceiptAppointment(a)}
+                        onAddPayment={() => openServicePaymentDialog(a)}
+                        onConfirm={() => handleStatusChange(a.id, "confirmed")}
+                        onCancel={() => setCancelAppointment(a)}
+                        onPreviewContract={() => setContractPreviewAppointment(a)}
+                        onSendContract={() => sendServiceContractWhatsApp(a)}
+                        onToggleContractSigned={() => updateServiceAppointmentFlags(a, { contractSigned: !a.contractSigned })}
+                        onToggleCashDeposited={() => updateServiceAppointmentFlags(a, { cashDeposited: !a.cashDeposited })}
+                        onSendReview={() => sendServiceReviewRequest(a)}
+                        onEdit={() => startEditingAppointment(a)}
+                        isDeleting={deletingAppointmentId === a.id}
+                        onDelete={() => handleDeleteAppointment(a.id)}
+                      />
+            ))}
           </div>
         )}
       </div>
