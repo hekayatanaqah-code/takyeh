@@ -11726,13 +11726,6 @@ function ServiceCalendarBookingsTab() {
                             )}
                           </div>
                           {appointment.status !== "cancelled" && (
-                            <div className="col-span-full grid grid-cols-2 gap-1.5">
-                            <Button size="sm" variant="outline"
-                              className="w-full min-w-0 h-8 rounded-lg text-[11px] gap-1 px-2 whitespace-nowrap"
-                              data-testid={`service-reschedule-${appointment.id}`}
-                              onClick={() => { setSummaryDate(null); startEditingAppointment(appointment); }}>
-                              <Clock className="w-3.5 h-3.5" />تعديل الموعد
-                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -11742,7 +11735,6 @@ function ServiceCalendarBookingsTab() {
                             >
                               <XCircle className="w-3.5 h-3.5" />إلغاء الحجز
                             </Button>
-                            </div>
                           )}
                         </div>
                       </div>
@@ -11798,15 +11790,17 @@ function ServiceCalendarBookingsTab() {
         <DialogContent
           dir="rtl"
           data-testid="service-new-booking-form"
-          aria-label="تسجيل حجز يدوي للخدمة"
+          aria-label={editingAppointmentId ? "تعديل الحجز" : "تسجيل حجز يدوي للخدمة"}
           className="max-w-md max-h-[92vh] overflow-y-auto"
         >
           <DialogHeader>
             <DialogTitle className="text-right text-base">
-              {editingAppointmentId ? "تعديل الحجز / الموعد" : "إضافة حجز يدوي"}
+              {editingAppointmentId ? "تعديل الحجز" : "إضافة حجز يدوي"}
             </DialogTitle>
             <DialogDescription className="text-right">
-              تسجيل حجز مباشر للخدمة المحددة مع بيانات العميل والدفع.
+              {editingAppointmentId
+                ? "تعديل بيانات الحجز وموعده من مكان واحد، مع توضيح سبب التعديل."
+                : "تسجيل حجز مباشر للخدمة المحددة مع بيانات العميل والدفع."}
             </DialogDescription>
           </DialogHeader>
 
@@ -11909,6 +11903,12 @@ function ServiceCalendarBookingsTab() {
               </div>
             )}
             <div className="space-y-1.5 md:col-span-2">
+              <fieldset className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3"
+                data-testid="service-booking-schedule-section">
+                <legend className="px-1 text-xs font-bold text-primary">
+                  {editingAppointmentId ? "الموعد وإعادة الجدولة" : "موعد الحجز"}
+                </legend>
+                <div className="space-y-1.5 sm:col-span-2">
               <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
               {/* Unified Hijri / Gregorian date picker */}
               {form.dateStr && !pickerOpen ? (
@@ -12008,6 +12008,36 @@ function ServiceCalendarBookingsTab() {
                 value={form.startTime}
                 onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))}
                 className="rounded-xl" />
+            </div>
+            {editingAppointmentId && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground">سبب التعديل / إعادة الجدولة *</label>
+                <Select value={form.editReasonType}
+                  onValueChange={(value) => setForm(current => ({
+                    ...current, editReasonType: value, editReason: value === "أخرى" ? "" : value,
+                  }))}>
+                  <SelectTrigger className="rounded-xl bg-background">
+                    <SelectValue placeholder="اختر سبب التعديل" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="طلب العميل">طلب العميل</SelectItem>
+                    <SelectItem value="تعديل تاريخ الحجز">تعديل تاريخ الحجز</SelectItem>
+                    <SelectItem value="تعديل وقت الحجز">تعديل وقت الحجز</SelectItem>
+                    <SelectItem value="تعديل مدة الحجز">تعديل مدة الحجز</SelectItem>
+                    <SelectItem value="ظروف طارئة">ظروف طارئة</SelectItem>
+                    <SelectItem value="صيانة">صيانة</SelectItem>
+                    <SelectItem value="أخرى">أخرى</SelectItem>
+                  </SelectContent>
+                </Select>
+                {form.editReasonType === "أخرى" && (
+                  <Textarea aria-label="اكتب سبب التعديل" value={form.editReason}
+                    onChange={event => setForm(current => ({ ...current, editReason: event.target.value }))}
+                    rows={2} className="rounded-xl resize-none bg-background"
+                    placeholder="اكتب سبب التعديل أو إعادة الجدولة..." />
+                )}
+              </div>
+            )}
+              </fieldset>
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المدة</label>
@@ -12158,46 +12188,6 @@ function ServiceCalendarBookingsTab() {
               </label>
             )}
           </div>
-          {editingAppointmentId && (
-            <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">سبب التعديل / إعادة الجدولة *</label>
-                <Select
-                  value={form.editReasonType}
-                  onValueChange={(value) => setForm((current) => ({
-                    ...current,
-                    editReasonType: value,
-                    editReason: value === "أخرى" ? "" : value,
-                  }))}
-                >
-                  <SelectTrigger className="rounded-xl bg-background">
-                    <SelectValue placeholder="اختر سبب التعديل" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="طلب العميل">طلب العميل</SelectItem>
-                    <SelectItem value="تعديل تاريخ الحجز">تعديل تاريخ الحجز</SelectItem>
-                    <SelectItem value="تعديل مدة الحجز">تعديل مدة الحجز</SelectItem>
-                    <SelectItem value="ظروف طارئة">ظروف طارئة</SelectItem>
-                    <SelectItem value="صيانة">صيانة</SelectItem>
-                    <SelectItem value="أخرى">أخرى</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {form.editReasonType === "أخرى" && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground">اكتب سبب التعديل *</label>
-                  <Textarea
-                    value={form.editReason}
-                    onChange={(event) => setForm((current) => ({ ...current, editReason: event.target.value }))}
-                    rows={2}
-                    className="rounded-xl resize-none bg-background"
-                    placeholder="اكتب سبب التعديل أو إعادة الجدولة..."
-                    autoFocus
-                  />
-                </div>
-              )}
-            </div>
-          )}
           <div className="flex gap-2 justify-end">
             <Button variant="ghost" onClick={closeBookingForm} disabled={saving || receiptUploading} className="rounded-xl">إلغاء</Button>
             <Button onClick={handleSave} disabled={saving || receiptUploading} className="rounded-xl gap-2 bg-amber-500 hover:bg-amber-600 text-white">
@@ -12329,7 +12319,7 @@ function ServiceCalendarBookingsTab() {
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => startEditingAppointment(a)}>
                           <Edit2 className="w-4 h-4" />
-                          تعديل الحجز
+                          تعديل
                         </DropdownMenuItem>
                         {a.status === "pending" && (
                           <DropdownMenuItem
@@ -12339,12 +12329,6 @@ function ServiceCalendarBookingsTab() {
                           >
                             {cancellingId === a.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                             تأكيد الحجز
-                          </DropdownMenuItem>
-                        )}
-                        {a.status !== "cancelled" && (
-                          <DropdownMenuItem onSelect={() => startEditingAppointment(a)}
-                            data-testid={`service-list-reschedule-${a.id}`}>
-                            <Clock className="w-4 h-4" />تعديل الموعد
                           </DropdownMenuItem>
                         )}
                         {a.status !== "cancelled" && (

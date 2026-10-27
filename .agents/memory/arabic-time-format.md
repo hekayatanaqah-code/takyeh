@@ -25,3 +25,10 @@ The legacy Arabic-storage rule above applies to property check-in/out times, not
 **Why:** The user requested changing an individual service appointment's time without deleting its booking. A native time input needs an unambiguous value; that is independent of the established property check-in/out format.
 
 **How to apply:** Keep service times optional and render Eastern digits at the presentation boundary. Do not use this addition as permission to migrate property time strings or impose hourly exclusivity on a daily-capacity service.
+
+## Unified service-booking editing
+Use the primary «تعديل» action as the only entry for editing a service booking. Do not add a separate «تعديل الموعد» action to its card or options menu. Group the date, optional time and required edit reason together inside the general edit dialog.
+
+**Why:** The user explicitly removed the duplicate scheduling action and requested compact, unified editing like the property workflow.
+
+**How to apply:** Preserve the existing rescheduling save, capacity validation and calendar refresh; change the entry point and field organization, not the booking identity or financial values.
