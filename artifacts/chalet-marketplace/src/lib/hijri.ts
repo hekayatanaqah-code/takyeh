@@ -126,6 +126,12 @@ export function toHijri(dateStr: string): string {
   }
 }
 
+/** Intl's Arabic Hijri dates may already include the era suffix. */
+export function withHijriEra(label: string): string {
+  const base = label.replace(/(?:[\s\u200e\u200f\u061c]*هـ)+[\s\u200e\u200f\u061c]*$/u, "").trim();
+  return base ? `${base} هـ` : "";
+}
+
 export function formatDualDate(dateStr: string): { gregorian: string; hijri: string } {
   if (!dateStr) return { gregorian: "", hijri: "" };
   try {

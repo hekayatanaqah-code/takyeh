@@ -86,7 +86,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
-import { formatDateWithHijri, formatDualDate, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
+import { formatDateWithHijri, formatDualDate, withHijriEra, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import { CustomerDate } from "@/components/owner/CustomerDate";
 import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
@@ -11445,7 +11445,7 @@ function ServiceCalendarBookingsTab() {
                   تفاصيل يوم الخدمة
                 </DialogTitle>
                 <DialogDescription className="text-right">
-                  <span className="font-bold text-foreground">{dual.hijri} هـ</span>
+                  <span className="font-bold text-foreground">{withHijriEra(dual.hijri)}</span>
                   <span className="mx-2">—</span>
                   <span>{dual.gregorian} م</span>
                 </DialogDescription>
@@ -11814,7 +11814,7 @@ function ServiceCalendarBookingsTab() {
             </div>
             {form.dateStr ? (
               <p className="text-xs text-muted-foreground font-medium pr-7">
-                📅 {formatDualDate(form.dateStr).hijri} هـ
+                📅 {withHijriEra(formatDualDate(form.dateStr).hijri)}
                 <span className="text-muted-foreground/60 mr-2">({formatDualDate(form.dateStr).gregorian} م)</span>
               </p>
             ) : (
@@ -11915,7 +11915,7 @@ function ServiceCalendarBookingsTab() {
               {form.dateStr && !pickerOpen ? (
                 <div className="flex items-center gap-3 bg-primary/5 border border-primary/30 rounded-xl px-4 py-2.5">
                   <div className="flex-1">
-                    <p className="font-bold text-primary text-sm">{formatDualDate(form.dateStr).hijri} هـ</p>
+                    <p className="font-bold text-primary text-sm">{withHijriEra(formatDualDate(form.dateStr).hijri)}</p>
                     <p className="text-xs text-muted-foreground">{formatDualDate(form.dateStr).gregorian} م</p>
                   </div>
                   <button type="button" onClick={() => { setPickerOpen(true); const [y,m] = form.dateStr.split("-").map(Number); setPickYear(y); setPickMonth(m - 1); }}
@@ -12245,7 +12245,7 @@ function ServiceCalendarBookingsTab() {
                     {a.notes && <p className="text-[11px] text-muted-foreground mt-1 truncate">{a.notes}</p>}
                   </div>
                   <div>
-                    <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
+                    <p className="text-xs text-primary font-semibold">{withHijriEra(dual.hijri)}</p>
                     <p className="text-xs text-muted-foreground">{dual.gregorian} م</p>
                     {a.startTime && <p className="text-xs text-foreground mt-0.5">الوقت: <bdi>{toAr(a.startTime)}</bdi></p>}
                     {a.duration && <p className="text-[11px] text-muted-foreground mt-0.5">{serviceDurationLabel(a.duration, a.durationUnit)}</p>}
@@ -12866,7 +12866,7 @@ function ServiceBookingInsurancesTab() {
                       <span className="font-bold text-foreground">{a.clientName}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${meta.cls}`}>{meta.label}</span>
                     </div>
-                    <p className="text-xs text-primary font-semibold">{dual.hijri} هـ</p>
+                    <p className="text-xs text-primary font-semibold">{withHijriEra(dual.hijri)}</p>
                     <p className="text-xs text-muted-foreground">{dual.gregorian} م{a.duration ? ` · ${a.duration}` : ""}</p>
                     <div className="flex gap-3 mt-1.5 text-xs flex-wrap">
                       <span className="font-bold text-blue-700 dark:text-blue-300">تأمين: {insAmt.toLocaleString()} ر.س</span>

@@ -21,9 +21,9 @@ function render(overrides: Partial<ServiceBookingScheduleFieldsProps> = {}) {
 it("always displays the same minute-precision time field in creation and editing", () => {
   for (const editing of [false, true]) {
     const html = render({ editing, time: "13:45" });
-    assert.equal((html.match(/type="time"/g) ?? []).length, 1);
+    assert.equal((html.match(/data-testid="service-booking-time"/g) ?? []).length, 1);
+    assert(!html.includes('type="time"'));
     assert(html.includes('value="13:45"'));
-    assert(html.includes('step="60"'));
     assert(html.includes(">الوقت</label>"));
     assert(html.includes("بتوقيت السعودية"));
     assert(html.includes("١:٤٥ م"));
@@ -51,14 +51,14 @@ it("uses unique associated time labels when multiple booking forms are mounted",
     React.createElement(ServiceBookingScheduleFields, props()),
     React.createElement(ServiceBookingScheduleFields, props({ editing: true })),
   ));
-  const inputIds = [...html.matchAll(/<input[^>]*\sid="([^"]+-time)"/g)].map(match => match[1]);
+  const inputIds = [...html.matchAll(/<button[^>]*\sid="([^"]+-time)"/g)].map(match => match[1]);
   assert.equal(inputIds.length, 2);
   assert.equal(new Set(inputIds).size, 2);
   for (const id of inputIds) assert(html.includes(`for="${id}"`));
 });
 it("preserves midnight, noon and minute precision without timezone conversion", () => {
   for (const [time, arabic] of [
-    ["00:00", "١٢ ص"], ["12:00", "١٢ م"], ["23:59", "١١:٥٩ م"], ["09:05", "٩:٠٥ ص"],
+    ["00:00", "١٢:٠٠ ص"], ["12:00", "١٢:٠٠ م"], ["23:59", "١١:٥٩ م"], ["09:05", "٩:٠٥ ص"],
   ]) {
     const html = render({ editing: true, time });
     assert(html.includes(`value="${time}"`));

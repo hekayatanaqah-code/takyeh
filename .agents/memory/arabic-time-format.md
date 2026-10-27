@@ -32,3 +32,10 @@ Use the primary «تعديل» action as the only entry for editing a service bo
 **Why:** The user explicitly removed the duplicate scheduling action and requested compact, unified editing like the property workflow.
 
 **How to apply:** Preserve the existing rescheduling save, capacity validation and calendar refresh; change the entry point and field organization, not the booking identity or financial values. The user explicitly scoped this unification to service bookings only, not properties. Creation and editing must show the same optional Saudi-local time field, without assigning a default time to historical bookings.
+
+## Service time-picker presentation
+Offer separate hour, minute and AM/PM selections with a provider-selectable 12/24-hour display preference. The preference changes presentation only, never the stored Saudi-local time. Time selection remains a draft until explicit confirmation; cancellation must preserve the saved time.
+
+**Why:** The user requested a consistent, organized picker instead of the overlapping browser-native controls, with an optional 12/24-hour choice.
+
+**How to apply:** Preserve all 60 minutes and correct noon/midnight conversions. Keep the browser's display preference separate from booking data and avoid timezone conversion. Arabic Intl Hijri dates may already contain «هـ»; normalize the era before adding it to service-booking labels.
