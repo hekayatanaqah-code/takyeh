@@ -330,10 +330,14 @@ it("requires a reason, scopes objections to their owner, and lets administration
     assert.equal((await request(decisionPath, admin.sessionId, decide("keep"))).response.status, 200);
     const [kept] = await db.select().from(serviceReviewsTable).where(eq(serviceReviewsTable.id, serviceReview.id));
     assert.equal(kept.reportedAt, null);
+    const serviceNotices = await db.select().from(ownerNotificationsTable).where(eq(ownerNotificationsTable.ownerId, owner.ownerId));
+    assert.equal(serviceNotices.length, 1);
+    assert(serviceNotices[0].message.includes("إبقاء التقييم"));
     assert.equal((await request(decisionPath, admin.sessionId, decide("delete"))).response.status, 409);
     assert.equal((await request(path, owner.sessionId, post("اعتراض جديد"))).response.status, 200);
     assert.equal((await request(decisionPath, admin.sessionId, decide("delete"))).response.status, 200);
     assert.equal((await db.select().from(serviceReviewsTable).where(eq(serviceReviewsTable.id, serviceReview.id))).length, 0);
+    assert.equal((await db.select().from(ownerNotificationsTable).where(eq(ownerNotificationsTable.ownerId, owner.ownerId))).length, 1);
     const chaletId = await createChalet(owner.ownerId);
     const [propertyReview] = await db.insert(reviewsTable).values({ chaletId, rating: 1, comment: "تقييم عقار" }).returning();
     reviewIds.push(propertyReview.id);
@@ -341,11 +345,15 @@ it("requires a reason, scopes objections to their owner, and lets administration
     assert.equal((await request(propertyPath, owner.sessionId, post(""))).response.status, 400);
     assert.equal((await request(propertyPath, owner.sessionId, post("تقييم غير منصف"))).response.status, 200);
     assert.equal((await request(`/admin/reviews/${propertyReview.id}/dismiss-report`, admin.sessionId, { method: "POST" })).response.status, 200);
+    assert.equal((await db.select().from(ownerNotificationsTable).where(eq(ownerNotificationsTable.ownerId, owner.ownerId))).length, 2);
     assert.equal((await request(propertyPath, owner.sessionId, post("طلب مراجعة"))).response.status, 200);
     assert.equal((await request(`/admin/reviews/${propertyReview.id}`, admin.sessionId, { method: "DELETE" })).response.status, 200);
     const notices = await db.select().from(ownerNotificationsTable).where(eq(ownerNotificationsTable.ownerId, owner.ownerId));
-    assert(notices.some(n => n.message.includes("حذف التقييم")));
-    assert(notices.some(n => n.message.includes("إبقاء التقييم")));
+    // The property's prior keep-notice is linked to the deleted review and
+    // follows its existing cascade; deletion must not create a replacement.
+    assert.equal(notices.length, 1);
+    assert(notices.every(n => n.message.includes("إبقاء التقييم")));
+    assert(!notices.some(n => n.message.includes("حذف التقييم")));
   } finally {
     if (previousAdmin === undefined) delete process.env.ADMIN_USER_ID;
     else process.env.ADMIN_USER_ID = previousAdmin;

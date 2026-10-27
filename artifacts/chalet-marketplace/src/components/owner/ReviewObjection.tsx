@@ -1,14 +1,15 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
 /** The caller supplies its existing owner-authenticated transport and scope. */
-export function ReviewObjection({ endpoint, reportedAt, refreshKey, request }: {
+export function ReviewObjection({ endpoint, reportedAt, refreshKey, request, replyAction }: {
   endpoint: string;
   reportedAt?: string | null;
   refreshKey: readonly unknown[];
   request: (url: string, options: RequestInit) => Promise<Response>;
+  replyAction?: ReactNode;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -27,12 +28,19 @@ export function ReviewObjection({ endpoint, reportedAt, refreshKey, request }: {
       setReason("");
     },
   });
-  if (reportedAt) return (
-    <p role="status" className="text-xs text-amber-700 dark:text-amber-400">اعتراضك قيد مراجعة الإدارة</p>
-  );
   return (
     <div className="space-y-2">
-      {!open ? <Button variant="outline" size="sm" onClick={() => { mutation.reset(); setOpen(true); }}>اعتراض على التقييم</Button> : (
+      <div className="flex flex-nowrap items-center gap-2 [&>button]:min-w-0 [&>button]:px-2 [&>button]:text-xs sm:[&>button]:px-3 sm:[&>button]:text-sm"
+        data-testid="review-action-row">
+        {replyAction}
+        {reportedAt ? (
+          <p role="status" className="text-xs text-amber-700 dark:text-amber-400">اعتراضك قيد مراجعة الإدارة</p>
+        ) : (
+          <Button variant="outline" size="sm" aria-expanded={open} disabled={mutation.isPending}
+            onClick={() => { mutation.reset(); setOpen(value => !value); }}>اعتراض على التقييم</Button>
+        )}
+      </div>
+      {open && !reportedAt && (
         <div className="rounded-xl border border-amber-300 p-3 space-y-2">
           <label className="text-sm font-semibold">سبب الاعتراض على التقييم</label>
           <p className="text-xs text-muted-foreground">وضح سبب عدم إنصاف التقييم أو مخالفته. يبقى منشورًا حتى تراجعه الإدارة وتقرر حذفه أو إبقاءه.</p>

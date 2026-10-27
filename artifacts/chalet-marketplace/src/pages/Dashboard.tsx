@@ -21976,11 +21976,12 @@ function ServiceReviewsTab() {
                     <Button size="sm" disabled={!replyDraft[review.id]?.trim() || reply.isPending} onClick={() => reply.mutate({ reviewId: review.id, text: replyDraft[review.id] })}>حفظ الرد</Button>
                   </div>
                 </div>
-              ) : (
-                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setReplyingId(review.id)}>الرد على التقييم</Button>
-              )}
+              ) : null}
               <ReviewObjection endpoint={`/providers/my/approved/${providerId}/reviews/${review.id}/report`}
-                reportedAt={review.reportedAt} request={apiFetch} refreshKey={["service-reviews", providerId]} />
+                reportedAt={review.reportedAt} request={apiFetch} refreshKey={["service-reviews", providerId]}
+                replyAction={!review.ownerReply && replyingId !== review.id ? (
+                  <Button variant="outline" size="sm" onClick={() => setReplyingId(review.id)}>الرد على التقييم</Button>
+                ) : null} />
             </div>
           ))}
         </div>
@@ -22537,12 +22538,6 @@ function ReviewsTab() {
                       <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 space-y-1">
                         <p className="text-xs font-semibold text-green-700 dark:text-green-400">ردك على التقييم</p>
                         <p className="text-sm text-foreground leading-relaxed">{rev.ownerReply}</p>
-                        <button
-                          onClick={() => { setReplyingId(rev.id); setReplyDraft((p) => ({ ...p, [rev.id]: rev.ownerReply ?? "" })); }}
-                          className="text-xs text-muted-foreground hover:text-primary underline-offset-2 hover:underline"
-                        >
-                          تعديل الرد
-                        </button>
                       </div>
                     )}
 
@@ -22571,18 +22566,16 @@ function ReviewsTab() {
                           <Button size="sm" variant="outline" onClick={() => setReplyingId(null)}>إلغاء</Button>
                         </div>
                       </div>
-                    ) : !rev.ownerReply ? (
-                      <button
-                        onClick={() => setReplyingId(rev.id)}
-                        className="flex items-center gap-1.5 text-sm text-primary hover:underline underline-offset-2 font-medium"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        الرد على هذا التقييم
-                      </button>
                     ) : null}
 
                     <ReviewObjection endpoint={`/owner/reviews/${rev.id}/report`}
-                      reportedAt={rev.reportedAt} request={apiFetch} refreshKey={["owner", "reviews"]} />
+                      reportedAt={rev.reportedAt} request={apiFetch} refreshKey={["owner", "reviews"]}
+                      replyAction={replyingId !== rev.id ? (
+                        <Button variant="outline" size="sm"
+                          onClick={() => { setReplyingId(rev.id); setReplyDraft(p => ({ ...p, [rev.id]: rev.ownerReply ?? "" })); }}>
+                          {rev.ownerReply ? "تعديل الرد" : "الرد على التقييم"}
+                        </Button>
+                      ) : null} />
                   </div>
                 ))}
               </div>

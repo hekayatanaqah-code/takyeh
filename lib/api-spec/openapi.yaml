@@ -84,7 +84,7 @@ paths:
                 decision: { type: string, enum: [keep, delete] }
       responses:
         "200":
-          description: Decision applied and owner notified
+          description: Decision applied; the owner is notified only when the review is kept
         "409":
           description: Objection no longer pending
   /providers/my/approved/{providerId}/catalog-media:

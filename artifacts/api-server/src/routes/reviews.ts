@@ -53,9 +53,9 @@ router.post("/admin/service-reviews/:id/decision", requireAdminOrAdminStaff, req
       await tx.update(serviceReviewsTable).set({ reportedAt: null, reportedBy: null, reportReason: null })
         .where(eq(serviceReviewsTable.id, id));
     }
-    if (review.reportedBy) await tx.insert(ownerNotificationsTable).values({
+    if (body.data.decision === "keep" && review.reportedBy) await tx.insert(ownerNotificationsTable).values({
       ownerId: review.reportedBy, type: "review_dispute_decision",
-      message: `راجعت الإدارة اعتراضك على تقييم "${provider?.name ?? "الخدمة"}" وقررت ${body.data.decision === "delete" ? "حذف التقييم" : "إبقاء التقييم"}.`,
+      message: `راجعت الإدارة اعتراضك على تقييم "${provider?.name ?? "الخدمة"}" وقررت إبقاء التقييم.`,
     });
     return true;
   });
@@ -429,13 +429,6 @@ router.delete("/admin/reviews/:id", requireAdminOrAdminStaff, requireSupportDisp
   const deleted = await db.transaction(async tx => {
     const [review] = await tx.select().from(reviewsTable).where(eq(reviewsTable.id, reviewId)).for("update");
     if (!review) return false;
-    if (review.reportedBy) {
-      const [chalet] = await tx.select({ name: chaletsTable.nameAr }).from(chaletsTable).where(eq(chaletsTable.id, review.chaletId));
-      await tx.insert(ownerNotificationsTable).values({
-        ownerId: review.reportedBy, type: "review_dispute_decision", chaletId: review.chaletId,
-        message: `راجعت الإدارة اعتراضك على تقييم "${chalet?.name ?? "العقار"}" وقررت حذف التقييم.`,
-      });
-    }
     await tx.delete(reviewsTable).where(eq(reviewsTable.id, reviewId));
     return true;
   });
