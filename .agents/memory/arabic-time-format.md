@@ -39,3 +39,10 @@ Offer separate hour, minute and AM/PM selections with a provider-selectable 12/2
 **Why:** The user requested a consistent, organized picker instead of the overlapping browser-native controls, with an optional 12/24-hour choice.
 
 **How to apply:** Preserve all 60 minutes and correct noon/midnight conversions. Keep the browser's display preference separate from booking data and avoid timezone conversion. Arabic Intl Hijri dates may already contain «هـ»; normalize the era before adding it to service-booking labels.
+
+## Approved time-picker design
+التنسيق الحالي لمنتقي وقت الخدمات معتمد نهائيًا بالكامل، بما فيه نص التوقيت المصغّر والمتناسق مع بقية حقول نافذة التعديل.
+
+**Why:** المستخدم أكد أن التنسيق أصبح مرتبًا واحترافيًا وطلب اعتماده نهائيًا.
+
+**How to apply:** حافظ على هذا التنسيق أثناء التحديثات الوظيفية، ولا تُعِد تكبير نص التوقيت أو تصميم المنتقي دون طلب جديد من المستخدم.
