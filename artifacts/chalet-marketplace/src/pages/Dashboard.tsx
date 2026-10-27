@@ -45,6 +45,7 @@ import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard"
 import { ServiceManagementNavigation } from "@/components/owner/ServiceManagementNavigation";
 import { ServiceCatalogPanel, ServiceOffersPanel } from "@/components/owner/ServiceCatalogPanels";
 import { ReviewObjection } from "@/components/owner/ReviewObjection";
+import { ServiceBookingScheduleFields } from "@/components/owner/ServiceBookingScheduleFields";
 import { hasServiceInsurance, serviceDashboardTabs } from "@/lib/serviceDashboardTabs";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
 import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport } from "@/lib/financialReportActivity";
@@ -11902,14 +11903,14 @@ function ServiceCalendarBookingsTab() {
                 <p className="text-[11px] text-muted-foreground">يظهر هذا الحقل لأن التأمين المسترد مفعّل لهذه الخدمة.</p>
               </div>
             )}
-            <div className="space-y-1.5 md:col-span-2">
-              <fieldset className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3"
-                data-testid="service-booking-schedule-section">
-                <legend className="px-1 text-xs font-bold text-primary">
-                  {editingAppointmentId ? "الموعد وإعادة الجدولة" : "موعد الحجز"}
-                </legend>
-                <div className="space-y-1.5 sm:col-span-2">
-              <label className="text-xs font-semibold text-muted-foreground">تاريخ الخدمة *</label>
+            <ServiceBookingScheduleFields editing={!!editingAppointmentId}
+              time={form.startTime}
+              onTimeChange={value => setForm(current => ({ ...current, startTime: value }))}
+              reasonType={form.editReasonType} reason={form.editReason}
+              onReasonTypeChange={value => setForm(current => ({
+                ...current, editReasonType: value, editReason: value === "أخرى" ? "" : value,
+              }))}
+              onReasonChange={value => setForm(current => ({ ...current, editReason: value }))}>
               {/* Unified Hijri / Gregorian date picker */}
               {form.dateStr && !pickerOpen ? (
                 <div className="flex items-center gap-3 bg-primary/5 border border-primary/30 rounded-xl px-4 py-2.5">
@@ -12001,44 +12002,7 @@ function ServiceCalendarBookingsTab() {
                   </div>
                 </div>
               )}
-            </div>
-            <div className="space-y-1.5">
-              <label htmlFor="service-appointment-time" className="text-xs font-semibold text-muted-foreground">وقت الموعد (اختياري — بتوقيت السعودية)</label>
-              <Input id="service-appointment-time" type="time" dir="ltr"
-                value={form.startTime}
-                onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))}
-                className="rounded-xl" />
-            </div>
-            {editingAppointmentId && (
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-muted-foreground">سبب التعديل / إعادة الجدولة *</label>
-                <Select value={form.editReasonType}
-                  onValueChange={(value) => setForm(current => ({
-                    ...current, editReasonType: value, editReason: value === "أخرى" ? "" : value,
-                  }))}>
-                  <SelectTrigger className="rounded-xl bg-background">
-                    <SelectValue placeholder="اختر سبب التعديل" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="طلب العميل">طلب العميل</SelectItem>
-                    <SelectItem value="تعديل تاريخ الحجز">تعديل تاريخ الحجز</SelectItem>
-                    <SelectItem value="تعديل وقت الحجز">تعديل وقت الحجز</SelectItem>
-                    <SelectItem value="تعديل مدة الحجز">تعديل مدة الحجز</SelectItem>
-                    <SelectItem value="ظروف طارئة">ظروف طارئة</SelectItem>
-                    <SelectItem value="صيانة">صيانة</SelectItem>
-                    <SelectItem value="أخرى">أخرى</SelectItem>
-                  </SelectContent>
-                </Select>
-                {form.editReasonType === "أخرى" && (
-                  <Textarea aria-label="اكتب سبب التعديل" value={form.editReason}
-                    onChange={event => setForm(current => ({ ...current, editReason: event.target.value }))}
-                    rows={2} className="rounded-xl resize-none bg-background"
-                    placeholder="اكتب سبب التعديل أو إعادة الجدولة..." />
-                )}
-              </div>
-            )}
-              </fieldset>
-            </div>
+            </ServiceBookingScheduleFields>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground">المدة</label>
               <div className="grid grid-cols-[1fr_7rem] gap-2">

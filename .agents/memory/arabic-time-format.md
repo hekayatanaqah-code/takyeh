@@ -31,4 +31,4 @@ Use the primary «تعديل» action as the only entry for editing a service bo
 
 **Why:** The user explicitly removed the duplicate scheduling action and requested compact, unified editing like the property workflow.
 
-**How to apply:** Preserve the existing rescheduling save, capacity validation and calendar refresh; change the entry point and field organization, not the booking identity or financial values.
+**How to apply:** Preserve the existing rescheduling save, capacity validation and calendar refresh; change the entry point and field organization, not the booking identity or financial values. The user explicitly scoped this unification to service bookings only, not properties. Creation and editing must show the same optional Saudi-local time field, without assigning a default time to historical bookings.
