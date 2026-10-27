@@ -206,7 +206,7 @@ export function ServiceTimePicker({ id, value, onChange, describedBy, defaultOpe
           data-testid="panel-service-time"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-2xl font-bold tabular-nums text-primary" dir="ltr" aria-live="polite" data-testid="text-time-draft">
+            <span className="text-sm font-semibold tabular-nums text-primary" dir="ltr" aria-live="polite" data-testid="text-time-draft">
               {displayTime(formatCanonical(draft.h, draft.m), format)}
             </span>
             <div role="radiogroup" aria-label="نظام الساعة" className="flex rounded-lg bg-muted p-0.5 text-xs"
