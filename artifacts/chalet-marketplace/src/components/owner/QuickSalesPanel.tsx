@@ -203,7 +203,7 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
           </div>
         ) : !enabled ? (
           <div className="rounded-xl border border-dashed border-border bg-secondary/30 p-4 text-sm text-muted-foreground flex gap-2" data-testid="status-quick-sales-disabled">
-            <Lock className="w-4 h-4 shrink-0 mt-0.5" />تسجيل مبيعات جديدة موقوف. فعّل «البيع السريع» من الإعدادات، والسجل أدناه يبقى متاحًا.
+            <Lock className="w-4 h-4 shrink-0 mt-0.5" />تسجيل مبيعات جديدة موقوف. فعّل «البيع السريع» من «بيانات النشاط»، والسجل أدناه يبقى متاحًا.
           </div>
         ) : (
           <form className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-4" onSubmit={e => { e.preventDefault(); submit(); }} data-testid="form-quick-sale">

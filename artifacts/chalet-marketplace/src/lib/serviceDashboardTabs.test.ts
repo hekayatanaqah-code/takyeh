@@ -3,9 +3,20 @@ import { it } from "node:test";
 import { hasServiceInsurance, serviceDashboardTabs } from "./serviceDashboardTabs";
 
 it("restores the complete service navigation even for all activities", () => {
-  const ids = serviceDashboardTabs([]).map(v => v.id);
+  const ids = serviceDashboardTabs([], true).map(v => v.id);
   for (const id of ["details", "catalog", "seasons", "offers", "reviews", "calendar", "quickSales", "customers", "messages"] as const) {
     assert.ok(ids.includes(id), id);
+  }
+});
+it("shows quick sales only when the account setting is enabled in individual and all-activity navigation", () => {
+  for (const providers of [[], [{ requiresContract: true, requiresInsurance: true, insuranceAmount: "100" }]]) {
+    const disabled = serviceDashboardTabs(providers, false);
+    const enabled = serviceDashboardTabs(providers, true);
+    assert.equal(serviceDashboardTabs(providers).some(tab => tab.id === "quickSales"), false);
+    assert.equal(disabled.some(tab => tab.id === "quickSales"), false);
+    assert.equal(enabled.filter(tab => tab.id === "quickSales").length, 1);
+    assert.deepEqual(enabled.filter(tab => tab.id !== "quickSales"), disabled);
+    assert.ok(disabled.some(tab => tab.id === "details"), "settings remain reachable when quick sales is disabled");
   }
 });
 it("insurance needs enabled insurance and a finite positive amount", () => {

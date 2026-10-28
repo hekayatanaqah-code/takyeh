@@ -51,7 +51,7 @@ import { ServiceCatalogPanel, ServiceOffersPanel } from "@/components/owner/Serv
 import { QuickSalesPanel } from "@/components/owner/QuickSalesPanel";
 import { QuickSalesSettingsPanel } from "@/components/owner/QuickSalesSettingsPanel";
 import { QuickSalesRevenueDetails, RevenueSourceFilter } from "@/components/owner/QuickSalesRevenue";
-import { useListQuickSales } from "@workspace/api-client-react";
+import { useListQuickSales, useGetQuickSalesSettings } from "@workspace/api-client-react";
 import { quickSalesForPeriod, quickSalesTotal, type RevenueSource } from "@/lib/quickSalesRevenue";
 import { ReviewObjection } from "@/components/owner/ReviewObjection";
 import { ServiceBookingScheduleFields } from "@/components/owner/ServiceBookingScheduleFields";
@@ -9965,6 +9965,7 @@ function ServiceDetailsTab() {
       <ServiceDetailsStickySave businessName={form.businessName} saving={saving} uploading={uploadingLogo || uploadingGallery || uploadingVideo}
         readOnly={isReadOnly} onSave={() => { if (uploadingLogo || uploadingGallery || uploadingVideo) return; void handleSave(); }} />
       {bannerBlock}
+      <QuickSalesSettingsPanel readOnly={isReadOnly} />
       <ServiceActivityDetailsSection id="basic" index={1} title="المعلومات الأساسية والتأمين"
         hint="الاسم والتواصل والمدينة والوصف والخبرة والتأمين المسترد وإعداد العقود"
         open={openSections.basic} onOpenChange={toggleSection("basic")}>
@@ -25491,6 +25492,13 @@ export default function Dashboard() {
         : "both";
   const canSeeChalets  = businessType === "chalet" || businessType === "both";
   const canSeeServices = businessType === "service" || businessType === "both";
+  const quickSalesSettings = useGetQuickSalesSettings({ query: {
+    enabled: isAuthenticated && canSeeServices,
+    staleTime: 30_000,
+    refetchOnMount: "always",
+    refetchInterval: 30_000,
+  } });
+  const quickSalesEnabled = quickSalesSettings.data?.enabled === true;
 
   /* ── Submissions: use apiFetch (credentials: include) + wait for auth ── */
   const { data: submissions, isLoading: submissionsLoading, isError: submissionsError, refetch: retrySubmissions } = useQuery<any[]>({
@@ -25752,10 +25760,10 @@ export default function Dashboard() {
     const scoped = selectedFinanceUnit.type === "all"
       ? myApprovedProviders
       : myApprovedProviders.filter(item => item.id === selectedServiceId);
-    if (!serviceDashboardTabs(scoped).some(tab => tab.id === selectedServiceTab)) {
+    if (!serviceDashboardTabs(scoped, quickSalesEnabled).some(tab => tab.id === selectedServiceTab)) {
       setSelectedServiceTab("details");
     }
-  }, [selectedServiceId, selectedServiceTab, myApprovedProviders, selectedFinanceUnit.type, providersLoading, providersError]);
+  }, [selectedServiceId, selectedServiceTab, myApprovedProviders, selectedFinanceUnit.type, providersLoading, providersError, quickSalesEnabled]);
 
   /* One activity scope for every section; preserve all rather than auto-picking a property. */
   useEffect(() => {
@@ -26547,7 +26555,7 @@ export default function Dashboard() {
                 {/* ── Service ERP Dashboard ─────────────────────────── */}
                 {selectedFinanceUnit.type === "all" && (
                   <div className="space-y-5">
-                    <ServiceManagementNavigation providers={myApprovedProviders} value={selectedServiceTab} onChange={setSelectedServiceTab} />
+                    <ServiceManagementNavigation providers={myApprovedProviders} value={selectedServiceTab} onChange={setSelectedServiceTab} quickSalesEnabled={quickSalesEnabled} />
                     {myApprovedProviders.filter(provider =>
                       selectedServiceTab === "insurance" ? hasServiceInsurance(provider) :
                       selectedServiceTab === "digitalContracts" ? provider.requiresContract : true,
@@ -26617,7 +26625,7 @@ export default function Dashboard() {
                       </div>
 
                       {/* ERP Tab bar */}
-                      <ServiceManagementNavigation providers={[selectedProvider]} value={selectedServiceTab} onChange={setSelectedServiceTab} />
+                      <ServiceManagementNavigation providers={[selectedProvider]} value={selectedServiceTab} onChange={setSelectedServiceTab} quickSalesEnabled={quickSalesEnabled} />
 
                       {/* ERP Tab Content — core operations only */}
                       <div className="min-h-[300px]">

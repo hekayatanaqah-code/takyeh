@@ -31,7 +31,7 @@ export function QuickSalesSettingsPanel({ readOnly = false }: { readOnly?: boole
       onSuccess: (s) => {
         qc.setQueryData(getGetQuickSalesSettingsQueryKey(), s);
         qc.invalidateQueries({ queryKey: getGetQuickSalesSettingsQueryKey() });
-        toast({ title: s.enabled ? "تم تفعيل البيع السريع" : "تم إيقاف البيع السريع", description: s.enabled ? undefined : "السجل السابق محفوظ ويظهر كما هو." });
+        toast({ title: s.enabled ? "تم تفعيل البيع السريع" : "تم إيقاف البيع السريع", description: s.enabled ? "ظهر تبويب «المبيعات المفردة» في إدارة الخدمة." : "أُخفي التبويب، والسجل السابق محفوظ والإيرادات السابقة تبقى محتسبة." });
       },
       onError: (e) => toast({ title: "لم يتم الحفظ", description: qsErrText(e), variant: "destructive" }),
     });
@@ -42,7 +42,7 @@ export function QuickSalesSettingsPanel({ readOnly = false }: { readOnly?: boole
       <header className="flex items-center gap-3 px-4 sm:px-5 py-4 border-b border-border bg-secondary/40">
         <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><Zap className="w-5 h-5" /></div>
         <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-base">البيع السريع</h3>
+          <h3 className="font-bold text-base">البيع السريع (المبيعات المفردة)</h3>
           <p className="text-xs text-muted-foreground">تسجيل مبيعات الكاونتر المباشرة بعيدًا عن الحجوزات والمناسبات</p>
         </div>
       </header>
@@ -66,8 +66,9 @@ export function QuickSalesSettingsPanel({ readOnly = false }: { readOnly?: boole
           <label className={cn("flex items-center justify-between gap-4 rounded-xl border px-4 py-3.5 transition-colors",
             enabled ? "border-primary/30 bg-primary/5" : "border-border bg-secondary/30", !readOnly && "cursor-pointer")}>
             <div>
-              <p className="font-semibold text-sm" data-testid="text-quick-sales-status">{enabled ? "مفعّل لكل أنشطتك" : "غير مفعّل"}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">الإعداد على مستوى الحساب ويشمل كل أنشطة الخدمات المعتمدة.</p>
+              <p className="font-semibold text-sm">تفعيل البيع السريع</p>
+              <p className="text-xs font-medium mt-1" data-testid="text-quick-sales-status">{upd.isPending ? "جارٍ حفظ الإعداد…" : enabled ? "مفعّل — التبويب ظاهر" : "موقوف — التبويب مخفي"}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">يُحفظ تلقائيًا ويشمل كل أنشطة الخدمات المعتمدة في حسابك.</p>
             </div>
             <Switch checked={enabled} disabled={readOnly || upd.isPending} onCheckedChange={toggle}
               aria-label="تفعيل البيع السريع" data-testid="switch-quick-sales-enabled" />
@@ -79,7 +80,7 @@ export function QuickSalesSettingsPanel({ readOnly = false }: { readOnly?: boole
             <li>تسجّل أنت البيعة بعد استلام المبلغ كاملًا نقدًا أو تحويلًا — لا يوجد دفع إلكتروني للعميل.</li>
             <li>التصنيف (نقد/تحويل) للحسابات فقط، ولا تنقل المنصة أي أموال.</li>
             <li>لا عقد ولا تأمين ولا حجز في التقويم.</li>
-            <li>عند الإيقاف يتوقف تسجيل مبيعات جديدة فقط، ويبقى السجل السابق ظاهرًا ومحتسبًا.</li>
+            <li>عند الإيقاف يُخفى تبويب المبيعات المفردة ويتوقف تسجيل مبيعات جديدة. السجل السابق محفوظ والإيرادات السابقة تبقى محتسبة؛ أعد التفعيل لعرض السجل.</li>
           </ul>
         </div>
       </div>
