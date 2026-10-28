@@ -10,10 +10,11 @@ import { customerHistorySearch } from "@/lib/customerHistoryFilters";
 import { fromAr, toAr } from "@/lib/utils";
 import { CustomerDate } from "./CustomerDate";
 import type { CustomerCalendar } from "@/lib/customerPresentation";
+import { customerHistoryTabs, resolveCustomerHistoryTab, type CustomerHistoryTab } from "@/lib/customerHistoryTabs";
+import type { ServiceCapabilities } from "@/lib/serviceDashboardTabs";
 
-type HistoryTab = "bookings" | "contracts" | "insurance";
 type HistoryStatus = "all" | "active" | "completed" | "cancelled";
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+const BASE = (import.meta.env?.BASE_URL ?? "/").replace(/\/$/, "");
 const PERIODS: Record<string, string> = { morning: "صباحي", evening: "مسائي", full_day: "يومي كامل", fullday: "يومي كامل" };
 
 function bookingStatus(row: CrmHistoryRecord) {
@@ -32,9 +33,28 @@ export function CustomerHistory({ profile, providerId, calendar, onCalendarChang
   profile: CrmCustomerSummary; providerId?: number;
   calendar: CustomerCalendar; onCalendarChange: (calendar: CustomerCalendar) => void;
 }) {
-  const [tab, setTab] = useState<HistoryTab>("bookings");
+  const [requestedTab, setTab] = useState<CustomerHistoryTab>("bookings");
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({ status: "all" as HistoryStatus, period: "all" as "all" | "this-month" | "last-month", search: "", page: 1 });
+  const service = useQuery<ServiceCapabilities>({
+    queryKey: ["service-provider-detail", providerId],
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`${BASE}/api/providers/${providerId}`, { signal, credentials: "include" });
+      if (!response.ok) throw new Error("تعذّر تحميل إعدادات الخدمة");
+      return response.json();
+    },
+    enabled: !!providerId,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: "always",
+  });
+  const tabs = customerHistoryTabs(profile, providerId, service.isError ? undefined : service.data);
+  const tab = resolveCustomerHistoryTab(requestedTab, tabs);
+  useEffect(() => {
+    if (requestedTab !== tab) {
+      setTab(tab);
+      setFilters(previous => ({ ...previous, page: 1 }));
+    }
+  }, [requestedTab, tab]);
   useEffect(() => {
     const timer = setTimeout(() => {
       setFilters(previous => previous.search === search ? previous : { ...previous, search, page: 1 });
@@ -44,7 +64,7 @@ export function CustomerHistory({ profile, providerId, calendar, onCalendarChang
   const range = archiveDateRange({ ...EMPTY_ARCHIVE_FILTERS, period: filters.period }, Date.now(), calendar);
   const params: GetOwnerCrmHistoryParams = {
     phone: profile.clientPhone, providerId, tab, status: filters.status,
-    page: filters.page, search: customerHistorySearch(filters.search) || undefined, ...range,
+    page: requestedTab === tab ? filters.page : 1, search: customerHistorySearch(filters.search) || undefined, ...range,
   };
   const history = useQuery({
     queryKey: ["owner", "crm-history", params],
@@ -54,11 +74,6 @@ export function CustomerHistory({ profile, providerId, calendar, onCalendarChang
   });
   const data = history.data;
   const busy = history.isFetching || filters.search !== search;
-  const tabs = [
-    { id: "bookings", label: "سجل الحجوزات", count: profile.totalBookings },
-    { id: "contracts", label: "العقود الرقمية", count: profile.contractCount },
-    { id: "insurance", label: "سجل التأمينات", count: profile.insuranceCount },
-  ] as const;
   const resetPage = () => setFilters(previous => ({ ...previous, page: 1 }));
   const timestampDay = (value: string) => new Date(value).toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" });
   return <section className="bg-card border border-border rounded-2xl overflow-hidden" aria-label="سجلات العميل" data-testid="customer-history">

@@ -26,3 +26,9 @@ The owner approved the existing customer-profile histories. The main right-hand 
 **Why:** The owner explicitly approved the prior profile changes and requested these rules for the main directory only.
 
 **How to apply:** Search and sort the entire authorized directory before paging, reset to page one when criteria change, and preserve the selected profile and note draft while paging or filtering.
+
+Inside service customer profiles, «العقود الرقمية» and «سجل التأمينات» appear only when the respective feature is currently enabled for that service and the customer has matching records. Empty or disabled tabs must be absent, not merely disabled.
+
+**Why:** The user clarified that this rule concerns the customer file inside the service dashboard, not the public service page or the standalone contract page.
+
+**How to apply:** Read the selected provider's actual settings, do not infer feature activation from historical counts or another service. Hide while settings are unavailable; fall back to booking history if the active tab becomes ineligible. Preserve historical records and unsaved customer notes.
