@@ -14688,8 +14688,8 @@ function RevenueTab() {
         <div className="flex items-center gap-3 flex-wrap">
           <Activity className="w-5 h-5 text-amber-500 shrink-0" />
           <h2 className="text-lg font-bold text-foreground">إيرادات: {unit.type === "service" ? unit.name : revenueProviders.length === 1 ? revenueProviders[0].businessName : "جميع الخدمات"}</h2>
-          <div className="flex w-full flex-wrap items-center justify-start gap-2" dir="rtl">
-            <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
+          <div className="grid w-full min-w-0 grid-cols-[auto_minmax(0,0.8fr)_minmax(0,1.2fr)] items-center gap-1.5 sm:flex sm:flex-nowrap sm:gap-2" dir="rtl">
+            <div className="flex h-9 items-stretch rounded-lg border border-border overflow-hidden text-xs shrink-0">
               {(["gregorian", "hijri"] as const).map((mode) => (
                 <button
                   key={mode}
@@ -14702,7 +14702,7 @@ function RevenueTab() {
                     if (years[0]) setServiceRevenueYear(years[0]);
                     localStorage.setItem("revCalType", mode);
                   }}
-                  className={`px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                  className={`px-2 sm:px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                 >
                   {mode === "gregorian" ? "ميلادي" : "هجري"}
                 </button>
@@ -14710,7 +14710,7 @@ function RevenueTab() {
             </div>
             {serviceYearOptions.length > 0 && (
               <Select dir="rtl" value={serviceRevenueYear} onValueChange={setServiceRevenueYear}>
-                <SelectTrigger aria-label="السنة" className="h-9 text-right text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                <SelectTrigger aria-label="السنة" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[7.5rem] [&>svg]:shrink-0" dir="rtl">
                   <SelectValue placeholder="السنة" />
                 </SelectTrigger>
                 <SelectContent dir="rtl" align="start" className="text-right">
@@ -14728,7 +14728,7 @@ function RevenueTab() {
                 value={activeServiceMonth}
                 onValueChange={calType === "gregorian" ? setServiceSelectedMonth : setServiceSelectedHijriMonth}
               >
-                <SelectTrigger aria-label="الشهر" className="h-9 text-right text-sm rounded-lg border-border min-w-[8rem] max-w-full gap-2" dir="rtl">
+                <SelectTrigger aria-label="الشهر" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[11rem] [&>svg]:shrink-0" dir="rtl">
                   <span className="min-w-0 flex-1 truncate text-right text-sm font-medium">
                     {serviceMonthLabel(
                       activeServiceMonth,
@@ -14913,11 +14913,11 @@ function RevenueTab() {
               )}
             </button>
           </div>
-          {/* RTL filters: calendar, year, then month; wrap from the right on mobile. */}
+          {/* Keep calendar, year and month together in one RTL row, including mobile. */}
           {!showAllFuture && (
-            <div className="flex w-full items-center justify-start gap-2 flex-wrap" dir="rtl">
+            <div className="grid w-full min-w-0 grid-cols-[auto_minmax(0,0.8fr)_minmax(0,1.2fr)] items-center gap-1.5 sm:flex sm:flex-nowrap sm:gap-2" dir="rtl">
               {/* Calendar toggle */}
-              <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
+              <div className="flex h-9 items-stretch rounded-lg border border-border overflow-hidden text-xs shrink-0">
                 {(["gregorian", "hijri"] as const).map(mode => (
                   <button key={mode}
                     onClick={() => {
@@ -14928,7 +14928,7 @@ function RevenueTab() {
                       localStorage.setItem("revCalType", mode);
                       setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50);
                     }}
-                    className={`px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                    className={`px-2 sm:px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >
                     {mode === "gregorian" ? "ميلادي" : "هجري"}
                   </button>
@@ -14936,7 +14936,7 @@ function RevenueTab() {
               </div>
               {/* Year dropdown */}
               <Select dir="rtl" value={revYear || "__all__"} onValueChange={yr => { setRevYear(yr === "__all__" ? "" : yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
-                <SelectTrigger aria-label="السنة" className="h-9 text-right text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                <SelectTrigger aria-label="السنة" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[7.5rem] [&>svg]:shrink-0" dir="rtl">
                   <SelectValue placeholder="السنة" />
                 </SelectTrigger>
                 <SelectContent dir="rtl" align="start" className="text-right">
@@ -14951,7 +14951,7 @@ function RevenueTab() {
               {/* Month dropdown — data-driven */}
               {calType === "gregorian" ? (
                 <Select dir="rtl" value={selectedMonth || "__all__"} onValueChange={v => setSelectedMonth(v === "__all__" ? "" : v)} disabled={!revYear}>
-                  <SelectTrigger aria-label="الشهر" className="h-9 text-right text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                  <SelectTrigger aria-label="الشهر" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[11rem] [&>svg]:shrink-0 [&>span]:min-w-0 [&>span]:truncate" dir="rtl">
                     {(() => {
                       const ym = selectedMonth;
                       if (!revYear || !ym) return <span className="text-sm text-muted-foreground">كل الشهور</span>;
@@ -14979,7 +14979,7 @@ function RevenueTab() {
                 </Select>
               ) : (
                 <Select dir="rtl" value={selectedHijriMonth || "__all__"} onValueChange={v => setSelectedHijriMonth(v === "__all__" ? "" : v)} disabled={!revYear}>
-                  <SelectTrigger aria-label="الشهر" className="h-9 text-right text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                  <SelectTrigger aria-label="الشهر" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[11rem] [&>svg]:shrink-0 [&>span]:min-w-0 [&>span]:truncate" dir="rtl">
                     {revYear && selectedHijriMonth
                       ? <span className="text-sm font-medium truncate">{getBookingMonthLabel(selectedHijriMonth, "hijri")}</span>
                       : <span className="text-sm text-muted-foreground">كل الشهور</span>}
