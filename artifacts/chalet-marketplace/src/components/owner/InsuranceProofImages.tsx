@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -27,6 +27,7 @@ export function InsuranceProofImages({ images, onChange, upload, onUploadingChan
   const busyRef = useRef(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const helpId = useId();
   useEffect(() => {
     active.current = true;
     return () => { active.current = false; onUploadingChange(false); };
@@ -71,9 +72,11 @@ export function InsuranceProofImages({ images, onChange, upload, onUploadingChan
     }
   }
 
-  return <div className="space-y-2">
-    <p className="text-xs font-semibold text-muted-foreground">صور توثيق التلفيات أو الأضرار (اختياري)</p>
-    <div className="flex flex-wrap gap-2">
+  return <div dir="rtl" className="space-y-3 rounded-xl border border-border bg-muted/20 p-3 text-start sm:p-4">
+    <p className="text-sm font-bold leading-6 text-foreground">
+      صور توثيق التلفيات أو الأضرار <span className="text-xs font-medium text-muted-foreground">(اختياري)</span>
+    </p>
+    {images.length > 0 && <div className="flex flex-wrap gap-3">
       {images.map((path, index) => <div key={path} className="relative">
         <a href={imageUrl(path)} target="_blank" rel="noopener noreferrer">
           <img src={imageUrl(path)} alt={`صورة توثيق الخصم ${index + 1}`} className="w-20 h-20 object-cover rounded-lg border border-border" />
@@ -84,19 +87,25 @@ export function InsuranceProofImages({ images, onChange, upload, onUploadingChan
           <X className="w-3 h-3" />
         </button>
       </div>)}
-    </div>
+    </div>}
     <input ref={input} type="file" accept="image/*" multiple className="hidden" aria-label="اختيار صور توثيق الخصم"
       disabled={disabled || uploading} onChange={event => {
         const files = event.target.files;
         void addImages(files);
         event.target.value = "";
       }} />
-    <Button type="button" variant="outline" size="sm" className="gap-2 rounded-xl border-dashed"
-      disabled={disabled || uploading || images.length >= 10} onClick={() => input.current?.click()}>
-      {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
-      {uploading ? "جارٍ رفع الصور…" : "إرفاق صور التلفيات"}
-    </Button>
-    <p className="text-[11px] text-muted-foreground">حتى عشر صور، بحد أقصى ٢ ميغابايت للصورة. تُحفظ الصور مع تفاصيل خصم هذا الحجز.</p>
-    {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
+    <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4">
+      <Button type="button" variant="outline" aria-describedby={helpId}
+        className="min-h-11 shrink-0 gap-2 rounded-xl border-dashed bg-background px-4 text-sm font-semibold"
+        disabled={disabled || uploading || images.length >= 10} onClick={() => input.current?.click()}>
+        {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+        {uploading ? "جارٍ رفع الصور…" : "إرفاق صور التلفيات"}
+      </Button>
+      <div id={helpId} className="min-w-0 space-y-1 text-sm leading-6">
+        <p className="font-semibold text-foreground">حتى ١٠ صور، بحد أقصى ٢ ميغابايت لكل صورة.</p>
+        <p className="font-medium text-foreground/80">تُحفظ الصور مع تفاصيل خصم هذا الحجز.</p>
+      </div>
+    </div>
+    {error && <p role="alert" className="text-sm font-medium leading-6 text-destructive">{error}</p>}
   </div>;
 }
