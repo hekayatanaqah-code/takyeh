@@ -8,6 +8,173 @@
 import * as zod from 'zod';
 
 
+export const GetQuickSalesSettingsResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+export const UpdateQuickSalesSettingsBody = zod.object({
+  "enabled": zod.boolean()
+})
+
+export const UpdateQuickSalesSettingsResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+
+
+
+export const ListQuickSalesQueryParams = zod.object({
+  "providerId": zod.coerce.number().int().min(1).optional()
+})
+
+
+export const listQuickSalesResponseItemsItemNameMax = 150;
+
+export const listQuickSalesResponseItemsItemQuantityMax = 10000;
+
+export const listQuickSalesResponseItemsItemUnitPriceMin = 0.01;
+export const listQuickSalesResponseItemsItemUnitPriceMax = 9999999;
+
+
+
+export const ListQuickSalesResponseItem = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "providerName": zod.string(),
+  "dateStr": zod.string(),
+  "clientName": zod.string(),
+  "items": zod.array(zod.object({
+  "catalogItemId": zod.number().int().min(1).optional(),
+  "name": zod.string().min(1).max(listQuickSalesResponseItemsItemNameMax),
+  "quantity": zod.number().int().min(1).max(listQuickSalesResponseItemsItemQuantityMax),
+  "unitPrice": zod.number().min(listQuickSalesResponseItemsItemUnitPriceMin).max(listQuickSalesResponseItemsItemUnitPriceMax)
+})),
+  "total": zod.number(),
+  "paymentMethod": zod.enum(['cash', 'bank']),
+  "notes": zod.string(),
+  "status": zod.enum(['completed', 'cancelled']),
+  "cancellationReason": zod.string().nullish(),
+  "cancelledAt": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListQuickSalesResponse = zod.array(ListQuickSalesResponseItem)
+
+
+
+export const createQuickSaleBodyDateStrRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createQuickSaleBodyClientNameMax = 150;
+
+
+export const createQuickSaleBodyItemsItemNameMax = 150;
+
+export const createQuickSaleBodyItemsItemQuantityMax = 10000;
+
+export const createQuickSaleBodyItemsItemUnitPriceMin = 0.01;
+export const createQuickSaleBodyItemsItemUnitPriceMax = 9999999;
+
+export const createQuickSaleBodyItemsMax = 50;
+
+export const createQuickSaleBodyNotesMax = 1000;
+
+
+
+export const CreateQuickSaleBody = zod.object({
+  "providerId": zod.number().int().min(1),
+  "dateStr": zod.string().regex(createQuickSaleBodyDateStrRegExp),
+  "clientName": zod.string().max(createQuickSaleBodyClientNameMax).optional(),
+  "items": zod.array(zod.object({
+  "catalogItemId": zod.number().int().min(1).optional(),
+  "name": zod.string().min(1).max(createQuickSaleBodyItemsItemNameMax),
+  "quantity": zod.number().int().min(1).max(createQuickSaleBodyItemsItemQuantityMax),
+  "unitPrice": zod.number().min(createQuickSaleBodyItemsItemUnitPriceMin).max(createQuickSaleBodyItemsItemUnitPriceMax)
+})).min(1).max(createQuickSaleBodyItemsMax),
+  "paymentMethod": zod.enum(['cash', 'bank']),
+  "notes": zod.string().max(createQuickSaleBodyNotesMax).optional(),
+  "idempotencyKey": zod.string().uuid()
+})
+
+
+export const createQuickSaleResponseItemsItemNameMax = 150;
+
+export const createQuickSaleResponseItemsItemQuantityMax = 10000;
+
+export const createQuickSaleResponseItemsItemUnitPriceMin = 0.01;
+export const createQuickSaleResponseItemsItemUnitPriceMax = 9999999;
+
+
+
+export const CreateQuickSaleResponse = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "providerName": zod.string(),
+  "dateStr": zod.string(),
+  "clientName": zod.string(),
+  "items": zod.array(zod.object({
+  "catalogItemId": zod.number().int().min(1).optional(),
+  "name": zod.string().min(1).max(createQuickSaleResponseItemsItemNameMax),
+  "quantity": zod.number().int().min(1).max(createQuickSaleResponseItemsItemQuantityMax),
+  "unitPrice": zod.number().min(createQuickSaleResponseItemsItemUnitPriceMin).max(createQuickSaleResponseItemsItemUnitPriceMax)
+})),
+  "total": zod.number(),
+  "paymentMethod": zod.enum(['cash', 'bank']),
+  "notes": zod.string(),
+  "status": zod.enum(['completed', 'cancelled']),
+  "cancellationReason": zod.string().nullish(),
+  "cancelledAt": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
+
+
+
+export const CancelQuickSaleParams = zod.object({
+  "saleId": zod.coerce.number().int().min(1)
+})
+
+export const cancelQuickSaleBodyReasonMin = 3;
+export const cancelQuickSaleBodyReasonMax = 500;
+
+
+
+export const CancelQuickSaleBody = zod.object({
+  "reason": zod.string().min(cancelQuickSaleBodyReasonMin).max(cancelQuickSaleBodyReasonMax)
+})
+
+
+export const cancelQuickSaleResponseItemsItemNameMax = 150;
+
+export const cancelQuickSaleResponseItemsItemQuantityMax = 10000;
+
+export const cancelQuickSaleResponseItemsItemUnitPriceMin = 0.01;
+export const cancelQuickSaleResponseItemsItemUnitPriceMax = 9999999;
+
+
+
+export const CancelQuickSaleResponse = zod.object({
+  "id": zod.number().int(),
+  "providerId": zod.number().int(),
+  "providerName": zod.string(),
+  "dateStr": zod.string(),
+  "clientName": zod.string(),
+  "items": zod.array(zod.object({
+  "catalogItemId": zod.number().int().min(1).optional(),
+  "name": zod.string().min(1).max(cancelQuickSaleResponseItemsItemNameMax),
+  "quantity": zod.number().int().min(1).max(cancelQuickSaleResponseItemsItemQuantityMax),
+  "unitPrice": zod.number().min(cancelQuickSaleResponseItemsItemUnitPriceMin).max(cancelQuickSaleResponseItemsItemUnitPriceMax)
+})),
+  "total": zod.number(),
+  "paymentMethod": zod.enum(['cash', 'bank']),
+  "notes": zod.string(),
+  "status": zod.enum(['completed', 'cancelled']),
+  "cancellationReason": zod.string().nullish(),
+  "cancelledAt": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+
+
 /**
  * @summary Record an additional payment using the booking's existing payment method and custody status
  */

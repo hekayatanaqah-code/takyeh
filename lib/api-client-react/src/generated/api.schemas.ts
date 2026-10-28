@@ -5,6 +5,90 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface QuickSalesSettings {
+  enabled: boolean;
+}
+
+export interface QuickSaleLine {
+  /** @minimum 1 */
+  catalogItemId?: number;
+  /**
+     * @minLength 1
+     * @maxLength 150
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 10000
+     */
+  quantity: number;
+  /**
+     * @minimum 0.01
+     * @maximum 9999999
+     */
+  unitPrice: number;
+}
+
+export type CreateQuickSalePaymentMethod = typeof CreateQuickSalePaymentMethod[keyof typeof CreateQuickSalePaymentMethod];
+
+
+export const CreateQuickSalePaymentMethod = {
+  cash: 'cash',
+  bank: 'bank',
+} as const;
+
+export interface CreateQuickSale {
+  /** @minimum 1 */
+  providerId: number;
+  /** @pattern ^\d{4}-\d{2}-\d{2}$ */
+  dateStr: string;
+  /** @maxLength 150 */
+  clientName?: string;
+  /**
+     * @minItems 1
+     * @maxItems 50
+     */
+  items: QuickSaleLine[];
+  paymentMethod: CreateQuickSalePaymentMethod;
+  /** @maxLength 1000 */
+  notes?: string;
+  idempotencyKey: string;
+}
+
+export type QuickSalePaymentMethod = typeof QuickSalePaymentMethod[keyof typeof QuickSalePaymentMethod];
+
+
+export const QuickSalePaymentMethod = {
+  cash: 'cash',
+  bank: 'bank',
+} as const;
+
+export type QuickSaleStatus = typeof QuickSaleStatus[keyof typeof QuickSaleStatus];
+
+
+export const QuickSaleStatus = {
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface QuickSale {
+  id: number;
+  providerId: number;
+  providerName: string;
+  dateStr: string;
+  clientName: string;
+  items: QuickSaleLine[];
+  total: number;
+  paymentMethod: QuickSalePaymentMethod;
+  notes: string;
+  status: QuickSaleStatus;
+  /** @nullable */
+  cancellationReason?: string | null;
+  /** @nullable */
+  cancelledAt?: string | null;
+  createdAt: string;
+}
+
 export type ServiceAppointmentPaymentInputExpectedPaymentMethod = typeof ServiceAppointmentPaymentInputExpectedPaymentMethod[keyof typeof ServiceAppointmentPaymentInputExpectedPaymentMethod];
 
 
@@ -1543,6 +1627,21 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListQuickSalesParams = {
+/**
+ * @minimum 1
+ */
+providerId?: number;
+};
+
+export type CancelQuickSaleBody = {
+  /**
+     * @minLength 3
+     * @maxLength 500
+     */
+  reason: string;
+};
 
 export type SubmitServiceReviewObjectionBody = {
   /**

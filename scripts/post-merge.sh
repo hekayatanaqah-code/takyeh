@@ -17,3 +17,4 @@ pnpm --filter @workspace/scripts exec tsx src/migrate-owner-services.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-photography-service-targets.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-property-offers.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-provider-catalog.ts
+pnpm --filter @workspace/scripts exec tsx src/migrate-quick-sales.ts

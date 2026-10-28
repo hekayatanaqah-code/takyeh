@@ -4,7 +4,7 @@ import { hasServiceInsurance, serviceDashboardTabs } from "./serviceDashboardTab
 
 it("restores the complete service navigation even for all activities", () => {
   const ids = serviceDashboardTabs([]).map(v => v.id);
-  for (const id of ["details", "catalog", "seasons", "offers", "reviews", "calendar", "customers", "messages"]) {
+  for (const id of ["details", "catalog", "seasons", "offers", "reviews", "calendar", "quickSales", "customers", "messages"] as const) {
     assert.ok(ids.includes(id), id);
   }
 });

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import staffHoldingsRouter from "./staff-holdings";
+import quickSalesRouter from "./quick-sales";
 import { propertyOffersRouter } from "./property-offers";
 import { quotePropertyPrice } from "../lib/property-offer-pricing";
 import { staffMobileSchema, staffNationalIdSchema } from "../lib/staff-contact-validation";
@@ -472,6 +473,7 @@ router.post("/contract/:bookingId/sign", async (req, res) => {
 });
 
 router.use(requireAuth);
+router.use(quickSalesRouter);
 router.use(propertyOffersRouter(getOwnerIds));
 
 // A property-only plan retains booking and property tools, but not the financial

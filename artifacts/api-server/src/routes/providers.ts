@@ -18,6 +18,7 @@ import {
   citiesCatalogTable,
   ownerAccountLinksTable,
   ownerSubscriptionsTable,
+  quickSalesTable,
 } from "@workspace/db/schema";
 import { eq, and, ne, desc, isNull, gte, sql, inArray, or } from "drizzle-orm";
 import { z } from "zod";
@@ -611,6 +612,9 @@ router.delete("/my/approved/:id", requireAuth, async (req: any, res) => {
   const id = Number(req.params.id);
   const [provider] = await db.select().from(serviceProvidersTable).where(eq(serviceProvidersTable.id, id)).limit(1);
   if (!provider || provider.ownerId !== req.user.id) return res.status(404).json({ error: "المزود غير موجود" });
+
+  const [saleHistory] = await db.select({ id: quickSalesTable.id }).from(quickSalesTable).where(eq(quickSalesTable.providerId, id)).limit(1);
+  if (saleHistory) return res.status(409).json({ error: "لا يمكن حذف نشاط له سجل مبيعات مفردة؛ يمكنك إيقاف النشاط مع الاحتفاظ بالسجل المالي" });
 
   // Check for upcoming appointments (future date, not cancelled)
   const today = new Date().toISOString().slice(0, 10);

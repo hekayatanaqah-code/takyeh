@@ -48,6 +48,11 @@ import { ServiceBookingPaymentDialog } from "@/components/owner/ServiceBookingPa
 import { useRecordServiceAppointmentPayment } from "@workspace/api-client-react";
 import { ServiceManagementNavigation } from "@/components/owner/ServiceManagementNavigation";
 import { ServiceCatalogPanel, ServiceOffersPanel } from "@/components/owner/ServiceCatalogPanels";
+import { QuickSalesPanel } from "@/components/owner/QuickSalesPanel";
+import { QuickSalesSettingsPanel } from "@/components/owner/QuickSalesSettingsPanel";
+import { QuickSalesRevenueDetails, RevenueSourceFilter } from "@/components/owner/QuickSalesRevenue";
+import { useListQuickSales } from "@workspace/api-client-react";
+import { quickSalesForPeriod, quickSalesTotal, type RevenueSource } from "@/lib/quickSalesRevenue";
 import { ReviewObjection } from "@/components/owner/ReviewObjection";
 import { ServiceBookingScheduleFields } from "@/components/owner/ServiceBookingScheduleFields";
 import { hasServiceInsurance, serviceDashboardTabs } from "@/lib/serviceDashboardTabs";
@@ -13918,6 +13923,12 @@ export function BankLedgerTab() {
 
 function RevenueTab() {
   const { unit } = useAdminFinance();
+  const [revenueSource, setRevenueSource] = useState<RevenueSource>("all");
+  const quickSalesQuery = useListQuickSales(undefined, { query: {
+    enabled: unit.type !== "chalet", staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000,
+  } });
+  const activityQuickSales = (quickSalesQuery.data ?? []).filter(sale =>
+    unit.type === "all" || (unit.type === "service" && sale.providerId === unit.id));
   const _nowRev = new Date();
   const currentMonth = `${_nowRev.getFullYear()}-${String(_nowRev.getMonth() + 1).padStart(2, "0")}`;
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
@@ -13959,7 +13970,7 @@ function RevenueTab() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const fmtN = (n: number) => Math.round(n).toLocaleString("ar-SA");
+  const fmtN = (n: number) => n.toLocaleString("ar-SA", { maximumFractionDigits: 2 });
   const fmtDualDate = (dateStr: string) => {
     const { hijri, gregorian } = formatDualDate(dateStr);
     return `${hijri.replace(/\s*هـ\s*$/, "")} (${gregorian})`;
@@ -14062,7 +14073,8 @@ function RevenueTab() {
     || (unit.type === "all" && revOwnerChalets.length === 0 && revenueProviders.length > 0);
   const serviceRevenueDates = serviceAppts
     .filter(a => a.status !== "cancelled" && a.dateStr)
-    .map(a => a.dateStr as string);
+    .map(a => a.dateStr as string)
+    .concat(activityQuickSales.filter(sale => sale.status === "completed").map(sale => sale.dateStr));
 
   const { data: depositLogs = [], refetch: refetchDepositLogs } = useQuery<Array<{ id: number; ownerId: number; submissionId: number | null; amount: string; note: string | null; createdAt: string }>>({
     queryKey: ["owner", "cash-deposit-logs"],
@@ -14307,17 +14319,19 @@ function RevenueTab() {
 
   const serviceGregorianMonths = useMemo(() => {
     const months = new Set<string>();
-    serviceAppts.forEach((appointment) => {
+    serviceRevenueDates.forEach((dateStr) => {
+      const appointment = { dateStr };
       if (/^\d{4}-\d{2}-\d{2}$/.test(appointment.dateStr ?? "")) {
         months.add(appointment.dateStr.slice(0, 7));
       }
     });
     return Array.from(months).sort().reverse();
-  }, [serviceAppts]);
+  }, [serviceRevenueDates]);
 
   const serviceHijriMonths = useMemo(() => {
     const months = new Map<string, { key: string; year: number; month: number; sampleDate: Date }>();
-    serviceAppts.forEach((appointment) => {
+    serviceRevenueDates.forEach((dateStr) => {
+      const appointment = { dateStr };
       if (!/^\d{4}-\d{2}-\d{2}$/.test(appointment.dateStr ?? "")) return;
       const sampleDate = new Date(`${appointment.dateStr}T12:00:00`);
       const hijri = toHijriComponents(sampleDate);
@@ -14325,7 +14339,7 @@ function RevenueTab() {
       if (!months.has(key)) months.set(key, { key, year: hijri.year, month: hijri.month, sampleDate });
     });
     return Array.from(months.values()).sort((a, b) => b.sampleDate.getTime() - a.sampleDate.getTime());
-  }, [serviceAppts]);
+  }, [serviceRevenueDates]);
 
   const serviceYearOptions = useMemo(() => {
     if (calType === "gregorian") {
@@ -14368,11 +14382,14 @@ function RevenueTab() {
     serviceSelectedHijriMonth,
   ]);
 
-  const combinedServiceBookings = serviceRevenueBookings(serviceAppts, unit, revenuePeriod);
+  const combinedServiceBookings = revenueSource === "quick_sales" ? [] : serviceRevenueBookings(serviceAppts, unit, revenuePeriod);
   const combinedServiceTotals = serviceRevenueTotals(combinedServiceBookings);
+  const combinedQuickSales = revenueSource === "bookings" ? [] : quickSalesForPeriod(activityQuickSales, unit, revenuePeriod);
+  const combinedQuickTotal = quickSalesTotal(combinedQuickSales);
 
   // Filter bookings to selected month + optional chalet unit filter
   const monthBookings = useMemo(() => {
+    if (unit.type !== "chalet" && revenueSource === "quick_sales") return [];
     let filtered = allBookings.filter(b => isInRevenuePeriod(b.bookingDate, revenuePeriod));
     // FIX: ownerBookingsTable has submissionId, NOT chaletId
     if (unit.type === "chalet") {
@@ -14380,7 +14397,7 @@ function RevenueTab() {
       if (subId) filtered = filtered.filter(b => b.submissionId === subId);
     }
     return filtered;
-  }, [allBookings, revenuePeriod, unit]);
+  }, [allBookings, revenuePeriod, unit, revenueSource]);
 
   // ── Monthly revenue breakdown: base rent + services for selected month ───
   // Computed directly from allBookings (not monthBookings) with correct submissionId filter
@@ -14404,11 +14421,14 @@ function RevenueTab() {
   }, [monthBookings]);
 
   // Service-unit: use the exact selected Gregorian or Hijri period.
-  const monthSvcAppts = serviceRevenueBookings(serviceAppts, unit, {
+  const selectedServicePeriod = {
     calendar: calType,
     year: serviceRevenueYear,
     month: calType === "gregorian" ? serviceSelectedMonth : serviceSelectedHijriMonth,
-  });
+  };
+  const monthSvcAppts = revenueSource === "quick_sales" ? [] : serviceRevenueBookings(serviceAppts, unit, selectedServicePeriod);
+  const serviceQuickSales = revenueSource === "bookings" ? [] : quickSalesForPeriod(activityQuickSales, unit, selectedServicePeriod);
+  const serviceQuickTotal = quickSalesTotal(serviceQuickSales);
 
   // Build revenue rows: each booking can generate 1-3 rows
   interface RevenueRow {
@@ -14538,7 +14558,7 @@ function RevenueTab() {
     refund:       { label: "استرداد",      emoji: "↩️", cls: "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" },
   };
 
-  const loading = finLoading || bkLoading || svcLoading;
+  const loading = finLoading || bkLoading || svcLoading || (unit.type !== "chalet" && quickSalesQuery.isLoading);
 
   const big3 = useMemo(() => {
     const sales = monthBookings.reduce((s, b) => {
@@ -14561,11 +14581,11 @@ function RevenueTab() {
       return s + rem;
     }, 0);
     return {
-      sales: Math.round(sales + combinedServiceTotals.sales),
-      collected: Math.round(collected + combinedServiceTotals.collected),
+      sales: Math.round(sales + combinedServiceTotals.sales) + combinedQuickTotal,
+      collected: Math.round(collected + combinedServiceTotals.collected) + combinedQuickTotal,
       pending: Math.round(pending + combinedServiceTotals.pending),
     };
-  }, [monthBookings, combinedServiceTotals.sales, combinedServiceTotals.collected, combinedServiceTotals.pending]);
+  }, [monthBookings, combinedServiceTotals.sales, combinedServiceTotals.collected, combinedServiceTotals.pending, combinedQuickTotal]);
 
   const channels = useMemo(() => {
     // Use allBookings for bankTransfers (preserves all-time bank position)
@@ -14614,12 +14634,13 @@ function RevenueTab() {
     };
   }, [allBookings, depositLogs, unit, financial?.cashBreakdown]);
 
-  if (svcError) {
+  if (svcError || (unit.type !== "chalet" && quickSalesQuery.isError)) {
     return <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 space-y-3" dir="rtl">
-      <p className="text-sm font-semibold">تعذّر تحميل إيرادات الخدمات. لا يمكن عرض الإجماليات كاملة حالياً.</p>
+      <p className="text-sm font-semibold">تعذّر تحميل إيرادات الخدمات أو المبيعات المفردة. لا يمكن عرض الإجماليات كاملة حالياً.</p>
       <Button variant="outline" onClick={() => {
         if (unit.type === "all") void revenueProvidersQ.refetch();
         serviceRevenueQueries.forEach(query => { void query.refetch(); });
+        void quickSalesQuery.refetch();
       }}>إعادة المحاولة</Button>
     </div>;
   }
@@ -14639,8 +14660,8 @@ function RevenueTab() {
     }
     const filteredSvcRows = svcFilter === "all" ? svcRows : svcRows.filter(r => r.type === svcFilter);
 
-    const svcSales = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.amount ?? 0)), 0);
-    const svcCollected = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.deposit ?? 0)), 0);
+    const svcSales = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.amount ?? 0)), 0) + serviceQuickTotal;
+    const svcCollected = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.deposit ?? 0)), 0) + serviceQuickTotal;
     const svcPending   = monthSvcAppts.reduce((s, a) => {
       const amt = Math.round(Number(a.amount ?? 0)); const dep = Math.round(Number(a.deposit ?? 0));
       return s + Math.max(0, amt - dep);
@@ -14764,6 +14785,7 @@ function RevenueTab() {
           </div>
         </div>
 
+        <RevenueSourceFilter value={revenueSource} onChange={setRevenueSource} />
         {/* KPI cards — same financial definitions used for properties */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-2xl p-4 space-y-1">
@@ -14771,17 +14793,17 @@ function RevenueTab() {
               <Receipt className="w-3.5 h-3.5 text-blue-600" />
               {revenueSalesTitle(servicePeriod)}
             </div>
-            {svcLoading ? <Skeleton className="h-7 w-24" /> : (
+            {svcLoading || quickSalesQuery.isLoading ? <Skeleton className="h-7 w-24" /> : (
               <OwnerStatAmount amount={fmtN(svcSales)} className="text-blue-700 dark:text-blue-400" />
             )}
-            <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي قيمة حجوزات الخدمات {activeServiceMonth ? "في الشهر المحدد" : serviceRevenueYear ? "في السنة المحددة" : "لكامل الفترة"}</div>
+            <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي الحجوزات والمبيعات وفق نوع الإيراد المختار {activeServiceMonth ? "في الشهر المحدد" : serviceRevenueYear ? "في السنة المحددة" : "لكامل الفترة"}</div>
           </div>
           <div className="bg-green-50/60 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
               <RiyalIcon className="w-3.5 h-3.5 text-green-600" />
               المبالغ المحصّلة
             </div>
-            {svcLoading ? <Skeleton className="h-7 w-24" /> : (
+            {svcLoading || quickSalesQuery.isLoading ? <Skeleton className="h-7 w-24" /> : (
               <OwnerStatAmount amount={fmtN(svcCollected)} className="text-green-700 dark:text-green-400" />
             )}
             <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي العربون أو المبلغ المدفوع المسجل</div>
@@ -14798,8 +14820,9 @@ function RevenueTab() {
           </div>
         </div>
 
-        {/* Revenue log — mirror of chalet log */}
-        <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+        {revenueSource !== "bookings" && <QuickSalesRevenueDetails sales={serviceQuickSales} />}
+        {/* Revenue log — bookings remain separate from direct sales. */}
+        <div className={revenueSource === "quick_sales" ? "hidden" : "bg-card border border-border rounded-2xl p-4 space-y-3"}>
           <div className="flex items-center gap-2 flex-wrap">
             <Receipt className="w-4 h-4 text-amber-500" />
             <h3 className="font-bold text-sm text-foreground">سجل إيرادات الخدمة</h3>
@@ -15012,6 +15035,8 @@ function RevenueTab() {
         </div>
       </div>
 
+      {unit.type !== "chalet" && <RevenueSourceFilter value={revenueSource} onChange={setRevenueSource} />}
+
 {false && null}
 
 {false && null}
@@ -15158,7 +15183,7 @@ function RevenueTab() {
             <OwnerStatAmount amount={fmtN(big3.sales)} className="text-blue-700 dark:text-blue-400" />
           )}
           <div className="text-sm font-medium leading-relaxed text-foreground/80">
-            {revenuePeriod.month ? "إجمالي قيمة الحجوزات في الشهر المحدد" : revYear ? "إجمالي قيمة الحجوزات في السنة المحددة" : "إجمالي قيمة الحجوزات منذ بدء التشغيل"}
+            {revenuePeriod.month ? "إجمالي المبيعات والحجوزات المختارة في الشهر" : revYear ? "إجمالي المبيعات والحجوزات المختارة في السنة" : "إجمالي المبيعات والحجوزات المختارة منذ بدء التشغيل"}
           </div>
         </div>
 
@@ -15214,6 +15239,8 @@ function RevenueTab() {
         </div>
       )}
 
+      {unit.type !== "chalet" && revenueSource !== "bookings" && <QuickSalesRevenueDetails sales={combinedQuickSales} />}
+      <div className={unit.type !== "chalet" && revenueSource === "quick_sales" ? "hidden" : "contents"}>
       {/* ── FINANCIAL CHANNELS DISTRIBUTION ── */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
@@ -15570,6 +15597,7 @@ function RevenueTab() {
         </div>
       )}
 
+      </div>
       </>}
 
       {/* ══ DEPOSIT CASH CONFIRMATION DIALOG ══════════════════════════════ */}
@@ -25296,6 +25324,7 @@ function ServiceManagementContent({ provider, tab, calendarPreference }: {
   const { isReadOnly } = useReadOnly();
   if (tab === "details") return <ServiceDetailsTab />;
   if (tab === "catalog") return <ServiceCatalogPanel providerId={provider.id} readOnly={isReadOnly} />;
+  if (tab === "quickSales") return <QuickSalesPanel key={provider.id} providerId={provider.id} readOnly={isReadOnly} />;
   if (tab === "offers") return <ServiceOffersPanel providerId={provider.id} readOnly={isReadOnly} />;
   if (tab === "seasons") return <ServiceSeasonsTab />;
   if (tab === "calendar") return <ServiceCalendarBookingsTab />;
@@ -26339,6 +26368,7 @@ export default function Dashboard() {
               <DialogDescription>تعديل بيانات الحساب وكلمة المرور وتفضيلات الإشعارات</DialogDescription>
             </DialogHeader>
             <OwnerProfileTab />
+            {canSeeServices && <QuickSalesSettingsPanel readOnly={isReadOnly} />}
           </DialogContent>
         </Dialog>
 

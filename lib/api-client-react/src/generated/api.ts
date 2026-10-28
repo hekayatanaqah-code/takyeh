@@ -34,6 +34,7 @@ import type {
   AdminUpdatePartnerAccountBody,
   AuthUserEnvelope,
   BeginBrowserLoginParams,
+  CancelQuickSaleBody,
   Chalet,
   ChaletFacility,
   ChaletFacilityInput,
@@ -46,6 +47,7 @@ import type {
   CreatePhotographyBooking200,
   CreatePhotographyPackage200,
   CreatePhotographyPackageBody,
+  CreateQuickSale,
   CreateServiceSeasonInput,
   CreateSubmissionRequest,
   CrmCustomerPage,
@@ -89,6 +91,7 @@ import type {
   ListAdminServiceReviewObjections200Item,
   ListOwnerNotificationHistoryParams,
   ListPropertyOffersParams,
+  ListQuickSalesParams,
   LoginPhotographer200,
   LoginPhotographerBody,
   LogoutPhotographer200,
@@ -143,6 +146,8 @@ import type {
   ProviderOffer,
   ProviderOfferInput,
   PublicProviderCatalogItem,
+  QuickSale,
+  QuickSalesSettings,
   RatePhotographySession200,
   ReadPhotographyOperationalAlert200,
   ReceiptCompleteInput,
@@ -208,6 +213,450 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetQuickSalesSettingsUrl = () => {
+
+
+
+
+  return `/api/owner/quick-sales/settings`
+}
+
+export const getQuickSalesSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<QuickSalesSettings> => {
+
+  return customFetch<QuickSalesSettings>(getGetQuickSalesSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetQuickSalesSettingsQueryKey = () => {
+    return [
+    `/api/owner/quick-sales/settings`
+    ] as const;
+    }
+
+
+export const getGetQuickSalesSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getQuickSalesSettings>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getQuickSalesSettings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetQuickSalesSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getQuickSalesSettings>>> = ({ signal }) => getQuickSalesSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getQuickSalesSettings>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetQuickSalesSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getQuickSalesSettings>>>
+export type GetQuickSalesSettingsQueryError = ErrorType<unknown>
+
+
+export function useGetQuickSalesSettings<TData = Awaited<ReturnType<typeof getQuickSalesSettings>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getQuickSalesSettings>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getQuickSalesSettings>>,
+          TError,
+          Awaited<ReturnType<typeof getQuickSalesSettings>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetQuickSalesSettings<TData = Awaited<ReturnType<typeof getQuickSalesSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getQuickSalesSettings>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getQuickSalesSettings>>,
+          TError,
+          Awaited<ReturnType<typeof getQuickSalesSettings>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetQuickSalesSettings<TData = Awaited<ReturnType<typeof getQuickSalesSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getQuickSalesSettings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetQuickSalesSettings<TData = Awaited<ReturnType<typeof getQuickSalesSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getQuickSalesSettings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetQuickSalesSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateQuickSalesSettingsUrl = () => {
+
+
+
+
+  return `/api/owner/quick-sales/settings`
+}
+
+export const updateQuickSalesSettings = async (quickSalesSettings: QuickSalesSettings, options?: Parameters<typeof customFetch>[1]): Promise<QuickSalesSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<QuickSalesSettings>(getUpdateQuickSalesSettingsUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(quickSalesSettings)
+  }
+);}
+
+
+
+
+
+export const getUpdateQuickSalesSettingsMutationKey = () => ['updateQuickSalesSettings'] as const;
+
+export const getUpdateQuickSalesSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateQuickSalesSettings>>, TError,UpdateQuickSalesSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateQuickSalesSettings>>, TError,UpdateQuickSalesSettingsMutationVariables, TContext> => {
+
+const mutationKey = getUpdateQuickSalesSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateQuickSalesSettings>>, UpdateQuickSalesSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateQuickSalesSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateQuickSalesSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateQuickSalesSettings>>>
+    export type UpdateQuickSalesSettingsMutationBody = BodyType<QuickSalesSettings>
+    export type UpdateQuickSalesSettingsMutationError = ErrorType<unknown>
+    export type UpdateQuickSalesSettingsMutationVariables = {data: BodyType<QuickSalesSettings>}
+
+    export const useUpdateQuickSalesSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateQuickSalesSettings>>, TError,UpdateQuickSalesSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateQuickSalesSettings>>,
+        TError,
+        UpdateQuickSalesSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateQuickSalesSettingsMutationOptions(options), queryClient);
+    }
+
+export const getListQuickSalesUrl = (params?: ListQuickSalesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/owner/quick-sales?${stringifiedParams}` : `/api/owner/quick-sales`
+}
+
+export const listQuickSales = async (params?: ListQuickSalesParams, options?: Parameters<typeof customFetch>[1]): Promise<QuickSale[]> => {
+
+  return customFetch<QuickSale[]>(getListQuickSalesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListQuickSalesQueryKey = (params?: ListQuickSalesParams,) => {
+    return [
+    `/api/owner/quick-sales`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListQuickSalesQueryOptions = <TData = Awaited<ReturnType<typeof listQuickSales>>, TError = ErrorType<unknown>>(params?: ListQuickSalesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listQuickSales>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListQuickSalesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listQuickSales>>> = ({ signal }) => listQuickSales(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listQuickSales>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListQuickSalesQueryResult = NonNullable<Awaited<ReturnType<typeof listQuickSales>>>
+export type ListQuickSalesQueryError = ErrorType<unknown>
+
+
+export function useListQuickSales<TData = Awaited<ReturnType<typeof listQuickSales>>, TError = ErrorType<unknown>>(
+ params: undefined |  ListQuickSalesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listQuickSales>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listQuickSales>>,
+          TError,
+          Awaited<ReturnType<typeof listQuickSales>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListQuickSales<TData = Awaited<ReturnType<typeof listQuickSales>>, TError = ErrorType<unknown>>(
+ params?: ListQuickSalesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listQuickSales>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listQuickSales>>,
+          TError,
+          Awaited<ReturnType<typeof listQuickSales>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListQuickSales<TData = Awaited<ReturnType<typeof listQuickSales>>, TError = ErrorType<unknown>>(
+ params?: ListQuickSalesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listQuickSales>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListQuickSales<TData = Awaited<ReturnType<typeof listQuickSales>>, TError = ErrorType<unknown>>(
+ params?: ListQuickSalesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listQuickSales>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListQuickSalesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateQuickSaleUrl = () => {
+
+
+
+
+  return `/api/owner/quick-sales`
+}
+
+export const createQuickSale = async (createQuickSaleBody: CreateQuickSale, options?: Parameters<typeof customFetch>[1]): Promise<QuickSale> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<QuickSale>(getCreateQuickSaleUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(createQuickSaleBody)
+  }
+);}
+
+
+
+
+
+export const getCreateQuickSaleMutationKey = () => ['createQuickSale'] as const;
+
+export const getCreateQuickSaleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createQuickSale>>, TError,CreateQuickSaleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createQuickSale>>, TError,CreateQuickSaleMutationVariables, TContext> => {
+
+const mutationKey = getCreateQuickSaleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createQuickSale>>, CreateQuickSaleMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createQuickSale(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateQuickSaleMutationResult = NonNullable<Awaited<ReturnType<typeof createQuickSale>>>
+    export type CreateQuickSaleMutationBody = BodyType<CreateQuickSale>
+    export type CreateQuickSaleMutationError = ErrorType<void>
+    export type CreateQuickSaleMutationVariables = {data: BodyType<CreateQuickSale>}
+
+    export const useCreateQuickSale = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createQuickSale>>, TError,CreateQuickSaleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createQuickSale>>,
+        TError,
+        CreateQuickSaleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateQuickSaleMutationOptions(options), queryClient);
+    }
+
+export const getCancelQuickSaleUrl = (saleId: number,) => {
+
+
+
+
+  return `/api/owner/quick-sales/${saleId}/cancel`
+}
+
+export const cancelQuickSale = async (saleId: number,
+    cancelQuickSaleBody: CancelQuickSaleBody, options?: Parameters<typeof customFetch>[1]): Promise<QuickSale> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<QuickSale>(getCancelQuickSaleUrl(saleId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(cancelQuickSaleBody)
+  }
+);}
+
+
+
+
+
+export const getCancelQuickSaleMutationKey = () => ['cancelQuickSale'] as const;
+
+export const getCancelQuickSaleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelQuickSale>>, TError,CancelQuickSaleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelQuickSale>>, TError,CancelQuickSaleMutationVariables, TContext> => {
+
+const mutationKey = getCancelQuickSaleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelQuickSale>>, CancelQuickSaleMutationVariables> = (props) => {
+          const {saleId,data} = props ?? {};
+
+          return  cancelQuickSale(saleId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelQuickSaleMutationResult = NonNullable<Awaited<ReturnType<typeof cancelQuickSale>>>
+    export type CancelQuickSaleMutationBody = BodyType<CancelQuickSaleBody>
+    export type CancelQuickSaleMutationError = ErrorType<void>
+    export type CancelQuickSaleMutationVariables = {saleId: number;data: BodyType<CancelQuickSaleBody>}
+
+    export const useCancelQuickSale = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelQuickSale>>, TError,CancelQuickSaleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof cancelQuickSale>>,
+        TError,
+        CancelQuickSaleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCancelQuickSaleMutationOptions(options), queryClient);
+    }
 
 export const getRecordServiceAppointmentPaymentUrl = (id: number,
     apptId: number,) => {
