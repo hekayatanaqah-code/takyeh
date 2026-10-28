@@ -14342,17 +14342,17 @@ function RevenueTab() {
   }, [calType, serviceGregorianMonths, serviceHijriMonths, serviceRevenueYear]);
 
   useEffect(() => {
-    if (!serviceOnlyRevenue || serviceYearOptions.length === 0) return;
+    if (!serviceOnlyRevenue || serviceYearOptions.length === 0 || !serviceRevenueYear) return;
     if (!serviceYearOptions.includes(serviceRevenueYear)) {
       setServiceRevenueYear(serviceYearOptions[0]);
       return;
     }
     if (calType === "gregorian") {
-      if (!serviceMonthsForYear.includes(serviceSelectedMonth)) {
+      if (serviceSelectedMonth && !serviceMonthsForYear.includes(serviceSelectedMonth)) {
         const firstMonth = serviceGregorianMonths.find((month) => month.startsWith(`${serviceRevenueYear}-`));
         if (firstMonth) setServiceSelectedMonth(firstMonth);
       }
-    } else if (!serviceMonthsForYear.includes(serviceSelectedHijriMonth)) {
+    } else if (serviceSelectedHijriMonth && !serviceMonthsForYear.includes(serviceSelectedHijriMonth)) {
       const firstMonth = serviceHijriMonths.find((month) => String(month.year) === serviceRevenueYear);
       if (firstMonth) setServiceSelectedHijriMonth(firstMonth.key);
     }
@@ -14678,9 +14678,10 @@ function RevenueTab() {
         secondary,
       };
     };
-    const activeServiceMonth = calType === "gregorian"
-      ? (serviceMonthsForYear.includes(serviceSelectedMonth) ? serviceSelectedMonth : serviceMonthsForYear[0] ?? "")
-      : (serviceMonthsForYear.includes(serviceSelectedHijriMonth) ? serviceSelectedHijriMonth : serviceMonthsForYear[0] ?? "");
+    const activeServiceMonth = !serviceRevenueYear ? "" : calType === "gregorian"
+      ? serviceSelectedMonth
+      : serviceSelectedHijriMonth;
+    const servicePeriod = { calendar: calType, year: serviceRevenueYear, month: activeServiceMonth };
 
     return (
       <div className="space-y-5" dir="rtl">
@@ -14699,7 +14700,7 @@ function RevenueTab() {
                       ? Array.from(new Set(serviceGregorianMonths.map((month) => month.slice(0, 4)))).sort().reverse()
                       : Array.from(new Set(serviceHijriMonths.map((month) => String(month.year)))).sort().reverse();
                     setCalType(mode);
-                    if (years[0]) setServiceRevenueYear(years[0]);
+                    if (serviceRevenueYear && years[0]) setServiceRevenueYear(years[0]);
                     localStorage.setItem("revCalType", mode);
                   }}
                   className={`px-2 sm:px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
@@ -14709,11 +14710,16 @@ function RevenueTab() {
               ))}
             </div>
             {serviceYearOptions.length > 0 && (
-              <Select dir="rtl" value={serviceRevenueYear} onValueChange={setServiceRevenueYear}>
+              <Select dir="rtl" value={serviceRevenueYear || "__all__"} onValueChange={(value) => {
+                setServiceRevenueYear(value === "__all__" ? "" : value);
+                setServiceSelectedMonth("");
+                setServiceSelectedHijriMonth("");
+              }}>
                 <SelectTrigger aria-label="السنة" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[7.5rem] [&>svg]:shrink-0" dir="rtl">
                   <SelectValue placeholder="السنة" />
                 </SelectTrigger>
                 <SelectContent dir="rtl" align="start" className="text-right">
+                  <SelectItem value="__all__">كل السنوات</SelectItem>
                   {serviceYearOptions.map((year) => (
                     <SelectItem key={year} value={year}>
                       {calType === "hijri" ? `${toArN(Number(year))} هـ` : `${toArN(Number(year))} م`}
@@ -14722,21 +14728,27 @@ function RevenueTab() {
                 </SelectContent>
               </Select>
             )}
-            {serviceMonthsForYear.length > 0 && (
+            {serviceYearOptions.length > 0 && (
               <Select
                 dir="rtl"
-                value={activeServiceMonth}
-                onValueChange={calType === "gregorian" ? setServiceSelectedMonth : setServiceSelectedHijriMonth}
+                value={activeServiceMonth || "__all__"}
+                disabled={!serviceRevenueYear}
+                onValueChange={(value) => {
+                  const month = value === "__all__" ? "" : value;
+                  if (calType === "gregorian") setServiceSelectedMonth(month);
+                  else setServiceSelectedHijriMonth(month);
+                }}
               >
                 <SelectTrigger aria-label="الشهر" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[11rem] [&>svg]:shrink-0" dir="rtl">
                   <span className="min-w-0 flex-1 truncate text-right text-sm font-medium">
-                    {serviceMonthLabel(
+                    {activeServiceMonth ? serviceMonthLabel(
                       activeServiceMonth,
                       calType,
-                    ).primary}
+                    ).primary : "كل الأشهر"}
                   </span>
                 </SelectTrigger>
                 <SelectContent dir="rtl" align="start" className="revenue-gregorian-month-menu text-right">
+                  <SelectItem value="__all__">كل الأشهر</SelectItem>
                   {serviceMonthsForYear.map((month) => {
                     const label = serviceMonthLabel(month, calType);
                     return (
@@ -14757,12 +14769,12 @@ function RevenueTab() {
           <div className="bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
               <Receipt className="w-3.5 h-3.5 text-blue-600" />
-              إجمالي مبيعات الشهر
+              {revenueSalesTitle(servicePeriod)}
             </div>
             {svcLoading ? <Skeleton className="h-7 w-24" /> : (
               <OwnerStatAmount amount={fmtN(svcSales)} className="text-blue-700 dark:text-blue-400" />
             )}
-            <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي قيمة حجوزات الخدمات في الشهر المحدد</div>
+            <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي قيمة حجوزات الخدمات {activeServiceMonth ? "في الشهر المحدد" : serviceRevenueYear ? "في السنة المحددة" : "لكامل الفترة"}</div>
           </div>
           <div className="bg-green-50/60 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
@@ -14803,9 +14815,9 @@ function RevenueTab() {
           {svcLoading ? (
             <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-12 w-full" />)}</div>
           ) : filteredSvcRows.length === 0 ? (
-            <div className="text-center text-muted-foreground text-sm py-8">لا توجد إيرادات لهذا الشهر</div>
+            <div className="text-center text-muted-foreground text-sm py-8">لا توجد إيرادات للفترة المحددة</div>
           ) : (
-            <PaginatedItems items={filteredSvcRows} resetKey={`${calType}|${serviceSelectedMonth}|${serviceSelectedHijriMonth}|${svcFilter}`}>
+            <PaginatedItems items={filteredSvcRows} resetKey={`${calType}|${serviceRevenueYear}|${serviceSelectedMonth}|${serviceSelectedHijriMonth}|${svcFilter}`}>
               {(pagination) => (
                 <div ref={pagination.tableRef} className="scroll-mt-4">
                   <div className="overflow-x-auto">

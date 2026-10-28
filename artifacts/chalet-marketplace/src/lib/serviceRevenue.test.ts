@@ -50,3 +50,20 @@ test("overpayments do not inflate sales or create negative pending amounts", () 
   assert.deepEqual(serviceRevenueTotals([{ id: 1, providerId: 1, amount: "10.50", deposit: "12" }]),
     { sales: 10.5, collected: 12, pending: 0 });
 });
+
+test("all months scopes to the chosen year and all years includes the full service history in either calendar", () => {
+  const activity = { type: "service", id: 167, name: "خدمة" } as const;
+  const history = [
+    ...appointments,
+    { id: 7, providerId: 167, dateStr: "2025-01-10", amount: "70", deposit: "20" },
+  ];
+  for (const calendar of ["gregorian", "hijri"] as const) {
+    const year = revenueMonthKey("2026-10-15", calendar).slice(0, 4);
+    const annual = serviceRevenueBookings(history, activity, { calendar, year, month: "" });
+    assert.deepEqual(annual.map(a => a.id), [1, 2, 3, 5]);
+    assert.deepEqual(serviceRevenueTotals(annual), { sales: 900, collected: 550, pending: 350 });
+    const allTime = serviceRevenueBookings(history, activity, { calendar, year: "", month: "" });
+    assert.deepEqual(allTime.map(a => a.id), [1, 2, 3, 5, 7]);
+    assert.deepEqual(serviceRevenueTotals(allTime), { sales: 970, collected: 570, pending: 400 });
+  }
+});
