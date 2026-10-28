@@ -1,6 +1,7 @@
 import { Calendar, CheckCircle, ChevronDown, Clock, Edit2, Eye, Globe, Loader2, MapPin, MessageCircle, MessageSquare, Phone, Plus, Receipt, ScrollText, Star, Trash2, XCircle, Banknote, Briefcase } from "lucide-react";
 import { formatDualDate, withHijriEra } from "@/lib/hijri";
 import { serviceReceiptMoney, servicePaymentMethodLabel } from "@/lib/serviceReceipt";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 const toAr = (v: unknown) => String(v ?? "").replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 const STATUS_LABEL: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
@@ -37,7 +38,7 @@ const STRIP_TONE: Record<ServiceFinancialStrip["tone"], string> = {
   amber: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800",
 };
 
-const pill = "inline-flex items-center gap-1 text-xs font-medium rounded-lg px-2.5 py-1 border transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
+const pill = "inline-flex shrink-0 items-center justify-center gap-1 h-8 text-xs font-medium rounded-lg px-2.5 border transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
 
 export type ServiceBookingCardProps = {
   appointment: any;
@@ -145,19 +146,25 @@ export function ServiceBookingCard(p: ServiceBookingCardProps) {
           <div><p className="text-[10px] text-muted-foreground">المتبقي</p><p className={`text-xs font-bold ${fin.remaining === 0 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>{serviceReceiptMoney(fin.remaining)}</p></div>
         </div>
 
-        <div className="flex flex-wrap gap-1.5">
-          <div className="relative">
-            <button type="button" disabled={!hasPhone} title={hasPhone ? "إرسال رسالة واتساب" : "لا يوجد رقم واتساب للعميل"} onClick={p.onToggleMessageMenu} className={`${pill} text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:bg-green-100`} data-testid={`button-service-whatsapp-${a.id}`}>
+        <div
+          className="flex min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin]"
+          role="group"
+          aria-label="إجراءات الحجز — مرّر أفقيًا لعرض المزيد"
+          tabIndex={0}
+          data-testid={`service-booking-action-strip-${a.id}`}
+        >
+          <DropdownMenu dir="rtl" open={p.messageMenuOpen} onOpenChange={(open) => { if (open !== p.messageMenuOpen) p.onToggleMessageMenu(); }}>
+            <DropdownMenuTrigger asChild>
+            <button type="button" disabled={!hasPhone} title={hasPhone ? "إرسال رسالة واتساب" : "لا يوجد رقم واتساب للعميل"} className={`${pill} text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 hover:bg-green-100`} data-testid={`button-service-whatsapp-${a.id}`}>
               <MessageSquare className="w-3.5 h-3.5" />واتساب<ChevronDown className="w-3 h-3" />
             </button>
-            {p.messageMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-60 max-w-[80vw] rounded-xl border border-border bg-card shadow-xl p-1.5">
+            </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" sideOffset={6} className="w-60 max-w-[80vw] rounded-xl">
                 {p.templates.length > 0 ? p.templates.map((t) => (
-                  <button key={t.id} type="button" onClick={() => p.onSendTemplate(t.body)} className="w-full text-right rounded-lg px-3 py-2 text-xs font-medium hover:bg-muted transition-colors">{t.title}</button>
+                  <DropdownMenuItem key={t.id} onSelect={() => p.onSendTemplate(t.body)} className="text-xs">{t.title}</DropdownMenuItem>
                 )) : <p className="px-3 py-2 text-xs text-muted-foreground">فعّل واتساب أو أضف قالباً من إعدادات الرسائل.</p>}
-              </div>
-            )}
-          </div>
+              </DropdownMenuContent>
+          </DropdownMenu>
           {fin.canCollect && (
             <button type="button" onClick={p.onAddPayment} className={`${pill} text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 hover:bg-blue-100`} data-testid={`button-service-add-payment-${a.id}`}>
               <Plus className="w-3.5 h-3.5" />إضافة دفعة
@@ -193,6 +200,7 @@ export function ServiceBookingCard(p: ServiceBookingCardProps) {
             </button>
           )}
         </div>
+        <p className="text-[10px] text-muted-foreground">مرّر الأزرار أفقيًا لعرض باقي الإجراءات</p>
       </div>
 
       <div className={`rounded-b-xl border-t px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs ${STRIP_TONE[fin.strip.tone]}`} data-testid={`strip-service-financial-${a.id}`}>

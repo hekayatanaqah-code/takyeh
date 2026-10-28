@@ -43,6 +43,7 @@ import { FinancialMonthOption } from "@/components/FinancialMonthOption";
 import { SubmissionDate } from "@/components/owner/SubmissionDate";
 import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard";
 import { ServiceBookingCard, serviceFinancialState } from "@/components/owner/ServiceBookingCard";
+import { sortServiceBookings, serviceBookingPage } from "@/lib/serviceBookingList";
 import { ServiceBookingPaymentDialog } from "@/components/owner/ServiceBookingPaymentDialog";
 import { useRecordServiceAppointmentPayment } from "@workspace/api-client-react";
 import { ServiceManagementNavigation } from "@/components/owner/ServiceManagementNavigation";
@@ -10442,6 +10443,12 @@ function ServiceCalendarBookingsTab() {
   const [contractPreviewAppointment, setContractPreviewAppointment] = useState<any | null>(null);
   const receiptPdfExportNonceRef = useRef(0);
   const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
+  const [serviceListPage, setServiceListPage] = useState(1);
+  const serviceListRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setServiceListPage(1);
+    setOpenServiceMessageMenuId(null);
+  }, [providerId, listFilter]);
   const emptyForm = {
     clientName: "",
     clientPhone: "",
@@ -11232,9 +11239,19 @@ function ServiceCalendarBookingsTab() {
   };
   const statusLabel: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
 
-  const filteredAppts = listFilter === "all" ? appointments : appointments.filter(a => a.status === listFilter);
+  const filteredAppts = useMemo(
+    () => sortServiceBookings<any>(
+      listFilter === "all" ? appointments : appointments.filter(a => a.status === listFilter),
+      todayStr,
+    ),
+    [appointments, listFilter, todayStr],
+  );
+  const pagedAppts = serviceBookingPage(filteredAppts, serviceListPage);
+  useEffect(() => {
+    if (serviceListPage !== pagedAppts.page) setServiceListPage(pagedAppts.page);
+  }, [serviceListPage, pagedAppts.page]);
   const summaryAppointments = summaryDate
-    ? appointments.filter((appointment) => appointment.dateStr === summaryDate)
+    ? sortServiceBookings(appointments.filter((appointment) => appointment.dateStr === summaryDate), todayStr)
     : [];
   const summaryActiveAppointments = summaryAppointments.filter((appointment) => appointment.status !== "cancelled");
   const summaryBlocked = summaryDate ? blockedSet.has(summaryDate) : false;
@@ -12023,7 +12040,7 @@ function ServiceCalendarBookingsTab() {
       />
 
       {/* ── APPOINTMENTS LIST ── */}
-      <div className="space-y-3">
+      <div ref={serviceListRef} className="min-w-0 space-y-3 scroll-mt-24" data-testid="service-bookings-register">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-sm font-bold text-foreground">سجل الحجوزات</h3>
           <div className="flex gap-1">
@@ -12045,7 +12062,7 @@ function ServiceCalendarBookingsTab() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {filteredAppts.map((a: any) => (
+            {pagedAppts.items.map((a: any) => (
                       <ServiceBookingCard
                         key={a.id}
                         appointment={a}
@@ -12076,6 +12093,19 @@ function ServiceCalendarBookingsTab() {
                       />
             ))}
           </div>
+        )}
+        {!apptLoading && filteredAppts.length > 0 && (
+          <BookingArchivePagination
+            page={pagedAppts.page}
+            total={filteredAppts.length}
+            loading={false}
+            label="صفحات سجل حجوزات الخدمات"
+            onChange={(page) => {
+              setServiceListPage(page);
+              setOpenServiceMessageMenuId(null);
+              serviceListRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+            }}
+          />
         )}
       </div>
 

@@ -9,6 +9,12 @@ Service bookings use the property bookings' card presentation in both the bookin
 
 **How to apply:** Preserve visual parity without mounting property-only data or mutations. Keep the previously approved service time picker intact and keep editing/rescheduling unified under «تعديل».
 
+The service booking register is ordered by service date, not record-creation date, and limited to ten cards per page with previous/next/numbered navigation. Quick actions stay on one evenly spaced line rather than wrapping.
+
+**Why:** The user explicitly requested these constraints to keep large booking registers from becoming excessively long and card actions from becoming crowded.
+
+**How to apply:** Reset pagination when changing service or status filters, and keep the selected page valid after deletions. Allow scrolling inside the action strip on narrow screens without widening the page; menus must remain visible outside that scroll area.
+
 Additional collections use the existing booking's payment method and custody classification; do not silently introduce mixed payment methods or partial bank-deposit accounting.
 
 **Why:** This request changes presentation and adds a quick collection action, not a new per-installment financial ledger. Reclassifying all prior money to match a new payment would corrupt the accepted balances.

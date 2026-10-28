@@ -2,13 +2,13 @@ import { Button } from "@/components/ui/button";
 import { archivePageNumbers } from "@/lib/bookingArchive";
 import { toAr } from "@/lib/utils";
 
-export default function BookingArchivePagination({ page, total, loading, onChange }: {
-  page: number; total: number; loading: boolean; onChange: (page: number) => void;
+export default function BookingArchivePagination({ page, total, loading, onChange, label = "صفحات الأرشيف" }: {
+  page: number; total: number; loading: boolean; onChange: (page: number) => void; label?: string;
 }) {
   const totalPages = Math.max(1, Math.ceil(total / 10));
   if (!total) return null;
   return (
-    <nav aria-label="صفحات الأرشيف" className="px-4 pb-4 border-t border-border pt-3 space-y-2" dir="rtl">
+    <nav aria-label={label} className="px-4 pb-4 border-t border-border pt-3 space-y-2" dir="rtl">
       <p className="text-xs text-muted-foreground text-center">
         عرض {toAr((page - 1) * 10 + 1)}–{toAr(Math.min(page * 10, total))} من {toAr(total)} · ١٠ حجوزات لكل صفحة
       </p>

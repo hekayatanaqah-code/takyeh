@@ -4,6 +4,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ServiceBookingCard, serviceFinancialState } from "./ServiceBookingCard";
 import { normalizePaymentAmountInput, validateAdditionalPayment } from "./ServiceBookingPaymentDialog";
+import BookingArchivePagination from "./BookingArchivePagination";
 
 Object.assign(globalThis, { React });
 const noop = () => {};
@@ -40,4 +41,26 @@ it("validates eastern decimal payments", () => {
   assert.ok(validateAdditionalPayment(normalizePaymentAmountInput("-١٠"), 300));
   assert.ok(validateAdditionalPayment(normalizePaymentAmountInput("1e3"), 300));
   assert.ok(validateAdditionalPayment(normalizePaymentAmountInput("١.٢.٣"), 300));
+});
+
+it("keeps actions on a single nonshrinking horizontally scrollable row", () => {
+  const html = render(base);
+  assert.ok(html.includes('data-testid="service-booking-action-strip-7"'));
+  assert.ok(html.includes("flex-nowrap"));
+  assert.ok(html.includes("overflow-x-auto"));
+  assert.ok(html.includes("shrink-0"));
+  assert.ok(!html.includes("absolute right-0 top-full"));
+});
+
+it("renders previous, next and numbered navigation with service-specific label", () => {
+  const html = renderToStaticMarkup(React.createElement(BookingArchivePagination, {
+    page: 2, total: 25, loading: false, onChange: noop, label: "صفحات سجل حجوزات الخدمات",
+  }));
+  assert.ok(html.includes('aria-label="صفحات سجل حجوزات الخدمات"'));
+  assert.ok(html.includes('aria-current="page"'));
+  assert.ok(html.includes("السابق"));
+  assert.ok(html.includes("التالي"));
+  assert.ok(html.includes("١١"));
+  assert.ok(html.includes("٢٠"));
+  assert.ok(html.includes("٢٥"));
 });
