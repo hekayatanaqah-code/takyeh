@@ -24,4 +24,5 @@ export interface ServiceAppointmentRecord {
   amount?: string | null;
   /** @nullable */
   deposit?: string | null;
+  insuranceProofImages?: string[];
 }

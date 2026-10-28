@@ -184,6 +184,42 @@ after(async () => {
 });
 
 describe("service appointment capacity and isolation", () => {
+  it("persists insurance deduction pictures with the booking and preserves them on unrelated edits", async () => {
+    await db.update(serviceProvidersTable).set({ requiresInsurance: true, insuranceAmount: "300" })
+      .where(eq(serviceProvidersTable.id, providerId));
+    try {
+      const created = await requestAppointment(providerId, "POST", "", appointmentBody(TEST_DATES.available));
+      assert.equal(created.response.status, 201);
+      assert.deepEqual(created.json.insuranceProofImages, []);
+      const images = ["/api/storage/objects/uploads/test-damage-1.webp", "/api/storage/objects/uploads/test-damage-2.webp"];
+      const documented = await requestAppointment(providerId, "PATCH", `/${created.json.id}`, {
+        insuranceStatus: "deducted", insuranceDeductAmount: "50", insuranceDeductNote: "تلفيات موثقة",
+        insuranceProofImages: images,
+      });
+      assert.equal(documented.response.status, 200);
+      assert.deepEqual(documented.json.insuranceProofImages, images);
+      const edited = await requestAppointment(providerId, "PATCH", `/${created.json.id}`, { notes: "تفاصيل محدثة" });
+      assert.equal(edited.response.status, 200);
+      assert.deepEqual(edited.json.insuranceProofImages, images);
+      const reloaded = await requestAppointment(providerId, "GET");
+      assert.deepEqual(reloaded.json.find((row: any) => row.id === created.json.id).insuranceProofImages, images);
+      const [saved] = await db.select().from(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.id, created.json.id));
+      assert.deepEqual(saved.insuranceProofImages, images);
+      const otherProvider = await createProvider();
+      const denied = await requestAppointment(otherProvider, "PATCH", `/${created.json.id}`, { insuranceProofImages: [] });
+      assert.equal(denied.response.status, 404);
+      for (const insuranceProofImages of [
+        ["javascript:alert(1)"], ["https://example.com/image.webp"], ["/api/storage/objects/../secret.webp"],
+        Array(11).fill(images[0]), "not-an-array",
+      ]) {
+        const invalid = await requestAppointment(providerId, "PATCH", `/${created.json.id}`, { insuranceProofImages });
+        assert.equal(invalid.response.status, 422);
+      }
+    } finally {
+      await db.delete(ownerCustomersTable).where(eq(ownerCustomersTable.ownerId, ownerId));
+    }
+  });
+
   it("defaults insurance only when omitted and persists per-booking overrides, zero and blank exemptions", async () => {
     await db.update(serviceProvidersTable).set({
       requiresInsurance: true, insuranceAmount: "300", dailyCapacity: 20,

@@ -1137,6 +1137,10 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
     insuranceStatus: z.enum(["held", "refunded", "deducted"]).optional(),
     insuranceDeductAmount: z.string().optional().nullable(),
     insuranceDeductNote: z.string().optional().nullable(),
+    insuranceProofImages: z.array(z.string().regex(
+      /^\/api\/storage\/objects\/uploads\/[a-zA-Z0-9_-]+\.(webp|png|jpg|jpeg|gif|avif)$/,
+      "مسار صورة التوثيق غير صحيح",
+    )).max(10).optional(),
   });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة" });

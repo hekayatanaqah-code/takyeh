@@ -1581,6 +1581,11 @@ components:
         cancelReason: { type: [string, "null"] }
         cancelRefundAmount: { type: [string, "null"] }
         editReason: { type: [string, "null"] }
+        insuranceProofImages:
+          type: array
+          maxItems: 10
+          items: { type: string, pattern: '^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\.(webp|png|jpg|jpeg|gif|avif)$' }
+          description: Stored damage-evidence image paths; omission preserves existing attachments
     ServiceAppointmentRecord:
       type: object
       required: [id, providerId, dateStr, status]
@@ -1596,6 +1601,9 @@ components:
         clientPhone: { type: [string, "null"] }
         amount: { type: [string, "null"] }
         deposit: { type: [string, "null"] }
+        insuranceProofImages:
+          type: array
+          items: { type: string }
     ProviderCatalogImageUploadInput:
       type: object
       required: [file]

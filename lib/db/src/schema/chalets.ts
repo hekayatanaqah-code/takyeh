@@ -1183,6 +1183,7 @@ export const serviceAppointmentsTable = pgTable("service_appointments", {
   insuranceStatus: text("insurance_status").default("held"),
   insuranceDeductAmount: numeric("insurance_deduct_amount", { precision: 10, scale: 2 }),
   insuranceDeductNote: text("insurance_deduct_note"),
+  insuranceProofImages: jsonb("insurance_proof_images").$type<string[]>().notNull().default([]),
   source: text("source").notNull().default("external"),
   paymentMethod: paymentMethodEnum("payment_method").default("cash"),
   paymentReceiptUrl: text("payment_receipt_url"),

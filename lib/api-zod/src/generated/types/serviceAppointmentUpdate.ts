@@ -52,4 +52,10 @@ export interface ServiceAppointmentUpdate {
   cancelRefundAmount?: string | null;
   /** @nullable */
   editReason?: string | null;
+  /**
+     * Stored damage-evidence image paths; omission preserves existing attachments
+     * @maxItems 10
+     * @items.pattern ^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\.(webp|png|jpg|jpeg|gif|avif)$
+     */
+  insuranceProofImages?: string[];
 }

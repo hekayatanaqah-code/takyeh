@@ -38,7 +38,8 @@ export const RecordServiceAppointmentPaymentResponse = zod.object({
   "clientName": zod.string().optional(),
   "clientPhone": zod.string().nullish(),
   "amount": zod.string().nullish(),
-  "deposit": zod.string().nullish()
+  "deposit": zod.string().nullish(),
+  "insuranceProofImages": zod.array(zod.string()).optional()
 })
 
 
@@ -53,6 +54,9 @@ export const UpdateServiceAppointmentParams = zod.object({
 
 
 export const updateServiceAppointmentBodyStartTimeRegExp = new RegExp('^([01][0-9]|2[0-3]):[0-5][0-9]$');
+
+export const updateServiceAppointmentBodyInsuranceProofImagesItemRegExp = new RegExp('^/api/storage/objects/uploads/[a-zA-Z0-9_-]+\\.(webp|png|jpg|jpeg|gif|avif)$');
+export const updateServiceAppointmentBodyInsuranceProofImagesMax = 10;
 
 
 
@@ -78,7 +82,8 @@ export const UpdateServiceAppointmentBody = zod.object({
   "contractSigned": zod.boolean().optional(),
   "cancelReason": zod.string().nullish(),
   "cancelRefundAmount": zod.string().nullish(),
-  "editReason": zod.string().nullish()
+  "editReason": zod.string().nullish(),
+  "insuranceProofImages": zod.array(zod.string().regex(updateServiceAppointmentBodyInsuranceProofImagesItemRegExp)).max(updateServiceAppointmentBodyInsuranceProofImagesMax).optional().describe('Stored damage-evidence image paths; omission preserves existing attachments')
 })
 
 export const UpdateServiceAppointmentResponse = zod.object({
@@ -92,7 +97,8 @@ export const UpdateServiceAppointmentResponse = zod.object({
   "clientName": zod.string().optional(),
   "clientPhone": zod.string().nullish(),
   "amount": zod.string().nullish(),
-  "deposit": zod.string().nullish()
+  "deposit": zod.string().nullish(),
+  "insuranceProofImages": zod.array(zod.string()).optional()
 })
 
 

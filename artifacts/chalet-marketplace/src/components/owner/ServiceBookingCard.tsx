@@ -1,3 +1,4 @@
+import { InsuranceProofGallery } from "./InsuranceProofImages";
 import { Calendar, CheckCircle, ChevronDown, Clock, Edit2, Eye, Globe, Loader2, MapPin, MessageCircle, MessageSquare, Phone, Plus, Receipt, ScrollText, Star, Trash2, XCircle, Banknote, Briefcase } from "lucide-react";
 import { formatDualDate, withHijriEra } from "@/lib/hijri";
 import { serviceReceiptMoney, servicePaymentMethodLabel } from "@/lib/serviceReceipt";
@@ -136,6 +137,12 @@ export function ServiceBookingCard(p: ServiceBookingCardProps) {
           </div>
         )}
 
+        {a.insuranceStatus === "deducted" && a.insuranceProofImages?.length > 0 && (
+          <div className="space-y-2 border-t border-border pt-2 text-xs">
+            <p className="font-semibold text-red-600">توثيق خصم التأمين{a.insuranceDeductNote ? `: ${a.insuranceDeductNote}` : ""}</p>
+            <InsuranceProofGallery images={a.insuranceProofImages} />
+          </div>
+        )}
         {(a.serviceAddress || a.notes) && (
           <div className="bg-muted/30 rounded-lg px-3 py-2 text-xs space-y-1 min-w-0">
             {a.serviceAddress && <p className="flex items-start gap-1.5 break-words [overflow-wrap:anywhere]"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-muted-foreground" />{a.serviceAddress}</p>}

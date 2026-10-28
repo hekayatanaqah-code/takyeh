@@ -95,6 +95,7 @@ import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import { CustomerDate } from "@/components/owner/CustomerDate";
 import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
 import { CustomerHistory } from "@/components/owner/CustomerHistory";
+import { InsuranceProofGallery, InsuranceProofImages } from "@/components/owner/InsuranceProofImages";
 import { CustomerDirectory } from "@/components/owner/CustomerDirectory";
 import { StaffHoldingsPanel } from "@/components/owner/StaffHoldingsPanel";
 import {
@@ -12563,6 +12564,14 @@ function ServiceBookingInsurancesTab() {
   const [actionType, setActionType] = useState<"refund" | "deduct" | null>(null);
   const [deductForm, setDeductForm] = useState({ insuranceDeductAmount: "", insuranceDeductNote: "" });
   const [saving, setSaving] = useState(false);
+  const [proofImages, setProofImages] = useState<string[]>([]);
+  const [proofUploading, setProofUploading] = useState(false);
+  useEffect(() => {
+    setActionOpen(null);
+    setActionType(null);
+    setProofImages([]);
+    setProofUploading(false);
+  }, [providerId]);
 
   const { data: appointments = [], isLoading } = useQuery<any[]>({
     queryKey: ["service-appointments", providerId],
@@ -12594,6 +12603,7 @@ function ServiceBookingInsurancesTab() {
   }
 
   async function handleDeduct(apptId: number) {
+    if (saving || proofUploading) return;
     if (!deductForm.insuranceDeductAmount || !deductForm.insuranceDeductNote) {
       toast({ title: "المبلغ والتوثيق مطلوبان", variant: "destructive" });
       return;
@@ -12606,12 +12616,14 @@ function ServiceBookingInsurancesTab() {
           insuranceStatus: "deducted",
           insuranceDeductAmount: deductForm.insuranceDeductAmount,
           insuranceDeductNote: deductForm.insuranceDeductNote,
+          insuranceProofImages: proofImages,
         }),
       });
       if (!r.ok) throw new Error();
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
       toast({ title: "تم تسجيل الخصم التأميني ✓", description: `${parseFloat(deductForm.insuranceDeductAmount).toLocaleString()} ر.س — موثّق` });
       setActionOpen(null); setActionType(null); setDeductForm({ insuranceDeductAmount: "", insuranceDeductNote: "" });
+      setProofImages([]);
     } catch { toast({ title: "خطأ في التسجيل", variant: "destructive" }); }
     finally { setSaving(false); }
   }
@@ -12679,15 +12691,16 @@ function ServiceBookingInsurancesTab() {
                     {status === "deducted" && a.insuranceDeductNote && (
                       <p className="text-xs text-red-600 dark:text-red-400 mt-1">سبب الخصم: {a.insuranceDeductNote}{a.insuranceDeductAmount ? ` (${parseFloat(a.insuranceDeductAmount).toLocaleString()} ر.س)` : ""}</p>
                     )}
+                    {status === "deducted" && <InsuranceProofGallery images={a.insuranceProofImages} />}
                   </div>
 
                   {status === "held" && (
                     <div className="flex gap-2 shrink-0">
-                      <Button size="sm" variant="outline" onClick={() => { setActionOpen(a.id); setActionType("refund"); }}
+                      <Button size="sm" variant="outline" disabled={saving || proofUploading} onClick={() => { setActionOpen(a.id); setActionType("refund"); }}
                         className="rounded-xl text-xs gap-1 h-8 border-green-300 text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20">
                         <RefreshCw className="w-3 h-3" />استرداد
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => { setActionOpen(a.id); setActionType("deduct"); setDeductForm({ insuranceDeductAmount: String(insAmt), insuranceDeductNote: "" }); }}
+                      <Button size="sm" variant="outline" disabled={saving || proofUploading} onClick={() => { setActionOpen(a.id); setActionType("deduct"); setProofImages(a.insuranceProofImages ?? []); setDeductForm({ insuranceDeductAmount: String(insAmt), insuranceDeductNote: "" }); }}
                         className="rounded-xl text-xs gap-1 h-8 border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
                         <Scissors className="w-3 h-3" />خصم
                       </Button>
@@ -12727,9 +12740,11 @@ function ServiceBookingInsurancesTab() {
                           placeholder="وصف التلفيات أو السبب..." className="rounded-xl h-9" />
                       </div>
                     </div>
+                    <InsuranceProofImages key={`${providerId}:${a.id}`} images={proofImages} onChange={setProofImages}
+                      upload={uploadFile} onUploadingChange={setProofUploading} disabled={saving} />
                     <div className="flex gap-2 justify-end">
-                      <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => { setActionOpen(null); setActionType(null); }}>إلغاء</Button>
-                      <Button size="sm" disabled={saving} onClick={() => handleDeduct(a.id)}
+                      <Button variant="ghost" size="sm" disabled={saving || proofUploading} className="rounded-xl" onClick={() => { setActionOpen(null); setActionType(null); setProofImages([]); }}>إلغاء</Button>
+                      <Button size="sm" disabled={saving || proofUploading} onClick={() => handleDeduct(a.id)}
                         className="rounded-xl gap-1.5 bg-red-600 hover:bg-red-700 text-white">
                         {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Scissors className="w-3 h-3" />}حفظ الخصم
                       </Button>
