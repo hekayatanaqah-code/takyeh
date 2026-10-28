@@ -21,6 +21,7 @@ import {
 } from "@workspace/db/schema";
 import { eq, and, ne, desc, isNull, gte, sql, inArray, or } from "drizzle-orm";
 import { z } from "zod";
+import { initialAppointmentInsurance, serviceAppointmentInsuranceAmount } from "../lib/service-appointment-insurance";
 import { CreateServiceSeasonBody, UpdateServiceSeasonBody, RecordServiceAppointmentPaymentBody } from "@workspace/api-zod";
 import { randomBytes } from "crypto";
 import providerCatalogRouter, { getPublicCatalog } from "./provider-catalog";
@@ -960,7 +961,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
     notes: z.string().trim().min(1, "تفاصيل الخدمة مطلوبة"),
     amount: z.string().optional().nullable(),
     deposit: z.string().optional().nullable(),
-    insuranceAmount: z.string().optional().nullable(),
+    insuranceAmount: serviceAppointmentInsuranceAmount,
     source: z.enum(["platform", "whatsapp", "phone", "walk_in", "external"]).default("external"),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).default("cash"),
     paymentReceiptUrl: z.string().optional().nullable(),
@@ -1025,7 +1026,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
       ...parsed.data,
       clientPhone: phoneNormalized,
       clientIdNumber: provider.requiresInsurance ? (parsed.data.clientIdNumber || null) : null,
-      insuranceAmount: provider.requiresInsurance ? provider.insuranceAmount : null,
+      insuranceAmount: initialAppointmentInsurance(provider, parsed.data.insuranceAmount),
     }).returning();
     return { blocked: false as const, full: false as const, row };
   });
@@ -1124,7 +1125,7 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
     notes: z.string().trim().min(1, "تفاصيل الخدمة مطلوبة").optional(),
     amount: z.string().optional().nullable(),
     deposit: z.string().optional().nullable(),
-    insuranceAmount: z.string().optional().nullable(),
+    insuranceAmount: serviceAppointmentInsuranceAmount,
     source: z.enum(["platform", "whatsapp", "phone", "walk_in", "external"]).optional(),
     paymentMethod: z.enum(["cash", "transfer", "pos"]).optional(),
     paymentReceiptUrl: z.string().optional().nullable(),

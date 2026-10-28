@@ -18,6 +18,7 @@ import {
   serviceAppointmentsTable,
   serviceBlockedDatesTable,
   serviceProvidersTable,
+  ownerCustomersTable,
   sessionsTable,
 } from "@workspace/db";
 
@@ -183,6 +184,69 @@ after(async () => {
 });
 
 describe("service appointment capacity and isolation", () => {
+  it("defaults insurance only when omitted and persists per-booking overrides, zero and blank exemptions", async () => {
+    await db.update(serviceProvidersTable).set({
+      requiresInsurance: true, insuranceAmount: "300", dailyCapacity: 20,
+    }).where(eq(serviceProvidersTable.id, providerId));
+    try {
+      const cases = [
+        { input: {}, expected: 300 },
+        { input: { insuranceAmount: "125.50" }, expected: 125.5 },
+        { input: { insuranceAmount: "0" }, expected: 0 },
+        { input: { insuranceAmount: "" }, expected: 0 },
+        { input: { insuranceAmount: null }, expected: 0 },
+      ];
+      for (const { input, expected } of cases) {
+        const created = await requestAppointment(providerId, "POST", "", appointmentBody(TEST_DATES.available, {
+          amount: "500", deposit: "100", ...input,
+        }));
+        assert.equal(created.response.status, 201, JSON.stringify(created.json));
+        assert.equal(Number(created.json.insuranceAmount), expected);
+        const id = created.json.id;
+        const edited = await requestAppointment(providerId, "PATCH", `/${id}`, { insuranceAmount: "75.25" });
+        assert.equal(edited.response.status, 200);
+        assert.equal(Number(edited.json.insuranceAmount), 75.25);
+        const unrelatedEdit = await requestAppointment(providerId, "PATCH", `/${id}`, { notes: "تعديل التفاصيل فقط" });
+        assert.equal(Number(unrelatedEdit.json.insuranceAmount), 75.25);
+        for (const insuranceAmount of ["0", "50", "", null]) {
+          const waived = await requestAppointment(providerId, "PATCH", `/${id}`, { insuranceAmount });
+          assert.equal(waived.response.status, 200);
+          assert.equal(Number(waived.json.insuranceAmount), Number(insuranceAmount));
+        }
+        const [saved] = await db.select().from(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.id, id));
+        assert.equal(Number(saved.insuranceAmount), 0);
+        assert.equal(Number(saved.amount), 500);
+        assert.equal(Number(saved.deposit), 100);
+      }
+      const [settings] = await db.select().from(serviceProvidersTable).where(eq(serviceProvidersTable.id, providerId));
+      assert.equal(Number(settings.insuranceAmount), 300);
+      assert.equal(settings.requiresInsurance, true);
+    } finally {
+      await db.delete(ownerCustomersTable).where(eq(ownerCustomersTable.ownerId, ownerId));
+    }
+  });
+
+  it("rejects invalid insurance on create and edit without changing saved values", async () => {
+    await db.update(serviceProvidersTable).set({ requiresInsurance: true, insuranceAmount: "300" })
+      .where(eq(serviceProvidersTable.id, providerId));
+    try {
+      for (const insuranceAmount of ["-1", "NaN", "Infinity", "invalid", "12.345", "0x10"]) {
+        const rejected = await requestAppointment(providerId, "POST", "", appointmentBody(TEST_DATES.available, { insuranceAmount }));
+        assert.equal(rejected.response.status, 422);
+      }
+      const created = await requestAppointment(providerId, "POST", "", appointmentBody(TEST_DATES.available, { insuranceAmount: "0" }));
+      assert.equal(created.response.status, 201);
+      for (const insuranceAmount of ["-1", "NaN", "Infinity", "invalid", "12.345", "0x10"]) {
+        const rejected = await requestAppointment(providerId, "PATCH", `/${created.json.id}`, { insuranceAmount });
+        assert.equal(rejected.response.status, 422);
+      }
+      const [saved] = await db.select().from(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.id, created.json.id));
+      assert.equal(Number(saved.insuranceAmount), 0);
+    } finally {
+      await db.delete(ownerCustomersTable).where(eq(ownerCustomersTable.ownerId, ownerId));
+    }
+  });
+
   it("adds a payment atomically without replacing booking or custody details", async () => {
     const created = await requestAppointment(providerId, "POST", "", appointmentBody(TEST_DATES.available, {
       amount: "500.50", deposit: "100.10", paymentMethod: "cash", cashDeposited: false,

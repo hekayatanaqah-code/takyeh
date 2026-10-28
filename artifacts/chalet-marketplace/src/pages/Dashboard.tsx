@@ -10478,6 +10478,7 @@ function ServiceCalendarBookingsTab() {
   const [serviceCustomerLoading, setServiceCustomerLoading] = useState(false);
   const [serviceCustomerFound, setServiceCustomerFound] = useState<boolean | null>(null);
   const serviceCustomerLookupRequestRef = useRef(0);
+  const insuranceManuallyEditedRef = useRef(false);
 
   const { data: provider } = useQuery<any | null>({
     queryKey: ["service-provider-detail", providerId],
@@ -10487,6 +10488,11 @@ function ServiceCalendarBookingsTab() {
     },
     enabled: !!providerId,
   });
+  useEffect(() => {
+    if (!showForm || editingAppointmentId || !provider || insuranceManuallyEditedRef.current) return;
+    const insuranceAmount = provider.requiresInsurance ? String(provider.insuranceAmount ?? "0") : "0";
+    setForm(previous => previous.insuranceAmount === insuranceAmount ? previous : { ...previous, insuranceAmount });
+  }, [showForm, editingAppointmentId, provider?.requiresInsurance, provider?.insuranceAmount]);
 
   const { data: blockedDates = [] } = useQuery<{ id: number; dateStr: string }[]>({
     queryKey: ["service-blocked-dates", providerId],
@@ -10574,7 +10580,8 @@ function ServiceCalendarBookingsTab() {
   function createBookingForDate(dateStr: string) {
     const [year, month] = dateStr.split("-").map(Number);
     setEditingAppointmentId(null);
-    setForm({ ...emptyForm, dateStr });
+    insuranceManuallyEditedRef.current = false;
+    setForm({ ...emptyForm, dateStr, insuranceAmount: provider?.requiresInsurance ? String(provider.insuranceAmount ?? "0") : "0" });
     setServiceCustomerFound(null);
     setPickYear(year);
     setPickMonth(month - 1);
@@ -10588,6 +10595,7 @@ function ServiceCalendarBookingsTab() {
     setShowForm(false);
     setPickerOpen(false);
     setEditingAppointmentId(null);
+    insuranceManuallyEditedRef.current = false;
     setForm({ ...emptyForm });
     setServiceCustomerFound(null);
   }
@@ -10670,6 +10678,11 @@ function ServiceCalendarBookingsTab() {
       });
       return;
     }
+    const insuranceAmount = form.insuranceAmount.trim() || "0";
+    if (!/^\d+(?:\.\d{1,2})?$/.test(insuranceAmount) || !Number.isFinite(Number(insuranceAmount))) {
+      toast({ title: "مبلغ التأمين غير صحيح", description: "أدخل صفراً للإعفاء أو مبلغاً موجباً.", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const endpoint = editingAppointmentId
@@ -10689,7 +10702,7 @@ function ServiceCalendarBookingsTab() {
           clientIdNumber: provider?.requiresInsurance ? (form.clientIdNumber.trim() || null) : null,
           amount: form.amount || null,
           deposit: form.deposit || null,
-          insuranceAmount: editingAppointmentId ? (form.insuranceAmount || null) : undefined,
+          insuranceAmount,
         }),
       });
       if (!r.ok) {
@@ -10699,6 +10712,7 @@ function ServiceCalendarBookingsTab() {
       queryClient.invalidateQueries({ queryKey: ["service-appointments", providerId] });
       toast({ title: editingAppointmentId ? "تم تحديث الحجز ✓" : "تم تسجيل الحجز ✓" });
       setEditingAppointmentId(null);
+      insuranceManuallyEditedRef.current = false;
       setForm({ ...emptyForm }); setShowForm(false); setPickerOpen(false);
     } catch (error) {
       toast({
@@ -10711,6 +10725,7 @@ function ServiceCalendarBookingsTab() {
   }
 
   function startEditingAppointment(appointment: any) {
+    insuranceManuallyEditedRef.current = true;
     setEditingAppointmentId(appointment.id);
     setForm({
       clientName: appointment.clientName ?? "",
@@ -11895,21 +11910,24 @@ function ServiceCalendarBookingsTab() {
               />
               <p className="text-[11px] text-muted-foreground">يُحسب تلقائياً: المبلغ الإجمالي ناقص العربون المدفوع.</p>
             </div>
-            {(provider?.requiresInsurance || (editingAppointmentId && form.insuranceAmount)) && (
+            {(provider?.requiresInsurance || (editingAppointmentId && appointments.some(a => a.id === editingAppointmentId && a.insuranceAmount != null))) && (
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground">
+                <label htmlFor={`service-appointment-insurance-${providerId}`} className="text-xs font-semibold text-muted-foreground">
                   التأمين المسترد المطبق (ر.س)
                 </label>
                 <Input
                   type="text"
                   inputMode="decimal"
                   lang="ar"
-                  value={toAr(editingAppointmentId ? form.insuranceAmount : (provider?.insuranceAmount ?? ""))}
-                  onChange={e => editingAppointmentId && setForm(p => ({ ...p, insuranceAmount: e.target.value.replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))) }))}
-                  readOnly={!editingAppointmentId}
-                  className="rounded-xl bg-muted/40"
+                  id={`service-appointment-insurance-${providerId}`}
+                  value={toAr(form.insuranceAmount)}
+                  onChange={e => {
+                    insuranceManuallyEditedRef.current = true;
+                    setForm(p => ({ ...p, insuranceAmount: fromAr(e.target.value).replace(/٫/g, ".") }));
+                  }}
+                  className="rounded-xl"
                 />
-                {!editingAppointmentId && <p className="text-[11px] text-muted-foreground">يُضاف تلقائياً حسب إعداد الخدمة.</p>}
+                <p className="text-[11px] text-muted-foreground">القيمة الافتراضية من إعدادات الخدمة. يمكنك تعديلها أو مسحها أو إدخال صفر لإعفاء هذا الحجز فقط.</p>
               </div>
             )}
             <div className="space-y-1.5">
