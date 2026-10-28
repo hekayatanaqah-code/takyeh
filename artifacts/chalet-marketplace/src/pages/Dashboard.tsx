@@ -69,7 +69,7 @@ import { employeeDigits, employeeMobileInput, validEmployeeMobile, validEmployee
 import { currentSalaryMonth, hasStaffPlatformAccess, paidPayrollRecords, paidPayrollPeriods, payrollPeriod, payrollPeriodLabel } from "@/lib/payrollPeriods";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "@/components/layout/Navbar";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
 import { Button } from "@/components/ui/button";
@@ -92,6 +92,7 @@ import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
 import { formatDateWithHijri, formatDualDate, withHijriEra, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
 import { clampPage, filterServiceContracts, paginate, serviceContractStatus, serviceMonthOptions, serviceYearOptions, SERVICE_CONTRACTS_PAGE_SIZE, type ServiceCalView, type ServiceContractStatus } from "@/lib/serviceContractArchive";
+import { serviceRevenueBookings, serviceRevenueTotals } from "@/lib/serviceRevenue";
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import { CustomerDate } from "@/components/owner/CustomerDate";
 import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
@@ -14025,6 +14026,44 @@ function RevenueTab() {
     },
   });
 
+  const revenueProvidersQ = useQuery<{ id: number; businessName: string }[]>({
+    queryKey: ["owner", "revenue-service-providers"],
+    queryFn: async () => {
+      const r = await apiFetch("/providers/my/approved");
+      if (!r.ok) throw new Error("تعذّر تحميل أنشطة الخدمات");
+      return r.json();
+    },
+    enabled: unit.type === "all",
+    refetchInterval: 30_000,
+  });
+  const revenueProviders = revenueProvidersQ.data ?? [];
+  // Share the calendar cache so booking/payment invalidation updates revenue.
+  const revenueProviderIds = unit.type === "service" ? [unit.id]
+    : unit.type === "all" ? revenueProviders.map(provider => provider.id) : [];
+  const serviceRevenueQueries = useQueries({
+    queries: revenueProviderIds.map(providerId => ({
+      queryKey: ["service-appointments", providerId],
+      queryFn: async (): Promise<any[]> => {
+        const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`);
+        if (!r.ok) throw new Error("تعذّر تحميل حجوزات الخدمة");
+        return r.json();
+      },
+      staleTime: 0,
+      refetchOnMount: "always" as const,
+      refetchInterval: 30_000,
+    })),
+  });
+  const serviceAppts = serviceRevenueQueries.flatMap(query => query.data ?? []);
+  const svcLoading = (unit.type === "all" && revenueProvidersQ.isLoading)
+    || serviceRevenueQueries.some(query => query.isLoading);
+  const svcError = (unit.type === "all" && revenueProvidersQ.isError)
+    || serviceRevenueQueries.some(query => query.isError);
+  const serviceOnlyRevenue = unit.type === "service"
+    || (unit.type === "all" && revOwnerChalets.length === 0 && revenueProviders.length > 0);
+  const serviceRevenueDates = serviceAppts
+    .filter(a => a.status !== "cancelled" && a.dateStr)
+    .map(a => a.dateStr as string);
+
   const { data: depositLogs = [], refetch: refetchDepositLogs } = useQuery<Array<{ id: number; ownerId: number; submissionId: number | null; amount: string; note: string | null; createdAt: string }>>({
     queryKey: ["owner", "cash-deposit-logs"],
     queryFn: async () => {
@@ -14081,8 +14120,9 @@ function RevenueTab() {
     const years = new Set<string>();
     years.add(String(new Date().getFullYear()));
     allBookings.forEach(bk => { if (bk.bookingDate) years.add(bk.bookingDate.slice(0, 4)); });
+    serviceRevenueDates.forEach(date => years.add(date.slice(0, 4)));
     return Array.from(years).sort().reverse();
-  }, [allBookings]);
+  }, [allBookings, serviceRevenueDates]);
 
   const revHijriYearOptions = useMemo(() => {
     const years = new Set<number>();
@@ -14090,8 +14130,9 @@ function RevenueTab() {
     allBookings.forEach(bk => {
       if (bk.bookingDate) years.add(toHijriComponents(new Date(bk.bookingDate + "T00:00:00")).year);
     });
+    serviceRevenueDates.forEach(date => years.add(toHijriComponents(new Date(`${date}T12:00:00`)).year));
     return Array.from(years).sort().reverse();
-  }, [allBookings]);
+  }, [allBookings, serviceRevenueDates]);
 
   const revMonthsForYear = useMemo(() => {
     if (!revYear) return [];
@@ -14101,6 +14142,9 @@ function RevenueTab() {
       if (revYear === curYear) months.add(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
       allBookings.forEach(bk => {
         if (bk.bookingDate?.startsWith(revYear + "-")) months.add(bk.bookingDate.slice(0, 7));
+      });
+      serviceRevenueDates.forEach(date => {
+        if (date.startsWith(`${revYear}-`)) months.add(date.slice(0, 7));
       });
       return Array.from(months).sort().reverse();
     } else {
@@ -14115,9 +14159,16 @@ function RevenueTab() {
           if (!months.has(key)) months.set(key, d);
         }
       });
+      serviceRevenueDates.forEach(date => {
+        const d = new Date(`${date}T12:00:00`);
+        if (String(toHijriComponents(d).year) === revYear) {
+          const key = revenueMonthKey(date, "hijri");
+          if (!months.has(key)) months.set(key, d);
+        }
+      });
       return Array.from(months.entries()).sort(([,a],[,b]) => b.getTime()-a.getTime()).map(([k]) => k);
     }
-  }, [allBookings, calType, revYear]);
+  }, [allBookings, serviceRevenueDates, calType, revYear]);
 
   /* ── Receivables tab: cascading year/month options ── */
   const pendingAvailableMonths = useMemo(() => {
@@ -14254,16 +14305,6 @@ function RevenueTab() {
     staleTime: 60_000,
   });
 
-  const serviceProviderId = unit.type === "service" ? (unit as any).id : null;
-  const { data: serviceAppts = [], isLoading: svcLoading } = useQuery<any[]>({
-    queryKey: ["service-appointments", serviceProviderId],
-    queryFn: async () => {
-      const r = await apiFetch(`/providers/my/approved/${serviceProviderId}/appointments`);
-      return r.ok ? r.json() : [];
-    },
-    enabled: !!serviceProviderId,
-  });
-
   const serviceGregorianMonths = useMemo(() => {
     const months = new Set<string>();
     serviceAppts.forEach((appointment) => {
@@ -14301,22 +14342,23 @@ function RevenueTab() {
   }, [calType, serviceGregorianMonths, serviceHijriMonths, serviceRevenueYear]);
 
   useEffect(() => {
-    if (unit.type !== "service" || serviceYearOptions.length === 0) return;
+    if (!serviceOnlyRevenue || serviceYearOptions.length === 0) return;
     if (!serviceYearOptions.includes(serviceRevenueYear)) {
       setServiceRevenueYear(serviceYearOptions[0]);
       return;
     }
     if (calType === "gregorian") {
-      if (!serviceGregorianMonths.includes(serviceSelectedMonth)) {
+      if (!serviceMonthsForYear.includes(serviceSelectedMonth)) {
         const firstMonth = serviceGregorianMonths.find((month) => month.startsWith(`${serviceRevenueYear}-`));
         if (firstMonth) setServiceSelectedMonth(firstMonth);
       }
-    } else if (!serviceHijriMonths.some((month) => month.key === serviceSelectedHijriMonth)) {
+    } else if (!serviceMonthsForYear.includes(serviceSelectedHijriMonth)) {
       const firstMonth = serviceHijriMonths.find((month) => String(month.year) === serviceRevenueYear);
       if (firstMonth) setServiceSelectedHijriMonth(firstMonth.key);
     }
   }, [
-    unit.type,
+    serviceOnlyRevenue,
+    serviceMonthsForYear,
     calType,
     serviceYearOptions,
     serviceRevenueYear,
@@ -14326,15 +14368,8 @@ function RevenueTab() {
     serviceSelectedHijriMonth,
   ]);
 
-  // Combined service revenue for "all" unit mode
-  const { data: svcRevSummary } = useQuery<{ totalRevenue: number; totalDeposits: number; totalInsurance: number; totalPending: number; byProvider: { id: number; name: string; revenue: number; deposits: number; insurance: number; pending: number }[] }>({
-    queryKey: ["owner", "service-revenue-summary", selectedMonth],
-    queryFn: async () => {
-      const r = await apiFetch(`/owner/service-revenue-summary?month=${selectedMonth}`);
-      return r.ok ? r.json() : { totalRevenue: 0, totalDeposits: 0, totalInsurance: 0, totalPending: 0, byProvider: [] };
-    },
-    enabled: unit.type === "all",
-  });
+  const combinedServiceBookings = serviceRevenueBookings(serviceAppts, unit, revenuePeriod);
+  const combinedServiceTotals = serviceRevenueTotals(combinedServiceBookings);
 
   // Filter bookings to selected month + optional chalet unit filter
   const monthBookings = useMemo(() => {
@@ -14369,14 +14404,11 @@ function RevenueTab() {
   }, [monthBookings]);
 
   // Service-unit: use the exact selected Gregorian or Hijri period.
-  const monthSvcAppts = useMemo(() =>
-    serviceAppts.filter((appointment) => {
-      if (appointment.status === "cancelled" || !appointment.dateStr) return false;
-      if (calType === "gregorian") return appointment.dateStr.startsWith(serviceSelectedMonth);
-      const hijri = toHijriComponents(new Date(`${appointment.dateStr}T12:00:00`));
-      return `${hijri.year}-${String(hijri.month).padStart(2, "0")}` === serviceSelectedHijriMonth;
-    })
-  , [serviceAppts, calType, serviceSelectedMonth, serviceSelectedHijriMonth]);
+  const monthSvcAppts = serviceRevenueBookings(serviceAppts, unit, {
+    calendar: calType,
+    year: serviceRevenueYear,
+    month: calType === "gregorian" ? serviceSelectedMonth : serviceSelectedHijriMonth,
+  });
 
   // Build revenue rows: each booking can generate 1-3 rows
   interface RevenueRow {
@@ -14506,7 +14538,7 @@ function RevenueTab() {
     refund:       { label: "استرداد",      emoji: "↩️", cls: "bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300" },
   };
 
-  const loading = finLoading || bkLoading;
+  const loading = finLoading || bkLoading || svcLoading;
 
   const big3 = useMemo(() => {
     const sales = monthBookings.reduce((s, b) => {
@@ -14528,8 +14560,12 @@ function RevenueTab() {
       const rem = b.balanceCollected ? 0 : Math.max(0, tp - dep);
       return s + rem;
     }, 0);
-    return { sales: Math.round(sales), collected: Math.round(collected), pending: Math.round(pending) };
-  }, [monthBookings]);
+    return {
+      sales: Math.round(sales + combinedServiceTotals.sales),
+      collected: Math.round(collected + combinedServiceTotals.collected),
+      pending: Math.round(pending + combinedServiceTotals.pending),
+    };
+  }, [monthBookings, combinedServiceTotals.sales, combinedServiceTotals.collected, combinedServiceTotals.pending]);
 
   const channels = useMemo(() => {
     // Use allBookings for bankTransfers (preserves all-time bank position)
@@ -14578,8 +14614,18 @@ function RevenueTab() {
     };
   }, [allBookings, depositLogs, unit, financial?.cashBreakdown]);
 
+  if (svcError) {
+    return <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 space-y-3" dir="rtl">
+      <p className="text-sm font-semibold">تعذّر تحميل إيرادات الخدمات. لا يمكن عرض الإجماليات كاملة حالياً.</p>
+      <Button variant="outline" onClick={() => {
+        if (unit.type === "all") void revenueProvidersQ.refetch();
+        serviceRevenueQueries.forEach(query => { void query.refetch(); });
+      }}>إعادة المحاولة</Button>
+    </div>;
+  }
+
   /* ── SERVICE UNIT: render service appointments revenue ── */
-  if (unit.type === "service") {
+  if (serviceOnlyRevenue) {
     // Build revenue rows mirroring chalet row structure
     interface SvcRow { apptId: number; clientName: string; dateStr: string; type: "deposit" | "balance" | "damage"; amount: number; note?: string; isFullPayment?: boolean; }
     const svcRows: SvcRow[] = [];
@@ -14641,7 +14687,7 @@ function RevenueTab() {
         {/* Header */}
         <div className="flex items-center gap-3 flex-wrap">
           <Activity className="w-5 h-5 text-amber-500 shrink-0" />
-          <h2 className="text-lg font-bold text-foreground">إيرادات: {(unit as any).name}</h2>
+          <h2 className="text-lg font-bold text-foreground">إيرادات: {unit.type === "service" ? unit.name : revenueProviders.length === 1 ? revenueProviders[0].businessName : "جميع الخدمات"}</h2>
           <div className="ms-auto flex items-center gap-2 flex-nowrap">
             <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
               {(["gregorian", "hijri"] as const).map((mode) => (
@@ -14776,7 +14822,9 @@ function RevenueTab() {
                 <tbody>
                   {pagination.paginatedItems.map((row, i) => {
                     const { hijri, gregorian } = formatDualDate(row.dateStr);
-                    const meta = TYPE_META[row.type];
+                    const meta = row.type === "balance"
+                      ? { label: "متبقي مستحق", emoji: "", cls: "bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" }
+                      : TYPE_META[row.type];
                     return (
                       <tr key={`${row.apptId}-${row.type}-${i}`} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="py-2.5 px-3 font-medium">{row.clientName}</td>
@@ -14792,7 +14840,7 @@ function RevenueTab() {
                           {row.note && <div className="text-[10px] text-muted-foreground mt-0.5">{row.note}</div>}
                         </td>
                         <td className="py-2.5 px-3 text-left font-bold text-base tabular-nums">
-                          <span className={row.type === "damage" ? "text-red-600" : row.type === "balance" ? "text-green-600" : "text-blue-600"}>
+                          <span className={row.type === "damage" ? "text-red-600" : row.type === "balance" ? "text-amber-600" : "text-blue-600"}>
                             {fmtN(row.amount)}
                           </span>
                           <span className="text-[10px] font-normal text-muted-foreground ms-1">ر.س</span>
@@ -15125,12 +15173,41 @@ function RevenueTab() {
         </div>
       </div>
 
+      {unit.type === "all" && combinedServiceBookings.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl p-4 space-y-3" data-testid="combined-service-revenue">
+          <h3 className="font-bold text-sm text-foreground">حجوزات الخدمات المشمولة في الإيرادات</h3>
+          <PaginatedItems items={combinedServiceBookings} resetKey={JSON.stringify(revenuePeriod)}>
+            {(pagination) => <div ref={pagination.tableRef} className="scroll-mt-4">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[600px] text-sm">
+                  <thead><tr className="border-b border-border text-right">
+                    {["الحجز / العميل", "الخدمة", "التاريخ", "قيمة الحجز", "المحصّل", "المتبقي"].map(label =>
+                      <th key={label} className="p-3 text-xs font-semibold text-muted-foreground">{label}</th>)}
+                  </tr></thead>
+                  <tbody>{pagination.paginatedItems.map((a: any) => <tr key={a.id} className="border-b border-border/50">
+                    <td className="p-3">{a.clientName} <span className="text-xs text-muted-foreground">#{toAr(a.id)}</span></td>
+                    <td className="p-3">{revenueProviders.find(provider => provider.id === a.providerId)?.businessName ?? "خدمة"}</td>
+                    <td className="p-3 text-xs">{fmtDualDate(a.dateStr)}</td>
+                    <td className="p-3 tabular-nums">{fmtN(Number(a.amount ?? 0))} ر.س</td>
+                    <td className="p-3 tabular-nums text-green-700 dark:text-green-400">{fmtN(Number(a.deposit ?? 0))} ر.س</td>
+                    <td className="p-3 tabular-nums text-amber-700 dark:text-amber-400">{fmtN(Math.max(0, Number(a.amount ?? 0) - Number(a.deposit ?? 0)))} ر.س</td>
+                  </tr>)}</tbody>
+                </table>
+              </div>
+              <PaginationBar page={pagination.page} pageSize={pagination.pageSize}
+                totalItems={combinedServiceBookings.length} totalPages={pagination.totalPages}
+                onPageChange={pagination.goToPage} onPageSizeChange={pagination.changePageSize} />
+            </div>}
+          </PaginatedItems>
+        </div>
+      )}
+
       {/* ── FINANCIAL CHANNELS DISTRIBUTION ── */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
           <Wallet className="w-4 h-4 text-primary" />
           <h3 className="font-bold text-sm text-foreground">توزيع قنوات التحصيل</h3>
-          <span className="text-[11px] text-muted-foreground ms-auto">الوضع الراهن — جميع الحجوزات</span>
+          <span className="text-[11px] text-muted-foreground ms-auto">الوضع الراهن — {unit.type === "all" && revenueProviders.length > 0 ? "حجوزات العقارات" : "جميع الحجوزات"}</span>
         </div>
         {/* Column headers */}
         <div className="flex items-center justify-between px-5 py-2 bg-muted/30 border-b border-border">

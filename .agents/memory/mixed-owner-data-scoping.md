@@ -16,3 +16,11 @@ Any dashboard tab opened for a selected service must use provider-linked data an
 **Why:** The user explicitly distinguished account-wide requests from the independent services managed by the same provider.
 
 **How to apply:** Keep general controls separate from service-switching tabs. Preserve the selected service when returning from a general section, and isolate each service's forms and dialogs as well as its queries.
+
+## Unified revenue includes service-only owners
+
+«جميع الأنشطة» must include service bookings even when an owner has no properties. A single activity name in the selector must not be treated as proof that the underlying finance scope is already a specific service.
+
+**Why:** Real service bookings were visible in the calendar but revenue showed zero because the all-activity financial view counted only property bookings. Its service summary also used Gregorian periods under Hijri filters.
+
+**How to apply:** Include services in all-activity totals, available financial periods and visible booking details. Share selected-calendar boundaries across both product types. Reuse booking-cache freshness after writes, and never silently turn a failed service read into a valid zero total.
