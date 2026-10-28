@@ -38,7 +38,7 @@ const STRIP_TONE: Record<ServiceFinancialStrip["tone"], string> = {
   amber: "bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800",
 };
 
-const pill = "inline-flex shrink-0 items-center justify-center gap-1 h-8 text-xs font-medium rounded-lg px-2.5 border transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
+const pill = "flex min-w-0 w-full flex-col items-center justify-center gap-1 min-h-14 rounded-lg border px-1 py-2 text-[11px] leading-4 font-medium text-center whitespace-normal break-normal transition-colors disabled:opacity-50 disabled:cursor-not-allowed [&>svg]:shrink-0 sm:flex-row sm:flex-wrap sm:px-2 sm:text-xs";
 
 export type ServiceBookingCardProps = {
   appointment: any;
@@ -76,6 +76,9 @@ export function ServiceBookingCard(p: ServiceBookingCardProps) {
   const edited = !!(a.editReason || a.lastEditedAt);
   const rescheduled = !!(a.previousDateStr && a.editedDateStr);
   const hasPhone = !!String(a.clientPhone ?? "").replace(/\D/g, "");
+  const actionCount = 4 + Number(fin.canCollect) + Number(a.status === "pending")
+    + (p.requiresContract && !fin.cancelled ? 3 : 0) + Number(!fin.cancelled) + Number(!!p.onDelete);
+  const actionColumns = Math.ceil(actionCount / 2);
 
   return (
     <div className="flex flex-col bg-card border border-border rounded-xl min-w-0" data-testid={`card-service-booking-${a.id}`}>
@@ -147,10 +150,11 @@ export function ServiceBookingCard(p: ServiceBookingCardProps) {
         </div>
 
         <div
-          className="flex min-w-0 max-w-full flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin]"
+          className={`grid min-w-0 max-w-full grid-rows-2 items-stretch gap-1.5 ${actionColumns >= 5 ? "[&>button]:px-0.5 [&>button]:text-[10px]" : ""}`}
+          style={{ gridTemplateColumns: `repeat(${actionColumns}, minmax(0, 1fr))` }}
           role="group"
-          aria-label="إجراءات الحجز — مرّر أفقيًا لعرض المزيد"
-          tabIndex={0}
+          aria-label="إجراءات الحجز"
+          data-action-rows="2"
           data-testid={`service-booking-action-strip-${a.id}`}
         >
           <DropdownMenu dir="rtl" open={p.messageMenuOpen} onOpenChange={(open) => { if (open !== p.messageMenuOpen) p.onToggleMessageMenu(); }}>
@@ -200,7 +204,6 @@ export function ServiceBookingCard(p: ServiceBookingCardProps) {
             </button>
           )}
         </div>
-        <p className="text-[10px] text-muted-foreground">مرّر الأزرار أفقيًا لعرض باقي الإجراءات</p>
       </div>
 
       <div className={`rounded-b-xl border-t px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs ${STRIP_TONE[fin.strip.tone]}`} data-testid={`strip-service-financial-${a.id}`}>
