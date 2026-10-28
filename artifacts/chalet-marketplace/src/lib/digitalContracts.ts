@@ -32,14 +32,20 @@ export const CONTRACT_STATUS_STYLES = {
   cancelled: "border-red-300 bg-red-50 text-red-950 dark:border-red-700 dark:bg-red-950 dark:text-red-100",
 } as const;
 
+export function contractWhatsAppActionText(signed: boolean | null | undefined, pendingText: string) {
+  return signed
+    ? "تم توقيع عقدكم إلكترونياً بنجاح. يمكنكم الاطلاع على العقد الموقّع عبر الرابط التالي:"
+    : pendingText;
+}
+
 export function contractInvitationText(input: {
-  clientName?: string; propertyName: string; day: string; hijri: string; gregorian: string; period: string; link: string;
+  clientName?: string; propertyName: string; day: string; hijri: string; gregorian: string; period: string; link: string; signed?: boolean;
 }) {
   return [
     `مرحباً ${input.clientName?.trim() || "بكم"}،`,
     `بخصوص حجزكم في ${input.propertyName}:`,
     `اليوم: ${input.day}\nالتاريخ: ${input.hijri} | ${input.gregorian}\nالفترة: ${input.period}`,
-    "يرجى مراجعة بيانات العقد والشروط والأحكام، ثم تعبئة البيانات والتوقيع إلكترونياً عبر الرابط التالي:",
+    contractWhatsAppActionText(input.signed, "يرجى مراجعة بيانات العقد والشروط والأحكام، ثم تعبئة البيانات والتوقيع إلكترونياً عبر الرابط التالي:"),
     input.link,
     `شكراً لاختياركم ${input.propertyName}.`,
   ].join("\n\n");

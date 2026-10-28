@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { contractMoney, contractTermsText, propertyContractClauses, EMPTY_CONTRACT_TERMS, publicContractUrl, contractInvitationText, CONTRACT_STATUS_STYLES } from "./digitalContracts";
+import { contractMoney, contractTermsText, propertyContractClauses, EMPTY_CONTRACT_TERMS, publicContractUrl, contractInvitationText, contractWhatsAppActionText, CONTRACT_STATUS_STYLES } from "./digitalContracts";
 
 test("property clauses preserve only saved property wording, including customized former defaults", () => {
   const saved = "يُلزَم المستأجر بسداد تأمين خاص بالاتفاق\nشروط أخرى للعقار الثاني";
@@ -41,6 +41,28 @@ test("invitation is consistent and personal without assuming gender or promising
   assert.ok(text.includes("الشروط والأحكام"));
   assert.ok(text.includes("https://takyah.replit.app/contract/12"));
   assert.doesNotMatch(text, /أخونا|المبدئي|replit\.dev|localhost/);
+});
+
+test("WhatsApp preserves pending wording and confirms completed signatures without requesting another signature", () => {
+  const pending = "يرجى مراجعة بيانات العقد والشروط والأحكام والتوقيع إلكترونياً عبر الرابط التالي:";
+  for (const signed of [false, undefined, null]) {
+    assert.equal(contractWhatsAppActionText(signed, pending), pending);
+  }
+  const confirmation = contractWhatsAppActionText(true, pending);
+  assert.match(confirmation, /تم توقيع عقدكم إلكترونياً بنجاح/);
+  assert.doesNotMatch(confirmation, /يرجى|تعبئة|والتوقيع/);
+});
+
+test("signed property invitations retain booking details and link but replace the signing request", () => {
+  const input = {
+    clientName: "ضيف", propertyName: "العقار", day: "الأحد",
+    hijri: "١ جمادى الأولى", gregorian: "١ أكتوبر", period: "مسائية", link: publicContractUrl(12),
+  };
+  assert.equal(contractInvitationText({ ...input, signed: false }), contractInvitationText(input));
+  const signed = contractInvitationText({ ...input, signed: true });
+  for (const detail of Object.values(input)) assert.ok(signed.includes(detail));
+  assert.match(signed, /تم توقيع عقدكم إلكترونياً بنجاح/);
+  assert.doesNotMatch(signed, /يرجى|تعبئة البيانات/);
 });
 
 test("all status variants have strong text, filled backgrounds, borders and dark support", () => {

@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback, createContext, useCo
 import { createPortal } from "react-dom";
 import { useToast } from "@/hooks/use-toast";
 import { MessageTemplateEditor } from "@/components/messages/MessageTemplateEditor";
-import { publicContractUrl, contractInvitationText, propertyContractClauses, contractTermsText, contractMoney, CONTRACT_STATUS_STYLES } from "@/lib/digitalContracts";
+import { publicContractUrl, contractInvitationText, contractWhatsAppActionText, propertyContractClauses, contractTermsText, contractMoney, CONTRACT_STATUS_STYLES } from "@/lib/digitalContracts";
 import { DEFAULT_DETAILED_RECEIPT_TEMPLATE, DETAILED_RECEIPT_VARIABLES, detailedReceiptValues, renderDetailedReceipt } from "@/lib/detailedWhatsAppReceipt";
 import { saudiMoneyMessage } from "@/lib/saudiCurrency";
 import { saudiCurrencyHtml } from "@/lib/saudiCurrencyFont";
@@ -10153,7 +10153,7 @@ function ServiceDigitalContractsTabInner() {
     const dual = formatDualDate(a.dateStr);
     const msg = encodeWhatsAppText(
       `مرحباً ${a.clientName ?? "بكم"}،\n\nبخصوص حجزكم لدى ${provider?.businessName ?? "مقدم الخدمة"} بتاريخ ${dual.gregorian} (${dual.hijri}).\n\n`
-      + `يرجى مراجعة بيانات العقد والشروط والأحكام والتوقيع إلكترونياً عبر الرابط التالي:\n${serviceContractUrl(a.id)}\n\nشكراً لاختياركم.`,
+      + `${contractWhatsAppActionText(serviceContractStatus(a) === "signed", "يرجى مراجعة بيانات العقد والشروط والأحكام والتوقيع إلكترونياً عبر الرابط التالي:")}\n${serviceContractUrl(a.id)}\n\nشكراً لاختياركم.`,
     );
     window.open(`https://wa.me/${phone}?text=${msg}`, "_blank", "noopener,noreferrer");
   }
@@ -27119,7 +27119,8 @@ function buildContractWaMsg(
   contractLink: string,
   period?: string | null,
   isReturning?: boolean,
-  tenantName?: string
+  tenantName?: string,
+  signed = false
 ): string {
   const chalet = chalets?.find((c: any) => c.submissionId === submissionId);
   const cn = chalet?.nameAr ?? "العقار";
@@ -27147,7 +27148,7 @@ function buildContractWaMsg(
   const periodText = (period && periodMap[period]?.trim()) || period || "-";
   return encodeWhatsAppText(contractInvitationText({
     clientName: tenantName, propertyName: cn, day: dayN, hijri: hijriStr,
-    gregorian: gregorianStr, period: periodText, link: contractLink,
+    gregorian: gregorianStr, period: periodText, link: contractLink, signed,
   }));
 }
 
@@ -27599,7 +27600,7 @@ export function ContractsArchiveTab() {
                   const status = statusBadge(b);
                   const dualDt = b.bookingDate ? formatDualDate(b.bookingDate) : null;
                   const waUrl = b.clientPhone
-                    ? `https://wa.me/${b.clientPhone.replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id), (b as any).period, returningPhonesSet.has((b as any).clientPhone ?? ""), (b as any).clientName)}`
+                    ? `https://wa.me/${b.clientPhone.replace(/\D/g, "").replace(/^0/, "966")}?text=${buildContractWaMsg(b.bookingDate, b.submissionId, ownerChalets, contractUrl(b.id), (b as any).period, returningPhonesSet.has((b as any).clientPhone ?? ""), (b as any).clientName, status.key === "signed")}`
                     : null;
                   return (
                     <tr
