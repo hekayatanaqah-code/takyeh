@@ -13,3 +13,9 @@ The user's comparison images showed the guest-receivables subtab, identifiable b
 **Why:** Repeated fixes on a visually similar but different dropdown could pass isolated checks while leaving the actual reported screen unchanged.
 
 **How to apply:** Match the screenshot's subtab, option labels and surrounding headings before editing or verifying. Preview the actual reported selector, not a substitute from the neighboring subtab.
+
+Revenue year/month filters belong at the right-hand start of their own row, ordered calendar → year → month, including service-only revenue. Keep dropdown text right-aligned in both calendars.
+
+**Why:** The user explicitly reported the filter placement as left-aligned/reversed and requested logical Arabic positioning, not changes to financial calculations.
+
+**How to apply:** Preserve financial filtering behavior; check the filter group's placement and mobile wrapping as well as the alignment inside its menus.

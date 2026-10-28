@@ -14688,7 +14688,7 @@ function RevenueTab() {
         <div className="flex items-center gap-3 flex-wrap">
           <Activity className="w-5 h-5 text-amber-500 shrink-0" />
           <h2 className="text-lg font-bold text-foreground">إيرادات: {unit.type === "service" ? unit.name : revenueProviders.length === 1 ? revenueProviders[0].businessName : "جميع الخدمات"}</h2>
-          <div className="ms-auto flex items-center gap-2 flex-nowrap">
+          <div className="flex w-full flex-wrap items-center justify-start gap-2" dir="rtl">
             <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
               {(["gregorian", "hijri"] as const).map((mode) => (
                 <button
@@ -14709,11 +14709,11 @@ function RevenueTab() {
               ))}
             </div>
             {serviceYearOptions.length > 0 && (
-              <Select value={serviceRevenueYear} onValueChange={setServiceRevenueYear}>
-                <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[6.5rem] shrink-0" dir="rtl">
+              <Select dir="rtl" value={serviceRevenueYear} onValueChange={setServiceRevenueYear}>
+                <SelectTrigger aria-label="السنة" className="h-9 text-right text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                   <SelectValue placeholder="السنة" />
                 </SelectTrigger>
-                <SelectContent dir="rtl" align="end">
+                <SelectContent dir="rtl" align="start" className="text-right">
                   {serviceYearOptions.map((year) => (
                     <SelectItem key={year} value={year}>
                       {calType === "hijri" ? `${toArN(Number(year))} هـ` : `${toArN(Number(year))} م`}
@@ -14728,15 +14728,15 @@ function RevenueTab() {
                 value={activeServiceMonth}
                 onValueChange={calType === "gregorian" ? setServiceSelectedMonth : setServiceSelectedHijriMonth}
               >
-                <SelectTrigger className="h-9 text-sm rounded-lg border-border min-w-[8rem] shrink-0" dir="rtl">
-                  <span className="text-sm font-medium">
+                <SelectTrigger aria-label="الشهر" className="h-9 text-right text-sm rounded-lg border-border min-w-[8rem] max-w-full gap-2" dir="rtl">
+                  <span className="min-w-0 flex-1 truncate text-right text-sm font-medium">
                     {serviceMonthLabel(
                       activeServiceMonth,
                       calType,
                     ).primary}
                   </span>
                 </SelectTrigger>
-                <SelectContent dir="rtl" align="end" className={calType === "gregorian" ? "revenue-gregorian-month-menu" : undefined}>
+                <SelectContent dir="rtl" align="start" className="revenue-gregorian-month-menu text-right">
                   {serviceMonthsForYear.map((month) => {
                     const label = serviceMonthLabel(month, calType);
                     return (
@@ -14896,7 +14896,7 @@ function RevenueTab() {
           {unit.type === "chalet" ? `إيرادات: ${(unit as any).name}` : "الإيرادات"}
         </h2>
         <SectionGuideButton sectionKey="revenues" />
-        <div className="ms-auto flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex w-full items-center gap-2 flex-wrap justify-start" dir="rtl">
           {/* Revenue sub-tab pills */}
           <div className="flex rounded-lg border border-border overflow-hidden text-xs">
             <button
@@ -14913,9 +14913,9 @@ function RevenueTab() {
               )}
             </button>
           </div>
-          {/* Filters row: calType → year → month → refresh — all in one nowrap line */}
+          {/* RTL filters: calendar, year, then month; wrap from the right on mobile. */}
           {!showAllFuture && (
-            <div className="flex items-center gap-2 flex-nowrap">
+            <div className="flex w-full items-center justify-start gap-2 flex-wrap" dir="rtl">
               {/* Calendar toggle */}
               <div className="flex rounded-lg border border-border overflow-hidden text-xs shrink-0">
                 {(["gregorian", "hijri"] as const).map(mode => (
@@ -14935,11 +14935,11 @@ function RevenueTab() {
                 ))}
               </div>
               {/* Year dropdown */}
-              <Select value={revYear || "__all__"} onValueChange={yr => { setRevYear(yr === "__all__" ? "" : yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
-                <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+              <Select dir="rtl" value={revYear || "__all__"} onValueChange={yr => { setRevYear(yr === "__all__" ? "" : yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
+                <SelectTrigger aria-label="السنة" className="h-9 text-right text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                   <SelectValue placeholder="السنة" />
                 </SelectTrigger>
-                <SelectContent dir="rtl" align="end">
+                <SelectContent dir="rtl" align="start" className="text-right">
                   <SelectItem value="__all__">كل السنوات</SelectItem>
                   {(calType === "gregorian" ? revGregYearOptions : revHijriYearOptions.map(String)).map(yr => (
                     <SelectItem key={yr} value={yr}>
@@ -14951,7 +14951,7 @@ function RevenueTab() {
               {/* Month dropdown — data-driven */}
               {calType === "gregorian" ? (
                 <Select dir="rtl" value={selectedMonth || "__all__"} onValueChange={v => setSelectedMonth(v === "__all__" ? "" : v)} disabled={!revYear}>
-                  <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                  <SelectTrigger aria-label="الشهر" className="h-9 text-right text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                     {(() => {
                       const ym = selectedMonth;
                       if (!revYear || !ym) return <span className="text-sm text-muted-foreground">كل الشهور</span>;
@@ -14959,7 +14959,7 @@ function RevenueTab() {
                       return <span className="text-sm font-medium">{new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"})}</span>;
                     })()}
                   </SelectTrigger>
-                  <SelectContent dir="rtl" align="end" className="revenue-gregorian-month-menu">
+                  <SelectContent dir="rtl" align="start" className="revenue-gregorian-month-menu text-right">
                     <SelectItem value="__all__">كل الشهور</SelectItem>
                     {revMonthsForYear.map(ym => {
                       const [y,m] = ym.split("-").map(Number);
@@ -14979,12 +14979,12 @@ function RevenueTab() {
                 </Select>
               ) : (
                 <Select dir="rtl" value={selectedHijriMonth || "__all__"} onValueChange={v => setSelectedHijriMonth(v === "__all__" ? "" : v)} disabled={!revYear}>
-                  <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
+                  <SelectTrigger aria-label="الشهر" className="h-9 text-right text-sm rounded-lg border-border w-[7.5rem] shrink-0" dir="rtl">
                     {revYear && selectedHijriMonth
                       ? <span className="text-sm font-medium truncate">{getBookingMonthLabel(selectedHijriMonth, "hijri")}</span>
                       : <span className="text-sm text-muted-foreground">كل الشهور</span>}
                   </SelectTrigger>
-                  <SelectContent dir="rtl" align="end">
+                  <SelectContent dir="rtl" align="start" className="revenue-gregorian-month-menu text-right">
                     <SelectItem value="__all__">كل الشهور</SelectItem>
                     {revMonthsForYear.map(key => {
                       const gregSec = getCalCorrespondenceHint(key, "hijri");
