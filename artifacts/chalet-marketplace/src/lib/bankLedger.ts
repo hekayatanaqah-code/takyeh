@@ -25,8 +25,14 @@ export interface LedgerServiceAppointment {
   deposit: string | null; paymentMethod: string | null; cashDeposited: boolean;
   cancelledAt?: string | null; status: string;
 }
+export interface LedgerQuickSale {
+  id: number; providerId: number; providerName: string; clientName: string;
+  dateStr: string; paymentMethod: "cash" | "bank"; status: "completed" | "cancelled"; total: number;
+  items: Array<{ name: string; quantity: number }>;
+}
 export interface BankLedgerEntry {
   id: string; bookingId: number; clientName: string; description: string; bookingDate: string;
+  saleId?: number;
   type: "revenue" | "insurance" | "cash_deposit" | "expense";
   amount: number; status: string; insuranceDeposit?: boolean;
 }
@@ -41,6 +47,7 @@ function cents(value: string | number | null | undefined) {
 export function buildBankLedger(input: {
   scope: BankLedgerScope; bookings: LedgerBooking[]; deposits: LedgerDeposit[];
   expenses: LedgerExpense[]; payments: LedgerPayment[]; serviceAppointments?: LedgerServiceAppointment[];
+  quickSales?: LedgerQuickSale[];
   categoryLabels?: Record<string, string>;
 }): BankLedgerEntry[] {
   const { scope, bookings, deposits, expenses, payments, categoryLabels = {} } = input;
@@ -114,6 +121,15 @@ export function buildBankLedger(input: {
       description: [category, expense.notes].filter(Boolean).join(" — "),
       bookingDate: expense.dateStr, type: "expense",
       amount: -Math.abs(cents(expense.amount)) / 100, status: "تم الصرف",
+    });
+  }
+  for (const sale of input.quickSales ?? []) {
+    if (scope.type === "chalet" || (scope.type === "service" && sale.providerId !== scope.id) ||
+      sale.status !== "completed" || sale.paymentMethod !== "bank" || cents(sale.total) <= 0) continue;
+    entries.push({
+      id: `quick-sale-${sale.id}`, bookingId: 0, saleId: sale.id, clientName: sale.clientName || "عميل مباشر",
+      description: `بيع سريع — تحويل بنكي — ${sale.providerName} — ${sale.items.map(item => `${item.name} × ${item.quantity.toLocaleString("ar-SA", { useGrouping: false })}`).join("، ")}`,
+      bookingDate: sale.dateStr, type: "revenue", amount: cents(sale.total) / 100, status: "مكتمل",
     });
   }
   return entries.sort((a, b) => b.bookingDate.localeCompare(a.bookingDate) || a.id.localeCompare(b.id));

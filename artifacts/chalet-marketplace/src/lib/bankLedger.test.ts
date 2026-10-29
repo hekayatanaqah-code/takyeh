@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   bankLedgerTotals, buildBankLedger, formatBankAmount,
-  type LedgerBooking, type LedgerExpense, type LedgerDeposit,
+  type LedgerBooking, type LedgerExpense, type LedgerDeposit, type LedgerQuickSale,
 } from "./bankLedger";
 
 const booking = (patch: Partial<LedgerBooking> = {}): LedgerBooking => ({
@@ -122,4 +122,50 @@ test("changing table filters cannot mutate the all-time summary input", () => {
   const debits = rows.filter(row => row.type === "expense");
   assert.equal(bankLedgerTotals(debits).balance, -150);
   assert.deepEqual(bankLedgerTotals(rows), before);
+});
+
+const quickSale = (patch: Partial<LedgerQuickSale> = {}): LedgerQuickSale => ({
+  id: 171, providerId: 9, providerName: "نشاط اختباري", clientName: "عميل بيع مباشر",
+  dateStr: "2025-01-01", paymentMethod: "bank", status: "completed", total: 125.75,
+  items: [{ name: "منتج اختباري", quantity: 2 }], ...patch,
+});
+
+test("bank quick sales credit the ledger once alongside bookings with distinct identities and full details", () => {
+  const rows = build({ quickSales: [quickSale()], expenses: [expense({ amount: "25.50" })] });
+  assert.deepEqual(bankLedgerTotals(rows), { deposited: 625.75, withdrawn: 25.5, balance: 600.25 });
+  const row = rows.find(entry => entry.id === "quick-sale-171")!;
+  assert.equal(row.saleId, 171);
+  assert.equal(row.bookingId, 0);
+  assert.equal(row.clientName, "عميل بيع مباشر");
+  assert.equal(row.bookingDate, "2025-01-01");
+  assert.equal(row.type, "revenue");
+  assert.match(row.description, /بيع سريع — تحويل بنكي — نشاط اختباري — منتج اختباري × ٢/);
+  assert.equal(rows.filter(entry => entry.id === "booking-171").length, 1);
+});
+
+test("cash and cancelled quick sales never add a bank credit", () => {
+  const rows = build({ bookings: [], quickSales: [
+    quickSale({ paymentMethod: "cash" }), quickSale({ id: 172, status: "cancelled" }),
+  ] });
+  assert.equal(rows.length, 0);
+  assert.deepEqual(bankLedgerTotals(rows), { deposited: 0, withdrawn: 0, balance: 0 });
+});
+
+test("bank quick sales respect provider, property and consolidated scopes", () => {
+  const sales = [quickSale(), quickSale({ id: 172, providerId: 10, total: 50.25 })];
+  const rows = build({ scope: { type: "service", id: 9 }, quickSales: sales });
+  assert.equal(rows.length, 1);
+  assert.equal(bankLedgerTotals(rows).balance, 125.75);
+  assert.equal(build({ bookings: [], scope: { type: "chalet", submissionId: 7 }, quickSales: sales }).length, 0);
+  assert.equal(bankLedgerTotals(build({ bookings: [], quickSales: sales })).balance, 176);
+});
+
+test("cancellation removes the sale credit and full-history balance is independent of the table period", () => {
+  const args = { bookings: [], expenses: [expense({ amount: "25.50" })] };
+  const before = build({ ...args, quickSales: [quickSale()] });
+  assert.equal(bankLedgerTotals(before).balance, 100.25);
+  assert.equal(before.filter(entry => entry.bookingDate.startsWith("2026")).some(entry => entry.saleId), false);
+  assert.equal(bankLedgerTotals(before).deposited, 125.75);
+  const after = build({ ...args, quickSales: [quickSale({ status: "cancelled" })] });
+  assert.deepEqual(bankLedgerTotals(after), { deposited: 0, withdrawn: 25.5, balance: -25.5 });
 });

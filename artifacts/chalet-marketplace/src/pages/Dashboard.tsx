@@ -13686,13 +13686,19 @@ export function BankLedgerTab() {
     },
     enabled: unit.type !== "chalet", staleTime: 0, refetchOnMount: "always", refetchInterval: 60_000,
   });
-  const ledgerLoading = expensesLoading || (unit.type !== "service" && (bkLoading || logsLoading || paymentsLoading)) || (unit.type !== "chalet" && servicesLoading);
-  const ledgerFailed = expensesError || (unit.type !== "service" && (bkError || logsError || paymentsError)) || (unit.type !== "chalet" && servicesError);
+  const ledgerQuickSalesQuery = useListQuickSales(unit.type === "service" ? { providerId: unit.id } : undefined, {
+    query: { enabled: unit.type !== "chalet", staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000 },
+  });
+  const ledgerLoading = expensesLoading || (unit.type !== "service" && (bkLoading || logsLoading || paymentsLoading)) ||
+    (unit.type !== "chalet" && (servicesLoading || ledgerQuickSalesQuery.isLoading));
+  const ledgerFailed = expensesError || (unit.type !== "service" && (bkError || logsError || paymentsError)) ||
+    (unit.type !== "chalet" && (servicesError || ledgerQuickSalesQuery.isError));
   const ledgerEntries = useMemo(() => buildBankLedger({
     scope: unit, bookings: allBookings, deposits: depositLogs, payments: ledgerPayments,
     expenses: ledgerExpenses, serviceAppointments: ledgerServices,
+    quickSales: ledgerQuickSalesQuery.data,
     categoryLabels: Object.fromEntries(EXPENSE_CATS.map(category => [category.key, category.label])),
-  }), [allBookings, depositLogs, ledgerPayments, ledgerExpenses, ledgerServices, unit]);
+  }), [allBookings, depositLogs, ledgerPayments, ledgerExpenses, ledgerServices, ledgerQuickSalesQuery.data, unit]);
 
   const bankYearOptions = useMemo(() => {
     const years = new Set<string>();
@@ -13809,7 +13815,7 @@ export function BankLedgerTab() {
         <div className="flex border-b border-border text-xs overflow-x-auto">
           {([
             ["all",          "🗂️ كل الحوالات"],
-            ["revenue",      "🏠 إيرادات الحجوزات"],
+            ["revenue",      "إيرادات الحجوزات والمبيعات"],
             ["insurance",    "🔒 حوالات التأمينات"],
             ["cash_deposit", "💵 إيداعات نقدية"],
             ["expense",      "المصروفات المسحوبة 💸"],
@@ -13828,7 +13834,7 @@ export function BankLedgerTab() {
             <Button variant="outline" onClick={() => {
               void refetchLedgerExpenses();
               if (unit.type !== "service") { void refetchLedgerBookings(); void refetchLedgerLogs(); void refetchLedgerPayments(); }
-              if (unit.type !== "chalet") void refetchLedgerServices();
+              if (unit.type !== "chalet") { void refetchLedgerServices(); void ledgerQuickSalesQuery.refetch(); }
             }}>إعادة المحاولة</Button>
           </div>
         ) : filtered.length === 0 ? (
@@ -13844,8 +13850,8 @@ export function BankLedgerTab() {
               <thead>
                 <tr className="border-b border-border bg-muted/30">
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">تاريخ الحوالة</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم المستأجر</th>
-                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">رقم الحجز</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">اسم العميل</th>
+                  <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">رقم الحجز / البيعة</th>
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">نوع الدفعة</th>
                   <th className="text-right py-2.5 px-4 text-xs font-semibold text-muted-foreground">الوصف</th>
                   <th className="text-left py-2.5 px-4 text-xs font-semibold text-muted-foreground">المبلغ</th>
@@ -13856,7 +13862,7 @@ export function BankLedgerTab() {
                 {pagination.paginatedItems.map(e => {
                   const _dualDate = e.bookingDate ? formatDualDate(e.bookingDate) : null;
                   const typeInfo = {
-                    revenue:      { label: "🏠 حجز",        cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+                    revenue:      { label: e.saleId ? "بيع سريع" : "🏠 حجز", cls: "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
                     insurance:    { label: "🔒 تأمين",       cls: "bg-slate-50 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300" },
                     cash_deposit: { label: e.insuranceDeposit ? "💵 إيداع نقدي / تأمين" : "💵 إيداع نقدي", cls: "bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300" },
                     expense:      { label: "💸 مصروف مسحوب", cls: "bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
@@ -13878,7 +13884,7 @@ export function BankLedgerTab() {
                         ) : "—"}
                       </td>
                       <td className="py-2.5 px-4 font-medium text-foreground">{e.clientName}</td>
-                      <td className="py-2.5 px-4 text-muted-foreground">{e.bookingId > 0 ? `#${e.bookingId}` : "—"}</td>
+                      <td className="py-2.5 px-4 text-muted-foreground">{e.saleId ? `#${toAr(e.saleId)}` : e.bookingId > 0 ? `#${toAr(e.bookingId)}` : "—"}</td>
                       <td className="py-2.5 px-4">
                         <span className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${typeInfo.cls}`}>{typeInfo.label}</span>
                       </td>
