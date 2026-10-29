@@ -10,14 +10,9 @@ import { readFileSync } from "node:fs";
 it("keeps the service summary before provider and sales details, and waits for booking data", () => {
   const dashboard = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
   const serviceSection = dashboard.slice(dashboard.indexOf("{/* ── Services Report ── */}"), dashboard.indexOf("{/* ── Unified Report ── */}"));
-  const summaryIndex = serviceSection.indexOf('data-testid="service-report-summary"');
-  const providerDetailsIndex = serviceSection.indexOf('data-testid="service-report-provider-details"');
-  const salesDetailsIndex = serviceSection.indexOf('{repUnit.type === "service" && quickSaleDetailsSection}');
-  assert.ok(summaryIndex >= 0 && providerDetailsIndex > summaryIndex && salesDetailsIndex > providerDetailsIndex);
-  assert.ok(serviceSection.includes("!serviceReportLoading && !serviceReportError && svcRepSummary"));
-  for (const field of ["bookingRevenue", "quickSalesRevenue", "totalRevenue", "totalDeposits", "totalInsurance"]) {
-    assert.ok(serviceSection.slice(summaryIndex, providerDetailsIndex).includes(`svcRepSummary.${field}`));
-  }
+  assert.ok(serviceSection.includes("!serviceDataLoading && !serviceDataError"));
+  assert.ok(serviceSection.includes("<ServiceFinancialReportPanels"));
+  assert.ok(serviceSection.includes("details={serviceReportDetails} closingRows={serviceClosingRows}"));
   assert.ok(dashboard.includes("reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services)"));
 });
 

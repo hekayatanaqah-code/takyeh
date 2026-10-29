@@ -14,7 +14,9 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
 import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
-import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type OwnerWhatsAppSettingsInput } from "@workspace/api-client-react";
+import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type OwnerWhatsAppSettingsInput, type ServiceAppointmentRecord } from "@workspace/api-client-react";
+import { ServiceFinancialReportPanels, type ServiceReportDetailTable } from "@/components/owner/ServiceFinancialReportPanels";
+import { buildServiceFinancialReport, serviceExpensesForPeriod, serviceReportRows, serviceReportSourceLabels } from "@/lib/serviceFinancialReport";
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { OwnerNotificationCard } from "@/components/owner/OwnerNotificationCard";
@@ -19922,6 +19924,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const { unit: currentActivity } = useAdminFinance();
   const [reportActivityOverride, setReportUnit] = useState<FinanceUnit | null>(null);
   const repUnit = reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services);
+  const [serviceReportSource, setServiceReportSource] = useState<RevenueSource>("all");
+  const includesServiceBookings = repUnit.type !== "service" || serviceReportSource !== "quick_sales";
+  const includesServiceSales = repUnit.type !== "service" || serviceReportSource !== "bookings";
   const _nowRep = new Date();
   const currentMonth = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}`;
   const currentYear = String(_nowRep.getFullYear());
@@ -19969,7 +19974,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const [customTo, setCustomTo] = useState("");
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType, activityKey(repUnit)]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType, activityKey(repUnit), serviceReportSource]);
 
   const hijriReportParsed = useMemo(() => {
     if (!isHijri || !selectedHijriMonthVal) return null;
@@ -19991,6 +19996,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     },
     staleTime: 30_000,
     refetchOnMount: "always",
+    refetchInterval: repUnit.type === "service" ? 30_000 : false,
   });
   const gregorianPeriods = useMemo(() => financialPeriodOptions(reportYears?.gregorianMonths ?? [], "gregorian"), [reportYears]);
   const hijriPeriods = useMemo(() => financialPeriodOptions(reportYears?.hijriMonths ?? [], "hijri"), [reportYears]);
@@ -20118,16 +20124,47 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       return r.json();
     },
     enabled: isActivitySummary && viewMode === "monthly" && monthlyPeriodReady,
+    refetchInterval: 30_000,
   });
   const reportQuickSalesQuery = useListQuickSales(repUnit.type === "service" ? { providerId: repUnit.id } : undefined, {
     query: { enabled: isActivitySummary, staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000 },
   });
-  const reportQuickSales = quickSalesForPeriod(reportQuickSalesQuery.data ?? [], repUnit, {
+  const serviceReportPeriod = {
     calendar: isHijri ? "hijri" : "gregorian",
     year: (isHijri ? selectedHijriMonthVal : selectedMonth).slice(0, 4),
     month: isHijri ? selectedHijriMonthVal : selectedMonth,
+  } as const;
+  const reportQuickSales = includesServiceSales ? quickSalesForPeriod(reportQuickSalesQuery.data ?? [], repUnit, serviceReportPeriod) : [];
+  const serviceExpenseQuery = useQuery<OwnerExpense[]>({
+    queryKey: ["owner", "expenses", "service-report", repUnit.type === "service" ? repUnit.id : null],
+    queryFn: async () => {
+      const r = await apiFetch(`/owner/expenses?providerId=${repUnit.type === "service" ? repUnit.id : ""}`);
+      if (!r.ok) throw new Error("تعذّر تحميل مصروفات الخدمة");
+      return r.json();
+    },
+    enabled: repUnit.type === "service", staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000,
   });
-  const svcRepSummary = includeQuickSalesInReport(scopeServiceFinancialReport(rawSvcRepSummary, repUnit), reportQuickSales);
+  const serviceBookingsQuery = useQuery<ServiceAppointmentRecord[]>({
+    queryKey: ["service-appointments", repUnit.type === "service" ? repUnit.id : null],
+    queryFn: async () => {
+      const r = await apiFetch(`/providers/my/approved/${repUnit.type === "service" ? repUnit.id : ""}/appointments`);
+      if (!r.ok) throw new Error("تعذّر تحميل تفاصيل حجوزات الخدمة");
+      return r.json();
+    },
+    enabled: repUnit.type === "service" && includesServiceBookings, staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000,
+  });
+  const serviceReportExpenses = repUnit.type === "service"
+    ? serviceExpensesForPeriod(serviceExpenseQuery.data ?? [], repUnit.id, serviceReportPeriod) : [];
+  const serviceClosing = buildServiceFinancialReport(scopeServiceFinancialReport(rawSvcRepSummary, repUnit),
+    reportQuickSales, serviceReportExpenses, serviceReportSource);
+  const svcRepSummary = repUnit.type === "service" ? serviceClosing
+    : includeQuickSalesInReport(scopeServiceFinancialReport(rawSvcRepSummary, repUnit), reportQuickSales);
+  const serviceDataLoading = repUnit.type === "service" && (serviceExpenseQuery.isLoading
+    || (includesServiceBookings && (serviceReportLoading || serviceBookingsQuery.isLoading))
+    || (includesServiceSales && reportQuickSalesQuery.isLoading));
+  const serviceDataError = repUnit.type === "service" && (serviceExpenseQuery.isError
+    || (includesServiceBookings && (serviceReportError || serviceBookingsQuery.isError))
+    || (includesServiceSales && reportQuickSalesQuery.isError));
   const quickSaleDetails = {
     title: "تفاصيل المبيعات الفردية (البيع السريع)",
     headers: ["رقم البيع", "التاريخ", "النشاط", "العميل", "البنود والكميات", "التحصيل", "المبلغ"],
@@ -20143,6 +20180,30 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       ];
     }),
   };
+  const serviceMoney = (value: number) => `${value < 0 ? "-" : ""}${Math.abs(value).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
+  const serviceDate = (dateStr: string) => {
+    const date = formatDualDate(dateStr);
+    return isHijri ? `${date.hijri} — ${date.gregorian} م` : `${date.gregorian} م — ${date.hijri}`;
+  };
+  const serviceReportDetails: ServiceReportDetailTable[] = [
+    ...(includesServiceBookings ? [{
+      title: "تفاصيل حجوزات الخدمات الأساسية", headers: ["رقم الحجز", "التاريخ", "العميل", "المبلغ المحصّل"],
+      rows: (serviceBookingsQuery.data ?? []).filter(booking => booking.status !== "cancelled"
+        && isInRevenuePeriod(booking.dateStr, serviceReportPeriod)).map(booking =>
+        [toAr(String(booking.id)), serviceDate(booking.dateStr), booking.clientName || "غير محدد", serviceMoney(Number(booking.deposit ?? 0))]),
+      emptyMessage: "لا توجد حجوزات غير ملغاة خلال الفترة المختارة.",
+    }] : []),
+    ...(includesServiceSales ? [{ ...quickSaleDetails, emptyMessage: "لا توجد مبيعات فردية مكتملة خلال الفترة المختارة." }] : []),
+    { title: "تفاصيل المصروفات المسجلة للخدمة", headers: ["رقم المصروف", "التاريخ", "التصنيف", "الملاحظات", "المبلغ"],
+      rows: serviceReportExpenses.map(expense => [toAr(String(expense.id)), serviceDate(expense.dateStr),
+        expense.customCategory || expense.category, expense.notes || "—", serviceMoney(Number(expense.amount))]),
+      emptyMessage: "لا توجد مصروفات مسجلة لهذه الخدمة خلال الفترة المختارة." },
+  ];
+  const serviceClosingRows = serviceClosing ? [
+    { label: "إجمالي إيرادات النطاق المختار", amount: serviceClosing.totalRevenue },
+    { label: "المصروفات المسجلة للخدمة", amount: serviceClosing.totalExpenses },
+    { label: "صافي الربح / الدخل النهائي", amount: serviceClosing.netProfit },
+  ] : [];
 
   const archiveMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -20605,7 +20666,8 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && (viewMode === "monthly" ? monthlyPeriodReady
     : viewMode === "yearly" ? (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear))
       : activePeriods.years.length > 0) && (isActivitySummary
-    ? !!svcRepSummary && !serviceReportLoading && !serviceReportError && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (reportType !== "unified" || repUnit.type === "service" || !!financial)
+    ? repUnit.type === "service" ? !!serviceClosing && !serviceDataLoading && !serviceDataError
+      : !!svcRepSummary && !serviceReportLoading && !serviceReportError && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (reportType !== "unified" || !!financial)
     : viewMode === "monthly" ? !!report && !!financial && !isLoading
       : viewMode === "yearly" ? !!(isYearlyHijri ? yearlyHijri : yearly) && !(isYearlyHijri ? yearlyHijriLoading : yearlyLoading)
       : !!(isHijri ? customRangeDataHijri : customRangeData) && !!customFrom && !!customTo);
@@ -20625,7 +20687,13 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
         year: selectedYear, hijriYear: selectedHijriYear, from: customFrom, to: customTo });
       const logo = await getLogoDataUrl();
       let html: string;
-      if (isActivitySummary && svcRepSummary) {
+      if (repUnit.type === "service" && serviceClosing) {
+        html = buildActivitySummaryReportHtml({ title: reportHeading, period: activeMonthLabel,
+          activityName: repUnit.name, fileName, rows: serviceReportRows(serviceClosing, serviceReportSource),
+          scopeLabel: `نطاق التقرير: ${serviceReportSourceLabels[serviceReportSource]} — تُخصم مصروفات الخدمة المسجلة للفترة كاملة من إيرادات النطاق المختار؛ لا تُوزّع تلقائيًا بين الحجوزات والبيع السريع. العربون ضمن الإيرادات والتأمينات ليست إيرادًا.`,
+          detailSections: serviceReportDetails, closingRows: serviceClosingRows,
+          logo, css: REPORT_CSS, forPrint: action === "print" });
+      } else if (isActivitySummary && svcRepSummary) {
         const unified = repUnit.type === "all" && reportType === "unified";
         const rows = unified ? [
           { label: "إيرادات العقارات", amount: financial?.totalRevenue ?? 0 },
@@ -20763,83 +20831,40 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
         </div>
       )}
 
+      {repUnit.type === "service" && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
+        <label htmlFor="service-report-source" className="text-sm font-semibold">نطاق التقرير</label>
+        <select id="service-report-source" data-testid="service-report-source" value={serviceReportSource}
+          disabled={!!quickAction} onChange={event => setServiceReportSource(event.target.value as RevenueSource)}
+          className="min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm">
+          {(["all", "bookings", "quick_sales"] as const).map(source => <option key={source} value={source}>{serviceReportSourceLabels[source]}</option>)}
+        </select>
+      </div>}
+
       {/* ── Report Type Selector (only in "all" unit mode) ── */}
       {periodsLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل الفترات المالية…</p>}
       {periodsError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل السنوات والشهور المالية. أعد تحميل الصفحة للمحاولة مجددًا.</p>}
       {!periodsLoading && !periodsError && !activePeriods.months.length && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">لا توجد بيانات مالية فعلية ونشطة لهذا النشاط. ستظهر السنوات والشهور عند تسجيل بيانات مالية.</p>}
-      {isActivitySummary && serviceReportError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل تقرير الخدمات. أعد تحميل الصفحة للمحاولة مجددًا؛ إجراءات التصدير متوقفة حتى تكتمل البيانات.</p>}
-      {isActivitySummary && serviceReportLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل إيرادات الحجوزات والتأمينات لاستكمال التقرير…</p>}
-      {isActivitySummary && reportQuickSalesQuery.isLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل المبيعات الفردية لاستكمال التقرير…</p>}
-      {isActivitySummary && reportQuickSalesQuery.isError && <div role="alert" className="rounded-xl border border-destructive p-4 text-sm text-destructive">
+      {repUnit.type === "service" && serviceDataLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل إيرادات ومصروفات النطاق المختار…</p>}
+      {repUnit.type === "service" && serviceDataError && <div role="alert" className="rounded-xl border border-destructive p-4 text-sm text-destructive">
+        تعذّر تحميل بيانات التقرير كاملة؛ الملخص والتصدير متوقفان لتجنب إظهار أرقام ناقصة.
+        <Button variant="outline" className="mr-3" onClick={() => {
+          void serviceExpenseQuery.refetch();
+          if (includesServiceBookings) { void serviceBookingsQuery.refetch(); void qc.invalidateQueries({ queryKey: ["owner", "service-revenue-summary-rep"] }); }
+          if (includesServiceSales) void reportQuickSalesQuery.refetch();
+        }}>إعادة المحاولة</Button>
+      </div>}
+      {isActivitySummary && repUnit.type !== "service" && serviceReportError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل تقرير الخدمات. أعد تحميل الصفحة للمحاولة مجددًا؛ إجراءات التصدير متوقفة حتى تكتمل البيانات.</p>}
+      {isActivitySummary && repUnit.type !== "service" && serviceReportLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل إيرادات الحجوزات والتأمينات لاستكمال التقرير…</p>}
+      {isActivitySummary && repUnit.type !== "service" && reportQuickSalesQuery.isLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل المبيعات الفردية لاستكمال التقرير…</p>}
+      {isActivitySummary && repUnit.type !== "service" && reportQuickSalesQuery.isError && <div role="alert" className="rounded-xl border border-destructive p-4 text-sm text-destructive">
         تعذّر تحميل المبيعات الفردية؛ التقرير غير مكتمل والتصدير متوقف.
         <Button variant="outline" className="mr-3" onClick={() => void reportQuickSalesQuery.refetch()}>إعادة المحاولة</Button>
       </div>}
       {repUnit.type !== "service" && quickSaleDetailsSection}
       {/* ── Services Report ── */}
-      {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && monthlyPeriodReady && !serviceReportLoading && !serviceReportError && svcRepSummary && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Activity className="w-5 h-5 text-amber-500 shrink-0" />
-            <h2 className="text-lg font-bold text-foreground">{reportHeading}</h2>
-          </div>
-          {svcRepSummary && svcRepSummary.byProvider.length > 0 ? (
-            <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="service-report-summary">
-                <div className="bg-card border border-border rounded-2xl p-4 text-center">
-                  <div className="text-xs text-muted-foreground mb-1">إيرادات حجوزات الخدمات الأساسية</div>
-                  <div className="text-2xl font-bold text-foreground"><FinancialReportNumber value={svcRepSummary.bookingRevenue} /></div>
-                  <div className="text-xs text-muted-foreground">ر.س</div>
-                </div>
-                <div className="bg-card border border-border rounded-2xl p-4 text-center">
-                  <div className="text-xs text-muted-foreground mb-1">إيرادات المبيعات الفردية (البيع السريع)</div>
-                  <div className="text-2xl font-bold text-foreground"><FinancialReportNumber value={svcRepSummary.quickSalesRevenue} /></div>
-                  <div className="text-xs text-muted-foreground">ر.س</div>
-                </div>
-                <div className="bg-card border border-green-200 rounded-2xl p-4 text-center">
-                  <div className="text-xs text-muted-foreground mb-1">إجمالي إيرادات النشاط الموحّدة</div>
-                  <div className="text-2xl font-bold text-green-600"><FinancialReportNumber value={svcRepSummary.totalRevenue} /></div>
-                  <div className="text-xs text-muted-foreground">ر.س</div>
-                </div>
-                <div className="bg-card border border-blue-200 rounded-2xl p-4 text-center">
-                  <div className="text-xs text-muted-foreground mb-1">عربون محصّل</div>
-                  <div className="text-2xl font-bold text-blue-600"><FinancialReportNumber value={svcRepSummary.totalDeposits} /></div>
-                  <div className="text-xs text-muted-foreground">ر.س</div>
-                </div>
-                <div className="bg-card border border-orange-200 rounded-2xl p-4 text-center">
-                  <div className="text-xs text-muted-foreground mb-1">تأمينات</div>
-                  <div className="text-2xl font-bold text-orange-600"><FinancialReportNumber value={svcRepSummary.totalInsurance} /></div>
-                  <div className="text-xs text-muted-foreground">ر.س</div>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">الإيراد الموحّد = المحصّل من الحجوزات + المبيعات الفردية المكتملة. العربون ضمن إيرادات الحجوزات وليس إيرادًا إضافيًا، والتأمينات منفصلة عن الإيرادات.</p>
-              <div className="bg-card border border-border rounded-2xl p-4 space-y-3" data-testid="service-report-provider-details">
-                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-amber-500" /> تفصيل حسب الخدمة
-                </h3>
-                {svcRepSummary.byProvider.map(p => (
-                  <div key={p.id} className="flex items-center gap-3 py-2 border-b border-border/40 last:border-0">
-                    <div className="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
-                      <Activity className="w-4 h-4 text-amber-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-foreground truncate">{p.name}</p>
-                      {p.deposits > 0 && <p className="text-xs text-muted-foreground">عربون: <FinancialReportNumber value={p.deposits} currency /></p>}
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-green-600"><FinancialReportNumber value={p.revenue} currency /></p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <Activity className="w-10 h-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">لا توجد بيانات خدمات لهذا الشهر</p>
-            </div>
-          )}
-          {repUnit.type === "service" && quickSaleDetailsSection}
-        </div>
+      {repUnit.type === "service" && viewMode === "monthly" && monthlyPeriodReady && serviceClosing && !serviceDataLoading && !serviceDataError && (
+        <ServiceFinancialReportPanels rows={serviceReportRows(serviceClosing, serviceReportSource)}
+          details={serviceReportDetails} closingRows={serviceClosingRows} />
       )}
 
       {/* ── Unified Report ── */}

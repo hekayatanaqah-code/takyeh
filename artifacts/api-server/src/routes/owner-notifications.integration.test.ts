@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { after, before, it } from "node:test";
 import { eq, inArray } from "drizzle-orm";
-import { db, pool, ownerNotificationsTable, ownerBookingsTable, sessionsTable, chaletSubmissionsTable, ownerSubscriptionsTable, serviceProvidersTable, serviceAppointmentsTable, quickSalesTable } from "@workspace/db";
+import { db, pool, ownerNotificationsTable, ownerBookingsTable, sessionsTable, chaletSubmissionsTable, ownerSubscriptionsTable, serviceProvidersTable, serviceAppointmentsTable, quickSalesTable, ownerExpensesTable } from "@workspace/db";
 import app from "../app";
 import { createSession } from "../lib/auth";
 import { GetOwnerServiceRevenueSummaryResponse, GetOwnerFinancialPeriodsResponse } from "@workspace/api-zod";
@@ -47,6 +47,7 @@ after(async () => {
   await db.delete(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.ownerId, owner));
   await db.delete(serviceAppointmentsTable).where(inArray(serviceAppointmentsTable.ownerId, [owner, other]));
   await db.delete(quickSalesTable).where(inArray(quickSalesTable.ownerId, [owner, other]));
+  await db.delete(ownerExpensesTable).where(inArray(ownerExpensesTable.ownerId, [owner, other]));
   await db.delete(serviceProvidersTable).where(inArray(serviceProvidersTable.ownerId, [owner, other]));
   await db.delete(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, [owner, other]));
   if (sessions.length) await db.delete(sessionsTable).where(inArray(sessionsTable.sid, sessions));
@@ -149,6 +150,34 @@ it("marks only the selected property's notifications read, and never treats a se
   const [otherNotice] = await db.select().from(ownerNotificationsTable).where(eq(ownerNotificationsTable.id, notices[1].id));
   assert.equal(otherNotice.isRead, false);
   assert.equal((await fetch(`${base}/read-all`, { method: "PATCH", headers, body: JSON.stringify({ providerId: 999, submissionId: properties[0].id }) })).status, 400);
+});
+
+it("includes expense-only service periods and scopes expenses without distributing owner-wide costs", async () => {
+  const [provider, otherProvider] = await db.insert(serviceProvidersTable).values([
+    { ownerId: owner, businessName: "خدمة مصروفات اختبارية", category: "catering", city: "الرياض", whatsappNumber: "0500000000" },
+    { ownerId: other, businessName: "خدمة أخرى", category: "catering", city: "الرياض", whatsappNumber: "0500000000" },
+  ]).returning();
+  await db.insert(ownerExpensesTable).values([
+    { ownerId: owner, providerId: provider.id, dateStr: "2021-04-05", category: "مواد", amount: "35.90" },
+    { ownerId: other, providerId: otherProvider.id, dateStr: "2020-05-05", category: "مواد", amount: "999" },
+    { ownerId: owner, dateStr: "2019-06-05", category: "عام غير موزع", amount: "500" },
+  ]);
+  const headers = { Cookie: `sid=${session}` };
+  const root = base.replace(/\/notifications$/, "");
+  const periodsResponse = await fetch(`${root}/report-years?activity=services&providerId=${provider.id}`, { headers });
+  assert.equal(periodsResponse.status, 200);
+  const periods = GetOwnerFinancialPeriodsResponse.parse(await periodsResponse.json());
+  assert.deepEqual(periods.gregorianMonths, ["2021-04"]);
+  assert.equal(periods.hijriMonths.length, 1);
+  const expensesResponse = await fetch(`${root}/expenses?providerId=${provider.id}`, { headers });
+  assert.equal(expensesResponse.status, 200);
+  const expenseRows = await expensesResponse.json() as { providerId: number; amount: string }[];
+  assert.equal(expenseRows.length, 1);
+  assert.equal(expenseRows[0].providerId, provider.id);
+  assert.equal(Number(expenseRows[0].amount), 35.9);
+  const inaccessible = GetOwnerFinancialPeriodsResponse.parse(await (await fetch(
+    `${root}/report-years?activity=services&providerId=${otherProvider.id}`, { headers })).json());
+  assert.deepEqual(inaccessible.gregorianMonths, []);
 });
 
 it("includes quick-sale-only financial periods without leaking other providers, cancellations or owners", async () => {

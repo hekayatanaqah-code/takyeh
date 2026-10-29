@@ -44,6 +44,12 @@ Service-report improvements must preserve property-report accounting and present
 
 **How to apply:** Reuse the current dashboard activity as the local report default without changing global selection. Do not count deposits or insurance as extra revenue; wait for both booking and sale reads rather than displaying missing data as zero.
 
+Service reports support bookings-only, quick-sales-only and combined revenue scopes. Expenses remain the selected service's full recorded expenses for the same period, and final income is selected revenue minus those expenses, including negative results and expense-only periods.
+
+**Why:** The user requested source filtering and service expense/net-income reporting. Expenses have no booking-versus-sale attribution, so allocating or duplicating them by revenue source would invent accounting data.
+
+**How to apply:** Explain the full-period expense deduction in the page and PDF. Exclude unallocated owner-wide and property expenses rather than assigning them to every service. Apply identical source, service and calendar boundaries to summary cards, transaction tables and print/PDF, with closing totals after details.
+
 Financial month dropdown options show a smaller, muted «يوافق:» subtitle listing the overlapping months of the other calendar, including their years and era labels.
 
 **Why:** The user requested bidirectional calendar correspondence under each month name, whether Hijri or Gregorian is primary.

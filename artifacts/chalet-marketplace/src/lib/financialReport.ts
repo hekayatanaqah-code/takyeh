@@ -77,6 +77,9 @@ export function buildActivitySummaryReportHtml(options: {
   generatedAt?: string;
   forPrint: boolean; logo: string | null; css: string;
   details?: { title: string; headers: string[]; rows: string[][] };
+  detailSections?: { title: string; headers: string[]; rows: string[][]; emptyMessage?: string }[];
+  scopeLabel?: string;
+  closingRows?: { label: string; amount: number }[];
 }) {
   const escape = (value: string) => value.replace(/[&<>"']/g, character =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
@@ -85,18 +88,22 @@ export function buildActivitySummaryReportHtml(options: {
     <body><main class="page"><header class="header"><div class="header-brand">${options.logo ? `<img alt="تكية" src="${escape(options.logo)}" style="width:110px;height:auto">` : '<div class="brand-name">تكية</div>'}</div>
     <div class="header-center"><h1 class="report-title">${escape(options.title)}</h1><p class="report-sub">${escape(options.activityName)}</p><p class="report-sub">${escape(options.period)}</p></div></header>
     ${options.generatedAt ? `<div class="financial-summary-meta"><span>${escape(options.activityName)}</span><span>تاريخ الإصدار: ${escape(options.generatedAt)}</span></div>` : ""}
+    ${options.scopeLabel ? `<p class="report-sub">${escape(options.scopeLabel)}</p>` : ""}
     <table class="financial-summary-table"><thead><tr><th>البيان</th><th class="financial-amount-col">المبلغ</th></tr></thead><tbody>${options.rows.map(row => {
       const emphasis = row.emphasis ?? (/^(صافي|الصافي)/.test(row.label) ? "net" : /^(إجمالي|الإجمالي)/.test(row.label) ? "total" : "");
       const amount = Math.abs(row.amount).toLocaleString("ar-SA", { maximumFractionDigits: 2 });
       return `<tr${emphasis ? ` class="financial-${emphasis}"` : ""}><td>${escape(row.label)}</td><td class="financial-amount-col">${row.amount < 0 ? "-" : ""}${escape(amount)} ر.س</td></tr>`;
     }).join("")}</tbody></table>
-    ${options.details ? `<section class="financial-sales-details"><h2 class="section-title">${escape(options.details.title)}</h2>
-    <table><thead><tr>${options.details.headers.map(header => `<th>${escape(header)}</th>`).join("")}</tr></thead>
-    <tbody>${options.details.rows.map(row => `<tr>${row.map(cell => `<td>${escape(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>
-    ${!options.details.rows.length ? "<p>لا توجد مبيعات فردية مكتملة خلال الفترة المختارة.</p>" : ""}</section>
+    ${(options.detailSections ?? (options.details ? [{ ...options.details, emptyMessage: "لا توجد مبيعات فردية مكتملة خلال الفترة المختارة." }] : [])).map(section => `<section class="financial-sales-details"><h2 class="section-title">${escape(section.title)}</h2>
+    <table><thead><tr>${section.headers.map(header => `<th>${escape(header)}</th>`).join("")}</tr></thead>
+    <tbody>${section.rows.map(row => `<tr>${row.map(cell => `<td>${escape(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    ${!section.rows.length ? `<p>${escape(section.emptyMessage ?? "لا توجد سجلات خلال الفترة المختارة.")}</p>` : ""}</section>`).join("")}
+    ${options.details || options.detailSections ? `
     <style>.financial-sales-details{margin-top:22px}.financial-sales-details table{font-size:11px!important;table-layout:fixed!important}
     .financial-sales-details td,.financial-sales-details th{white-space:normal!important;overflow-wrap:anywhere;padding:6px!important}
     .financial-sales-details thead{display:table-header-group}</style>` : ""}
+    ${options.closingRows ? `<section class="financial-closing"><h2 class="section-title">الحسابات الختامية</h2><table><tbody>${options.closingRows.map(row =>
+      `<tr class="${row.label.startsWith("صافي") ? "financial-net" : ""}"><td>${escape(row.label)}</td><td class="financial-amount-col">${row.amount < 0 ? "-" : ""}${escape(Math.abs(row.amount).toLocaleString("ar-SA", { maximumFractionDigits: 2 }))} ر.س</td></tr>`).join("")}</tbody></table></section>` : ""}
     <footer class="footer">منصة تكيّة — تقرير مالي</footer></main>
     ${options.forPrint ? '<script>window.addEventListener("load",async()=>{await document.fonts.ready;setTimeout(()=>{window.focus();window.print()},250)})</script>' : ""}</body></html>`);
 }

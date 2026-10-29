@@ -4810,6 +4810,16 @@ router.get("/report-years", async (req, res) => {
           gt(quickSalesTable.total, "0"),
         ));
         allDates.push(...sales.map(sale => sale.d));
+        // A service can have expenses in a month with no bookings or sales.
+        // Keep the existing property/unified period calculation unchanged.
+        if (activity === "services") {
+          const expenses = await db.select({ d: ownerExpensesTable.dateStr }).from(ownerExpensesTable).where(and(
+            inArray(ownerExpensesTable.ownerId, allOwnerIds),
+            inArray(ownerExpensesTable.providerId, providers.map(provider => provider.id)),
+            gt(ownerExpensesTable.amount, "0"),
+          ));
+          allDates.push(...expenses.map(expense => expense.d));
+        }
       }
     }
     const gregMonths = new Set<string>();
