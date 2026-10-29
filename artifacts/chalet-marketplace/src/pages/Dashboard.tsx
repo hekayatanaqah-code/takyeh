@@ -53,6 +53,7 @@ import { QuickSalesSettingsPanel } from "@/components/owner/QuickSalesSettingsPa
 import { QuickSalesRevenueDetails, RevenueSourceFilter } from "@/components/owner/QuickSalesRevenue";
 import { useListQuickSales, useGetQuickSalesSettings } from "@workspace/api-client-react";
 import { quickSalesForPeriod, quickSalesTotal, type RevenueSource } from "@/lib/quickSalesRevenue";
+import { revenueMonthLabel } from "@/lib/revenueMonthLabel";
 import { ReviewObjection } from "@/components/owner/ReviewObjection";
 import { ServiceBookingScheduleFields } from "@/components/owner/ServiceBookingScheduleFields";
 import { hasServiceInsurance, serviceDashboardTabs } from "@/lib/serviceDashboardTabs";
@@ -14668,38 +14669,7 @@ function RevenueTab() {
       return s + Math.max(0, amt - dep);
     }, 0);
 
-    const serviceMonthLabel = (monthKey: string, mode: "gregorian" | "hijri") => {
-      const [year, month] = monthKey.split("-").map(Number);
-      if (mode === "hijri") {
-        const range = getHijriMonthGregorianRange(year, month);
-        let secondary = "";
-        if (range.start && range.end) {
-          const start = new Date(`${range.start}T12:00:00`);
-          const end = new Date(`${range.end}T12:00:00`);
-          const startName = start.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
-          const endName = end.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" });
-          secondary = start.getMonth() === end.getMonth()
-            ? `${startName} ${toArN(start.getFullYear())}`
-            : `${startName} / ${endName} ${toArN(end.getFullYear())}`;
-        }
-        return {
-          primary: `${HIJRI_MONTHS_AR[month - 1]} ${toArN(year)} هـ`,
-          secondary,
-        };
-      }
-      const sample = new Date(year, month - 1, 15);
-      const firstHijri = toHijriComponents(new Date(year, month - 1, 1));
-      const lastHijri = toHijriComponents(new Date(year, month, 0));
-      const secondary = firstHijri.year === lastHijri.year && firstHijri.month === lastHijri.month
-        ? `${HIJRI_MONTHS_AR[firstHijri.month - 1]} ${toArN(firstHijri.year)} هـ`
-        : firstHijri.year === lastHijri.year
-          ? `${HIJRI_MONTHS_AR[firstHijri.month - 1]} / ${HIJRI_MONTHS_AR[lastHijri.month - 1]} ${toArN(firstHijri.year)} هـ`
-          : `${HIJRI_MONTHS_AR[firstHijri.month - 1]} ${toArN(firstHijri.year)} / ${HIJRI_MONTHS_AR[lastHijri.month - 1]} ${toArN(lastHijri.year)} هـ`;
-      return {
-        primary: sample.toLocaleDateString("ar-SA", { month: "long", calendar: "gregory" }),
-        secondary,
-      };
-    };
+    const serviceMonthLabel = revenueMonthLabel;
     const activeServiceMonth = !serviceRevenueYear ? "" : calType === "gregorian"
       ? serviceSelectedMonth
       : serviceSelectedHijriMonth;

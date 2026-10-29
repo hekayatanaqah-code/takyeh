@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListQuickSales, useCreateQuickSale, useCancelQuickSale, useGetQuickSalesSettings, useGetProviderCatalogItems,
@@ -20,11 +20,12 @@ import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { useToast } from "@/hooks/use-toast";
 import { cn, toAr, fromAr } from "@/lib/utils";
-import { formatDualDate, HIJRI_MONTHS_AR } from "@/lib/hijri";
+import { formatDualDate } from "@/lib/hijri";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle, type RevenuePeriod } from "@/lib/revenuePeriod";
+import { quickSalesHistoryMonths, reconcileQuickSalesHistoryPeriod, switchQuickSalesHistoryCalendar } from "@/lib/quickSalesHistoryPeriod";
+import { QuickSalesHistoryFilters } from "./QuickSalesHistoryFilters";
 import { qsErrText } from "./QuickSalesSettingsPanel";
 
-const G_MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const MAX_TOTAL = 9_999_999_999.99;
 const PAY_LABEL = { cash: "نقدًا", bank: "تحويل بنكي" } as const;
 
@@ -100,17 +101,6 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
   const idem = useRef<{ sig: string; key: string } | null>(null);
 
   const setLine = (k: string, patch: Partial<Line>) => setLines(ls => ls.map(l => l.key === k ? { ...l, ...patch } : l));
-  const addCatalog = (id: string) => {
-    const it = activeCatalog.find(i => String(i.id) === id);
-    if (!it) return;
-    setLines(ls => {
-      const ex = ls.find(l => l.catalogItemId === it.id);
-      if (ex) return ls.map(l => l === ex ? { ...l, qty: String((parseInt(fromAr(l.qty)) || 0) + 1) } : l);
-      const blank = ls.length === 1 && !ls[0].name.trim() && !ls[0].price.trim();
-      const nl: Line = { key: uuid(), catalogItemId: it.id, name: it.name, qty: "1", price: String(it.price) };
-      return blank ? [nl] : [...ls, nl];
-    });
-  };
 
   const parsed = lines.map(l => ({ l, q: parseNum(l.qty), p: parseNum(l.price) }));
   const total = r2(parsed.reduce((a, x) => a + (Number.isFinite(x.q) && Number.isFinite(x.p) ? x.q * x.p : 0), 0));
@@ -147,16 +137,20 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
   };
 
   /* history filter */
-  const [period, setPeriod] = useState<RevenuePeriod>({ calendar: "hijri", year: "", month: "" });
+  const [period, setPeriod] = useState<RevenuePeriod>(() => {
+    const month = revenueMonthKey(today(), "hijri");
+    return { calendar: "hijri", year: month.slice(0, 4), month };
+  });
   const sales = useMemo(() => [...(salesQ.data ?? [])].sort((a, b) => b.dateStr.localeCompare(a.dateStr) || b.id - a.id), [salesQ.data]);
-  const monthOpts = useMemo(() => {
-    const keys = Array.from(new Set(sales.map(s => revenueMonthKey(s.dateStr, period.calendar)))).sort().reverse();
-    return keys.map(k => {
-      const [y, m] = k.split("-");
-      const names = period.calendar === "hijri" ? HIJRI_MONTHS_AR : G_MONTHS;
-      return { k, label: `${names[Number(m) - 1]} ${toAr(y)}${period.calendar === "hijri" ? " هـ" : " م"}` };
+  const historyDates = useMemo(() => sales.map(sale => sale.dateStr), [sales]);
+  const historyMonths = useMemo(() => quickSalesHistoryMonths(historyDates, period.calendar), [historyDates, period.calendar]);
+  useEffect(() => {
+    if (salesQ.isLoading || salesQ.isError) return;
+    setPeriod(previous => {
+      const next = reconcileQuickSalesHistoryPeriod(previous, historyMonths);
+      return next.year === previous.year && next.month === previous.month ? previous : next;
     });
-  }, [sales, period.calendar]);
+  }, [historyMonths, salesQ.isLoading, salesQ.isError]);
   const filtered = sales.filter(s => isInRevenuePeriod(s.dateStr, period));
 
   const [toCancel, setToCancel] = useState<QuickSale | null>(null);
@@ -206,56 +200,65 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
             <Lock className="w-4 h-4 shrink-0 mt-0.5" />تسجيل مبيعات جديدة موقوف. فعّل «البيع السريع» من «بيانات النشاط»، والسجل أدناه يبقى متاحًا.
           </div>
         ) : (
-          <form className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-4" onSubmit={e => { e.preventDefault(); submit(); }} data-testid="form-quick-sale">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div>
-                <Label>تاريخ البيع</Label>
-                <DualCalendarPicker value={dateStr} onChange={setDateStr} compact />
+          <form dir="rtl" className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-4 text-right min-w-0" onSubmit={e => { e.preventDefault(); submit(); }} data-testid="form-quick-sale">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
+              <div className="space-y-1.5 min-w-0">
+                <Label htmlFor="qs-client" className="block">العميل <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
+                <Input id="qs-client" className="h-10" value={clientName} maxLength={150} onChange={e => setClientName(e.target.value)} data-testid="input-quick-sale-client" />
               </div>
-              <div>
-                <Label htmlFor="qs-client">العميل <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                <Input id="qs-client" value={clientName} maxLength={150} onChange={e => setClientName(e.target.value)} data-testid="input-quick-sale-client" />
-              </div>
-              <div>
-                <Label>طريقة الاستلام</Label>
-                <div className="grid grid-cols-2 gap-1 rounded-lg bg-secondary p-1">
+              <div className="space-y-1.5 min-w-0">
+                <Label id="qs-pay-label" className="block">طريقة الاستلام</Label>
+                <div role="radiogroup" aria-labelledby="qs-pay-label" className="grid grid-cols-2 gap-1 rounded-lg bg-secondary p-1 h-10">
                   {(["cash", "bank"] as const).map(m => (
-                    <button type="button" key={m} onClick={() => setPay(m)} data-testid={`button-pay-${m}`}
-                      className={cn("flex items-center justify-center gap-1.5 rounded-md py-1.5 text-sm transition-colors", pay === m ? "bg-card shadow-sm font-semibold text-primary" : "text-muted-foreground")}>
+                    <button type="button" role="radio" aria-checked={pay === m} key={m} onClick={() => setPay(m)} data-testid={`button-pay-${m}`}
+                      className={cn("flex items-center justify-center gap-1.5 rounded-md text-sm transition-colors whitespace-nowrap", pay === m ? "bg-card shadow-sm font-semibold text-primary" : "text-muted-foreground")}>
                       {m === "cash" ? <Banknote className="w-4 h-4" /> : <Landmark className="w-4 h-4" />}{PAY_LABEL[m]}
                     </button>
                   ))}
                 </div>
               </div>
+              <div className="space-y-1.5 min-w-0">
+                <Label className="block">تاريخ البيع</Label>
+                <DualCalendarPicker value={dateStr} onChange={setDateStr} label="تاريخ البيع" compact className="h-10 rounded-md border border-input bg-background px-3 py-2" />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <Label className="m-0">البنود</Label>
-                {activeCatalog.length > 0 && (
-                  <Select value="" onValueChange={addCatalog}>
-                    <SelectTrigger className="h-8 w-auto min-w-[11rem] text-xs" data-testid="select-catalog-item"><Package className="w-3.5 h-3.5 ml-1" /><SelectValue placeholder="أضف من قائمتك" /></SelectTrigger>
-                    <SelectContent>{activeCatalog.map(i => <SelectItem key={i.id} value={String(i.id)}>{i.name} — {money(i.price)} ر.س</SelectItem>)}</SelectContent>
-                  </Select>
-                )}
-              </div>
-              {lines.map((l, idx) => {
-                const q = parseNum(l.qty), p = parseNum(l.price);
-                const sub = Number.isFinite(q) && Number.isFinite(p) ? r2(q * p) : 0;
-                return (
-                  <div key={l.key} className="grid grid-cols-[minmax(0,1fr)_3rem_5rem_auto] sm:grid-cols-[minmax(0,1fr)_4.5rem_6.5rem_auto] gap-1 sm:gap-2 items-center" data-testid={`row-line-${idx}`}>
-                    <Input placeholder="اسم البند" value={l.name} maxLength={150} onChange={e => setLine(l.key, { name: e.target.value, catalogItemId: undefined })} data-testid={`input-line-name-${idx}`} />
-                    <Input inputMode="numeric" aria-label="الكمية" value={l.qty} onChange={e => setLine(l.key, { qty: e.target.value })} className="text-center" data-testid={`input-line-qty-${idx}`} />
-                    <div className="relative">
-                      <Input inputMode="decimal" aria-label="سعر الوحدة" placeholder="السعر" value={l.price} onChange={e => setLine(l.key, { price: e.target.value })} className="pl-7" data-testid={`input-line-price-${idx}`} />
-                      <RiyalIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    </div>
-                    <Button type="button" size="icon" variant="ghost" disabled={lines.length === 1} onClick={() => setLines(ls => ls.filter(x => x.key !== l.key))} aria-label="حذف البند" data-testid={`button-remove-line-${idx}`}><Trash2 className="w-4 h-4" /></Button>
-                    {l.catalogItemId && <p className="col-span-4 -mt-1 text-[11px] text-muted-foreground">من القائمة · المجموع <Price value={sub} /></p>}
+            <div className="space-y-2 min-w-0">
+              <Label className="block">البنود</Label>
+              <div className="w-full max-w-full overflow-x-auto overscroll-x-contain px-1 pb-1" tabIndex={0} role="region" aria-label="بنود البيع — مرّر أفقيًا على الجوال">
+                <div className="min-w-[42rem] space-y-2">
+                  <div className="grid grid-cols-[12rem_minmax(8rem,1fr)_4.5rem_7rem_5.5rem] gap-2 text-[11px] text-muted-foreground px-0.5" aria-hidden="true">
+                    <span>من القائمة</span><span>اسم البند</span><span className="text-center">الكمية</span><span>سعر الوحدة</span><span className="text-center">إضافة / حذف</span>
                   </div>
-                );
-              })}
-              <Button type="button" size="sm" variant="outline" onClick={() => setLines(ls => [...ls, newLine()])} data-testid="button-add-line"><Plus className="w-4 h-4 ml-1" />بند يدوي</Button>
+                  {lines.map((l, idx) => {
+                    const q = parseNum(l.qty), p = parseNum(l.price);
+                    const sub = Number.isFinite(q) && Number.isFinite(p) ? r2(q * p) : 0;
+                    return (
+                      <div key={l.key} className="grid grid-cols-[12rem_minmax(8rem,1fr)_4.5rem_7rem_5.5rem] gap-2 items-center" data-testid={`row-line-${idx}`}>
+                        <Select dir="rtl" value={l.catalogItemId ? String(l.catalogItemId) : ""} disabled={activeCatalog.length === 0}
+                          onValueChange={v => { const it = activeCatalog.find(i => String(i.id) === v); if (it) setLine(l.key, { catalogItemId: it.id, name: it.name, price: String(it.price) }); }}>
+                          <SelectTrigger className="h-10 min-w-0 text-xs [&>span]:min-w-0 [&>span]:truncate" aria-label={`اختيار من القائمة للبند ${idx + 1}`} data-testid={idx === 0 ? "select-catalog-item" : `select-line-catalog-${idx}`}>
+                            <Package className="w-3.5 h-3.5 ml-1 shrink-0" /><SelectValue placeholder={activeCatalog.length ? "اختر من قائمتك" : "لا توجد قائمة"} />
+                          </SelectTrigger>
+                          <SelectContent dir="rtl" align="start">{activeCatalog.map(i => <SelectItem key={i.id} value={String(i.id)}>{i.name} — {money(i.price)} ر.س</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Input className="h-10 min-w-0" aria-label={`اسم البند ${idx + 1}`} placeholder="اسم البند" value={l.name} maxLength={150} onChange={e => setLine(l.key, { name: e.target.value, catalogItemId: undefined })} data-testid={`input-line-name-${idx}`} />
+                        <Input inputMode="numeric" aria-label={`الكمية للبند ${idx + 1}`} value={l.qty} onChange={e => setLine(l.key, { qty: e.target.value })} className="h-10 text-center tabular-nums" data-testid={`input-line-qty-${idx}`} />
+                        <div className="relative">
+                          <Input inputMode="decimal" aria-label={`سعر الوحدة للبند ${idx + 1}`} placeholder="0" value={l.price} onChange={e => setLine(l.key, { price: e.target.value })} className="h-10 pl-7 tabular-nums" data-testid={`input-line-price-${idx}`} />
+                          <RiyalIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button type="button" size="icon" variant="outline" className="h-10 w-10 shrink-0" onClick={() => setLines(ls => [...ls, newLine()])} aria-label="إضافة بند" title="إضافة بند" data-testid={idx === 0 ? "button-add-line" : `button-add-line-${idx}`}><Plus className="w-4 h-4" /></Button>
+                          <Button type="button" size="icon" variant="ghost" className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive" disabled={lines.length === 1} onClick={() => setLines(ls => ls.filter(x => x.key !== l.key))} aria-label={`حذف البند ${idx + 1}`} title="حذف البند" data-testid={`button-remove-line-${idx}`}><Trash2 className="w-4 h-4" /></Button>
+                        </div>
+                        {sub > 0 && <p className="col-start-2 col-span-3 -mt-1 text-[11px] text-muted-foreground">{l.catalogItemId ? "من القائمة · " : ""}المجموع <Price value={sub} /></p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">اختر من قائمتك أو اكتب بندًا يدويًا. استخدم زر + لإضافة بند. على الجوال يمكنك تمرير صف البنود أفقيًا.</p>
             </div>
 
             <div>
@@ -284,21 +287,11 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
 
         {/* ── History ── */}
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="space-y-3">
             <h4 className="font-bold text-sm">سجل البيع السريع <span className="text-muted-foreground font-normal">· {revenueSalesTitle(period).replace("المبيعات", "").replace("مبيعات", "").trim() || "الكل"}</span></h4>
-            <div className="flex gap-2">
-              <Select value={period.calendar} onValueChange={v => setPeriod({ calendar: v as RevenuePeriod["calendar"], year: "", month: "" })}>
-                <SelectTrigger className="h-8 w-24 text-xs" data-testid="select-history-calendar"><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="hijri">هجري</SelectItem><SelectItem value="gregorian">ميلادي</SelectItem></SelectContent>
-              </Select>
-              <Select value={period.month || "all"} onValueChange={v => setPeriod(p => v === "all" ? { ...p, year: "", month: "" } : { ...p, year: v.split("-")[0], month: v })}>
-                <SelectTrigger className="h-8 min-w-[9rem] text-xs" data-testid="select-history-month"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">كل الفترات</SelectItem>
-                  {monthOpts.map(o => <SelectItem key={o.k} value={o.k}>{o.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <QuickSalesHistoryFilters period={period} months={historyMonths} loading={salesQ.isLoading || salesQ.isError}
+              onChange={setPeriod}
+              onCalendarChange={calendar => setPeriod(previous => switchQuickSalesHistoryCalendar(previous, calendar, historyDates))} />
           </div>
 
           {salesQ.isLoading ? (
