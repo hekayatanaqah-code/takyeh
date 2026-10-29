@@ -53,6 +53,7 @@ import {
   cashDepositLogsTable,
   expenseCategoriesTable,
   ownerCustomersTable,
+  quickSalesTable,
 } from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
 import { eq, and, ne, inArray, gte, gt, lte, sql, desc, isNull, isNotNull, or, getTableColumns, type SQL } from "drizzle-orm";
@@ -4802,6 +4803,13 @@ router.get("/report-years", async (req, res) => {
           .from(serviceAppointmentsTable).where(and(inArray(serviceAppointmentsTable.providerId, providers.map(provider => provider.id)),
             ne(serviceAppointmentsTable.status, "cancelled")));
         allDates.push(...appointments.filter(row => [row.amount, row.deposit, row.insurance].some(value => Number(value) > 0)).map(row => row.d));
+        const sales = await db.select({ d: quickSalesTable.dateStr }).from(quickSalesTable).where(and(
+          inArray(quickSalesTable.ownerId, allOwnerIds),
+          inArray(quickSalesTable.providerId, providers.map(provider => provider.id)),
+          eq(quickSalesTable.status, "completed"),
+          gt(quickSalesTable.total, "0"),
+        ));
+        allDates.push(...sales.map(sale => sale.d));
       }
     }
     const gregMonths = new Set<string>();

@@ -76,6 +76,7 @@ export function buildActivitySummaryReportHtml(options: {
   rows: { label: string; amount: number; emphasis?: "total" | "net" }[];
   generatedAt?: string;
   forPrint: boolean; logo: string | null; css: string;
+  details?: { title: string; headers: string[]; rows: string[][] };
 }) {
   const escape = (value: string) => value.replace(/[&<>"']/g, character =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
@@ -89,6 +90,13 @@ export function buildActivitySummaryReportHtml(options: {
       const amount = Math.abs(row.amount).toLocaleString("ar-SA", { maximumFractionDigits: 2 });
       return `<tr${emphasis ? ` class="financial-${emphasis}"` : ""}><td>${escape(row.label)}</td><td class="financial-amount-col">${row.amount < 0 ? "-" : ""}${escape(amount)} ر.س</td></tr>`;
     }).join("")}</tbody></table>
+    ${options.details ? `<section class="financial-sales-details"><h2 class="section-title">${escape(options.details.title)}</h2>
+    <table><thead><tr>${options.details.headers.map(header => `<th>${escape(header)}</th>`).join("")}</tr></thead>
+    <tbody>${options.details.rows.map(row => `<tr>${row.map(cell => `<td>${escape(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table>
+    ${!options.details.rows.length ? "<p>لا توجد مبيعات فردية مكتملة خلال الفترة المختارة.</p>" : ""}</section>
+    <style>.financial-sales-details{margin-top:22px}.financial-sales-details table{font-size:11px!important;table-layout:fixed!important}
+    .financial-sales-details td,.financial-sales-details th{white-space:normal!important;overflow-wrap:anywhere;padding:6px!important}
+    .financial-sales-details thead{display:table-header-group}</style>` : ""}
     <footer class="footer">منصة تكيّة — تقرير مالي</footer></main>
     ${options.forPrint ? '<script>window.addEventListener("load",async()=>{await document.fonts.ready;setTimeout(()=>{window.focus();window.print()},250)})</script>' : ""}</body></html>`);
 }

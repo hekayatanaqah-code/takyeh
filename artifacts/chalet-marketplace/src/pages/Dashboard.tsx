@@ -59,7 +59,7 @@ import { ReviewObjection } from "@/components/owner/ReviewObjection";
 import { ServiceBookingScheduleFields } from "@/components/owner/ServiceBookingScheduleFields";
 import { hasServiceInsurance, serviceDashboardTabs } from "@/lib/serviceDashboardTabs";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
-import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport } from "@/lib/financialReportActivity";
+import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport, defaultFinancialReportActivity, includeQuickSalesInReport } from "@/lib/financialReportActivity";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
@@ -19919,7 +19919,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   // This is a report-local filter: it never changes the owner's dashboard activity.
-  const [repUnit, setReportUnit] = useState<FinanceUnit>({ type: "all" });
+  const { unit: currentActivity } = useAdminFinance();
+  const [reportActivityOverride, setReportUnit] = useState<FinanceUnit | null>(null);
+  const repUnit = reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services);
   const _nowRep = new Date();
   const currentMonth = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}`;
   const currentYear = String(_nowRep.getFullYear());
@@ -19967,7 +19969,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const [customTo, setCustomTo] = useState("");
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType, activityKey(repUnit)]);
 
   const hijriReportParsed = useMemo(() => {
     if (!isHijri || !selectedHijriMonthVal) return null;
@@ -20117,7 +20119,30 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     },
     enabled: isActivitySummary && viewMode === "monthly" && monthlyPeriodReady,
   });
-  const svcRepSummary = scopeServiceFinancialReport(rawSvcRepSummary, repUnit);
+  const reportQuickSalesQuery = useListQuickSales(repUnit.type === "service" ? { providerId: repUnit.id } : undefined, {
+    query: { enabled: isActivitySummary, staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000 },
+  });
+  const reportQuickSales = quickSalesForPeriod(reportQuickSalesQuery.data ?? [], repUnit, {
+    calendar: isHijri ? "hijri" : "gregorian",
+    year: (isHijri ? selectedHijriMonthVal : selectedMonth).slice(0, 4),
+    month: isHijri ? selectedHijriMonthVal : selectedMonth,
+  });
+  const svcRepSummary = includeQuickSalesInReport(scopeServiceFinancialReport(rawSvcRepSummary, repUnit), reportQuickSales);
+  const quickSaleDetails = {
+    title: "تفاصيل المبيعات الفردية (البيع السريع)",
+    headers: ["رقم البيع", "التاريخ", "النشاط", "العميل", "البنود والكميات", "التحصيل", "المبلغ"],
+    rows: reportQuickSales.map(sale => {
+      const date = formatDualDate(sale.dateStr);
+      return [
+        toAr(String(sale.id)),
+        isHijri ? `${date.hijri} — ${date.gregorian} م` : `${date.gregorian} م — ${date.hijri}`,
+        sale.providerName, sale.clientName || "غير محدد",
+        sale.items.map(item => `${item.name} × ${toAr(String(item.quantity))}`).join("، "),
+        sale.paymentMethod === "bank" ? "تحويل بنكي" : "نقدي",
+        `${sale.total.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`,
+      ];
+    }),
+  };
 
   const archiveMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -20577,10 +20602,10 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     }
   }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel]);
 
-  const quickReportReady = !periodsLoading && !periodsError && (viewMode === "monthly" ? monthlyPeriodReady
+  const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && (viewMode === "monthly" ? monthlyPeriodReady
     : viewMode === "yearly" ? (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear))
       : activePeriods.years.length > 0) && (isActivitySummary
-    ? !!svcRepSummary && !serviceReportLoading && !serviceReportError && (reportType !== "unified" || repUnit.type === "service" || !!financial)
+    ? !!svcRepSummary && !serviceReportLoading && !serviceReportError && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (reportType !== "unified" || repUnit.type === "service" || !!financial)
     : viewMode === "monthly" ? !!report && !!financial && !isLoading
       : viewMode === "yearly" ? !!(isYearlyHijri ? yearlyHijri : yearly) && !(isYearlyHijri ? yearlyHijriLoading : yearlyLoading)
       : !!(isHijri ? customRangeDataHijri : customRangeData) && !!customFrom && !!customTo);
@@ -20604,19 +20629,22 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
         const unified = repUnit.type === "all" && reportType === "unified";
         const rows = unified ? [
           { label: "إيرادات العقارات", amount: financial?.totalRevenue ?? 0 },
-          { label: "إيرادات الخدمات", amount: svcRepSummary.totalRevenue },
+          { label: "إيرادات حجوزات الخدمات", amount: svcRepSummary.bookingRevenue },
+          { label: "المبيعات الفردية (البيع السريع)", amount: svcRepSummary.quickSalesRevenue },
           { label: "إجمالي الإيرادات الموحّدة", amount: (financial?.totalRevenue ?? 0) + svcRepSummary.totalRevenue },
           { label: "مصروفات العقارات", amount: financial?.totalExpenses ?? 0 },
           { label: "صافي العقارات", amount: financial?.netProfit ?? 0 },
         ] : [
-          { label: "إجمالي إيرادات الخدمات", amount: svcRepSummary.totalRevenue },
+          { label: "إيرادات حجوزات الخدمات", amount: svcRepSummary.bookingRevenue },
+          { label: "المبيعات الفردية (البيع السريع)", amount: svcRepSummary.quickSalesRevenue },
+          { label: "إجمالي إيرادات النشاط الموحّدة", amount: svcRepSummary.totalRevenue },
           { label: "عربون محصّل", amount: svcRepSummary.totalDeposits },
           { label: "التأمينات", amount: svcRepSummary.totalInsurance },
           ...svcRepSummary.byProvider.map(provider => ({ label: provider.name, amount: provider.revenue })),
         ];
         html = buildActivitySummaryReportHtml({ title: reportHeading,
           period: activeMonthLabel, activityName: repUnit.type === "service" ? repUnit.name : "جميع الأنشطة",
-          fileName, rows, logo, css: REPORT_CSS, forPrint: action === "print" });
+          fileName, rows, details: quickSaleDetails, logo, css: REPORT_CSS, forPrint: action === "print" });
       } else if (viewMode === "monthly") {
         const qr = await generateReportQrDataUrl("monthly", isHijri ? selectedHijriMonthVal : selectedMonth);
         html = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, action === "print", qr,
@@ -20722,8 +20750,28 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       {periodsError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل السنوات والشهور المالية. أعد تحميل الصفحة للمحاولة مجددًا.</p>}
       {!periodsLoading && !periodsError && !activePeriods.months.length && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">لا توجد بيانات مالية فعلية ونشطة لهذا النشاط. ستظهر السنوات والشهور عند تسجيل بيانات مالية.</p>}
       {isActivitySummary && serviceReportError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل تقرير الخدمات. أعد تحميل الصفحة للمحاولة مجددًا؛ إجراءات التصدير متوقفة حتى تكتمل البيانات.</p>}
+      {isActivitySummary && reportQuickSalesQuery.isLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل المبيعات الفردية لاستكمال التقرير…</p>}
+      {isActivitySummary && reportQuickSalesQuery.isError && <div role="alert" className="rounded-xl border border-destructive p-4 text-sm text-destructive">
+        تعذّر تحميل المبيعات الفردية؛ التقرير غير مكتمل والتصدير متوقف.
+        <Button variant="outline" className="mr-3" onClick={() => void reportQuickSalesQuery.refetch()}>إعادة المحاولة</Button>
+      </div>}
+      {isActivitySummary && monthlyPeriodReady && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (
+        <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
+          <h3 className="font-bold">{quickSaleDetails.title}</h3>
+          <div className="flex flex-wrap gap-6 text-sm">
+            <p>إيرادات حجوزات الخدمات: <FinancialReportNumber value={svcRepSummary?.bookingRevenue ?? 0} currency /></p>
+            <p>المبيعات الفردية: <FinancialReportNumber value={svcRepSummary?.quickSalesRevenue ?? 0} currency /></p>
+            <p className="font-bold">إجمالي إيرادات الخدمات والبيع السريع: <FinancialReportNumber value={svcRepSummary?.totalRevenue ?? 0} currency /></p>
+          </div>
+          {quickSaleDetails.rows.length ? <div className="overflow-x-auto">
+            <table className="w-full text-right text-xs"><thead><tr>{quickSaleDetails.headers.map(header => <th key={header} className="p-2">{header}</th>)}</tr></thead>
+              <tbody>{quickSaleDetails.rows.map((row, index) => <tr key={reportQuickSales[index].id} className="border-t border-border">{row.map((cell, column) => <td key={column} className="p-2">{cell}</td>)}</tr>)}</tbody>
+            </table>
+          </div> : <p className="text-sm text-muted-foreground">لا توجد مبيعات فردية مكتملة خلال الفترة المختارة.</p>}
+        </section>
+      )}
       {/* ── Services Report ── */}
-      {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && monthlyPeriodReady && (
+      {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && monthlyPeriodReady && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Activity className="w-5 h-5 text-amber-500 shrink-0" />
@@ -20778,7 +20826,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       )}
 
       {/* ── Unified Report ── */}
-      {repUnit.type === "all" && reportType === "unified" && viewMode === "monthly" && monthlyPeriodReady && (
+      {repUnit.type === "all" && reportType === "unified" && viewMode === "monthly" && monthlyPeriodReady && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Zap className="w-5 h-5 text-primary shrink-0" />

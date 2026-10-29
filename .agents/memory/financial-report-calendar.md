@@ -26,11 +26,17 @@ Financial report print/PDF output uses the literal abbreviation «ر.س» in one
 
 **How to apply:** Keep these report-specific choices separate from the platform's general riyal artwork convention. Zero page margins and empty page-margin boxes suppress native browser furniture where supported; never promise to override every browser's user-controlled header/footer setting.
 
-The financial reports section has its own activity filter, initially «جميع الأنشطة». Selecting a property or service scopes its report and updates both the screen and PDF heading to «التقرير المالي - [اسم النشاط]».
+The financial reports section has its own activity filter, initially the current dashboard activity (or its sole available activity when internal dashboard scope is all). Keep «جميع الأنشطة» available as an explicit local choice. Selecting a property or service scopes its report and updates both the screen and PDF heading to «التقرير المالي - [اسم النشاط]».
 
-**Why:** The user explicitly requested activity-specific financial reports and matching titles inside the reports section.
+**Why:** The user explicitly requested current-activity defaults instead of all activities, while retaining local activity switching and matching report titles.
 
 **How to apply:** Do not change the global dashboard activity to implement this filter. Keep published property IDs distinct from submission IDs, filter service totals by provider, and reset report-local export/share state when changing activity.
+
+Completed quick sales belong in the selected activity's unified report revenue and explicit transaction details, on screen and in print/PDF; cancelled sales do not. Include periods whose only revenue comes from quick sales, even when new quick-sale entry is disabled.
+
+**Why:** The user reported quick sales being omitted from comprehensive reports and their printed/PDF output.
+
+**How to apply:** Keep sales distinct from booking collections and insurance, then sum them once in halalas. Apply the same activity and calendar boundaries to both sources, and stop exports if either source cannot load.
 
 Financial month dropdown options show a smaller, muted «يوافق:» subtitle listing the overlapping months of the other calendar, including their years and era labels.
 

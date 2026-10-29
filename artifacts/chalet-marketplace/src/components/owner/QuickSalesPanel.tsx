@@ -162,6 +162,7 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
         ++customerRequest.current;
         setLines([newLine()]); setClientName(""); setClientPhone(""); setCustomerLookup("idle"); setNotes(""); setConfirmed(false);
         qc.invalidateQueries({ queryKey: getListQuickSalesQueryKey() });
+        qc.invalidateQueries({ queryKey: ["owner", "report-years"] });
         qc.invalidateQueries({ queryKey: ["owner", "crm-customers"] });
         qc.invalidateQueries({ queryKey: ["owner", "crm-history"] });
         toast({ title: "تم تسجيل البيعة", description: `${money(sale.total)} ريال · ${PAY_LABEL[sale.paymentMethod]}` });
@@ -195,6 +196,7 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
     cancel.mutate({ saleId: toCancel.id, data: { reason: reason.trim() } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListQuickSalesQueryKey() });
+        qc.invalidateQueries({ queryKey: ["owner", "report-years"] });
         qc.invalidateQueries({ queryKey: ["owner", "crm-customers"] });
         qc.invalidateQueries({ queryKey: ["owner", "crm-history"] });
         setToCancel(null); setReason("");
