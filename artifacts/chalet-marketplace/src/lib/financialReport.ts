@@ -1,3 +1,25 @@
+/** Property detail visibility changes presentation only, never the supplied totals. */
+export function buildPropertyReportClosingHtml(totals: { revenue: number; expenses: number; netProfit: number }) {
+  return `<section class="section financial-closing"><h2 class="section-title">الحسابات الختامية</h2><table><tbody>
+    <tr><td>إجمالي الإيرادات</td><td>${formatFinancialAmount(totals.revenue)}</td></tr>
+    <tr><td>إجمالي المصروفات</td><td>${formatFinancialAmount(totals.expenses)}</td></tr>
+    <tr class="total-row"><td>صافي الربح / الدخل النهائي</td><td>${formatFinancialAmount(totals.netProfit)}</td></tr>
+    </tbody></table></section>`;
+}
+
+export function buildPropertyBookingDetailsHtml(
+  showDetails: boolean,
+  rows: { name: string; date: string; base: number; svc: number; total: number }[],
+) {
+  if (!showDetails || !rows.length) return "";
+  const escape = (text: string) => text.replace(/[&<>"']/g, character =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
+  return `<section class="section-auto financial-booking-details"><h2 class="section-title">تفصيل الحجوزات</h2>
+    <table><thead><tr><th>العميل</th><th>التاريخ</th><th>قيمة الإيجار</th><th>رسوم الخدمات</th><th>الإجمالي</th></tr></thead><tbody>
+    ${rows.map(row => `<tr><td>${escape(row.name)}</td><td>${escape(row.date)}</td><td>${formatFinancialAmount(row.base)}</td><td>${formatFinancialAmount(row.svc)}</td><td>${formatFinancialAmount(row.total)}</td></tr>`).join("")}
+    </tbody></table></section>`;
+}
+
 export type FinancialReportCalendar = "hijri" | "gregorian";
 
 /** Isolate the sign and Eastern digits together so RTL cannot move the minus. */

@@ -39,7 +39,7 @@ import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
-import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "@/lib/financialReport";
+import { buildActivitySummaryReportHtml, buildPropertyReportClosingHtml, buildPropertyBookingDetailsHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "@/lib/financialReport";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
@@ -19382,13 +19382,14 @@ async function printMonthlyReport(
   isCurrentPeriod = false,
   calMode: ReportCalendarMode = "gregorian",
   hijriMonth?: string,
+  showDetails = false,
 ) {
   const win = window.open("", "_blank", "width=900,height=1200");
   if (!win) return;
   const qr = await generateReportQrDataUrl("monthly", month);
   const logo = await getLogoDataUrl();
   const fileName = buildReportFileName({ viewMode: "monthly", calMode, month, hijriMonth });
-  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle, logo, isCurrentPeriod, fileName));
+  win.document.write(buildMonthlyReportHtml(month, propertyName, report, financial, true, qr, breakdown, monthTitle, logo, isCurrentPeriod, fileName, showDetails));
   win.document.close();
 }
 
@@ -19402,6 +19403,7 @@ async function printYearlyReport(
   daysDiff?: number,
   isCurrentPeriod = false,
   fileName?: string,
+  showDetails = false,
 ) {
   if (!yearly) return;
   const win = window.open("", "_blank", "width=794,height=1123");
@@ -19414,7 +19416,7 @@ async function printYearlyReport(
     year: calMode === "gregorian" ? year : undefined,
     hijriYear: calMode === "hijri" ? year : undefined,
   });
-  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod, daysDiff, isCurrentPeriod, resolvedFileName));
+  win.document.write(buildYearlyReportHtml(year, propertyName, yearly, true, qr, logo, isCustom, calMode, isShortPeriod, daysDiff, isCurrentPeriod, resolvedFileName, showDetails));
   win.document.close();
 }
 
@@ -19526,6 +19528,7 @@ function buildMonthlyReportHtml(
   logoDataUrl: string | null = null,
   isCurrentPeriod = false,
   fileName = "0000.pdf",
+  showDetails = false,
 ): string {
   const monthStr = toAr(monthTitle ?? new Date(month + "-15").toLocaleDateString("ar-SA", { year: "numeric", month: "long", calendar: "gregory" }));
   const _now = new Date();
@@ -19596,7 +19599,9 @@ ${report ? `<div class="section"><div class="section-title">نسبة الإشغ�
 ${slotHtml ? `<div class="slot-row" style="margin-top:14px">${slotHtml}</div>` : ""}
 </div>` : ""}
 
-${catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
+${showDetails && catRows ? `<div class="section"><div class="section-title">توزيع المصروفات</div><table><thead><tr><th>الفئة</th><th>المبلغ (ر.س)</th><th>النسبة</th></tr></thead><tbody>${catRows}</tbody></table></div>` : ""}
+${buildPropertyBookingDetailsHtml(showDetails, (breakdown?.rows ?? []).map(row => ({ ...row, date: formatDateWithHijri(`${row.date}T12:00:00+03:00`) })))}
+${financial ? buildPropertyReportClosingHtml({ revenue: financial.totalRevenue, expenses: financial.totalExpenses, netProfit: financial.netProfit }) : ""}
 
 <div class="footer">منصة تكيّة — تقرير مالي</div>
 </div>${scriptTag}</body></html>`);
@@ -19615,6 +19620,7 @@ function buildYearlyReportHtml(
   daysDiff?: number,
   isCurrentPeriod = false,
   fileName = "0000.pdf",
+  showDetails = false,
 ): string {
   const _nowY = new Date();
   const _hcY = toHijriComponents(_nowY);
@@ -19673,7 +19679,7 @@ function buildYearlyReportHtml(
     : `<svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg>`;
   const chartSvg = buildMonthlyBarChartSvg(yearly.monthly, isCustom ? calMode : undefined);
   // Compact single-page layout for very short periods (≤14 days), multi-page for longer ones
-  const isCompact = isShortPeriod && !!daysDiff && daysDiff <= 14;
+  const isCompact = !showDetails && isShortPeriod && !!daysDiff && daysDiff <= 14;
   const currentPeriodNotice = isCurrentPeriod
     ? `<div class="current-period-notice">ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم ${printDate}.</div>`
     : "";
@@ -19701,7 +19707,7 @@ ${currentPeriodNotice}
 
 ${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">${isCustom ? "أداء الإيرادات والمصروفات" : "أداء الإيرادات والمصروفات السنوية"}</span></div><div style="text-align:left;margin-bottom:10px;direction:rtl;"><span style="display:inline-block;margin-left:16px;font-size:11px;color:#333;font-weight:600;"><span style="width:11px;height:11px;background:#16a34a;border-radius:2px;display:inline-block;margin-left:5px;vertical-align:middle;"></span><span style="vertical-align:middle;">إيرادات</span></span><span style="display:inline-block;font-size:11px;color:#333;font-weight:600;"><span style="width:11px;height:11px;background:#dc2626;border-radius:2px;display:inline-block;margin-left:5px;vertical-align:middle;"></span><span style="vertical-align:middle;">مصروفات</span></span></div><div style="padding-bottom:10px;">${chartSvg}</div></div>` : ""}
 
-<div class="section-auto"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">تفاصيل الإيرادات والمصروفات</span></div>
+${showDetails ? `<div class="section-auto"><div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><span style="width:4px;height:18px;background:#8C6246;border-radius:2px;flex-shrink:0;display:inline-block;"></span><span style="font-size:14px;font-weight:700;color:#8C6246;margin:0;line-height:1;">تفاصيل الإيرادات والمصروفات</span></div>
 <table><thead><tr>
 <th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">الشهر</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">الإيرادات (ر.س)</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">المصروفات (ر.س)</th><th style="height:38px;padding:10px 8px 4px;text-align:right;direction:rtl;vertical-align:top;">صافي الربح (ر.س)</th>
 </tr></thead>
@@ -19711,7 +19717,8 @@ ${chartSvg ? `<div class="section"><div style="display:flex;align-items:center;g
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;">${formatAmount(yearly.totals.expenses)}</td>
 <td style="height:38px;padding:10px 8px 4px;vertical-align:top;text-align:right;direction:rtl;font-weight:700;${yearly.totals.netProfit >= 0 ? "color:#16a34a" : "color:#dc2626"}">${formatAmountSigned(yearly.totals.netProfit)}</td>
 </tr></tbody>
-</table></div>
+</table></div>` : ""}
+${buildPropertyReportClosingHtml(yearly.totals)}
 
 <div class="footer">منصة تكيّة — تقرير مالي</div>
 </div>${scriptTag}</body></html>`);
@@ -19883,6 +19890,7 @@ async function generateAndUploadReportPdf(
     monthTitle?: string | null;
     calMode?: ReportCalendarMode;
     fileName?: string;
+    showDetails?: boolean;
   }
 ): Promise<string | null> {
   let html: string;
@@ -19899,11 +19907,11 @@ async function generateAndUploadReportPdf(
   if (type === "monthly") {
     const qr = await generateReportQrDataUrl("monthly", params.month!);
     const logo = await getLogoDataUrl();
-    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null, params.monthTitle ?? null, logo, false, fileName);
+    html = buildMonthlyReportHtml(params.month!, params.propertyName, params.report, params.financial, false, qr, params.breakdown ?? null, params.monthTitle ?? null, logo, false, fileName, params.showDetails);
   } else {
     const qr = await generateReportQrDataUrl("yearly", params.year!);
     const logo = await getLogoDataUrl();
-    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!, false, qr, logo, false, calMode, false, undefined, false, fileName);
+    html = buildYearlyReportHtml(params.year!, params.propertyName, params.yearly!, false, qr, logo, false, calMode, false, undefined, false, fileName, params.showDetails);
   }
 
   const { blob } = await htmlToPdfBlob(html, fileName);
@@ -19926,6 +19934,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const loneReportActivity = loneFinancialReportActivity(properties, services);
   const repUnit = loneReportActivity ?? (reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services));
   const [serviceReportSource, setServiceReportSource] = useState<RevenueSource>("all");
+  const [showPropertyReportDetails, setShowPropertyReportDetails] = useState(false);
   const includesServiceBookings = repUnit.type !== "service" || serviceReportSource !== "quick_sales";
   const includesServiceSales = repUnit.type !== "service" || serviceReportSource !== "bookings";
   const _nowRep = new Date();
@@ -19975,7 +19984,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const [customTo, setCustomTo] = useState("");
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType, activityKey(repUnit), serviceReportSource]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType, activityKey(repUnit), serviceReportSource, showPropertyReportDetails]);
 
   const hijriReportParsed = useMemo(() => {
     if (!isHijri || !selectedHijriMonthVal) return null;
@@ -20493,7 +20502,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
 
       if (viewMode === "monthly") {
         const logo = await getLogoDataUrl();
-        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo, false, shareFileName);
+        htmlContent = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, false, qr, repBreakdown, activeMonthLabel, logo, false, shareFileName, showPropertyReportDetails);
       } else if (viewMode === "custom") {
         const _shareCalMode = isHijri ? "hijri" : "gregorian";
         const _shareData = _shareCalMode === "hijri" ? customRangeDataHijri : customRangeData;
@@ -20502,10 +20511,10 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
         const _shareFmt = (d: string) => formatDateWithHijri(`${d}T12:00:00+03:00`);
         const rangeLabel = customFrom && customTo ? `${_shareFmt(customFrom)} ← ${_shareFmt(customTo)}` : "فترة مخصصة";
         const _shareDiff = customFrom && customTo ? Math.round((new Date(customTo + "T12:00:00").getTime() - new Date(customFrom + "T12:00:00").getTime()) / 86_400_000) + 1 : undefined;
-        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode, groupByDay, _shareDiff, false, shareFileName);
+        htmlContent = buildYearlyReportHtml(rangeLabel, selectedPropertyName, _shareData as any, false, qr, logo, true, _shareCalMode, groupByDay, _shareDiff, false, shareFileName, showPropertyReportDetails);
       } else if (activeWaYearly) {
         const logo = await getLogoDataUrl();
-        htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo, false, shareCalMode, false, undefined, false, shareFileName);
+        htmlContent = buildYearlyReportHtml(activeWaYearStr, selectedPropertyName, activeWaYearly, false, qr, logo, false, shareCalMode, false, undefined, false, shareFileName, showPropertyReportDetails);
       } else return;
 
       const { blob } = await htmlToPdfBlob(htmlContent, shareFileName);
@@ -20528,7 +20537,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     } finally {
       setWaLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData, customRangeDataHijri, groupByDay]);
+  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData, customRangeDataHijri, groupByDay, showPropertyReportDetails]);
 
   const handleShareEmail = useCallback(async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -20545,6 +20554,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       if (!url) {
         if (viewMode === "monthly") {
           url = await generateAndUploadReportPdf("monthly", {
+            showDetails: showPropertyReportDetails,
             month: selectedMonth,
             hijriMonth: selectedHijriMonthVal,
             calMode: isHijri ? "hijri" : "gregorian",
@@ -20556,6 +20566,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           });
         } else if (viewMode === "yearly" && emailYearly) {
           url = await generateAndUploadReportPdf("yearly", {
+            showDetails: showPropertyReportDetails,
             year: emailYearStr,
             hijriYear: selectedHijriYear,
             calMode: isYearlyHijri ? "hijri" : "gregorian",
@@ -20614,7 +20625,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     } finally {
       setEmailLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, shareEmail, pdfUrl, repBreakdown, activeMonthLabel]);
+  }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, shareEmail, pdfUrl, repBreakdown, activeMonthLabel, showPropertyReportDetails]);
 
   const handleSaveToArchive = useCallback(async () => {
     setArchiveSaving(true);
@@ -20623,6 +20634,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       if (!url) {
         if (viewMode === "monthly") {
           url = await generateAndUploadReportPdf("monthly", {
+            showDetails: showPropertyReportDetails,
             month: selectedMonth,
             hijriMonth: selectedHijriMonthVal,
             calMode: isHijri ? "hijri" : "gregorian",
@@ -20634,6 +20646,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           });
         } else if (viewMode === "yearly" && (isYearlyHijri ? yearlyHijri : yearly)) {
           url = await generateAndUploadReportPdf("yearly", {
+            showDetails: showPropertyReportDetails,
             year: isYearlyHijri ? selectedHijriYear : selectedYear,
             hijriYear: selectedHijriYear,
             calMode: isYearlyHijri ? "hijri" : "gregorian",
@@ -20662,7 +20675,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     } finally {
       setArchiveSaving(false);
     }
-  }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel]);
+  }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel, showPropertyReportDetails]);
 
   const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && (viewMode === "monthly" ? monthlyPeriodReady
     : viewMode === "yearly" ? (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear))
@@ -20672,6 +20685,12 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     : viewMode === "monthly" ? !!report && !!financial && !isLoading
       : viewMode === "yearly" ? !!(isYearlyHijri ? yearlyHijri : yearly) && !(isYearlyHijri ? yearlyHijriLoading : yearlyLoading)
       : !!(isHijri ? customRangeDataHijri : customRangeData) && !!customFrom && !!customTo);
+
+  const propertyClosingTotals = isActivitySummary || !quickReportReady ? null
+    : viewMode === "monthly" && financial
+      ? { revenue: financial.totalRevenue, expenses: financial.totalExpenses, netProfit: financial.netProfit }
+      : viewMode === "yearly" ? (isYearlyHijri ? yearlyHijri : yearly)?.totals
+      : (isHijri ? customRangeDataHijri : customRangeData)?.totals;
 
   async function handleQuickReportAction(action: "print" | "pdf" | "share") {
     if (!quickReportReady || quickAction) return;
@@ -20717,20 +20736,20 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       } else if (viewMode === "monthly") {
         const qr = await generateReportQrDataUrl("monthly", isHijri ? selectedHijriMonthVal : selectedMonth);
         html = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, action === "print", qr,
-          repBreakdown, activeMonthLabel, logo, isCurrentMonthlyPeriod, fileName);
+          repBreakdown, activeMonthLabel, logo, isCurrentMonthlyPeriod, fileName, showPropertyReportDetails);
       } else if (viewMode === "yearly") {
         const activeYear = isYearlyHijri ? selectedHijriYear : selectedYear;
         const qr = await generateReportQrDataUrl("yearly", activeYear);
         html = buildYearlyReportHtml(activeYear, selectedPropertyName, (isYearlyHijri ? yearlyHijri : yearly)!,
           action === "print", qr, logo, false, calMode, false, undefined,
-          isYearlyHijri ? Number(selectedHijriYear) === nowHijriYearNum : selectedYear === currentYear, fileName);
+          isYearlyHijri ? Number(selectedHijriYear) === nowHijriYearNum : selectedYear === currentYear, fileName, showPropertyReportDetails);
       } else {
         const activeCustomData = (isHijri ? customRangeDataHijri : customRangeData)!;
         const formatDate = (date: string) => formatDateWithHijri(`${date}T12:00:00+03:00`);
         const range = `${formatDate(customFrom)} ← ${formatDate(customTo)}`;
         const days = Math.round((new Date(`${customTo}T12:00:00`).getTime() - new Date(`${customFrom}T12:00:00`).getTime()) / 86400000) + 1;
         html = buildYearlyReportHtml(range, selectedPropertyName, activeCustomData, action === "print", null,
-          logo, true, calMode, groupByDay, days, false, fileName);
+          logo, true, calMode, groupByDay, days, false, fileName, showPropertyReportDetails);
       }
       if (printWindow) {
         printWindow.document.write(html);
@@ -20813,6 +20832,15 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           onChange={selectReportActivity} loading={activitiesLoading || !!quickAction} error={activitiesError} />
       </div>
 
+      {!isActivitySummary && <label className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 cursor-pointer">
+        <input type="checkbox" checked={showPropertyReportDetails}
+          data-testid="property-report-show-details"
+          disabled={!!quickAction || waLoading || emailLoading || archiveSaving}
+          onChange={event => setShowPropertyReportDetails(event.target.checked)}
+          className="mt-1 h-4 w-4 accent-primary" />
+        <span><span className="block text-sm font-semibold">إظهار الجداول التفصيلية للحجوزات والمصروفات</span>
+          <span className="text-xs text-muted-foreground">يشمل العرض والطباعة وPDF. تبقى الملخصات والحسابات الختامية ظاهرة دون تغيير الإجماليات.</span></span>
+      </label>}
       <SectionGuideButton sectionKey="reports" />
       {isActivitySummary && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
@@ -21200,7 +21228,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 );
               })()}
 
-              <div className="bg-card border border-border rounded-2xl p-5">
+              {(isActivitySummary || showPropertyReportDetails) && <div className="bg-card border border-border rounded-2xl p-5">
                 <h3 className="font-bold text-foreground text-sm mb-4">تفصيل شهري لعام {activeYearLabel}</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -21243,6 +21271,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 </div>
               </div>
 
+              }
               <div className="flex flex-wrap gap-2 justify-end">
                 <Button variant="outline" size="sm" onClick={() => printYearlyReport(
                   isYearlyHijri ? activeYearLabel : selectedYear,
@@ -21259,6 +21288,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                     year: isYearlyHijri ? undefined : selectedYear,
                     hijriYear: isYearlyHijri ? selectedHijriYear : undefined,
                   }),
+                  showPropertyReportDetails,
                 )} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير السنوي
                 </Button>
@@ -21390,7 +21420,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 </div>
 
                 {/* Monthly breakdown table */}
-                <div className="bg-card border border-border rounded-2xl overflow-hidden">
+                {(isActivitySummary || showPropertyReportDetails) && <div className="bg-card border border-border rounded-2xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-border">
                     <h3 className="font-bold text-sm">{tableTitle}</h3>
                   </div>
@@ -21426,6 +21456,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                   </div>
                 </div>
 
+                }
                 {/* Action buttons */}
                 <div className="flex flex-wrap gap-2 justify-end">
                   <Button variant="outline" size="sm" onClick={() => {
@@ -21443,6 +21474,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                       _diff,
                       false,
                       buildReportFileName({ viewMode: "custom", calMode: _cm, from: customFrom, to: customTo }),
+                      showPropertyReportDetails,
                     );
                   }} className="gap-2">
                     <FileText className="w-4 h-4" />طباعة التقرير
@@ -21524,7 +21556,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           </div>
 
           {/* ══ Booking Breakdown Table ══ */}
-          {repBreakdown.rows.length > 0 && (
+          {(isActivitySummary || showPropertyReportDetails) && repBreakdown.rows.length > 0 && (
             <div style={{ background: "var(--card,#fff)", border: "1px solid var(--border,#e5e7eb)", borderRadius: 16, padding: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <Receipt className="w-4 h-4 text-primary" />
@@ -21644,7 +21676,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                 </div>
               )}
 
-              {Object.keys(financial.categoryTotals).length > 0 && (
+              {(isActivitySummary || showPropertyReportDetails) && Object.keys(financial.categoryTotals).length > 0 && (
                 <div className="bg-card border border-border rounded-2xl p-5">
                   <h3 className="font-bold text-foreground text-sm mb-4 flex items-center gap-2">
                     <Wallet className="w-4 h-4 text-primary" />توزيع المصروفات
@@ -21788,6 +21820,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                   isCurrentMonthlyPeriod,
                   isHijri ? "hijri" : "gregorian",
                   isHijri ? selectedHijriMonthVal : undefined,
+                  showPropertyReportDetails,
                 )} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
@@ -21838,6 +21871,14 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
         </>
       )}
 
+      {propertyClosingTotals && <section data-testid="property-report-closing" className="rounded-2xl border border-border bg-card p-5">
+        <h3 className="mb-4 font-bold">الحسابات الختامية</h3>
+        <dl className="space-y-3 text-sm">
+          <div className="flex flex-wrap justify-between gap-2"><dt>إجمالي الإيرادات</dt><dd><FinancialReportNumber value={propertyClosingTotals.revenue} currency /></dd></div>
+          <div className="flex flex-wrap justify-between gap-2"><dt>إجمالي المصروفات</dt><dd className="text-red-600"><FinancialReportNumber value={propertyClosingTotals.expenses} currency /></dd></div>
+          <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-3 font-bold"><dt>صافي الربح / الدخل النهائي</dt><dd className={propertyClosingTotals.netProfit < 0 ? "text-red-600" : "text-primary"}><FinancialReportNumber value={propertyClosingTotals.netProfit} currency /></dd></div>
+        </dl>
+      </section>}
       {/* ── Sharing Settings ── */}
       <div className="bg-card border border-border rounded-2xl p-5 mt-4">
         <button

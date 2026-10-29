@@ -1,6 +1,51 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "./financialReport";
+import { buildActivitySummaryReportHtml, buildPropertyBookingDetailsHtml, buildPropertyReportClosingHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "./financialReport";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+
+it("property print/PDF builders hide details by default but retain identical closing totals", () => {
+  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const builderSource = source.slice(source.indexOf("function buildMonthlyReportHtml("), source.indexOf("/* ── Fresh PDF"));
+  const js = ts.transpileModule(builderSource, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const deps = {
+    toAr: (v: unknown) => String(v), toHijriComponents: () => ({ day: 1, month: 1, year: 1448 }),
+    HIJRI_MONTHS_AR: ["محرم"], formatAmount: formatFinancialAmount, formatAmountSigned: formatFinancialAmount,
+    catMap: {}, REPORT_CSS: "", buildRevBarSvg: () => "", buildMonthlyBarChartSvg: () => "",
+    finalizeFinancialReportHtml, buildPropertyBookingDetailsHtml, buildPropertyReportClosingHtml,
+    escapeFinancialReportText: (s: string) => s, formatDateWithHijri: (s: string) => s,
+  };
+  const builders = new Function(...Object.keys(deps), `${js}; return { buildMonthlyReportHtml, buildYearlyReportHtml };`)(...Object.values(deps));
+  const totals = { revenue: 100, expenses: 150, netProfit: -50 };
+  const financial = { totalRevenue: 100, totalExpenses: 150, netProfit: -50, categoryTotals: { صيانة: 150 } };
+  const breakdown = { rows: [{ id: 1, name: "<عميل>", date: "2026-10-29", base: 100, svc: 0, total: 100 }], totBase: 100, totSvc: 0, totTotal: 100 };
+  for (const forPrint of [false, true]) {
+    const monthly = (showDetails?: boolean) => builders.buildMonthlyReportHtml("2026-10", "عقار", null, financial, forPrint, null, breakdown, null, null, false, "report.pdf", showDetails);
+    const yearly = (showDetails?: boolean) => builders.buildYearlyReportHtml("2026", "عقار", { monthly: [{ month: "2026-10", ...totals }], totals }, forPrint, null, null, false, "gregorian", false, undefined, false, "report.pdf", showDetails);
+    const custom = (showDetails?: boolean) => builders.buildYearlyReportHtml("فترة مخصصة", "عقار", { monthly: [{ month: "2026-10-29", ...totals }], totals }, forPrint, null, null, true, "gregorian", true, 7, false, "report.pdf", showDetails);
+    for (const render of [monthly, yearly, custom]) {
+      const compact = render();
+      const detailed = render(true);
+      assert.ok(compact.includes("الحسابات الختامية"));
+      assert.ok(detailed.includes("الحسابات الختامية"));
+      assert.equal(compact.match(/<section class="section financial-closing">[\s\S]*?<\/section>/)?.[0],
+        detailed.match(/<section class="section financial-closing">[\s\S]*?<\/section>/)?.[0]);
+      assert.equal(compact.includes("window.print"), forPrint);
+    }
+    assert.ok(!monthly().includes("تفصيل الحجوزات"));
+    assert.ok(!monthly().includes("توزيع المصروفات"));
+    assert.ok(monthly(true).includes("&lt;عميل&gt;"));
+    assert.ok(monthly(true).includes("توزيع المصروفات"));
+    assert.ok(!yearly().includes("تفاصيل الإيرادات والمصروفات"));
+    assert.ok(yearly(true).includes("تفاصيل الإيرادات والمصروفات"));
+    assert.ok(!custom().includes("تفاصيل الإيرادات والمصروفات"));
+    assert.ok(custom(true).includes("تفاصيل الإيرادات والمصروفات"));
+  }
+  assert.equal(buildPropertyBookingDetailsHtml(true, []), "");
+  assert.ok(source.includes('useState(false);\n  const includesServiceBookings'));
+  assert.ok(source.includes('!isActivitySummary && <label'));
+  assert.ok(source.includes('data-testid="property-report-closing"'));
+});
 
 it("uses the platform Hijri default even for legacy Gregorian preferences", () => {
   assert.equal(resolveReportCalendar("hijri", "gregorian"), "hijri");
