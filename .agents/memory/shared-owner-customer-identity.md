@@ -3,11 +3,17 @@ name: Shared owner customer identity
 description: Why property and service bookings use one customer identity while preserving denormalized booking history.
 ---
 
-Treat a normalized phone number as one customer identity per owner across property and service bookings. Keep the customer master record for future form autofill, but retain name, phone, and service details on each booking as historical snapshots.
+Treat a normalized phone number as one customer identity per owner across property bookings, service bookings and quick sales. Keep the customer master record for future form autofill, but retain name, phone, and transaction details as historical snapshots.
 
 **Why:** Owners expect a customer known from either side of the business to be recognized in every new-booking form. Replacing booking snapshots with references alone would make old bookings change when customer details are updated.
 
 **How to apply:** Normalize Saudi local and international phone variants at API boundaries. New bookings should atomically upsert the shared customer and write their own snapshot; lookup may migrate matching historical bookings into the customer master on first use.
+
+البيع السريع باستخدام اسم العميل ورقم جواله يجب أن ينشئ ملف العميل أو يحدّثه تلقائيًا، ويظهره في قاعدة عملاء التاجر. ملف عميل الخدمات يجمع الحجوزات والمشتريات السريعة دون تكرار الهوية، مع تمييز نوع كل عملية وإبقاء المبيعات الملغاة في السجل دون إيراد.
+
+**Why:** المستخدم كرر طلب الربط التلقائي والملف المركزي الشامل؛ حفظ الاسم داخل البيعة وحده لا يحقق المطلوب.
+
+**How to apply:** استخدم هوية الجوال الموحّدة داخل حساب التاجر في الحفظ والبحث والقائمة والملف. لا تربط البيعات التاريخية التي لا تحمل جوالًا اعتمادًا على تطابق الاسم وحده؛ قد يعود الاسم لأكثر من عميل.
 
 In the customer database, display mobile numbers with Eastern Arabic digits, including edit and delete dialogs. Show both Hijri and Gregorian dates throughout customer summaries and booking, contract and insurance histories, with the owner's booking-calendar preference first.
 

@@ -242,8 +242,12 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
                 <Label htmlFor="qs-phone" className="block">جوال العميل <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
                 <Input id="qs-phone" type="tel" inputMode="tel" dir="rtl" className="h-10 text-right" value={clientPhone} maxLength={16}
                   placeholder="٠٥xxxxxxxx" onChange={e => {
+                    const next = quickSaleNumericInput(e.target.value);
+                    // Browsers may emit another change after controlled digit conversion.
+                    // An unchanged phone must not invalidate its in-flight lookup.
+                    if (next === clientPhone) return;
                     ++customerRequest.current;
-                    setClientPhone(quickSaleNumericInput(e.target.value)); setClientName(""); setCustomerLookup("idle");
+                    setClientPhone(next); setClientName(""); setCustomerLookup("idle");
                   }} data-testid="input-quick-sale-phone" aria-describedby="qs-customer-status" />
                 <Label htmlFor="qs-client" className="block text-xs">اسم العميل</Label>
                 <Input id="qs-client" className="h-10" value={clientName} maxLength={150} readOnly={customerLookup === "found" || customerLookup === "loading"}

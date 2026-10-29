@@ -70,12 +70,12 @@ function source(ownerId: string, phone: string, providerId?: number, withTiming 
         AND b.date_str >= ${today}) AS is_active
       FROM service_appointments b JOIN service_providers p ON p.id = b.provider_id
       WHERE b.owner_id = ${ownerId} AND p.owner_id = ${ownerId}
-        AND ${customerPhoneSql(sql`b.client_phone`)} = ${phone}
+        AND b.provider_id = ${providerId} AND ${customerPhoneSql(sql`b.client_phone`)} = ${phone}
       UNION ALL
-      SELECT b.id, b.client_name, NULL::text, b.date_str, NULL::int, 'quick_sale'::text,
+      SELECT b.id, b.client_name, NULL::text, b.date_str::text, NULL::int, 'quick_sale'::text,
         b.total::text, b.provider_name, b.cancelled_at, (b.status = 'cancelled'),
         false, NULL::text, false, false, NULL::text, NULL::text, NULL::timestamptz, false
-      FROM quick_sales b WHERE b.owner_id = ${ownerId} AND b.client_phone = ${phone}`;
+      FROM quick_sales b WHERE b.owner_id = ${ownerId} AND b.provider_id = ${providerId} AND b.client_phone = ${phone}`;
   }
   return sql`SELECT b.id, b.client_name, b.contract_signer_id AS client_id_number,
     b.booking_date, b.duration_days, b.period, coalesce(b.total_price, 0)::text AS total_price,

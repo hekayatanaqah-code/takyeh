@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { after, before, it } from "node:test";
 import { eq, inArray } from "drizzle-orm";
-import { db, pool, ownerCustomersTable, ownerSubscriptionsTable, serviceProvidersTable, sessionsTable, quickSalesTable, quickSalesSettingsTable, providerCatalogItemsTable } from "@workspace/db";
+import { db, pool, ownerCustomersTable, ownerSubscriptionsTable, serviceAppointmentsTable, serviceProvidersTable, sessionsTable, quickSalesTable, quickSalesSettingsTable, providerCatalogItemsTable } from "@workspace/db";
 import app from "../app";
 import { createSession } from "../lib/auth";
 
@@ -43,6 +43,7 @@ before(async () => {
 after(async () => {
   await db.delete(quickSalesTable).where(eq(quickSalesTable.ownerId, ownerId));
   await db.delete(ownerCustomersTable).where(eq(ownerCustomersTable.ownerId, ownerId));
+  await db.delete(serviceAppointmentsTable).where(eq(serviceAppointmentsTable.ownerId, ownerId));
   await db.delete(quickSalesSettingsTable).where(eq(quickSalesSettingsTable.ownerId, ownerId));
   if (providerIds.length) await db.delete(serviceProvidersTable).where(inArray(serviceProvidersTable.id, providerIds));
   await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
@@ -99,6 +100,29 @@ it("links quick sales to the normalized owner customer identity and customer his
   assert.equal(historyJson.total, 1);
   assert.equal(historyJson.items[0].record_type, "quick_sale");
   assert.equal(historyJson.items[0].item_summary, "منتج اختباري × 3");
+  await db.insert(serviceAppointmentsTable).values({
+    ownerId, providerId: providerIds[0], clientName: "اسم الحجز التاريخي",
+    clientPhone: `+966${phone.slice(1)}`, dateStr: "2026-10-01", amount: "100",
+  });
+  const headers = { authorization: `Bearer ${sid}` };
+  const directory = await fetch(`${base}/api/owner/crm/customers?scope=service&providerId=${providerIds[0]}&search=${phone}`, { headers });
+  assert.equal(directory.status, 200);
+  const directoryJson = await directory.json() as any;
+  assert.equal(directoryJson.items.length, 1);
+  assert.equal(directoryJson.items[0].client_phone, phone);
+  assert.equal(directoryJson.items[0].total_bookings, 1);
+  assert.equal(directoryJson.items[0].total_sales, 1);
+  assert.equal(directoryJson.items[0].total_revenue, 130.45);
+  const mergedHistory = await fetch(`${base}/api/owner/crm/history?phone=${phone}&providerId=${providerIds[0]}`, { headers });
+  const merged = await mergedHistory.json() as any;
+  assert.equal(merged.total, 2);
+  assert.deepEqual(new Set(merged.items.map((row: any) => row.record_type)), new Set(["quick_sale", "booking"]));
+  const cancelled = await request(`/${created.json.id}/cancel`, "POST", { reason: "تصحيح اختبار العميل" });
+  assert.equal(cancelled.status, 200);
+  const cancelledProfile = await fetch(`${base}/api/owner/crm/profile?phone=${phone}&providerId=${providerIds[0]}`, { headers });
+  const cancelledSummary = await cancelledProfile.json() as any;
+  assert.equal(cancelledSummary.totalRevenue, 100);
+  assert.equal(cancelledSummary.totalSales, 1);
 });
 it("rejects invalid dates, blank names, fractional quantities, excess precision and other-provider products", async () => {
   for (const patch of [

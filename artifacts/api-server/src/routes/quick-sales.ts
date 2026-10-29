@@ -52,7 +52,9 @@ router.post("/quick-sales", async (req, res): Promise<void> => {
   const access = await ownerPlanAccess(ownerId);
   if (!access.active) { res.status(403).json({ error: "الحساب للقراءة فقط؛ يلزم اشتراك نشط لتسجيل المبيعات" }); return; }
   const input = body.data;
-  const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  // Anonymous retries created before phone linking used a payload without clientPhone.
+  const { clientPhone: _phone, ...legacyInput } = input;
+  const hash = createHash("sha256").update(JSON.stringify(input.clientPhone ? input : legacyInput)).digest("hex");
   const result = await db.transaction(async tx => {
     // Serializes disable/create and retries for the SAME owner, not the marketplace.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`quick-sales:${ownerId}`}, 0))`);
@@ -83,9 +85,13 @@ router.post("/quick-sales", async (req, res): Promise<void> => {
       ));
       clientName = customer?.name || clientName;
       if (!clientName) return { error: "اكتب اسم العميل الجديد", status: 400 };
-      await tx.insert(ownerCustomersTable).values({
+      const [savedCustomer] = await tx.insert(ownerCustomersTable).values({
         ownerId, phoneNormalized: input.clientPhone, phone: input.clientPhone, name: clientName,
-      }).onConflictDoNothing({ target: [ownerCustomersTable.ownerId, ownerCustomersTable.phoneNormalized] });
+      }).onConflictDoUpdate({
+        target: [ownerCustomersTable.ownerId, ownerCustomersTable.phoneNormalized],
+        set: { phone: input.clientPhone, updatedAt: new Date() },
+      }).returning();
+      clientName = savedCustomer.name;
     }
     const [row] = await tx.insert(quickSalesTable).values({
       ownerId, providerId: provider.id, providerName: provider.businessName, dateStr: input.dateStr,

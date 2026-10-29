@@ -24521,7 +24521,7 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
                 <div className="grid grid-cols-2 gap-3 mt-1">
                   {statCard("إجمالي الحجوزات", (() => { const n = profile.totalBookings; return `${toAr(n)} ${n >= 3 && n <= 10 ? "حجوزات" : "حجز"}`; })())}
                   {serviceScope && statCard("عمليات البيع السريع", toAr(profile.totalSales ?? 0))}
-                  {statCard("إجمالي الإيراد",  `${toAr(Math.round(profile.totalRevenue))} ر.س`)}
+                  {statCard("إجمالي الإيراد", `${toAr(profile.totalRevenue.toLocaleString("en-US", { maximumFractionDigits: 2 }))} ر.س`)}
                 </div>
                 {/* ID number + last booking */}
                 <div className="grid grid-cols-2 gap-3">
@@ -24532,18 +24532,18 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
                     </p>
                   </div>
                   <div className="bg-muted/40 rounded-xl p-4 flex flex-col gap-1">
-                    <p className="text-xs text-muted-foreground">آخر حجز</p>
+                    <p className="text-xs text-muted-foreground">{serviceScope ? "آخر عملية" : "آخر حجز"}</p>
                     <CustomerDate value={profile.lastBookingDate} preference={profileCalView} />
                   </div>
                 </div>
               </div>
 
               {/* ── Tabbed Sections: Bookings / Contracts / Insurance ── */}
-              <CustomerHistory key={`${scopedProviderId ?? "chalet"}:${profile.clientPhone}`}
+              <CustomerHistory key={`history:${scopedProviderId ?? "chalet"}:${profile.clientPhone}`}
                 profile={profile} providerId={scopedProviderId ?? undefined}
                 calendar={profileCalView} onCalendarChange={setProfileCalView} />
               {/* ── Private Notes ── */}
-              <CustomerNotes key={`${serviceScope ? scopedProviderId : "chalet"}:${profile.clientPhone}`}
+              <CustomerNotes key={`notes:${serviceScope ? scopedProviderId : "chalet"}:${profile.clientPhone}`}
                 ref={notesRef} initialValue={profile.note ?? ""}
                 save={value => saveCustomerNote(profile.clientPhone, value)} />
             </>

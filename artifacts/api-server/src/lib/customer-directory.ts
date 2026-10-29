@@ -36,12 +36,13 @@ export async function sendCrmCustomers(req: Request, res: Response) {
       (b.cancelled_at IS NULL AND b.status NOT IN ('cancelled', 'canceled', 'completed') AND b.date_str >= ${today}) AS is_active
     FROM service_appointments b JOIN service_providers p ON p.id = b.provider_id
     WHERE b.owner_id = ${ownerId} AND p.owner_id = ${ownerId}
-      `);
+      ${providerId ? sql`AND b.provider_id = ${providerId}` : sql``}`);
   if (scope !== "chalet") sources.push(sql`
-    SELECT b.id, b.client_name, b.client_phone, b.date_str AS booking_date,
+    SELECT b.id, b.client_name, b.client_phone, b.date_str::text AS booking_date,
       CASE WHEN b.status = 'cancelled' THEN 0 ELSE b.total END AS revenue,
       'quick_sale'::text AS kind, b.provider_name AS provider_name, false AS is_active
-    FROM quick_sales b WHERE b.owner_id = ${ownerId} AND b.client_phone <> ''`);
+    FROM quick_sales b WHERE b.owner_id = ${ownerId} AND b.client_phone <> ''
+      ${providerId ? sql`AND b.provider_id = ${providerId}` : sql``}`);
   const search = normalizeCrmSearch(parsed.data.search ?? "");
   // Strip spacing/punctuation only for phone matching; names retain literal substring semantics.
   const phoneSearch = search.replace(/[\s()+.-]/g, "");
