@@ -15,4 +15,10 @@ Employee birth and hiring dates require realistic historical year choices ending
 
 **Why:** The user explicitly reported unrealistic future Hijri years in employee forms and requested matching, historically appropriate dates.
 
-**How to apply:** Constrain employee pickers without removing future dates from booking calendars. Switching calendars must navigate through an actual Gregorian day rather than reusing a year number or an independently stale navigation state. Opening an optional employee field should not invent a birth or hiring date.
+**How to apply:** Constrain employee pickers without removing future dates from booking calendars. Switching calendars must navigate through an actual Gregorian day rather than reusing a year number or an independently stale navigation state. Opening a birth-date field must not invent a date.
+
+Employee fields start with Hijri as the primary display. When the user switches calendars, the chosen calendar becomes primary and the other remains secondary. A fresh add-employee form defaults hiring date to the current Saudi day on each opening; editing preserves the saved date and birth date stays blank until chosen.
+
+**Why:** The user explicitly requested Hijri-first presentation, clear display of the selected calendar, and today's hiring date as soon as the add form opens.
+
+**How to apply:** Compute the default at form opening rather than module initialization; never apply it to existing employee edits. Keep Gregorian storage independent of display preferences.

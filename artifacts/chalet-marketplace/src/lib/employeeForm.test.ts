@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { employeeDigits, employeeMobileInput, EMPTY_NEW_STAFF_FORM, validEmployeeMobile, validEmployeeNationalId } from "./employeeForm";
+import { employeeDigits, employeeMobileInput, EMPTY_NEW_STAFF_FORM, validEmployeeMobile, validEmployeeNationalId, newStaffForm } from "./employeeForm";
+
+test("each new employee starts with today's Saudi hiring date and no birth date", () => {
+  const form = newStaffForm(new Date("2026-10-29T20:59:00Z"));
+  assert.equal(form.hireDate, "2026-10-29");
+  assert.equal(form.birthDate, "");
+  form.hireDate = "2020-01-01";
+  assert.equal(newStaffForm(new Date("2026-10-29T21:01:00Z")).hireDate, "2026-10-30");
+  assert.equal(newStaffForm(new Date("2026-12-31T21:01:00Z")).hireDate, "2027-01-01");
+  assert.equal(EMPTY_NEW_STAFF_FORM.hireDate, "");
+});
 
 test("employee mobile starts with 05 and preserves that prefix on clearing and editing", () => {
   assert.equal(EMPTY_NEW_STAFF_FORM.phoneNum, "05");

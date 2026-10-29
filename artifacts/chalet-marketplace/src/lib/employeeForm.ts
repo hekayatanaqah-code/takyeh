@@ -1,3 +1,5 @@
+import { employeeToday } from "./employeeDate";
+
 export const STAFF_JOB_TITLES = [
   "استقبال / خدمة عملاء",
   "مشرف / مدير",
@@ -10,6 +12,11 @@ export const EMPTY_NEW_STAFF_FORM = {
   name: "", baseSalary: "", nationalId: "", phoneNum: "05",
   birthDate: "", hireDate: "", email: "", jobTitle: "", customJobTitle: "",
 };
+
+/** Evaluate when the add dialog opens, not at module load or when editing an employee. */
+export function newStaffForm(now = new Date()) {
+  return { ...EMPTY_NEW_STAFF_FORM, hireDate: employeeToday(now) };
+}
 
 /**
  * Keep canonical digits in state; render Arabic-Indic digits at the input.

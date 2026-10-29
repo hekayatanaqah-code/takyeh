@@ -72,7 +72,7 @@ import { Switch } from "@/components/ui/switch";
 import { serviceImageError, moveServicePhoto } from "@/lib/chaletServiceMedia";
 import { Label } from "@/components/ui/label";
 import { normalizeIdentifier } from "@/lib/authLabels";
-import { employeeDigits, employeeMobileInput, validEmployeeMobile, validEmployeeNationalId, EMPTY_NEW_STAFF_FORM, STAFF_JOB_TITLES } from "@/lib/employeeForm";
+import { employeeDigits, employeeMobileInput, validEmployeeMobile, validEmployeeNationalId, EMPTY_NEW_STAFF_FORM, STAFF_JOB_TITLES, newStaffForm } from "@/lib/employeeForm";
 import { currentSalaryMonth, hasStaffPlatformAccess, paidPayrollRecords, paidPayrollPeriods, payrollPeriod, payrollPeriodLabel } from "@/lib/payrollPeriods";
 import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -17852,7 +17852,10 @@ function StaffTab() {
       <SectionGuideButton sectionKey="employees" />
       {/* ── Add Staff Button ── */}
       <div className="flex justify-start">
-        <Button onClick={() => setShowAddStaff(true)} className="h-10 px-5 font-bold">
+        <Button onClick={() => {
+          setAddForm(newStaffForm());
+          setShowAddStaff(true);
+        }} className="h-10 px-5 font-bold">
           <Plus className="w-4 h-4 me-1.5" />
           إضافة موظف جديد
         </Button>

@@ -17,6 +17,18 @@ test("employee year bounds are historical and stop today in both eras", () => {
   }
 });
 
+test("default hiring date remains selectable at Saudi midnight and year rollover", () => {
+  for (const [instant, day] of [
+    ["2026-10-29T21:01:00Z", "2026-10-30"],
+    ["2026-12-31T21:01:00Z", "2027-01-01"],
+  ]) {
+    const bounds = employeeDateBounds("hire", new Date(instant));
+    assert.equal(bounds.maxDate, day);
+    assert.equal(bounds.initialDate, day);
+    assert.ok(bounds.minDate < day);
+  }
+});
+
 test("known Umm al-Qura dates map to actual Gregorian dates without year mixing", () => {
   assert.deepEqual(toHijriComponents(new Date("2024-03-11T12:00:00")), { year: 1445, month: 9, day: 1 });
   assert.equal(toGregorianStr(getHijriMonthDays(1445, 9)[0].date), "2024-03-11");
