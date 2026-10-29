@@ -20712,6 +20712,24 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     </Button>
   );
 
+  const quickSaleDetailsSection = isActivitySummary && monthlyPeriodReady
+    && !serviceReportLoading && !serviceReportError && svcRepSummary
+    && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError ? (
+      <section className="space-y-3 rounded-2xl border border-border bg-card p-4" data-testid="service-report-sales-details">
+        <h3 className="font-bold">{quickSaleDetails.title}</h3>
+        {repUnit.type !== "service" && <div className="flex flex-wrap gap-6 text-sm">
+          <p>إيرادات حجوزات الخدمات: <FinancialReportNumber value={svcRepSummary.bookingRevenue} currency /></p>
+          <p>المبيعات الفردية: <FinancialReportNumber value={svcRepSummary.quickSalesRevenue} currency /></p>
+          <p className="font-bold">إجمالي إيرادات الخدمات والبيع السريع: <FinancialReportNumber value={svcRepSummary.totalRevenue} currency /></p>
+        </div>}
+        {quickSaleDetails.rows.length ? <div className="overflow-x-auto">
+          <table className="w-full text-right text-xs"><thead><tr>{quickSaleDetails.headers.map(header => <th key={header} className="p-2">{header}</th>)}</tr></thead>
+            <tbody>{quickSaleDetails.rows.map((row, index) => <tr key={reportQuickSales[index].id} className="border-t border-border">{row.map((cell, column) => <td key={column} className="p-2">{cell}</td>)}</tr>)}</tbody>
+          </table>
+        </div> : <p className="text-sm text-muted-foreground">لا توجد مبيعات فردية مكتملة خلال الفترة المختارة.</p>}
+      </section>
+    ) : null;
+
   return (
     <div className="financial-reports space-y-6">
 
@@ -20750,28 +20768,15 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       {periodsError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل السنوات والشهور المالية. أعد تحميل الصفحة للمحاولة مجددًا.</p>}
       {!periodsLoading && !periodsError && !activePeriods.months.length && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">لا توجد بيانات مالية فعلية ونشطة لهذا النشاط. ستظهر السنوات والشهور عند تسجيل بيانات مالية.</p>}
       {isActivitySummary && serviceReportError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل تقرير الخدمات. أعد تحميل الصفحة للمحاولة مجددًا؛ إجراءات التصدير متوقفة حتى تكتمل البيانات.</p>}
+      {isActivitySummary && serviceReportLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل إيرادات الحجوزات والتأمينات لاستكمال التقرير…</p>}
       {isActivitySummary && reportQuickSalesQuery.isLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل المبيعات الفردية لاستكمال التقرير…</p>}
       {isActivitySummary && reportQuickSalesQuery.isError && <div role="alert" className="rounded-xl border border-destructive p-4 text-sm text-destructive">
         تعذّر تحميل المبيعات الفردية؛ التقرير غير مكتمل والتصدير متوقف.
         <Button variant="outline" className="mr-3" onClick={() => void reportQuickSalesQuery.refetch()}>إعادة المحاولة</Button>
       </div>}
-      {isActivitySummary && monthlyPeriodReady && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (
-        <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
-          <h3 className="font-bold">{quickSaleDetails.title}</h3>
-          <div className="flex flex-wrap gap-6 text-sm">
-            <p>إيرادات حجوزات الخدمات: <FinancialReportNumber value={svcRepSummary?.bookingRevenue ?? 0} currency /></p>
-            <p>المبيعات الفردية: <FinancialReportNumber value={svcRepSummary?.quickSalesRevenue ?? 0} currency /></p>
-            <p className="font-bold">إجمالي إيرادات الخدمات والبيع السريع: <FinancialReportNumber value={svcRepSummary?.totalRevenue ?? 0} currency /></p>
-          </div>
-          {quickSaleDetails.rows.length ? <div className="overflow-x-auto">
-            <table className="w-full text-right text-xs"><thead><tr>{quickSaleDetails.headers.map(header => <th key={header} className="p-2">{header}</th>)}</tr></thead>
-              <tbody>{quickSaleDetails.rows.map((row, index) => <tr key={reportQuickSales[index].id} className="border-t border-border">{row.map((cell, column) => <td key={column} className="p-2">{cell}</td>)}</tr>)}</tbody>
-            </table>
-          </div> : <p className="text-sm text-muted-foreground">لا توجد مبيعات فردية مكتملة خلال الفترة المختارة.</p>}
-        </section>
-      )}
+      {repUnit.type !== "service" && quickSaleDetailsSection}
       {/* ── Services Report ── */}
-      {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && monthlyPeriodReady && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (
+      {(repUnit.type === "service" || (repUnit.type === "all" && reportType === "services")) && viewMode === "monthly" && monthlyPeriodReady && !serviceReportLoading && !serviceReportError && svcRepSummary && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (
         <div className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
             <Activity className="w-5 h-5 text-amber-500 shrink-0" />
@@ -20779,9 +20784,19 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           </div>
           {svcRepSummary && svcRepSummary.byProvider.length > 0 ? (
             <>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="service-report-summary">
+                <div className="bg-card border border-border rounded-2xl p-4 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">إيرادات حجوزات الخدمات الأساسية</div>
+                  <div className="text-2xl font-bold text-foreground"><FinancialReportNumber value={svcRepSummary.bookingRevenue} /></div>
+                  <div className="text-xs text-muted-foreground">ر.س</div>
+                </div>
+                <div className="bg-card border border-border rounded-2xl p-4 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">إيرادات المبيعات الفردية (البيع السريع)</div>
+                  <div className="text-2xl font-bold text-foreground"><FinancialReportNumber value={svcRepSummary.quickSalesRevenue} /></div>
+                  <div className="text-xs text-muted-foreground">ر.س</div>
+                </div>
                 <div className="bg-card border border-green-200 rounded-2xl p-4 text-center">
-                  <div className="text-xs text-muted-foreground mb-1">إجمالي الإيرادات</div>
+                  <div className="text-xs text-muted-foreground mb-1">إجمالي إيرادات النشاط الموحّدة</div>
                   <div className="text-2xl font-bold text-green-600"><FinancialReportNumber value={svcRepSummary.totalRevenue} /></div>
                   <div className="text-xs text-muted-foreground">ر.س</div>
                 </div>
@@ -20796,7 +20811,8 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
                   <div className="text-xs text-muted-foreground">ر.س</div>
                 </div>
               </div>
-              <div className="bg-card border border-border rounded-2xl p-4 space-y-3">
+              <p className="text-xs text-muted-foreground">الإيراد الموحّد = المحصّل من الحجوزات + المبيعات الفردية المكتملة. العربون ضمن إيرادات الحجوزات وليس إيرادًا إضافيًا، والتأمينات منفصلة عن الإيرادات.</p>
+              <div className="bg-card border border-border rounded-2xl p-4 space-y-3" data-testid="service-report-provider-details">
                 <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
                   <Briefcase className="w-4 h-4 text-amber-500" /> تفصيل حسب الخدمة
                 </h3>
@@ -20822,6 +20838,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
               <p className="text-sm">لا توجد بيانات خدمات لهذا الشهر</p>
             </div>
           )}
+          {repUnit.type === "service" && quickSaleDetailsSection}
         </div>
       )}
 

@@ -38,6 +38,12 @@ Completed quick sales belong in the selected activity's unified report revenue a
 
 **How to apply:** Keep sales distinct from booking collections and insurance, then sum them once in halalas. Apply the same activity and calendar boundaries to both sources, and stop exports if either source cannot load.
 
+Service-report improvements must preserve property-report accounting and presentation. In service reports, show booking revenue and quick-sale revenue separately alongside their unified total, deposits and insurance; put all detail tables below the summary cards, consistent with print/PDF.
+
+**Why:** The user explicitly restricted these improvements to service reports and required full stability for property reports.
+
+**How to apply:** Reuse the current dashboard activity as the local report default without changing global selection. Do not count deposits or insurance as extra revenue; wait for both booking and sale reads rather than displaying missing data as zero.
+
 Financial month dropdown options show a smaller, muted «يوافق:» subtitle listing the overlapping months of the other calendar, including their years and era labels.
 
 **Why:** The user requested bidirectional calendar correspondence under each month name, whether Hijri or Gregorian is primary.

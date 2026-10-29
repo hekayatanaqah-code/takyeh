@@ -5,6 +5,21 @@ import { buildActivitySummaryReportHtml } from "./financialReport";
 import type { QuickSale } from "@workspace/api-client-react";
 import { quickSalesForPeriod } from "./quickSalesRevenue";
 import { revenueMonthKey } from "./revenuePeriod";
+import { readFileSync } from "node:fs";
+
+it("keeps the service summary before provider and sales details, and waits for booking data", () => {
+  const dashboard = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const serviceSection = dashboard.slice(dashboard.indexOf("{/* ── Services Report ── */}"), dashboard.indexOf("{/* ── Unified Report ── */}"));
+  const summaryIndex = serviceSection.indexOf('data-testid="service-report-summary"');
+  const providerDetailsIndex = serviceSection.indexOf('data-testid="service-report-provider-details"');
+  const salesDetailsIndex = serviceSection.indexOf('{repUnit.type === "service" && quickSaleDetailsSection}');
+  assert.ok(summaryIndex >= 0 && providerDetailsIndex > summaryIndex && salesDetailsIndex > providerDetailsIndex);
+  assert.ok(serviceSection.includes("!serviceReportLoading && !serviceReportError && svcRepSummary"));
+  for (const field of ["bookingRevenue", "quickSalesRevenue", "totalRevenue", "totalDeposits", "totalInsurance"]) {
+    assert.ok(serviceSection.slice(summaryIndex, providerDetailsIndex).includes(`svcRepSummary.${field}`));
+  }
+  assert.ok(dashboard.includes("reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services)"));
+});
 
 it("defaults to the current or lone activity without preventing an explicit all-activity filter", () => {
   const service = { type: "service", id: 10, name: "النشاط الحالي" } as const;
@@ -13,6 +28,16 @@ it("defaults to the current or lone activity without preventing an explicit all-
   assert.deepEqual(defaultFinancialReportActivity({ type: "all" }, [{ id: 15, submissionId: 50, nameAr: "عقار" }], []),
     { type: "chalet", id: 15, submissionId: 50, name: "عقار" });
   assert.deepEqual(defaultFinancialReportActivity({ type: "all" }, [], [{ id: 10 }, { id: 20 }]), { type: "all" });
+});
+
+it("keeps the current service in a mixed owner's report without changing the property default", () => {
+  const properties = [{ id: 10, submissionId: 50, nameAr: "عقار مستقل" }];
+  const services = [{ id: 10, businessName: "كيكة الحلون" }, { id: 20, businessName: "خدمة أخرى" }];
+  const currentService = { type: "service", id: 10, name: "كيكة الحلون" } as const;
+  assert.equal(defaultFinancialReportActivity(currentService, properties, services), currentService);
+  const currentProperty = { type: "chalet", id: 10, submissionId: 50, name: "عقار مستقل" } as const;
+  assert.equal(defaultFinancialReportActivity(currentProperty, properties, services), currentProperty);
+  assert.deepEqual(defaultFinancialReportActivity({ type: "all" }, properties, services), { type: "all" });
 });
 
 it("adds cash and bank sales once with exact cents, excluding cancellations and other activities/periods", () => {
@@ -63,6 +88,7 @@ it("the actual print and PDF templates retain sale details, amounts and safely e
     assert.ok(html.includes("كيك × ٢"));
     assert.ok(html.includes("٢٥٫٧٥"));
     assert.ok(html.includes("١٢٥٫٨٥"));
+    assert.ok(html.indexOf("إجمالي الإيرادات الموحّدة") < html.indexOf("تفاصيل المبيعات الفردية"));
     assert.equal(html.includes("window.print()"), forPrint);
   }
 });
