@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { calendarOpeningDate } from "@/lib/calendarOpeningDate";
+import { calendarOpeningDate, calendarSwitchDate } from "@/lib/calendarOpeningDate";
 import {
   HIJRI_MONTHS_AR,
   toHijriComponents,
@@ -339,6 +339,21 @@ export function DualCalendarPicker({
     return pickerGY > maxG.year || (pickerGY === maxG.year && pickerGM >= maxG.month);
   }, [calendarMode, pickerHY, pickerHM, pickerGY, pickerGM, maxH, maxG]);
 
+  function switchCalendarMode(nextMode: "hijri" | "gregorian") {
+    if (nextMode !== calendarMode) {
+      const anchor = calendarSwitchDate(value, visibleGregorianDates, todayStr, minDateStr, maxDateStr);
+      const date = new Date(`${anchor}T12:00:00`);
+      const h = toHijriComponents(date);
+      setPickerHY(h.year);
+      setPickerHM(h.month);
+      setPickerGY(date.getFullYear());
+      setPickerGM(date.getMonth());
+    }
+    setCalendarMode(nextMode);
+    onModeChange?.(nextMode);
+    setPickerView("days");
+  }
+
   const calendarBody = (
       <>
         {inline ? <p className="sr-only">{label ?? placeholder}</p> : <DialogTitle className="sr-only">{label ?? placeholder}</DialogTitle>}
@@ -347,9 +362,7 @@ export function DualCalendarPicker({
             type="button"
             aria-pressed={calendarMode === "hijri"}
             onClick={() => {
-              setCalendarMode("hijri");
-              onModeChange?.("hijri");
-              setPickerView("days");
+              switchCalendarMode("hijri");
             }}
             className={cn(
               "min-h-9 rounded-lg px-3 text-sm font-semibold transition-colors touch-manipulation",
@@ -364,9 +377,7 @@ export function DualCalendarPicker({
             type="button"
             aria-pressed={calendarMode === "gregorian"}
             onClick={() => {
-              setCalendarMode("gregorian");
-              onModeChange?.("gregorian");
-              setPickerView("days");
+              switchCalendarMode("gregorian");
             }}
             className={cn(
               "min-h-9 rounded-lg px-3 text-sm font-semibold transition-colors touch-manipulation",

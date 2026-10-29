@@ -8,3 +8,11 @@ All user-visible date inputs must use the shared modal-overlay picker; do not us
 **Why:** On iPhone WebKit, an anchored popover can conflict with focus, touch dispatch, nested dialogs, and viewport repositioning. Safari can also return an Arabic month name from `formatToParts` despite `month: "numeric"`; parsing that as an integer yields month 0, an `undefined` title, and an empty day grid.
 
 **How to apply:** Search the frontend for native date inputs before shipping. Test a public picker and a picker nested inside an owner dialog at iPhone size; verify a real Arabic Hijri month name, a nonempty grid, today selection, enabled-day computed pointer events, switching, Escape, parent-dialog survival, and constrained-height scrolling. Always specify `calendar: "gregory"` for Arabic Gregorian labels because `ar-SA` may default to Hijri.
+
+## Employee dates are historical
+
+Employee birth and hiring dates require realistic historical year choices ending today, not the default future-booking range. Apply the same behavior in add and edit forms, and never silently correct already-saved dates.
+
+**Why:** The user explicitly reported unrealistic future Hijri years in employee forms and requested matching, historically appropriate dates.
+
+**How to apply:** Constrain employee pickers without removing future dates from booking calendars. Switching calendars must navigate through an actual Gregorian day rather than reusing a year number or an independently stale navigation state. Opening an optional employee field should not invent a birth or hiring date.

@@ -96,6 +96,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { EmployeeDatePicker } from "@/components/owner/EmployeeDatePicker";
 import { HijriDatePicker } from "@/components/HijriDatePicker";
 import { formatDateWithHijri, formatDualDate, withHijriEra, toHijri, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
 import { clampPage, filterServiceContracts, paginate, serviceContractStatus, serviceMonthOptions, serviceYearOptions, SERVICE_CONTRACTS_PAGE_SIZE, type ServiceCalView, type ServiceContractStatus } from "@/lib/serviceContractArchive";
@@ -17972,21 +17973,19 @@ function StaffTab() {
                 </div>
                 <div className="min-w-0 space-y-1.5">
                   <label className="text-xs text-muted-foreground block">تاريخ التعيين</label>
-                  <DualCalendarPicker
+                  <EmployeeDatePicker
+                    kind="hire"
                     value={addForm.hireDate}
                     onChange={(value) => setAddForm((f) => ({ ...f, hireDate: value }))}
-                    placeholder="اختر تاريخ التعيين"
-                    mode="gregorian"
                     className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                   />
                 </div>
                 <div className="min-w-0 space-y-1.5">
                   <label className="text-xs text-muted-foreground block">تاريخ الميلاد</label>
-                  <DualCalendarPicker
+                  <EmployeeDatePicker
+                    kind="birth"
                     value={addForm.birthDate}
                     onChange={(value) => setAddForm((f) => ({ ...f, birthDate: value }))}
-                    placeholder="اختر تاريخ الميلاد"
-                    mode="gregorian"
                     className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                   />
                 </div>
@@ -19183,21 +19182,19 @@ function StaffTab() {
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">تاريخ الميلاد</label>
-                                <DualCalendarPicker
+                                <EmployeeDatePicker
+                                  kind="birth"
                                   value={editForm.birthDate}
                                   onChange={(value) => setEditForm((f) => ({ ...f, birthDate: value }))}
-                                  placeholder="اختر تاريخ الميلاد"
-                                  mode="gregorian"
                                   className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                                 />
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground mb-1 block">تاريخ التعيين</label>
-                                <DualCalendarPicker
+                                <EmployeeDatePicker
+                                  kind="hire"
                                   value={editForm.hireDate}
                                   onChange={(value) => setEditForm((f) => ({ ...f, hireDate: value }))}
-                                  placeholder="اختر تاريخ التعيين"
-                                  mode="gregorian"
                                   className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                                 />
                               </div>
