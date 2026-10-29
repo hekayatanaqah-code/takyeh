@@ -77,6 +77,7 @@ export function buildActivitySummaryReportHtml(options: {
   generatedAt?: string;
   forPrint: boolean; logo: string | null; css: string;
   details?: { title: string; headers: string[]; rows: string[][] };
+  propertyDetailsHtml?: string;
 }) {
   const escape = (value: string) => value.replace(/[&<>"']/g, character =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
@@ -97,6 +98,7 @@ export function buildActivitySummaryReportHtml(options: {
     <style>.financial-sales-details{margin-top:22px}.financial-sales-details table{font-size:11px!important;table-layout:fixed!important}
     .financial-sales-details td,.financial-sales-details th{white-space:normal!important;overflow-wrap:anywhere;padding:6px!important}
     .financial-sales-details thead{display:table-header-group}</style>` : ""}
+    ${options.propertyDetailsHtml ?? ""}
     <footer class="footer">منصة تكيّة — تقرير مالي</footer></main>
     ${options.forPrint ? '<script>window.addEventListener("load",async()=>{await document.fonts.ready;setTimeout(()=>{window.focus();window.print()},250)})</script>' : ""}</body></html>`);
 }

@@ -38,6 +38,7 @@ import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
 import { buildActivitySummaryReportHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "@/lib/financialReport";
+import { propertyBookingBreakdown, propertyReportDetailsHtml, type PropertyBookingBreakdown } from "@/lib/propertyFinancialReport";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
@@ -19417,10 +19418,7 @@ async function printYearlyReport(
 }
 
 /* ── Shared Report HTML builders (for print + PDF export) ── */
-type ReportBreakdown = {
-  rows: Array<{ id: number; name: string; date: string; base: number; svc: number; total: number }>;
-  totBase: number; totSvc: number; totTotal: number;
-} | null;
+type ReportBreakdown = PropertyBookingBreakdown | null;
 
  const REPORT_CSS = `*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Segoe UI',Tahoma,Arial,sans-serif;background:#fff;color:#111;direction:rtl;text-align:right;}.page{width:750px;padding:22px 36px;background:#fff;}.header{border-bottom:3px solid #8C6246;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;flex-direction:row;direction:ltr;}.header-brand{flex-shrink:0;}.brand-name{font-size:24px;font-weight:800;color:#8C6246;direction:rtl;}.brand-sub{font-size:11px;color:#666;margin-top:3px;direction:rtl;}.header-center{flex:1;text-align:center;padding:0 16px;direction:rtl;}.report-title{font-size:17px;font-weight:700;text-align:center;}.report-sub{font-size:11px;color:#666;text-align:center;margin-top:3px;}.qr-block{flex-shrink:0;text-align:center;}.qr-img{width:80px;height:80px;display:block;image-rendering:crisp-edges;}.qr-caption{font-size:9px;color:#888;margin-top:3px;direction:rtl;}.current-period-notice{margin:0 0 12px;padding:8px 12px;border:1px solid #fcd34d;border-radius:8px;background:#fffbeb;color:#92400e;font-size:11px;font-weight:600;text-align:right;}.section{margin-bottom:12px;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:12px;}.section-title{font-size:14px;font-weight:700;color:#8C6246;margin-bottom:8px;}.kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}.kpi-card{background:#faf9f6;border:1px solid #e8e2d0;border-radius:8px;padding:12px 16px;display:flex!important;flex-direction:column!important;justify-content:center!important;align-items:flex-start!important;text-align:right!important;direction:rtl!important;}.kpi-label{font-size:11px;color:#333;font-weight:600;margin-bottom:3px;}.kpi-value{font-size:17px;font-weight:700;color:#111;line-height:1.2;}.kpi-note{font-size:10px;color:#555;font-weight:500;margin-top:2px;}.kpi-green{border-color:#86efac!important;}.kpi-red{border-color:#fca5a5!important;}table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;word-wrap:break-word;}th{background:#8C6246;color:#fff;padding:6px 8px;text-align:right;vertical-align:middle;}td{padding:6px 8px;border-bottom:1px solid #ede9dd;word-break:break-word;vertical-align:middle;}tr:nth-child(even) td{background:#faf9f6;}tr.total-row td{font-weight:700;background:#fffbf0;border-top:2px solid #8C6246;}table th,table td{height:38px!important;text-align:right!important;direction:rtl!important;vertical-align:top!important;line-height:1.2!important;}table td{padding-top:2px!important;padding-bottom:8px!important;}table th{padding-top:2px!important;padding-bottom:8px!important;}.total-row{break-inside:avoid;page-break-inside:avoid;}.legend-item{display:inline-flex!important;align-items:center!important;gap:6px!important;}.slot-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}.slot-chip{background:#faf9f6;border:1px solid #e8e2d0;border-radius:6px;padding:5px 12px;font-size:12px;color:#555;}.footer{margin-top:14px;text-align:center;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:7px;}`;
 
@@ -19516,7 +19514,7 @@ function buildMonthlyReportHtml(
   month: string,
   propertyName: string,
   report: MonthReport | null | undefined,
-  financial: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
+  financial: { totalRevenue: number; totalInsuranceHeld?: number; totalInsuranceDeducted?: number; totalWithdrawals?: number; totalExpenses: number; netProfit: number; categoryTotals: Record<string, number> } | null | undefined,
   forPrint = false,
   qrDataUrl: string | null = null,
   breakdown: ReportBreakdown = null,
@@ -19573,6 +19571,7 @@ function buildMonthlyReportHtml(
 <div class="header-center"><div class="report-title">التقرير المالي - ${escapeFinancialReportText(propertyName)}</div><div class="report-sub">التقرير الشهري · ${monthStr}</div><div class="report-sub" style="font-size:10px;color:#444;margin-top:4px;">تاريخ إصدار التقرير: ${printDate}</div></div>
 ${qrHtml}</div>
 ${currentPeriodNotice}
+${breakdown && financial ? propertyReportDetailsHtml(breakdown, financial, date => formatDateWithHijri(`${date}T12:00:00+03:00`)) : ""}
 
 ${financial ? `<div class="section"><div class="section-title">الأداء والملخص المالي</div><div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
 <div class="kpi-card kpi-green"><div class="kpi-label">إجمالي الإيرادات</div><div class="kpi-value" style="font-size:18px">${formatAmount(financial.totalRevenue)}</div><div class="kpi-note">عربون + محصّل + تلفيات</div></div>
@@ -20008,7 +20007,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     if (hijriPeriods.years.length && !hijriPeriods.years.includes(selectedHijriYear)) setSelectedHijriYear(hijriPeriods.years[0]);
   }, [gregorianPeriods, hijriPeriods, selectedMonth, selectedHijriMonthVal, selectedYear, selectedHijriYear]);
 
-  const { data: report, isLoading } = useQuery<MonthReport>({
+  const { data: report, isLoading, isError: propertyReportError } = useQuery<MonthReport>({
     queryKey: ["owner", "reports", isHijri, isHijri ? selectedHijriMonthVal : selectedMonth, selectedSubmissionId],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -20035,7 +20034,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     },
   });
 
-  const { data: financial } = useQuery<{
+  const { data: financial, isError: propertyFinancialError } = useQuery<{
     month: string;
     totalRevenue: number;
     totalInsuranceHeld: number;
@@ -20058,7 +20057,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       }
       if (selectedSubmissionId !== "all") params.set("submissionId", selectedSubmissionId);
       const r = await apiFetch(`/owner/financial-summary?${params}`);
-      if (!r.ok) return null;
+      if (!r.ok) throw new Error("تعذّر تحميل الحسابات الختامية");
       return r.json();
     },
     enabled: viewMode === "monthly" && monthlyPeriodReady,
@@ -20166,11 +20165,11 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   }));
 
   // ── Fetch all owner bookings for revenue breakdown in التقارير المالية ───
-  const { data: repAllBookings = [] } = useQuery<OwnerBooking[]>({
+  const { data: repAllBookings = [], isLoading: reportBookingsLoading, isError: reportBookingsError } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings-revenue"],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذّر تحميل تفصيل الحجوزات");
       return r.json();
     },
     enabled: viewMode === "monthly" || viewMode === "custom",
@@ -20188,11 +20187,6 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
 
   // ── Compute monthly booking breakdown for the selected month/property ───
   const repBreakdown = useMemo(() => {
-    const getAddonSum = (b: OwnerBooking): number => {
-      const addons = (b.bookedAddons ?? []) as Array<{ id: number; name: string; price: string; unit: string }>;
-      return addons.filter(a => a.unit !== "خدمة مجانية" && Number(a.price) > 0)
-        .reduce((s, a) => s + Math.round(Number(a.price)), 0);
-    };
     const [selHY, selHM] = selectedHijriMonthVal ? selectedHijriMonthVal.split("-").map(Number) : [0, 0];
     const filtered = repAllBookings.filter(b => {
       if (!b.bookingDate) return false;
@@ -20206,19 +20200,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       const propMatch = selectedSubmissionId === "all" || String(b.submissionId) === selectedSubmissionId;
       return monthMatch && propMatch;
     });
-    const rows = filtered.map(b => {
-      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
-        : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
-        : Number(b.depositPaid ?? 0);
-      const svc = getAddonSum(b);
-      return { id: b.id, name: b.clientName, date: b.bookingDate, base: Math.max(0, tp - svc), svc, total: tp };
-    }).filter(r => r.total > 0);
-    const totBase  = Math.round(rows.reduce((s, r) => s + r.base, 0));
-    const totSvc   = Math.round(rows.reduce((s, r) => s + r.svc, 0));
-    const totTotal = Math.round(rows.reduce((s, r) => s + r.total, 0));
-    console.log("[تكية Reports] bookings:", rows.length, "| إيجار:", totBase, "| خدمات:", totSvc, "| إجمالي:", totTotal);
-    return { rows, totBase, totSvc, totTotal };
+    return propertyBookingBreakdown(filtered);
   }, [repAllBookings, selectedMonth, selectedHijriMonthVal, isHijri, selectedSubmissionId]);
+  const propertyDataReady = !reportBookingsLoading && !reportBookingsError && !propertyReportError && !propertyFinancialError;
 
   // ── Earliest transaction date (for minDate constraint in custom picker) ───
   const earliestTransactionDate = useMemo(() => {
@@ -20346,6 +20330,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   }
 
   const handleShareWhatsApp = useCallback(async (e: React.MouseEvent) => {
+    if (viewMode === "monthly" && (!propertyDataReady || !financial || !report)) return;
     e.preventDefault();
     e.stopPropagation();
     const phone = sharePhone.replace(/\D/g, "");
@@ -20466,9 +20451,10 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     } finally {
       setWaLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData, customRangeDataHijri, groupByDay]);
+  }, [propertyDataReady, viewMode, selectedMonth, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, sharePhone, activeMonthLabel, repBreakdown, isHijri, selectedHijriMonthVal, customFrom, customTo, customRangeData, customRangeDataHijri, groupByDay]);
 
   const handleShareEmail = useCallback(async (e: React.MouseEvent) => {
+    if (viewMode === "monthly" && (!propertyDataReady || !financial || !report)) return;
     e.preventDefault();
     e.stopPropagation();
     const trimmedEmail = shareEmail.trim();
@@ -20552,7 +20538,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     } finally {
       setEmailLoading(false);
     }
-  }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, shareEmail, pdfUrl, repBreakdown, activeMonthLabel]);
+  }, [propertyDataReady, viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedPropertyName, report, financial, yearly, yearlyHijri, isYearlyHijri, selectedHijriYear, shareEmail, pdfUrl, repBreakdown, activeMonthLabel]);
 
   const handleSaveToArchive = useCallback(async () => {
     setArchiveSaving(true);
@@ -20602,7 +20588,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     }
   }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel]);
 
-  const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && (viewMode === "monthly" ? monthlyPeriodReady
+  const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && (viewMode !== "monthly" || repUnit.type === "service" || propertyDataReady) && (viewMode === "monthly" ? monthlyPeriodReady
     : viewMode === "yearly" ? (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear))
       : activePeriods.years.length > 0) && (isActivitySummary
     ? !!svcRepSummary && !serviceReportLoading && !serviceReportError && !reportQuickSalesQuery.isLoading && !reportQuickSalesQuery.isError && (reportType !== "unified" || repUnit.type === "service" || !!financial)
@@ -20644,7 +20630,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
         ];
         html = buildActivitySummaryReportHtml({ title: reportHeading,
           period: activeMonthLabel, activityName: repUnit.type === "service" ? repUnit.name : "جميع الأنشطة",
-          fileName, rows, details: quickSaleDetails, logo, css: REPORT_CSS, forPrint: action === "print" });
+          fileName, rows, details: quickSaleDetails, logo, css: REPORT_CSS, forPrint: action === "print",
+          propertyDetailsHtml: unified && financial ? propertyReportDetailsHtml(repBreakdown, financial,
+            date => formatDateWithHijri(`${date}T12:00:00+03:00`)) : undefined });
       } else if (viewMode === "monthly") {
         const qr = await generateReportQrDataUrl("monthly", isHijri ? selectedHijriMonthVal : selectedMonth);
         html = buildMonthlyReportHtml(selectedMonth, selectedPropertyName, report, financial, action === "print", qr,
@@ -20748,6 +20736,10 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       {/* ── Report Type Selector (only in "all" unit mode) ── */}
       {periodsLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل الفترات المالية…</p>}
       {periodsError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل السنوات والشهور المالية. أعد تحميل الصفحة للمحاولة مجددًا.</p>}
+      {repUnit.type !== "service" && viewMode === "monthly" && (reportBookingsError || propertyReportError || propertyFinancialError) &&
+        <p role="alert" className="text-sm text-destructive">تعذّر تحميل بيانات تقرير العقارات بالكامل. أعد تحميل الصفحة؛ التصدير متوقف حتى تكتمل الحسابات وتفاصيل الحجوزات.</p>}
+      {repUnit.type !== "service" && viewMode === "monthly" && reportBookingsLoading &&
+        <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل تفصيل الحجوزات…</p>}
       {!periodsLoading && !periodsError && !activePeriods.months.length && <p role="status" className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">لا توجد بيانات مالية فعلية ونشطة لهذا النشاط. ستظهر السنوات والشهور عند تسجيل بيانات مالية.</p>}
       {isActivitySummary && serviceReportError && <p role="alert" className="text-sm text-destructive">تعذّر تحميل تقرير الخدمات. أعد تحميل الصفحة للمحاولة مجددًا؛ إجراءات التصدير متوقفة حتى تكتمل البيانات.</p>}
       {isActivitySummary && reportQuickSalesQuery.isLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل المبيعات الفردية لاستكمال التقرير…</p>}
@@ -20851,6 +20843,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
             <div className="text-3xl font-extrabold text-green-600"><FinancialReportNumber value={(financial?.totalRevenue ?? 0) + (svcRepSummary?.totalRevenue ?? 0)} /> <span className="text-lg font-normal text-muted-foreground">ر.س</span></div>
             {financial && <div className="text-xs text-muted-foreground mt-2">المصروفات: <FinancialReportNumber value={financial.totalExpenses} currency /> · صافي العقارات: <span className={financial.netProfit < 0 ? "text-red-600 dark:text-red-400" : ""}><FinancialReportNumber value={financial.netProfit} currency /></span></div>}
           </div>
+          {financial && propertyDataReady && <div className="rounded-2xl border border-border bg-card p-4"
+            dangerouslySetInnerHTML={{ __html: propertyReportDetailsHtml(repBreakdown, financial,
+              date => formatDateWithHijri(`${date}T12:00:00+03:00`)) }} />}
         </div>
       )}
 
@@ -21468,7 +21463,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
             <div style={{ background: "linear-gradient(135deg,#f0fdf4,#dcfce7)", border: "2px solid #4ade80", borderRadius: 16, padding: 20, minHeight: 150, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#15803d" }}>
                 <RiyalIcon className="w-4 h-4" />
-                <span>صافي الدخل</span>
+                <span>إجمالي قيمة الحجوزات</span>
               </div>
               <div style={{ fontSize: 30, fontWeight: 900, color: "#15803d", lineHeight: 1, marginTop: 4 }}>
                 <FinancialReportNumber value={repBreakdown.totTotal} rounded={false} />
@@ -21479,7 +21474,12 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           </div>
 
           {/* ══ Booking Breakdown Table ══ */}
-          {repBreakdown.rows.length > 0 && (
+          {financial && propertyDataReady && (
+            <div data-testid="property-report-reconciliation" dangerouslySetInnerHTML={{ __html: propertyReportDetailsHtml(
+              repBreakdown, financial, date => formatDateWithHijri(`${date}T12:00:00+03:00`), false,
+            ) }} />
+          )}
+          {propertyDataReady && repBreakdown.rows.length > 0 && (
             <div style={{ background: "var(--card,#fff)", border: "1px solid var(--border,#e5e7eb)", borderRadius: 16, padding: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 <Receipt className="w-4 h-4 text-primary" />
@@ -21733,17 +21733,8 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
               </div>
 
               <div className="flex flex-wrap gap-2 justify-end">
-                <Button variant="outline" size="sm" onClick={() => printMonthlyReport(
-                  selectedMonth,
-                  selectedPropertyName,
-                  report,
-                  financial,
-                  repBreakdown,
-                  activeMonthLabel,
-                  isCurrentMonthlyPeriod,
-                  isHijri ? "hijri" : "gregorian",
-                  isHijri ? selectedHijriMonthVal : undefined,
-                )} className="gap-2">
+                <Button variant="outline" size="sm" disabled={!quickReportReady || !!quickAction}
+                  onClick={() => void handleQuickReportAction("print")} className="gap-2">
                   <FileText className="w-4 h-4" />طباعة التقرير
                 </Button>
                 {downloadReportButton}

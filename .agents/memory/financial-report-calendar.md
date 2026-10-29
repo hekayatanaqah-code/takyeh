@@ -38,6 +38,12 @@ Completed quick sales belong in the selected activity's unified report revenue a
 
 **How to apply:** Keep sales distinct from booking collections and insurance, then sum them once in halalas. Apply the same activity and calendar boundaries to both sources, and stop exports if either source cannot load.
 
+Property financial reports must include all revenue, recorded expenses/withdrawals and final net profit, alongside a clear booking breakdown of customer, date, rent, service fees and total, including printed/PDF output.
+
+**Why:** The user explicitly rejected revenue-only property reports and required booking details to reconcile with final accounts.
+
+**How to apply:** Never label rent plus services as net income. Distinguish contractual booking values from actual collections; exclude cancelled bookings and refundable insurance from revenue. Show withdrawals as a subset of recorded expenses rather than deducting them again.
+
 Financial month dropdown options show a smaller, muted «يوافق:» subtitle listing the overlapping months of the other calendar, including their years and era labels.
 
 **Why:** The user requested bidirectional calendar correspondence under each month name, whether Hijri or Gregorian is primary.
