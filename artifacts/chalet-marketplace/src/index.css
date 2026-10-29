@@ -34,6 +34,24 @@ input, textarea, select, [contenteditable] {
   font-variant-numeric: lining-nums tabular-nums;
   font-feature-settings: "sups" 0, "subs" 0, "onum" 0;
 }
+.financial-reports-property .text-xs,
+.financial-reports-property [class*="text-[10px]"],
+.financial-reports-property [class*="text-[11px]"],
+.financial-reports-property [style*="font-size: 10px"],
+.financial-reports-property [style*="font-size: 11px"],
+.financial-reports-property [style*="font-size: 12px"] {
+  font-size: 0.875rem !important;
+  line-height: 1.6 !important;
+}
+.financial-reports-property .text-muted-foreground {
+  color: #475569;
+}
+.dark .financial-reports-property .text-muted-foreground {
+  color: #cbd5e1;
+}
+.financial-reports-property .recharts-text {
+  font-size: 12px;
+}
 .financial-bookings-scroll {
   max-height: 420px;
   overflow: auto;

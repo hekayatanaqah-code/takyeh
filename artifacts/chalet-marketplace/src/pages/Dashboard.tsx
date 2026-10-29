@@ -40,6 +40,7 @@ import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
 import { buildActivitySummaryReportHtml, buildPropertyReportClosingHtml, buildPropertyBookingDetailsHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "@/lib/financialReport";
+import { finalizePropertyReportHtml, propertyPdfSliceRanges } from "@/lib/propertyReportLayout";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
@@ -19568,7 +19569,7 @@ function buildMonthlyReportHtml(
     slots.unspecified > 0 ? `<div class="slot-chip">غير محدد: ${toAr(slots.unspecified)} حجز (${toAr(slotPct(slots.unspecified))}٪)</div>` : "",
   ].filter(Boolean).join("") : "";
 
-  return finalizeFinancialReportHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return finalizePropertyReportHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
  <title>${fileName}</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page print-container">
@@ -19604,7 +19605,7 @@ ${buildPropertyBookingDetailsHtml(showDetails, (breakdown?.rows ?? []).map(row =
 ${financial ? buildPropertyReportClosingHtml({ revenue: financial.totalRevenue, expenses: financial.totalExpenses, netProfit: financial.netProfit }) : ""}
 
 <div class="footer">منصة تكيّة — تقرير مالي</div>
-</div>${scriptTag}</body></html>`);
+</div>${scriptTag}</body></html>`, showDetails);
 }
 
 function buildYearlyReportHtml(
@@ -19687,7 +19688,7 @@ function buildYearlyReportHtml(
     ? `@page{size:A4 portrait;margin:0!important;}@media print{html,body{max-height:277mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
     : `@page{size:A4 portrait;margin:0!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;border-top:18px solid transparent!important;background-clip:padding-box!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
 
-  return finalizeFinancialReportHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
+  return finalizePropertyReportHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
  <title>${fileName}</title>
 <style>${REPORT_CSS}${printMediaCss}</style></head>
 <body><div class="page print-container">
@@ -19721,7 +19722,7 @@ ${showDetails ? `<div class="section-auto"><div style="display:flex;align-items:
 ${buildPropertyReportClosingHtml(yearly.totals)}
 
 <div class="footer">منصة تكيّة — تقرير مالي</div>
-</div>${scriptTag}</body></html>`);
+</div>${scriptTag}</body></html>`, showDetails);
 }
 
 /* ── Fresh PDF from the currently visible service receipt DOM ── */
@@ -19850,7 +19851,28 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-    // ── Force single page: scale content to fit A4 proportionally ──────────
+    if (iDoc.body.classList.contains("property-report") && !iDoc.body.classList.contains("property-report-compact")) {
+      const pageRect = pageEl.getBoundingClientRect();
+      const pixelRatio = canvas.height / pageRect.height;
+      const closing = pageEl.querySelector(".financial-closing")?.getBoundingClientRect();
+      const boundaries = Array.from(pageEl.querySelectorAll(".header,.section,.section-auto,.footer,tr"))
+        .map(element => element.getBoundingClientRect().bottom)
+        .filter(bottom => !closing || bottom <= closing.top || bottom >= closing.bottom)
+        .map(bottom => (bottom - pageRect.top) * pixelRatio);
+      const ranges = propertyPdfSliceRanges(canvas.height, pageHeightCanvasPx, boundaries);
+      ranges.forEach(({ start, end }, index) => {
+        if (index) pdf.addPage();
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width;
+        slice.height = end - start;
+        const context = slice.getContext("2d");
+        if (!context) throw new Error("تعذّر تجهيز صفحات التقرير التفصيلي");
+        context.drawImage(canvas, 0, start, canvas.width, end - start, 0, 0, canvas.width, end - start);
+        pdf.addImage(slice.toDataURL("image/jpeg", 0.93), "JPEG", MARGIN_MM, MARGIN_MM,
+          contentWidthMm, (end - start) * mmPerCanvasPx);
+      });
+    } else {
+    // Compact reports keep their whole summary and closing accounts on one page.
     // If content height ≤ one page → render at natural size.
     // If content overflows → scale down uniformly so everything fits on page 1.
     pdf.setFillColor(255, 255, 255);
@@ -19863,6 +19885,7 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
     // Center horizontally if scaled down
     const offsetX = MARGIN_MM + (contentWidthMm - renderW) / 2;
     pdf.addImage(canvas.toDataURL("image/jpeg", 0.93), "JPEG", offsetX, MARGIN_MM, renderW, renderH);
+    }
 
     // إخراج الـ PDF كـ ArrayBuffer نقي ثم بناء Blob بترميز صريح
     // يمنع أي تلاعب في الترميز أثناء نقل الملف عبر Web Share API
@@ -20819,7 +20842,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     ) : null;
 
   return (
-    <div className="financial-reports space-y-6">
+    <div className={`financial-reports space-y-6${!isActivitySummary ? " financial-reports-property" : ""}`}>
 
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">

@@ -3,6 +3,7 @@ import { it } from "node:test";
 import { buildActivitySummaryReportHtml, buildPropertyBookingDetailsHtml, buildPropertyReportClosingHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "./financialReport";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { finalizePropertyReportHtml } from "./propertyReportLayout";
 
 it("property print/PDF builders hide details by default but retain identical closing totals", () => {
   const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
@@ -12,7 +13,7 @@ it("property print/PDF builders hide details by default but retain identical clo
     toAr: (v: unknown) => String(v), toHijriComponents: () => ({ day: 1, month: 1, year: 1448 }),
     HIJRI_MONTHS_AR: ["محرم"], formatAmount: formatFinancialAmount, formatAmountSigned: formatFinancialAmount,
     catMap: {}, REPORT_CSS: "", buildRevBarSvg: () => "", buildMonthlyBarChartSvg: () => "",
-    finalizeFinancialReportHtml, buildPropertyBookingDetailsHtml, buildPropertyReportClosingHtml,
+    finalizeFinancialReportHtml, finalizePropertyReportHtml, buildPropertyBookingDetailsHtml, buildPropertyReportClosingHtml,
     escapeFinancialReportText: (s: string) => s, formatDateWithHijri: (s: string) => s,
   };
   const builders = new Function(...Object.keys(deps), `${js}; return { buildMonthlyReportHtml, buildYearlyReportHtml };`)(...Object.values(deps));

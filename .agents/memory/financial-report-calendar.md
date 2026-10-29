@@ -56,8 +56,8 @@ Financial month dropdown options show a smaller, muted «يوافق:» subtitle 
 
 **How to apply:** Apply this to property, service and all-activity report selectors. Calculate correspondence from the entire selected month and year, not today's date or a midpoint; a Gregorian month can touch three Hijri months. Keep the collapsed selector compact with only its primary month name.
 
-Property reports default to summaries and closing accounts with detailed booking/expense tables hidden. A report-local checkbox controls the same detail visibility on screen, print and PDF, without changing calculations or service reports.
+Property reports default to summaries and closing accounts with detailed booking/expense tables hidden. The compact report must fit one complete A4 page with readable notes and dates. A report-local checkbox controls the same detail visibility on screen, print and PDF, without changing calculations or service reports.
 
-**Why:** The user requested concise property reports by default, with optional long tables for financial review.
+**Why:** The user requested concise property reports by default, optional long tables for financial review, and then explicitly required a one-page compact print/PDF with larger, higher-contrast secondary text.
 
-**How to apply:** Keep closing revenue, expenses and net income visible for monthly, annual and custom reports in either state. Invalidate cached exports when visibility changes; sharing and archived PDFs must use the same choice. Never clip expanded detail tables into a fixed-height compact print page.
+**How to apply:** Keep closing revenue, expenses and net income visible for monthly, annual and custom reports in either state. Invalidate cached exports when visibility changes; sharing and archived PDFs must use the same choice. Long detailed exports may use multiple pages at readable size; never clip them or shrink all their pages into one tiny image.
