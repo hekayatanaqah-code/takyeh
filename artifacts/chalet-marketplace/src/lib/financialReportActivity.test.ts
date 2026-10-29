@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { escapeFinancialReportText, financialReportTitle, scopeServiceFinancialReport, defaultFinancialReportActivity, includeQuickSalesInReport } from "./financialReportActivity";
+import { escapeFinancialReportText, financialReportTitle, scopeServiceFinancialReport, defaultFinancialReportActivity, loneFinancialReportActivity, includeQuickSalesInReport } from "./financialReportActivity";
 import { buildActivitySummaryReportHtml } from "./financialReport";
 import type { QuickSale } from "@workspace/api-client-react";
 import { quickSalesForPeriod } from "./quickSalesRevenue";
@@ -23,6 +23,22 @@ it("defaults to the current or lone activity without preventing an explicit all-
   assert.deepEqual(defaultFinancialReportActivity({ type: "all" }, [{ id: 15, submissionId: 50, nameAr: "عقار" }], []),
     { type: "chalet", id: 15, submissionId: 50, name: "عقار" });
   assert.deepEqual(defaultFinancialReportActivity({ type: "all" }, [], [{ id: 10 }, { id: 20 }]), { type: "all" });
+});
+
+it("fixes the sole financial activity and only offers switching for multiple activities", () => {
+  const service = loneFinancialReportActivity([], [{ id: 10, businessName: "كيكة الحلون" }]);
+  assert.deepEqual(service, { type: "service", id: 10, name: "كيكة الحلون" });
+  assert.deepEqual(loneFinancialReportActivity([{ id: 15, submissionId: 50, nameAr: "عقار" }], []),
+    { type: "chalet", id: 15, submissionId: 50, name: "عقار" });
+  assert.equal(loneFinancialReportActivity([], []), null);
+  assert.equal(loneFinancialReportActivity([], [{ id: 10 }, { id: 20 }]), null);
+  assert.equal(loneFinancialReportActivity([{ id: 10, submissionId: 50 }], [{ id: 10 }]), null);
+  const dashboard = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  assert.ok(dashboard.includes("loneReportActivity ?? (reportActivityOverride ??"));
+  const selector = readFileSync(new URL("../components/FinancialReportActivitySelect.tsx", import.meta.url), "utf8");
+  const fixedBranch = selector.slice(selector.indexOf("if (loneActivity"), selector.indexOf('<label htmlFor="financial-report-activity"'));
+  assert.ok(selector.includes('data-testid="financial-report-activity-fixed"'));
+  assert.ok(!fixedBranch.includes("<Select"));
 });
 
 it("keeps the current service in a mixed owner's report without changing the property default", () => {

@@ -2,6 +2,15 @@ import type { DashboardActivity } from "./dashboardActivity";
 import type { QuickSale } from "@workspace/api-client-react";
 import { quickSalesTotal } from "./quickSalesRevenue";
 
+export function loneFinancialReportActivity(
+  properties: { id: number; submissionId?: number | null; nameAr?: string | null }[],
+  services: { id: number; businessName?: string | null }[],
+): DashboardActivity | null {
+  if (properties.length + services.length !== 1) return null;
+  if (services.length) return { type: "service", id: services[0].id, name: services[0].businessName || "خدمة" };
+  return { type: "chalet", id: properties[0].id, submissionId: properties[0].submissionId ?? undefined, name: properties[0].nameAr || "عقار" };
+}
+
 export function defaultFinancialReportActivity(
   current: DashboardActivity,
   properties: { id: number; submissionId?: number | null; nameAr?: string | null }[],

@@ -1,5 +1,6 @@
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { activityKey, type DashboardActivity } from "@/lib/dashboardActivity";
+import { loneFinancialReportActivity } from "@/lib/financialReportActivity";
 
 export type ReportProperty = { id: number; submissionId?: number | null; nameAr?: string | null };
 export type ReportService = { id: number; businessName?: string | null };
@@ -12,6 +13,16 @@ export function FinancialReportActivitySelect({ value, properties, services, onC
   loading?: boolean;
   error?: boolean;
 }) {
+  const loneActivity = loneFinancialReportActivity(properties, services);
+  if (loneActivity && loneActivity.type !== "all" && !error) {
+    return <div className="flex flex-col gap-2">
+      <span id="financial-report-activity-label" className="text-sm font-semibold">النشاط المالي</span>
+      <div aria-labelledby="financial-report-activity-label" data-testid="financial-report-activity-fixed"
+        className="flex min-h-10 w-full items-center rounded-md border border-border bg-muted/30 px-3 py-2 text-sm font-medium sm:w-80">
+        {loneActivity.name}
+      </div>
+    </div>;
+  }
   return <div className="flex flex-col gap-2">
     <label htmlFor="financial-report-activity" className="text-sm font-semibold">النشاط المالي</label>
     <Select dir="rtl" value={activityKey(value)} disabled={loading || error} onValueChange={key => {

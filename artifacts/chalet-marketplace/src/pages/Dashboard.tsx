@@ -61,7 +61,7 @@ import { ReviewObjection } from "@/components/owner/ReviewObjection";
 import { ServiceBookingScheduleFields } from "@/components/owner/ServiceBookingScheduleFields";
 import { hasServiceInsurance, serviceDashboardTabs } from "@/lib/serviceDashboardTabs";
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
-import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport, defaultFinancialReportActivity, includeQuickSalesInReport } from "@/lib/financialReportActivity";
+import { financialReportTitle, escapeFinancialReportText, scopeServiceFinancialReport, defaultFinancialReportActivity, loneFinancialReportActivity, includeQuickSalesInReport } from "@/lib/financialReportActivity";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
@@ -19923,7 +19923,8 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   // This is a report-local filter: it never changes the owner's dashboard activity.
   const { unit: currentActivity } = useAdminFinance();
   const [reportActivityOverride, setReportUnit] = useState<FinanceUnit | null>(null);
-  const repUnit = reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services);
+  const loneReportActivity = loneFinancialReportActivity(properties, services);
+  const repUnit = loneReportActivity ?? (reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services));
   const [serviceReportSource, setServiceReportSource] = useState<RevenueSource>("all");
   const includesServiceBookings = repUnit.type !== "service" || serviceReportSource !== "quick_sales";
   const includesServiceSales = repUnit.type !== "service" || serviceReportSource !== "bookings";
@@ -20804,7 +20805,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-foreground" data-testid="financial-report-title">{reportHeading}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">اختر جميع الأنشطة أو نشاطًا محددًا لاستخراج تقريره المالي فقط.</p>
+          <p className="mt-1 text-xs text-muted-foreground">{loneReportActivity
+            ? "يُعرض التقرير المالي لنشاطك مباشرة."
+            : "اختر جميع الأنشطة أو نشاطًا محددًا لاستخراج تقريره المالي فقط."}</p>
         </div>
         <FinancialReportActivitySelect value={repUnit} properties={properties} services={services}
           onChange={selectReportActivity} loading={activitiesLoading || !!quickAction} error={activitiesError} />

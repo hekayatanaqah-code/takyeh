@@ -26,9 +26,9 @@ Financial report print/PDF output uses the literal abbreviation «ر.س» in one
 
 **How to apply:** Keep these report-specific choices separate from the platform's general riyal artwork convention. Zero page margins and empty page-margin boxes suppress native browser furniture where supported; never promise to override every browser's user-controlled header/footer setting.
 
-The financial reports section has its own activity filter, initially the current dashboard activity (or its sole available activity when internal dashboard scope is all). Keep «جميع الأنشطة» available as an explicit local choice. Selecting a property or service scopes its report and updates both the screen and PDF heading to «التقرير المالي - [اسم النشاط]».
+The financial reports section has its own activity filter, initially the current dashboard activity. With exactly one available activity, fix the report to that activity and display its name without a dropdown or «جميع الأنشطة». With multiple activities, retain «جميع الأنشطة» as an explicit local choice. Selecting a property or service scopes its report and updates both the screen and PDF heading to «التقرير المالي - [اسم النشاط]».
 
-**Why:** The user explicitly requested current-activity defaults instead of all activities, while retaining local activity switching and matching report titles.
+**Why:** The user explicitly requested current-activity defaults and matching report titles, then clarified that switching and «جميع الأنشطة» should only be available for multiple activities.
 
 **How to apply:** Do not change the global dashboard activity to implement this filter. Keep published property IDs distinct from submission IDs, filter service totals by provider, and reset report-local export/share state when changing activity.
 
