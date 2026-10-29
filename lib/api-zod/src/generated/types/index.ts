@@ -45,6 +45,7 @@ export * from './crmDirectoryCustomer';
 export * from './crmDirectoryCustomerSource';
 export * from './crmHistoryPage';
 export * from './crmHistoryRecord';
+export * from './crmHistoryRecordRecordType';
 export * from './decideServiceReviewObjectionBody';
 export * from './decideServiceReviewObjectionBodyDecision';
 export * from './declinePhotographySession200';

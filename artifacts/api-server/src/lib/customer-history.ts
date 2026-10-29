@@ -3,6 +3,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { GetOwnerCrmHistoryQueryParams, GetOwnerCrmProfileQueryParams } from "@workspace/api-zod";
+import { customerPhoneSql, normalizeCustomerPhone } from "./customerPhone";
 
 export const CRM_PAGE_SIZE = 10;
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
@@ -69,7 +70,12 @@ function source(ownerId: string, phone: string, providerId?: number, withTiming 
         AND b.date_str >= ${today}) AS is_active
       FROM service_appointments b JOIN service_providers p ON p.id = b.provider_id
       WHERE b.owner_id = ${ownerId} AND p.owner_id = ${ownerId}
-        AND b.provider_id = ${providerId} AND b.client_phone = ${phone}`;
+        AND ${customerPhoneSql(sql`b.client_phone`)} = ${phone}
+      UNION ALL
+      SELECT b.id, b.client_name, NULL::text, b.date_str, NULL::int, 'quick_sale'::text,
+        b.total::text, b.provider_name, b.cancelled_at, (b.status = 'cancelled'),
+        false, NULL::text, false, false, NULL::text, NULL::text, NULL::timestamptz, false
+      FROM quick_sales b WHERE b.owner_id = ${ownerId} AND b.client_phone = ${phone}`;
   }
   return sql`SELECT b.id, b.client_name, b.contract_signer_id AS client_id_number,
     b.booking_date, b.duration_days, b.period, coalesce(b.total_price, 0)::text AS total_price,
@@ -79,7 +85,7 @@ function source(ownerId: string, phone: string, providerId?: number, withTiming 
     ${withTiming ? sql`(b.cancelled_at IS NULL AND stay.observed_at < stay.checkout_at)` : sql`false`} AS is_active
     FROM owner_bookings b
     ${withTiming ? crmPropertyCheckout(now) : sql`LEFT JOIN chalet_submissions s ON s.id = b.submission_id`}
-    WHERE b.owner_id = ${ownerId} AND b.client_phone = ${phone}`;
+    WHERE b.owner_id = ${ownerId} AND ${customerPhoneSql(sql`b.client_phone`)} = ${phone}`;
 }
 
 async function authorizedProvider(ownerId: string, providerId?: number) {
@@ -91,14 +97,17 @@ async function authorizedProvider(ownerId: string, providerId?: number) {
 export async function sendCrmProfile(req: Request, res: Response) {
   const parsed = GetOwnerCrmProfileQueryParams.safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: "بيانات العميل غير صالحة" });
-  const { phone, providerId } = parsed.data;
+  const { providerId } = parsed.data;
+  const phone = normalizeCustomerPhone(parsed.data.phone);
   const ownerId = req.user!.id;
   if (!await authorizedProvider(ownerId, providerId)) return res.status(404).json({ error: "الخدمة غير موجودة" });
   const result = await db.execute(sql`WITH records AS (${source(ownerId, phone, providerId)})
-    SELECT (SELECT client_name FROM records ORDER BY booking_date DESC, id DESC LIMIT 1) AS "clientName",
+    SELECT coalesce((SELECT name FROM owner_customers WHERE owner_id = ${ownerId} AND phone_normalized = ${phone} LIMIT 1),
+      (SELECT client_name FROM records ORDER BY booking_date DESC, id DESC LIMIT 1)) AS "clientName",
       ${phone}::text AS "clientPhone",
       (SELECT client_id_number FROM records WHERE nullif(client_id_number, '') IS NOT NULL ORDER BY booking_date DESC, id DESC LIMIT 1) AS "clientIdNumber",
-      count(*)::int AS "totalBookings",
+      count(*) FILTER (WHERE period IS DISTINCT FROM 'quick_sale')::int AS "totalBookings",
+      count(*) FILTER (WHERE period = 'quick_sale')::int AS "totalSales",
       coalesce(sum(CASE WHEN ${!!providerId} AND cancelled THEN 0 ELSE total_price::numeric END), 0)::float8 AS "totalRevenue",
       max(booking_date) AS "lastBookingDate",
       count(*) FILTER (WHERE contract_signed)::int AS "contractCount",
@@ -106,7 +115,7 @@ export async function sendCrmProfile(req: Request, res: Response) {
       coalesce((SELECT notes FROM customer_notes WHERE owner_id = ${ownerId} AND client_phone = ${phone} LIMIT 1), '') AS note
     FROM records`);
   const profile = result.rows[0];
-  if (!profile || !profile.totalBookings) return res.status(404).json({ error: "العميل غير موجود" });
+  if (!profile || (!profile.totalBookings && !profile.totalSales)) return res.status(404).json({ error: "العميل غير موجود" });
   res.setHeader("Cache-Control", "private, no-store");
   return res.json(profile);
 }
@@ -114,11 +123,12 @@ export async function sendCrmProfile(req: Request, res: Response) {
 export async function sendCrmHistory(req: Request, res: Response) {
   const parsed = crmHistoryQuery.safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: "فلاتر السجل غير صالحة" });
-  const { phone, providerId, tab = "bookings", status = "all", page = 1, from, to } = parsed.data;
+  const { providerId, tab = "bookings", status = "all", page = 1, from, to } = parsed.data;
+  const phone = normalizeCustomerPhone(parsed.data.phone);
   const ownerId = req.user!.id;
   if (!await authorizedProvider(ownerId, providerId)) return res.status(404).json({ error: "الخدمة غير موجودة" });
   const search = normalizeCrmSearch(parsed.data.search ?? "");
-  const order = tab === "bookings" ? sql`is_active DESC, booking_date DESC, id DESC` : sql`booking_date DESC, id DESC`;
+  const order = tab === "bookings" ? sql`is_active DESC, booking_date DESC, id DESC, period` : sql`booking_date DESC, id DESC, period`;
   const result = await db.execute(sql`WITH records AS (${source(ownerId, phone, providerId, true)}),
     filtered AS (SELECT * FROM records WHERE true
       ${tab === "contracts" ? sql`AND contract_signed` : tab === "insurance" ? sql`AND coalesce(insurance_fee::numeric, 0) > 0` : sql``}
@@ -131,6 +141,10 @@ export async function sendCrmHistory(req: Request, res: Response) {
     page_rows AS (SELECT * FROM filtered ORDER BY ${order} LIMIT ${CRM_PAGE_SIZE}
       OFFSET (SELECT (page - 1) * ${CRM_PAGE_SIZE} FROM bounds)),
     enriched AS (SELECT r.*,
+      CASE WHEN r.period = 'quick_sale' THEN (SELECT string_agg(item->>'name' || ' × ' || (item->>'quantity'), '، ')
+        FROM quick_sales qs, jsonb_array_elements(qs.items) item WHERE qs.id = r.id AND qs.owner_id = ${ownerId}) ELSE '' END AS item_summary,
+      CASE WHEN r.period = 'quick_sale' THEN (SELECT payment_method FROM quick_sales WHERE id = r.id AND owner_id = ${ownerId}) ELSE '' END AS payment_method,
+      CASE WHEN r.period = 'quick_sale' THEN (SELECT cancellation_reason FROM quick_sales WHERE id = r.id AND owner_id = ${ownerId}) ELSE NULL END AS cancellation_reason,
       ${providerId ? sql`r.original_date AS latest_original_date, r.rescheduled_at AS latest_rescheduled_at` :
         sql`log.old_date AS latest_original_date, log.rescheduled_at AS latest_rescheduled_at`}
       FROM page_rows r ${providerId ? sql`` : sql`LEFT JOIN LATERAL (
@@ -138,7 +152,8 @@ export async function sendCrmHistory(req: Request, res: Response) {
         WHERE owner_id = ${ownerId} AND booking_id = r.id ORDER BY rescheduled_at DESC, id DESC LIMIT 1) log ON true`})
     SELECT bounds.*, ${CRM_PAGE_SIZE}::int AS "pageSize",
       coalesce((SELECT jsonb_agg((to_jsonb(enriched) - 'client_name' - 'client_id_number' - 'latest_original_date' - 'latest_rescheduled_at') ||
-        jsonb_build_object('original_date', latest_original_date, 'rescheduled_at', latest_rescheduled_at)
+        jsonb_build_object('original_date', latest_original_date, 'rescheduled_at', latest_rescheduled_at,
+          'record_type', CASE WHEN period = 'quick_sale' THEN 'quick_sale' ELSE 'booking' END)
         ORDER BY ${order}) FROM enriched), '[]'::jsonb) AS items FROM bounds`);
   res.setHeader("Cache-Control", "private, no-store");
   return res.json(result.rows[0]);

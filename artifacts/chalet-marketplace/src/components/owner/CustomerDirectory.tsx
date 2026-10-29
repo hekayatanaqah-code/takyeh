@@ -93,12 +93,13 @@ export function CustomerDirectory({ scope, providerId, selected, onSelect, calen
               <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">
                 {toAr(customer.total_bookings)} {customer.source === "service" ? "موعد" : customer.total_bookings >= 3 && customer.total_bookings <= 10 ? "حجوزات" : "حجز"}
               </span>
+              {!!customer.total_sales && <span className="text-xs font-bold text-primary bg-primary/10 rounded-full px-2 py-0.5">{toAr(customer.total_sales)} بيع سريع</span>}
             </div>
           </div>
           <p dir="ltr" className="text-xs text-muted-foreground mt-0.5 text-right">{toAr(customer.client_phone)}</p>
           {customer.providers.length > 0 && <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5 truncate">{customer.providers.join("، ")}</p>}
           <div className="mt-1">
-            <p className="text-xs text-muted-foreground">{customer.source === "service" ? "آخر موعد:" : "آخر حجز:"}</p>
+            <p className="text-xs text-muted-foreground">آخر عملية:</p>
             <span className="text-xs leading-snug"><CustomerDate value={customer.last_booking_date} preference={calendar} /></span>
           </div>
         </button>)}

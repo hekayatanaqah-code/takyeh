@@ -15,6 +15,7 @@ export interface QuickSale {
   providerName: string;
   dateStr: string;
   clientName: string;
+  clientPhone?: string;
   items: QuickSaleLine[];
   total: number;
   paymentMethod: QuickSalePaymentMethod;

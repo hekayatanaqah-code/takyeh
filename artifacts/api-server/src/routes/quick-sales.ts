@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createHash } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { db, providerCatalogItemsTable, quickSalesSettingsTable, quickSalesTable, serviceProvidersTable } from "@workspace/db";
+import { db, ownerCustomersTable, providerCatalogItemsTable, quickSalesSettingsTable, quickSalesTable, serviceProvidersTable } from "@workspace/db";
 import { CancelQuickSaleBody, CancelQuickSaleParams, CreateQuickSaleResponse, ListQuickSalesQueryParams, ListQuickSalesResponse, UpdateQuickSalesSettingsBody } from "@workspace/api-zod";
 import { quickSaleInput, quickSaleTotalCents } from "../lib/quick-sales";
 import { ownerPlanAccess } from "../lib/subscription-access";
@@ -74,9 +74,22 @@ router.post("/quick-sales", async (req, res): Promise<void> => {
     const items = input.items.map(item => ({
       ...item, name: item.catalogItemId ? catalog.find(product => product.id === item.catalogItemId)!.name : item.name.trim(),
     }));
+    let clientName = input.clientName;
+    if (input.clientPhone) {
+      // Same unique owner/normalized-phone key as bookings; no name-only matching.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`customer:${ownerId}:${input.clientPhone}`}, 0))`);
+      const [customer] = await tx.select().from(ownerCustomersTable).where(and(
+        eq(ownerCustomersTable.ownerId, ownerId), eq(ownerCustomersTable.phoneNormalized, input.clientPhone),
+      ));
+      clientName = customer?.name || clientName;
+      if (!clientName) return { error: "اكتب اسم العميل الجديد", status: 400 };
+      await tx.insert(ownerCustomersTable).values({
+        ownerId, phoneNormalized: input.clientPhone, phone: input.clientPhone, name: clientName,
+      }).onConflictDoNothing({ target: [ownerCustomersTable.ownerId, ownerCustomersTable.phoneNormalized] });
+    }
     const [row] = await tx.insert(quickSalesTable).values({
       ownerId, providerId: provider.id, providerName: provider.businessName, dateStr: input.dateStr,
-      clientName: input.clientName, items, total: (quickSaleTotalCents(items) / 100).toFixed(2),
+      clientName, clientPhone: input.clientPhone, items, total: (quickSaleTotalCents(items) / 100).toFixed(2),
       paymentMethod: input.paymentMethod, notes: input.notes, idempotencyKey: input.idempotencyKey, requestHash: hash,
     }).returning();
     return { row };

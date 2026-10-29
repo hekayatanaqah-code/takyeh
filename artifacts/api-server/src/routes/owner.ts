@@ -60,7 +60,7 @@ import { randomBytes, createHash, randomInt } from "crypto";
 import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { sendOtpEmail, sendReportEmail } from "../lib/email";
-import { normalizeCustomerPhone } from "../lib/customerPhone";
+import { customerPhoneSql, normalizeCustomerPhone } from "../lib/customerPhone";
 import { checkPropertyIdentity } from "../lib/property-identity";
 import { hasPropertySocialConflict, socialAccountIdentity } from "../lib/property-social-account";
 import { normalizeSaudiMobile } from "../lib/passwordRecovery";
@@ -2004,9 +2004,9 @@ router.get(["/customers/lookup", "/bookings/lookup"], async (req, res) => {
         createdAt: ownerBookingsTable.createdAt,
       })
       .from(ownerBookingsTable)
-      .where(eq(ownerBookingsTable.ownerId, ownerId))
+      .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(customerPhoneSql(sql`${ownerBookingsTable.clientPhone}`), phoneNormalized)))
       .orderBy(desc(ownerBookingsTable.createdAt))
-      .limit(500),
+      .limit(1),
     db
       .select({
         clientName: serviceAppointmentsTable.clientName,
@@ -2017,9 +2017,9 @@ router.get(["/customers/lookup", "/bookings/lookup"], async (req, res) => {
         createdAt: serviceAppointmentsTable.createdAt,
       })
       .from(serviceAppointmentsTable)
-      .where(eq(serviceAppointmentsTable.ownerId, ownerId))
+      .where(and(eq(serviceAppointmentsTable.ownerId, ownerId), eq(customerPhoneSql(sql`${serviceAppointmentsTable.clientPhone}`), phoneNormalized)))
       .orderBy(desc(serviceAppointmentsTable.createdAt))
-      .limit(500),
+      .limit(1),
   ]);
   const historical = [...serviceHistory, ...propertyHistory]
     .filter((row) => normalizeCustomerPhone(row.clientPhone ?? "") === phoneNormalized)

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { after, before, it } from "node:test";
 import { eq, inArray } from "drizzle-orm";
-import { db, pool, ownerSubscriptionsTable, serviceProvidersTable, sessionsTable, quickSalesTable, quickSalesSettingsTable, providerCatalogItemsTable } from "@workspace/db";
+import { db, pool, ownerCustomersTable, ownerSubscriptionsTable, serviceProvidersTable, sessionsTable, quickSalesTable, quickSalesSettingsTable, providerCatalogItemsTable } from "@workspace/db";
 import app from "../app";
 import { createSession } from "../lib/auth";
 
@@ -42,6 +42,7 @@ before(async () => {
 });
 after(async () => {
   await db.delete(quickSalesTable).where(eq(quickSalesTable.ownerId, ownerId));
+  await db.delete(ownerCustomersTable).where(eq(ownerCustomersTable.ownerId, ownerId));
   await db.delete(quickSalesSettingsTable).where(eq(quickSalesSettingsTable.ownerId, ownerId));
   if (providerIds.length) await db.delete(serviceProvidersTable).where(inArray(serviceProvidersTable.id, providerIds));
   await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
@@ -70,6 +71,34 @@ it("records exact cents, protects idempotent retries and provider isolation", as
   assert.equal((await request(`?providerId=${providerIds[2]}`)).status, 404);
   assert.equal((await request(`?providerId=${providerIds[1]}`)).json.length, 0);
   assert.equal((await request(`?providerId=${providerIds[0]}`)).json.length, 1);
+});
+it("links quick sales to the normalized owner customer identity and customer history", async () => {
+  await request("/settings", "PATCH", { enabled: true });
+  const phone = `05${String(Math.floor(Math.random() * 100_000_000)).padStart(8, "0")}`;
+  const sale = payload();
+  sale.clientName = "عميل موحد";
+  (sale as any).clientPhone = `+966${phone.slice(1)}`;
+  const created = await request("", "POST", sale);
+  assert.equal(created.status, 201, JSON.stringify(created.json));
+  assert.equal(created.json.clientPhone, phone);
+  assert.equal(created.json.clientName, sale.clientName);
+  const customer = await fetch(`${base}/api/owner/customers/lookup?phone=${encodeURIComponent(phone)}`, {
+    headers: { authorization: `Bearer ${sid}` },
+  });
+  assert.equal((await customer.json() as any).clientName, sale.clientName);
+  const profile = await fetch(`${base}/api/owner/crm/profile?phone=${encodeURIComponent(phone)}&providerId=${providerIds[0]}`, {
+    headers: { authorization: `Bearer ${sid}` },
+  });
+  const profileJson = await profile.json() as any;
+  assert.equal(profileJson.totalSales, 1);
+  assert.equal(profileJson.totalBookings, 0);
+  const history = await fetch(`${base}/api/owner/crm/history?phone=${encodeURIComponent(phone)}&providerId=${providerIds[0]}`, {
+    headers: { authorization: `Bearer ${sid}` },
+  });
+  const historyJson = await history.json() as any;
+  assert.equal(historyJson.total, 1);
+  assert.equal(historyJson.items[0].record_type, "quick_sale");
+  assert.equal(historyJson.items[0].item_summary, "منتج اختباري × 3");
 });
 it("rejects invalid dates, blank names, fractional quantities, excess precision and other-provider products", async () => {
   for (const patch of [

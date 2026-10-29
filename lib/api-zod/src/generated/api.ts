@@ -45,6 +45,7 @@ export const ListQuickSalesResponseItem = zod.object({
   "providerName": zod.string(),
   "dateStr": zod.string(),
   "clientName": zod.string(),
+  "clientPhone": zod.string().optional(),
   "items": zod.array(zod.object({
   "catalogItemId": zod.number().int().min(1).optional(),
   "name": zod.string().min(1).max(listQuickSalesResponseItemsItemNameMax),
@@ -66,6 +67,8 @@ export const ListQuickSalesResponse = zod.array(ListQuickSalesResponseItem)
 export const createQuickSaleBodyDateStrRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const createQuickSaleBodyClientNameMax = 150;
 
+export const createQuickSaleBodyClientPhoneMax = 30;
+
 
 export const createQuickSaleBodyItemsItemNameMax = 150;
 
@@ -84,6 +87,7 @@ export const CreateQuickSaleBody = zod.object({
   "providerId": zod.number().int().min(1),
   "dateStr": zod.string().regex(createQuickSaleBodyDateStrRegExp),
   "clientName": zod.string().max(createQuickSaleBodyClientNameMax).optional(),
+  "clientPhone": zod.string().max(createQuickSaleBodyClientPhoneMax).optional(),
   "items": zod.array(zod.object({
   "catalogItemId": zod.number().int().min(1).optional(),
   "name": zod.string().min(1).max(createQuickSaleBodyItemsItemNameMax),
@@ -111,6 +115,7 @@ export const CreateQuickSaleResponse = zod.object({
   "providerName": zod.string(),
   "dateStr": zod.string(),
   "clientName": zod.string(),
+  "clientPhone": zod.string().optional(),
   "items": zod.array(zod.object({
   "catalogItemId": zod.number().int().min(1).optional(),
   "name": zod.string().min(1).max(createQuickSaleResponseItemsItemNameMax),
@@ -159,6 +164,7 @@ export const CancelQuickSaleResponse = zod.object({
   "providerName": zod.string(),
   "dateStr": zod.string(),
   "clientName": zod.string(),
+  "clientPhone": zod.string().optional(),
   "items": zod.array(zod.object({
   "catalogItemId": zod.number().int().min(1).optional(),
   "name": zod.string().min(1).max(cancelQuickSaleResponseItemsItemNameMax),
@@ -1392,6 +1398,7 @@ export const GetOwnerCrmCustomersResponse = zod.object({
   "client_name": zod.string(),
   "client_phone": zod.string(),
   "total_bookings": zod.number().int(),
+  "total_sales": zod.number().int().optional(),
   "total_revenue": zod.number(),
   "last_booking_date": zod.string(),
   "source": zod.enum(['chalet', 'service', 'both']),
@@ -1424,6 +1431,7 @@ export const GetOwnerCrmProfileResponse = zod.object({
   "clientPhone": zod.string(),
   "clientIdNumber": zod.string().nullable(),
   "totalBookings": zod.number().int(),
+  "totalSales": zod.number().int().optional(),
   "totalRevenue": zod.number(),
   "lastBookingDate": zod.string(),
   "contractCount": zod.number().int(),
@@ -1463,6 +1471,10 @@ export const GetOwnerCrmHistoryQueryParams = zod.object({
 export const GetOwnerCrmHistoryResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number().int(),
+  "record_type": zod.enum(['booking', 'quick_sale']).optional(),
+  "item_summary": zod.string().optional(),
+  "payment_method": zod.string().optional(),
+  "cancellation_reason": zod.string().nullish(),
   "booking_date": zod.string(),
   "duration_days": zod.number().int().nullable(),
   "period": zod.string().nullable(),

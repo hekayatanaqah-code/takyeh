@@ -13,6 +13,7 @@ export const quickSalesTable = pgTable("quick_sales", {
   providerName: text("provider_name").notNull(),
   dateStr: date("date_str", { mode: "string" }).notNull(),
   clientName: text("client_name").notNull().default(""),
+  clientPhone: text("client_phone").notNull().default(""),
   items: jsonb("items").$type<Array<{ catalogItemId?: number; name: string; quantity: number; unitPrice: number }>>().notNull(),
   total: numeric("total", { precision: 14, scale: 2 }).notNull(),
   paymentMethod: text("payment_method").$type<"cash" | "bank">().notNull(),
@@ -27,4 +28,5 @@ export const quickSalesTable = pgTable("quick_sales", {
   uniqueIndex("quick_sales_owner_request_idx").on(t.ownerId, t.idempotencyKey),
   index("quick_sales_owner_date_idx").on(t.ownerId, t.dateStr),
   index("quick_sales_provider_idx").on(t.providerId),
+  index("quick_sales_owner_phone_idx").on(t.ownerId, t.clientPhone),
 ]);

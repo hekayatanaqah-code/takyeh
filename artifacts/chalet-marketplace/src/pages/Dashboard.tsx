@@ -24520,6 +24520,7 @@ function CustomersTab({ calendarPreference = "hijri" }: { calendarPreference?: "
                 {/* ── Section A: Basic Info Stats ── */}
                 <div className="grid grid-cols-2 gap-3 mt-1">
                   {statCard("إجمالي الحجوزات", (() => { const n = profile.totalBookings; return `${toAr(n)} ${n >= 3 && n <= 10 ? "حجوزات" : "حجز"}`; })())}
+                  {serviceScope && statCard("عمليات البيع السريع", toAr(profile.totalSales ?? 0))}
                   {statCard("إجمالي الإيراد",  `${toAr(Math.round(profile.totalRevenue))} ر.س`)}
                 </div>
                 {/* ID number + last booking */}

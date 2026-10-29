@@ -5,9 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CrmHistoryRecordRecordType } from './crmHistoryRecordRecordType';
 
 export interface CrmHistoryRecord {
   id: number;
+  record_type?: CrmHistoryRecordRecordType;
+  item_summary?: string;
+  payment_method?: string;
+  /** @nullable */
+  cancellation_reason?: string | null;
   booking_date: string;
   /** @nullable */
   duration_days: number | null;

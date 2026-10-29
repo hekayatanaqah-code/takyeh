@@ -12,6 +12,7 @@ export interface CrmCustomerSummary {
   /** @nullable */
   clientIdNumber: string | null;
   totalBookings: number;
+  totalSales?: number;
   totalRevenue: number;
   lastBookingDate: string;
   contractCount: number;

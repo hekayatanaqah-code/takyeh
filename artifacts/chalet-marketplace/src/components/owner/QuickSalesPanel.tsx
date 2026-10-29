@@ -25,6 +25,7 @@ import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle, type RevenuePeri
 import { quickSalesHistoryMonths, reconcileQuickSalesHistoryPeriod, switchQuickSalesHistoryCalendar } from "@/lib/quickSalesHistoryPeriod";
 import { QuickSalesHistoryFilters } from "./QuickSalesHistoryFilters";
 import { qsErrText } from "./QuickSalesSettingsPanel";
+import { quickSaleNumericInput, quickSalePhone } from "@/lib/quickSaleNumbers";
 
 const MAX_TOTAL = 9_999_999_999.99;
 const PAY_LABEL = { cash: "نقدًا", bank: "تحويل بنكي" } as const;
@@ -46,7 +47,7 @@ function DualDate({ s }: { s: string }) {
 }
 
 type Line = { key: string; catalogItemId?: number; name: string; qty: string; price: string };
-const newLine = (): Line => ({ key: uuid(), name: "", qty: "1", price: "" });
+const newLine = (): Line => ({ key: uuid(), name: "", qty: "١", price: "" });
 
 /* ── Revenue summary (optional reuse) ─────────────────────────── */
 
@@ -93,6 +94,32 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
   /* form — local only, never reset by refetches */
   const [dateStr, setDateStr] = useState(today());
   const [clientName, setClientName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+  const [customerLookup, setCustomerLookup] = useState<"idle" | "loading" | "found" | "new" | "error">("idle");
+  const customerRequest = useRef(0);
+  const normalizedPhone = quickSalePhone(clientPhone);
+  useEffect(() => {
+    const request = ++customerRequest.current;
+    if (!/^05\d{8}$/.test(normalizedPhone)) { setCustomerLookup("idle"); return; }
+    const controller = new AbortController();
+    setCustomerLookup("loading");
+    const timer = setTimeout(async () => {
+      try {
+        const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+        const response = await fetch(`${base}/api/owner/customers/lookup?phone=${encodeURIComponent(normalizedPhone)}`, {
+          credentials: "include", signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("lookup");
+        const customer = await response.json();
+        if (request !== customerRequest.current) return;
+        if (customer?.clientName) { setClientName(customer.clientName); setCustomerLookup("found"); }
+        else setCustomerLookup("new");
+      } catch {
+        if (!controller.signal.aborted && request === customerRequest.current) setCustomerLookup("error");
+      }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [normalizedPhone, clientPhone]);
   const [pay, setPay] = useState<"cash" | "bank">("cash");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<Line[]>([newLine()]);
@@ -108,6 +135,9 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
   const submit = () => {
     if (!canCreate || create.isPending) return;
     setFormErr(null);
+    if (clientPhone && !/^05\d{8}$/.test(normalizedPhone)) return setFormErr("أدخل رقم جوال سعودي صحيحًا");
+    if (normalizedPhone && customerLookup === "loading") return setFormErr("انتظر اكتمال البحث عن العميل");
+    if (normalizedPhone && !clientName.trim()) return setFormErr("اكتب اسم العميل الجديد");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return setFormErr("اختر تاريخ البيع");
     for (const { l, q, p } of parsed) {
       if (l.name.trim().length < 1) return setFormErr("اكتب اسم كل بند");
@@ -121,6 +151,7 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
       providerId, dateStr, paymentMethod: pay,
       items: parsed.map(({ l, q, p }) => ({ ...(l.catalogItemId ? { catalogItemId: l.catalogItemId } : {}), name: l.name.trim(), quantity: q, unitPrice: r2(p) })),
       ...(clientName.trim() ? { clientName: clientName.trim() } : {}),
+      ...(normalizedPhone ? { clientPhone: normalizedPhone } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
     };
     const sig = JSON.stringify(body);
@@ -128,8 +159,11 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
     create.mutate({ data: { ...body, idempotencyKey: idem.current.key } }, {
       onSuccess: (sale) => {
         idem.current = null;
-        setLines([newLine()]); setClientName(""); setNotes(""); setConfirmed(false);
+        ++customerRequest.current;
+        setLines([newLine()]); setClientName(""); setClientPhone(""); setCustomerLookup("idle"); setNotes(""); setConfirmed(false);
         qc.invalidateQueries({ queryKey: getListQuickSalesQueryKey() });
+        qc.invalidateQueries({ queryKey: ["owner", "crm-customers"] });
+        qc.invalidateQueries({ queryKey: ["owner", "crm-history"] });
         toast({ title: "تم تسجيل البيعة", description: `${money(sale.total)} ريال · ${PAY_LABEL[sale.paymentMethod]}` });
       },
       onError: (e) => { setFormErr(qsErrText(e)); toast({ title: "لم تُسجَّل البيعة", description: "بياناتك محفوظة، يمكنك إعادة المحاولة بأمان.", variant: "destructive" }); },
@@ -161,6 +195,8 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
     cancel.mutate({ saleId: toCancel.id, data: { reason: reason.trim() } }, {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: getListQuickSalesQueryKey() });
+        qc.invalidateQueries({ queryKey: ["owner", "crm-customers"] });
+        qc.invalidateQueries({ queryKey: ["owner", "crm-history"] });
         setToCancel(null); setReason("");
         toast({ title: "تم إلغاء البيعة محاسبيًا", description: "استُبعدت من الإيرادات وبقيت في السجل." });
       },
@@ -203,8 +239,21 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
           <form dir="rtl" className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-4 text-right min-w-0" onSubmit={e => { e.preventDefault(); submit(); }} data-testid="form-quick-sale">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
               <div className="space-y-1.5 min-w-0">
-                <Label htmlFor="qs-client" className="block">العميل <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                <Input id="qs-client" className="h-10" value={clientName} maxLength={150} onChange={e => setClientName(e.target.value)} data-testid="input-quick-sale-client" />
+                <Label htmlFor="qs-phone" className="block">جوال العميل <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
+                <Input id="qs-phone" type="tel" inputMode="tel" dir="rtl" className="h-10 text-right" value={clientPhone} maxLength={16}
+                  placeholder="٠٥xxxxxxxx" onChange={e => {
+                    ++customerRequest.current;
+                    setClientPhone(quickSaleNumericInput(e.target.value)); setClientName(""); setCustomerLookup("idle");
+                  }} data-testid="input-quick-sale-phone" aria-describedby="qs-customer-status" />
+                <Label htmlFor="qs-client" className="block text-xs">اسم العميل</Label>
+                <Input id="qs-client" className="h-10" value={clientName} maxLength={150} readOnly={customerLookup === "found" || customerLookup === "loading"}
+                  onChange={e => setClientName(e.target.value)} data-testid="input-quick-sale-client" />
+                <p id="qs-customer-status" role="status" className="text-[11px] text-muted-foreground">
+                  {customerLookup === "loading" ? "جارٍ البحث عن العميل…" : customerLookup === "found" ? "عميل مسجّل — ستُضاف البيعة إلى ملفه الموحد" :
+                    customerLookup === "new" ? "عميل جديد — أدخل اسمه، وسيُحفظ عند تسجيل البيعة" :
+                    customerLookup === "error" ? "تعذر البحث؛ أعد إدخال الجوال للمحاولة. سيتحقق النظام من الهوية عند الحفظ." :
+                    "أدخل الجوال لاستدعاء العميل وربط البيعة بملفه"}
+                </p>
               </div>
               <div className="space-y-1.5 min-w-0">
                 <Label id="qs-pay-label" className="block">طريقة الاستلام</Label>
@@ -236,16 +285,16 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
                     return (
                       <div key={l.key} className="grid grid-cols-[12rem_minmax(8rem,1fr)_4.5rem_7rem_5.5rem] gap-2 items-center" data-testid={`row-line-${idx}`}>
                         <Select dir="rtl" value={l.catalogItemId ? String(l.catalogItemId) : ""} disabled={activeCatalog.length === 0}
-                          onValueChange={v => { const it = activeCatalog.find(i => String(i.id) === v); if (it) setLine(l.key, { catalogItemId: it.id, name: it.name, price: String(it.price) }); }}>
+                          onValueChange={v => { const it = activeCatalog.find(i => String(i.id) === v); if (it) setLine(l.key, { catalogItemId: it.id, name: it.name, price: quickSaleNumericInput(String(it.price), true) }); }}>
                           <SelectTrigger className="h-10 min-w-0 text-xs [&>span]:min-w-0 [&>span]:truncate" aria-label={`اختيار من القائمة للبند ${idx + 1}`} data-testid={idx === 0 ? "select-catalog-item" : `select-line-catalog-${idx}`}>
                             <Package className="w-3.5 h-3.5 ml-1 shrink-0" /><SelectValue placeholder={activeCatalog.length ? "اختر من قائمتك" : "لا توجد قائمة"} />
                           </SelectTrigger>
                           <SelectContent dir="rtl" align="start">{activeCatalog.map(i => <SelectItem key={i.id} value={String(i.id)}>{i.name} — {money(i.price)} ر.س</SelectItem>)}</SelectContent>
                         </Select>
                         <Input className="h-10 min-w-0" aria-label={`اسم البند ${idx + 1}`} placeholder="اسم البند" value={l.name} maxLength={150} onChange={e => setLine(l.key, { name: e.target.value, catalogItemId: undefined })} data-testid={`input-line-name-${idx}`} />
-                        <Input inputMode="numeric" aria-label={`الكمية للبند ${idx + 1}`} value={l.qty} onChange={e => setLine(l.key, { qty: e.target.value })} className="h-10 text-center tabular-nums" data-testid={`input-line-qty-${idx}`} />
+                        <Input inputMode="numeric" aria-label={`الكمية للبند ${idx + 1}`} value={l.qty} onChange={e => setLine(l.key, { qty: quickSaleNumericInput(e.target.value) })} className="h-10 text-center tabular-nums" data-testid={`input-line-qty-${idx}`} />
                         <div className="relative">
-                          <Input inputMode="decimal" aria-label={`سعر الوحدة للبند ${idx + 1}`} placeholder="0" value={l.price} onChange={e => setLine(l.key, { price: e.target.value })} className="h-10 pl-7 tabular-nums" data-testid={`input-line-price-${idx}`} />
+                          <Input inputMode="decimal" aria-label={`سعر الوحدة للبند ${idx + 1}`} placeholder="٠" value={l.price} onChange={e => setLine(l.key, { price: quickSaleNumericInput(e.target.value, true) })} className="h-10 pl-7 tabular-nums" data-testid={`input-line-price-${idx}`} />
                           <RiyalIcon className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
                         </div>
                         <div className="flex items-center gap-1">
@@ -324,6 +373,7 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="font-semibold tabular-nums text-xs text-muted-foreground">#{toAr(s.id)}</span>
                               <span className="font-semibold truncate">{s.clientName || "عميل مباشر"}</span>
+                               {s.clientPhone && <span dir="ltr" className="text-xs text-muted-foreground">{toAr(s.clientPhone)}</span>}
                               <span className="chip">{PAY_LABEL[s.paymentMethod]}</span>
                               {off && <span className="chip text-destructive" data-testid={`status-sale-cancelled-${s.id}`}>ملغاة محاسبيًا</span>}
                             </div>

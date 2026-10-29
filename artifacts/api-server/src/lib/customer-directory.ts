@@ -3,6 +3,7 @@ import { sql, type SQL } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { GetOwnerCrmCustomersQueryParams } from "@workspace/api-zod";
 import { crmPropertyCheckout, normalizeCrmSearch } from "./customer-history";
+import { customerPhoneSql } from "./customerPhone";
 
 export const CUSTOMER_DIRECTORY_PAGE_SIZE = 20;
 
@@ -35,7 +36,12 @@ export async function sendCrmCustomers(req: Request, res: Response) {
       (b.cancelled_at IS NULL AND b.status NOT IN ('cancelled', 'canceled', 'completed') AND b.date_str >= ${today}) AS is_active
     FROM service_appointments b JOIN service_providers p ON p.id = b.provider_id
     WHERE b.owner_id = ${ownerId} AND p.owner_id = ${ownerId}
-      ${providerId ? sql`AND b.provider_id = ${providerId}` : sql``}`);
+      `);
+  if (scope !== "chalet") sources.push(sql`
+    SELECT b.id, b.client_name, b.client_phone, b.date_str AS booking_date,
+      CASE WHEN b.status = 'cancelled' THEN 0 ELSE b.total END AS revenue,
+      'quick_sale'::text AS kind, b.provider_name AS provider_name, false AS is_active
+    FROM quick_sales b WHERE b.owner_id = ${ownerId} AND b.client_phone <> ''`);
   const search = normalizeCrmSearch(parsed.data.search ?? "");
   // Strip spacing/punctuation only for phone matching; names retain literal substring semantics.
   const phoneSearch = search.replace(/[\s()+.-]/g, "");
@@ -44,19 +50,24 @@ export async function sendCrmCustomers(req: Request, res: Response) {
     : sql`has_active DESC, last_booking_date DESC, customer_key`;
   const result = await db.execute(sql`
     WITH records AS (${sql.join(sources, sql` UNION ALL `)}),
-    identified AS (SELECT *, CASE WHEN trim(client_phone) <> '' THEN client_phone ELSE 'name:' || client_name END AS customer_key FROM records),
-    customers AS (SELECT customer_key,
+    normalized AS (SELECT id, client_name, ${customerPhoneSql(sql`client_phone`)} AS client_phone,
+      booking_date, revenue, kind, provider_name, is_active FROM records),
+    identified AS (SELECT *, CASE WHEN trim(client_phone) <> '' THEN client_phone ELSE 'name:' || client_name END AS customer_key FROM normalized),
+    aggregated AS (SELECT customer_key,
       (array_agg(client_name ORDER BY booking_date DESC, id DESC, kind))[1] AS client_name,
-      max(client_phone) AS client_phone, count(*)::int AS total_bookings,
+      max(client_phone) AS client_phone, count(*) FILTER (WHERE kind <> 'quick_sale')::int AS total_bookings,
+      count(*) FILTER (WHERE kind = 'quick_sale')::int AS total_sales,
       sum(revenue)::float8 AS total_revenue, max(booking_date) AS last_booking_date,
       bool_or(is_active) AS has_active,
-      CASE WHEN bool_or(kind = 'chalet') AND bool_or(kind = 'service') THEN 'both'
-        WHEN bool_or(kind = 'service') THEN 'service' ELSE 'chalet' END AS source,
+      CASE WHEN bool_or(kind = 'chalet') AND bool_or(kind <> 'chalet') THEN 'both'
+        WHEN bool_or(kind <> 'chalet') THEN 'service' ELSE 'chalet' END AS source,
       coalesce(array_agg(DISTINCT provider_name ORDER BY provider_name) FILTER (WHERE provider_name IS NOT NULL), ARRAY[]::text[]) AS providers
       FROM identified GROUP BY customer_key),
+    customers AS (SELECT a.*, coalesce(c.name, a.client_name) AS display_name FROM aggregated a
+      LEFT JOIN owner_customers c ON c.owner_id = ${ownerId} AND c.phone_normalized = a.client_phone),
     filtered AS (SELECT * FROM customers WHERE true
       ${source === "all" ? sql`` : sql`AND (source = ${source} OR source = 'both')`}
-      ${search ? sql`AND (position(lower(${search}) in lower(client_name)) > 0
+      ${search ? sql`AND (position(lower(${search}) in lower(display_name)) > 0
         ${phoneSearch ? sql`OR position(${phoneSearch} in translate(regexp_replace(client_phone, '[[:space:]()+.-]', '', 'g'),
           '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789')) > 0` : sql``})` : sql``}),
     totals AS (SELECT count(*)::int AS total,
@@ -66,7 +77,8 @@ export async function sendCrmCustomers(req: Request, res: Response) {
     page_rows AS (SELECT * FROM filtered ORDER BY ${order} LIMIT ${CUSTOMER_DIRECTORY_PAGE_SIZE}
       OFFSET (SELECT (page - 1) * ${CUSTOMER_DIRECTORY_PAGE_SIZE} FROM bounds))
     SELECT bounds.*, ${CUSTOMER_DIRECTORY_PAGE_SIZE}::int AS "pageSize",
-      coalesce((SELECT jsonb_agg(to_jsonb(page_rows) - 'customer_key' ORDER BY ${order}) FROM page_rows), '[]'::jsonb) AS items FROM bounds`);
+      coalesce((SELECT jsonb_agg((to_jsonb(page_rows) - 'customer_key' - 'display_name') ||
+        jsonb_build_object('client_name', display_name) ORDER BY ${order}) FROM page_rows), '[]'::jsonb) AS items FROM bounds`);
   res.setHeader("Cache-Control", "private, no-store");
   return res.json(result.rows[0]);
 }

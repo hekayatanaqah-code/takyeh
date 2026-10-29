@@ -2,12 +2,12 @@ import { hasServiceInsurance, type ServiceCapabilities } from "./serviceDashboar
 
 export type CustomerHistoryTab = "bookings" | "contracts" | "insurance";
 export function customerHistoryTabs(
-  profile: { totalBookings: number; contractCount: number; insuranceCount: number },
+  profile: { totalBookings: number; totalSales?: number; contractCount: number; insuranceCount: number },
   providerId?: number,
   capabilities?: ServiceCapabilities,
 ) {
   const tabs: { id: CustomerHistoryTab; label: string; count: number }[] = [
-    { id: "bookings", label: "سجل الحجوزات", count: profile.totalBookings },
+    { id: "bookings", label: providerId ? "الحجوزات والمبيعات" : "سجل الحجوزات", count: profile.totalBookings + (profile.totalSales ?? 0) },
   ];
   // A service must explicitly enable the feature; historical records alone do not enable it.
   if (!providerId || (profile.contractCount > 0 && capabilities?.requiresContract === true)) {

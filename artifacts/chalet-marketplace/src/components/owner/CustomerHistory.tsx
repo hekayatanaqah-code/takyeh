@@ -129,7 +129,7 @@ export function CustomerHistory({ profile, providerId, calendar, onCalendarChang
           : <div className="overflow-x-auto">
             <table className="w-full min-w-[580px] text-xs text-right" aria-label={tabs.find(item => item.id === tab)!.label}>
               <thead className="bg-muted/30 text-muted-foreground"><tr>
-                <th className="p-2 font-medium">رقم الحجز</th><th className="p-2 font-medium">التاريخ{tab === "bookings" ? " والمدة" : ""}</th>
+                <th className="p-2 font-medium">رقم العملية</th><th className="p-2 font-medium">التاريخ{tab === "bookings" ? " والمدة" : ""}</th>
                 {tab !== "insurance" && <th className="p-2 font-medium">{providerId ? "الخدمة" : "العقار"}</th>}
                 {tab === "bookings" && <th className="p-2 font-medium">الحالة</th>}
                 <th className="p-2 font-medium">{tab === "contracts" ? "العقد" : tab === "insurance" ? "مبلغ التأمين" : "الإجمالي"}</th>
@@ -138,15 +138,19 @@ export function CustomerHistory({ profile, providerId, calendar, onCalendarChang
               <tbody className="divide-y divide-border">
                 {data.items.map(row => {
                   const status = bookingStatus(row);
-                  return <tr key={row.id} data-testid={`customer-history-row-${row.id}`}
+                  return <tr key={`${row.record_type ?? "booking"}-${row.id}`} data-testid={`customer-history-row-${row.record_type ?? "booking"}-${row.id}`}
                     className={tab === "bookings" && row.is_active ? "bg-primary/[0.035]" : "hover:bg-muted/20"}>
                     <td className="p-2 align-top font-semibold text-primary">
                       <span dir="ltr">#{toAr(row.id)}</span>
+                      {tab === "bookings" && <span className="block mt-1 text-[10px]">{row.record_type === "quick_sale" ? "بيع سريع" : "حجز"}</span>}
                       {tab === "bookings" && row.is_active && <span className="flex items-center gap-1 mt-1 text-[10px]"><Pin className="w-3 h-3" />مثبت</span>}
                     </td>
                     <td className="p-2 align-top"><CustomerDate value={row.booking_date} preference={calendar} />
                       {tab === "bookings" && <>
-                        <p className="text-muted-foreground mt-1">{row.duration_days ? `${toAr(row.duration_days)} يوم · ` : ""}{PERIODS[row.period ?? ""] ?? row.period ?? ""}</p>
+                        <p className="text-muted-foreground mt-1">{row.record_type === "quick_sale" ? toAr(row.item_summary ?? "") :
+                          `${row.duration_days ? `${toAr(row.duration_days)} يوم · ` : ""}${PERIODS[row.period ?? ""] ?? row.period ?? ""}`}</p>
+                        {row.record_type === "quick_sale" && <p className="text-muted-foreground">{row.payment_method === "cash" ? "نقدًا" : "تحويل بنكي"}</p>}
+                        {row.cancellation_reason && <p className="text-red-700">{row.cancellation_reason}</p>}
                         {row.cancelled_at && <div className="mt-1"><p className="text-red-700">تم الإلغاء:</p><CustomerDate value={timestampDay(row.cancelled_at)} preference={calendar} /></div>}
                         {row.original_date && <div className="mt-1"><p className="text-blue-700">الموعد السابق:</p><CustomerDate value={row.original_date.slice(0, 10)} preference={calendar} /></div>}
                         {row.rescheduled_at && <div className="mt-1"><p className="text-blue-700">تاريخ التعديل:</p><CustomerDate value={timestampDay(row.rescheduled_at)} preference={calendar} /></div>}
@@ -157,7 +161,7 @@ export function CustomerHistory({ profile, providerId, calendar, onCalendarChang
                     <td className="p-2 align-top whitespace-nowrap">
                       {tab === "contracts" ? <a href={`${BASE}/${providerId ? "service-contract" : "contract"}/${row.id}`} target="_blank" rel="noopener noreferrer"
                         className="inline-flex border border-primary/30 rounded-lg px-2.5 py-1 text-primary hover:bg-primary/10">عرض العقد</a>
-                        : <span className="font-semibold">{toAr(Math.round(Number(tab === "insurance" ? row.insurance_fee : row.total_price)))} ⃁</span>}
+                        : <span className="font-semibold">{toAr(Number(tab === "insurance" ? row.insurance_fee : row.total_price).toLocaleString("en-US", { maximumFractionDigits: 2 }))} ⃁</span>}
                     </td>
                     {tab === "insurance" && <td className="p-2 align-top">{insuranceStatus(row)}</td>}
                   </tr>;

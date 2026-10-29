@@ -1,8 +1,11 @@
 import { CreateQuickSaleBody } from "@workspace/api-zod";
 import { z } from "zod";
+import { normalizeCustomerPhone } from "./customerPhone";
 
 export const quickSaleInput = CreateQuickSaleBody.extend({
   clientName: z.string().trim().max(150).default(""),
+  clientPhone: z.string().max(30).default("").transform(normalizeCustomerPhone)
+    .refine(value => value === "" || /^05\d{8}$/.test(value), "رقم الجوال غير صالح"),
   notes: z.string().trim().max(1000).default(""),
   dateStr: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
     const date = new Date(`${value}T12:00:00Z`);

@@ -44,6 +44,8 @@ export interface CreateQuickSale {
   dateStr: string;
   /** @maxLength 150 */
   clientName?: string;
+  /** @maxLength 30 */
+  clientPhone?: string;
   /**
      * @minItems 1
      * @maxItems 50
@@ -77,6 +79,7 @@ export interface QuickSale {
   providerName: string;
   dateStr: string;
   clientName: string;
+  clientPhone?: string;
   items: QuickSaleLine[];
   total: number;
   paymentMethod: QuickSalePaymentMethod;
@@ -669,6 +672,7 @@ export interface CrmDirectoryCustomer {
   client_name: string;
   client_phone: string;
   total_bookings: number;
+  total_sales?: number;
   total_revenue: number;
   last_booking_date: string;
   source: CrmDirectoryCustomerSource;
@@ -691,6 +695,7 @@ export interface CrmCustomerSummary {
   /** @nullable */
   clientIdNumber: string | null;
   totalBookings: number;
+  totalSales?: number;
   totalRevenue: number;
   lastBookingDate: string;
   contractCount: number;
@@ -698,8 +703,21 @@ export interface CrmCustomerSummary {
   note: string;
 }
 
+export type CrmHistoryRecordRecordType = typeof CrmHistoryRecordRecordType[keyof typeof CrmHistoryRecordRecordType];
+
+
+export const CrmHistoryRecordRecordType = {
+  booking: 'booking',
+  quick_sale: 'quick_sale',
+} as const;
+
 export interface CrmHistoryRecord {
   id: number;
+  record_type?: CrmHistoryRecordRecordType;
+  item_summary?: string;
+  payment_method?: string;
+  /** @nullable */
+  cancellation_reason?: string | null;
   booking_date: string;
   /** @nullable */
   duration_days: number | null;

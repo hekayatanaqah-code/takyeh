@@ -11,6 +11,7 @@ export interface CrmDirectoryCustomer {
   client_name: string;
   client_phone: string;
   total_bookings: number;
+  total_sales?: number;
   total_revenue: number;
   last_booking_date: string;
   source: CrmDirectoryCustomerSource;
