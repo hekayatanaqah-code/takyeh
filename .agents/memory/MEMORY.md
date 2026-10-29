@@ -83,3 +83,4 @@
 - [Review objections and unified dates](review-objections-policy.md) — owner objections cover properties and services; Hijri is authoritative, Gregorian secondary, without rewriting history.
 - [Service booking cards](service-booking-cards.md) — match property cards without property data; additional payments must preserve existing collection and custody classifications.
 - [Service quick sales](service-quick-sales-boundary.md) — merchant-only optional account feature; separate from bookings, with unified revenue and no implied electronic payment.
+- [General activity expenses](general-activity-expenses.md) — no mandatory second selection; automatically link a lone activity even when the dashboard scope remains all.

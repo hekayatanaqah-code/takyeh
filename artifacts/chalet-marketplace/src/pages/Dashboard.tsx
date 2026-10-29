@@ -32,6 +32,7 @@ import type { PropertyPriceQuote } from "@workspace/api-client-react";
 import { ReceivablesMonthSelect } from "@/components/owner/ReceivablesMonthSelect";
 import { BankLedgerSummary } from "@/components/owner/BankLedgerSummary";
 import { isExpenseInScope } from "@/lib/expenseScope";
+import { defaultExpenseActivity, expenseTarget } from "@/lib/expenseTarget";
 import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit, type LedgerExpense, type LedgerPayment, type LedgerServiceAppointment } from "@/lib/bankLedger";
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
@@ -201,7 +202,7 @@ const ServiceErpCtx = createContext<{ providerId: number | null }>({ providerId:
 function useServiceErp() { return useContext(ServiceErpCtx); }
 
 type FinanceUnit = DashboardActivity;
-const AdminFinanceCtx = createContext<{ unit: FinanceUnit; selectUnit?: (unit: FinanceUnit) => void }>({ unit: { type: "all" } });
+const AdminFinanceCtx = createContext<{ unit: FinanceUnit; selectUnit?: (unit: FinanceUnit) => void; expenseActivities?: FinanceUnit[] }>({ unit: { type: "all" } });
 function useAdminFinance() { return useContext(AdminFinanceCtx); }
 
 const statusConfig = {
@@ -16445,7 +16446,12 @@ function TransactionHistoryTab() {
 }
 
 export function ExpensesTab() {
-  const { unit } = useAdminFinance();
+  const { unit, expenseActivities = [] } = useAdminFinance();
+  const [expenseActivityKey, setExpenseActivityKey] = useState("default");
+  const defaultActivity = defaultExpenseActivity(unit, expenseActivities);
+  const expenseActivity = unit.type === "all" && expenseActivityKey !== "default"
+    ? expenseActivities.find(activity => activityKey(activity) === expenseActivityKey)
+    : defaultActivity;
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   const qc = useQueryClient();
   const { data: mySubmissions = [] } = useQuery<any[]>({
@@ -16460,7 +16466,7 @@ export function ExpensesTab() {
   const initialExpenseMonth = getCurrentFinanceMonth("hijri");
   const [expYear, setExpYear] = useState<string>(() => initialExpenseMonth.split("-")[0]);
   const [expMonth, setExpMonth] = useState<string>(() => initialExpenseMonth);
-  const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "", submissionId: "" });
+  const [form, setForm] = useState({ categoryId: "", dateStr: new Date().toISOString().slice(0, 10), amount: "", notes: "", customCategory: "" });
   const [saveAsCategory, setSaveAsCategory] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -16572,6 +16578,9 @@ export function ExpensesTab() {
       setForm((f) => ({ ...f, amount: "", notes: "", customCategory: "" }));
       setReceiptUrl(null);
     },
+    onError: (error: Error) => {
+      toast({ title: "تعذر تسجيل المصروف", description: error.message, variant: "destructive" });
+    },
   });
 
   const deleteMutation = useMutation({
@@ -16598,6 +16607,14 @@ export function ExpensesTab() {
     if (isReadOnly) { onBlockedEdit(); return; }
     const amt = parseFloat(form.amount);
     if (!amt || isNaN(amt)) return;
+    let target: ReturnType<typeof expenseTarget>;
+    try {
+      if (!expenseActivity) throw new Error("النشاط المختار لم يعد متاحًا. اختر نشاطًا آخر أو المصروف العام.");
+      target = expenseTarget(expenseActivity);
+    } catch (error) {
+      toast({ title: "تعذر تسجيل المصروف", description: (error as Error).message, variant: "destructive" });
+      return;
+    }
     if (isOtherSelected && !form.customCategory.trim()) return;
     if (isOtherSelected && saveAsCategory && form.customCategory.trim()) {
       try {
@@ -16615,10 +16632,7 @@ export function ExpensesTab() {
       amount: amt,
       notes: form.notes || undefined,
       receiptUrl: receiptUrl || undefined,
-      submissionId: unit.type === "chalet"
-        ? (unit as any).submissionId
-        : (unit.type !== "service" && form.submissionId ? Number(form.submissionId) : undefined),
-      providerId: unitProviderId ?? undefined,
+      ...target,
     });
     setSaveAsCategory(false);
   }
@@ -16652,14 +16666,32 @@ export function ExpensesTab() {
   return (
     <div className="expenses-screen space-y-5">
       <SectionGuideButton sectionKey="expenses" />
-      {/* Quick Entry Form — only for individual unit, not master view */}
-      {unit.type !== "all" && (
+      {/* General entry is allowed; a selected or sole activity is linked automatically. */}
       <div className="bg-card border border-border rounded-2xl p-5">
         <h2 className="text-base font-bold text-foreground mb-4 flex items-center gap-2">
           <Receipt className="w-4 h-4 text-primary" />
-          {unit.type === "chalet" ? `تسجيل مصروف: ${(unit as any).name}` : `تسجيل مصروف: ${(unit as any).name}`}
+          {defaultActivity.type === "all" ? "تسجيل مصروف عام" : `تسجيل مصروف: ${defaultActivity.name}`}
         </h2>
         <form onSubmit={handleSubmit} className="expense-entry-form space-y-3">
+          {defaultActivity.type === "all" ? (
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground font-medium block">ربط المصروف بعقار أو خدمة (اختياري)</label>
+              <Select value={expenseActivityKey} onValueChange={setExpenseActivityKey}>
+                <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">مصروف عام — دون تخصيص</SelectItem>
+                  {expenseActivities.map(activity => activity.type !== "all" && (
+                    <SelectItem key={activityKey(activity)} value={activityKey(activity)}>
+                      {activity.type === "service" ? "خدمة" : "عقار"} — {activity.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">يمكنك التسجيل مباشرة دون اختيار. المصروف العام يظهر في إجمالي جميع الأنشطة ولا يُنسب لخدمة محددة.</p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">سيُسجّل المصروف تلقائيًا على نشاط «{defaultActivity.name}» دون الحاجة لاختيار إضافي.</p>
+          )}
           {/* Row 1: 3-column grid — Category + Amount + Date */}
           <div className="grid grid-cols-3 gap-3">
             {/* Category */}
@@ -16792,18 +16824,6 @@ export function ExpensesTab() {
           </div>
         </form>
       </div>
-      )}
-
-      {/* Master view notice */}
-      {unit.type === "all" && (
-        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-2xl p-4 flex items-center gap-3">
-          <Receipt className="w-5 h-5 text-amber-500 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">لتسجيل مصروف جديد</p>
-            <p className="text-xs text-muted-foreground">اختر عقاراً أو خدمةً محددة من القائمة لإضافة مصروف مرتبط بها</p>
-          </div>
-        </div>
-      )}
 
       {/* ── Personal Withdrawals Quick Button ── */}
       {unit.type !== "all" && (
@@ -17013,7 +17033,7 @@ export function ExpensesTab() {
               <thead>
                 <tr className="bg-muted/60 border-b border-border/40">
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">التاريخ</th>
-                  {expShowProp && <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">العقار</th>}
+                  {expShowProp && <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">العقار / النشاط</th>}
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الفئة</th>
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">الملاحظات / البيان</th>
                   <th className="text-right text-[10px] font-semibold text-muted-foreground px-3 py-2">المبلغ</th>
@@ -17028,9 +17048,12 @@ export function ExpensesTab() {
                   const displayDate = expCalType === "hijri"
                     ? formatDualDate(exp.dateStr).hijri.replace(/\s*هـ\s*$/, "") + " هـ"
                     : formatDualDate(exp.dateStr).gregorian;
+                  const linkedService = expenseActivities.find(activity => activity.type === "service" && activity.id === exp.providerId);
                   const propName = exp.submissionId
                     ? ((mySubmissions as any[]).find((s) => s.id === exp.submissionId) as any)?.nameAr ?? "—"
-                    : "—";
+                    : exp.providerId
+                      ? linkedService?.type === "service" ? linkedService.name : "خدمة"
+                      : "مصروف عام";
                   return (
                     <tr
                       key={exp.id}
@@ -26700,7 +26723,10 @@ export default function Dashboard() {
               )}
 
               {/* Tab content */}
-              <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit, selectUnit: changeDashboardActivity }}>
+              <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit, selectUnit: changeDashboardActivity, expenseActivities: [
+                ...ownerChalets.map((property: any): FinanceUnit => ({ type: "chalet", id: property.id, submissionId: property.submissionId, name: property.nameAr || "عقار" })),
+                ...myApprovedProviders.map((provider): FinanceUnit => ({ type: "service", id: provider.id, name: provider.businessName })),
+              ] }}>
               <div className="min-h-[320px]" key={activityKey(selectedFinanceUnit)}>
                 {adminFinanceTab === "revenue"       && <RevenueTab />}
                 {adminFinanceTab === "ledger"        && <BankLedgerTab />}
