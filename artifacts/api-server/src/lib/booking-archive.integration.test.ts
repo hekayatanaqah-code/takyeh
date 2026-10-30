@@ -76,6 +76,29 @@ after(async () => {
 });
 
 describe("owner booking archive", () => {
+  it("matches active-list whole-day boundaries for yesterday, today and multi-day stays in page and export", async () => {
+    const marker = `calendar-boundary-${randomUUID()}`;
+    const saudiDay = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const day = (offset: number) => new Date(Date.parse(`${saudiDay}T00:00:00Z`) + offset * 86400000).toISOString().slice(0, 10);
+    const rows = await db.insert(ownerBookingsTable).values([
+      { ownerId, clientName: marker, bookingDate: day(-1), durationDays: 1 },
+      { ownerId, clientName: marker, bookingDate: day(-1), durationDays: 2 },
+      { ownerId, clientName: marker, bookingDate: day(0), durationDays: 1 },
+      { ownerId, clientName: marker, bookingDate: day(-2), durationDays: 2 },
+    ]).returning({ id: ownerBookingsTable.id });
+    try {
+      const expected = [rows[0].id, rows[3].id].sort((a, b) => a - b);
+      for (const suffix of ["", "&export=1"]) {
+        const result = await request(`tab=completed&search=${encodeURIComponent(marker)}${suffix}`);
+        assert.equal(result.status, 200);
+        assert.equal(result.body.total, 2);
+        assert.deepEqual(result.body.bookings.map((row: { id: number }) => row.id).sort((a: number, b: number) => a - b), expected);
+      }
+    } finally {
+      await db.delete(ownerBookingsTable).where(inArray(ownerBookingsTable.id, rows.map(row => row.id)));
+    }
+  });
+
   it("returns ten records with stable, disjoint numeric pages and clamps deleted/out-of-range pages", async () => {
     const first = await request("tab=cancelled&page=1");
     const second = await request("tab=cancelled&page=2");

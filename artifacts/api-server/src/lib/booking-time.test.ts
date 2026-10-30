@@ -1,6 +1,41 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { bookingCheckoutAt, isStayComplete, timeMinutes } from "@workspace/booking-time";
+import { bookingCheckoutAt, isStayComplete, timeMinutes, bookingCalendarEndAt, isBookingCalendarComplete } from "@workspace/booking-time";
+
+test("active list archives only after the final Saudi calendar day ends", () => {
+  const booking = { bookingDate: "2026-10-30", durationDays: 1, period: "morning" };
+  const end = Date.parse("2026-10-31T00:00:00+03:00");
+  assert.equal(bookingCalendarEndAt(booking), end);
+  assert.equal(isBookingCalendarComplete(booking, end - 1), false);
+  assert.equal(isBookingCalendarComplete(booking, end), true);
+  // A morning departure must not remove today's booking from the list early.
+  const afternoon = Date.parse("2026-10-30T17:00:00+03:00");
+  assert.equal(isStayComplete(booking, { morningCheckIn: "٦ ص", morningCheckOut: "٤ م" }, afternoon), true);
+  assert.equal(isBookingCalendarComplete(booking, afternoon), false);
+  // Conversely, yesterday's overnight stay leaves the list even before its settlement time.
+  const afterMidnight = Date.parse("2026-10-31T00:30:00+03:00");
+  const evening = { ...booking, period: "evening" };
+  assert.equal(isStayComplete(evening, { eveningCheckIn: "٦ م", eveningCheckOut: "٢ ص" }, afterMidnight), false);
+  assert.equal(isBookingCalendarComplete(evening, afterMidnight), true);
+});
+
+test("calendar completion respects multiple days, leap dates, month/year rollover and invalid dates", () => {
+  for (const [bookingDate, durationDays, expectedEnd] of [
+    ["2026-10-30", 3, "2026-11-02"],
+    ["2026-12-31", 2, "2027-01-02"],
+    ["2024-02-28", 2, "2024-03-01"],
+  ] as const) {
+    const booking = { bookingDate, durationDays };
+    const end = Date.parse(`${expectedEnd}T00:00:00+03:00`);
+    assert.equal(bookingCalendarEndAt(booking), end);
+    assert.equal(isBookingCalendarComplete(booking, end - 1), false);
+    assert.equal(isBookingCalendarComplete(booking, end), true);
+  }
+  for (const bookingDate of ["invalid", "2026-02-30", ""]) {
+    assert.equal(isBookingCalendarComplete({ bookingDate }), false);
+  }
+  assert.equal(bookingCalendarEndAt({ bookingDate: "2026-10-30" }), bookingCalendarEndAt({ bookingDate: "2026-10-30", durationDays: 1 }));
+});
 
 test("stored Arabic, Persian, 12-hour and 24-hour times", () => {
   assert.equal(timeMinutes("٦ ص"), 360);

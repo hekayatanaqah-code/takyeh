@@ -3,11 +3,17 @@ name: Property stay completion
 description: Owner-requested timing boundaries for property insurance, booking-linked reviews and completed-booking archives.
 ---
 
-Property bookings remain active until the actual departure time for their booked period and duration, including overnight stays. Insurance receipt may be recorded before arrival, but refunds and damage deductions must wait until check-out. Booking-linked review invitations must not be sent, opened or submitted before completion; old links must recheck a rescheduled booking.
+Property insurance settlement and booking-linked reviews depend on the actual departure time for the booked period and duration, including overnight stays. Insurance receipt may be recorded before arrival, but refunds and damage deductions must wait until check-out. Booking-linked review invitations must not be sent, opened or submitted before completion; old links must recheck a rescheduled booking.
 
-**Why:** The user explicitly requested these financial and review timing restrictions and automatic separation of completed bookings from the main list.
+**Why:** The user explicitly requested these financial and review timing restrictions.
 
-**How to apply:** Use Saudi time regardless of the server or visitor timezone. Completion must mean the same thing for insurance, reviews and archiving, and restrictions must be enforced by the server as well as the interface. Archiving is a display classification, never deletion; retain insurance and review actions in the completed archive.
+**How to apply:** Use Saudi time regardless of the server or visitor timezone. Insurance and review restrictions must be enforced by the server as well as the interface. Retain insurance and review actions in the completed archive; archiving does not waive the actual-departure restrictions.
+
+The active booking list and completed archive use the end of the last occupied Saudi calendar day, independently of scheduled departure hours. Count the start date as the first occupied day; retain a multi-day booking through its last day in full and archive it only at the following midnight.
+
+**Why:** The user's later clarification explicitly requires yesterday's single-day bookings to leave today's active list and multi-day bookings to remain until their final day has fully elapsed. This supersedes the earlier shared list/archive/check-out boundary.
+
+**How to apply:** Use the same whole-day rule on the list, archive API and exports, with automatic day rollover. Archiving is classification only, never deletion, and must not alter the separate insurance/review timing rules.
 
 If no usable departure schedule exists, use the end of the last occupied Saudi calendar day rather than midnight at the start of that day. Honor existing general arrival/departure settings when period-specific settings are absent.
 

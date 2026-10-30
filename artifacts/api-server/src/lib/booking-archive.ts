@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
-import { and, count, desc, eq, getTableColumns, gte, inArray, isNotNull, isNull, lte, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, count, desc, getTableColumns, gte, inArray, isNotNull, isNull, lte, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { z } from "zod";
-import { db, chaletsTable, chaletSubmissionsTable, ownerBookingsTable, ownerRescheduleLogsTable } from "@workspace/db";
+import { db, ownerBookingsTable, ownerRescheduleLogsTable } from "@workspace/db";
 import { GetOwnerBookingArchiveQueryParams } from "@workspace/api-zod";
-import { isStayComplete } from "@workspace/booking-time";
+import { isBookingCalendarComplete } from "@workspace/booking-time";
 
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
   .refine(value => {
@@ -50,21 +50,6 @@ function pageFor(requested: number, total: number): number {
   return Math.min(requested, Math.max(1, Math.ceil(total / ARCHIVE_PAGE_SIZE)));
 }
 
-const liveTimes = {
-  id: chaletsTable.id,
-  checkInTime: chaletsTable.checkInTime, checkOutTime: chaletsTable.checkOutTime,
-  morningCheckIn: chaletsTable.morningCheckIn, morningCheckOut: chaletsTable.morningCheckOut,
-  eveningCheckIn: chaletsTable.eveningCheckIn, eveningCheckOut: chaletsTable.eveningCheckOut,
-  fullDayCheckIn: chaletsTable.fullDayCheckIn, fullDayCheckOut: chaletsTable.fullDayCheckOut,
-};
-const draftTimes = {
-  id: chaletSubmissionsTable.id,
-  checkInTime: chaletSubmissionsTable.checkInTime, checkOutTime: chaletSubmissionsTable.checkOutTime,
-  morningCheckIn: chaletSubmissionsTable.morningCheckIn, morningCheckOut: chaletSubmissionsTable.morningCheckOut,
-  eveningCheckIn: chaletSubmissionsTable.eveningCheckIn, eveningCheckOut: chaletSubmissionsTable.eveningCheckOut,
-  fullDayCheckIn: chaletSubmissionsTable.fullDayCheckIn, fullDayCheckOut: chaletSubmissionsTable.fullDayCheckOut,
-};
-
 /** Mounted after owner authentication; the caller supplies the session's resolved owner keys. */
 export async function sendBookingArchive(req: Request, res: Response, ownerIds: string[]) {
   const parsed = archiveQuerySchema.safeParse(req.query);
@@ -101,17 +86,13 @@ export async function sendBookingArchive(req: Request, res: Response, ownerIds: 
   let completeIds: number[] | undefined;
   if (query.tab === "completed") {
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    // Classify only thin date/time records, not every archived booking's large contract/media fields.
-    // The exact shared JS completion rule is retained for Arabic legacy and overnight schedules.
+    // List/archive classification uses the full final occupied date, independent of check-out schedules.
     const candidates = await db.select({
-      id: t.id, bookingDate: t.bookingDate, durationDays: t.durationDays, period: t.period,
-      live: liveTimes, draft: draftTimes,
+      id: t.id, bookingDate: t.bookingDate, durationDays: t.durationDays,
     }).from(t)
-      .leftJoin(chaletsTable, eq(chaletsTable.submissionId, t.submissionId))
-      .leftJoin(chaletSubmissionsTable, eq(chaletSubmissionsTable.id, t.submissionId))
       .where(and(scope, dateAndSearch, lte(t.bookingDate, today)));
     const now = Date.now();
-    completeIds = candidates.filter(row => isStayComplete(row, row.live ?? row.draft, now)).map(row => row.id);
+    completeIds = candidates.filter(row => isBookingCalendarComplete(row, now)).map(row => row.id);
   }
   const where = and(scope, dateAndSearch, completeIds ? inArray(t.id, completeIds) : undefined);
   const [[totals], yearRows] = await Promise.all([

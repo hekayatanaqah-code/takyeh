@@ -13,7 +13,7 @@ import { motion } from "framer-motion";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { useAuth } from "@workspace/replit-auth-web";
-import { isStayComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
+import { isStayComplete, isBookingCalendarComplete, REVIEW_NOT_READY_MESSAGE, INSURANCE_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type OwnerWhatsAppSettingsInput, type ServiceAppointmentRecord } from "@workspace/api-client-react";
 import { ServiceFinancialReportPanels, type ServiceReportDetailTable } from "@/components/owner/ServiceFinancialReportPanels";
 import { buildServiceFinancialReport, serviceExpensesForPeriod, serviceReportRows, serviceReportSourceLabels } from "@/lib/serviceFinancialReport";
@@ -4587,8 +4587,14 @@ function BookingCalendarTab({
   useEffect(() => {
     const tick = () => setStayClock(Date.now());
     const timer = window.setInterval(tick, 30_000);
+    let midnightTimer: ReturnType<typeof setTimeout>;
+    const scheduleMidnight = () => {
+      const nextMidnight = 86400000 - ((Date.now() + 3 * 60 * 60 * 1000) % 86400000);
+      midnightTimer = setTimeout(() => { tick(); scheduleMidnight(); }, nextMidnight);
+    };
+    scheduleMidnight();
     window.addEventListener("focus", tick);
-    return () => { window.clearInterval(timer); window.removeEventListener("focus", tick); };
+    return () => { window.clearInterval(timer); clearTimeout(midnightTimer); window.removeEventListener("focus", tick); };
   }, []);
   const bookingIsComplete = (booking: OwnerBooking) => isStayComplete(
     booking, ownerChalets.find((chalet: any) => chalet.submissionId === booking.submissionId), stayClock,
@@ -5076,7 +5082,7 @@ function BookingCalendarTab({
   };
   const archiveQuery = useGetOwnerBookingArchive(archiveParams, {
     query: {
-      queryKey: ["owner", "bookings", "archive", archiveParams],
+      queryKey: ["owner", "bookings", "archive", archiveParams, new Date(stayClock + 3 * 60 * 60 * 1000).toISOString().slice(0, 10)],
       enabled: showArchive && !archiveInvalid,
       refetchInterval: 30_000,
       staleTime: 0,
@@ -5270,8 +5276,8 @@ function BookingCalendarTab({
   const filteredBookings = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return bookings.filter((b) => {
-      // Exclude past (completed) bookings — they move to archive "المكتملة" tab
-      if (bookingIsComplete(b)) return false;
+      // The active list retains every occupied date in full; settlement still uses actual check-out.
+      if (b.cancelledAt || isBookingCalendarComplete(b, stayClock)) return false;
 
       if (filterFrom && b.bookingDate < filterFrom) return false;
       if (filterTo && b.bookingDate > filterTo) return false;

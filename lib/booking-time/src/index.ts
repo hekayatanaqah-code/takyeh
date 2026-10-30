@@ -53,3 +53,19 @@ export function bookingCheckoutAt(booking: StayBooking, times?: StayTimes | null
 export function isStayComplete(booking: StayBooking, times?: StayTimes | null, now = Date.now()): boolean {
   return now >= bookingCheckoutAt(booking, times);
 }
+
+/** List/archive classification uses whole occupied Saudi dates, not check-out hours.
+ * A duration of N occupies the start date through start + N - 1, inclusive. */
+export function bookingCalendarEndAt(booking: StayBooking): number {
+  const date = booking.bookingDate?.slice(0, 10);
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return Number.POSITIVE_INFINITY;
+  const utcDay = Date.parse(`${date}T00:00:00Z`);
+  if (!Number.isFinite(utcDay) || new Date(utcDay).toISOString().slice(0, 10) !== date) return Number.POSITIVE_INFINITY;
+  const duration = Math.max(1, Math.trunc(booking.durationDays ?? 1));
+  if (!Number.isFinite(duration)) return Number.POSITIVE_INFINITY;
+  return utcDay - 3 * 60 * 60 * 1000 + duration * 86400000;
+}
+
+export function isBookingCalendarComplete(booking: StayBooking, now = Date.now()): boolean {
+  return now >= bookingCalendarEndAt(booking);
+}
