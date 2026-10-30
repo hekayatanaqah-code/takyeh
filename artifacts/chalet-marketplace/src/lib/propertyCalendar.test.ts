@@ -35,6 +35,61 @@ it("never lets full-day mirror availability hide real morning or evening booking
   assert.deepEqual(propertyCalendarRows(undefined, { notes: "صيانة", periodFullDay: true }), []);
 });
 
+it("colors the upcoming 24 Jumada I booking in its exact Hijri and Gregorian day cells without an availability mirror", () => {
+  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const calendarCode = source.slice(source.indexOf("function MiniCalendar("), source.indexOf("/* ── Cancellation Management Dialog"));
+  const js = ts.transpileModule(calendarCode, { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const deps = { React, useMemo, getHijriMonthDays, toHijriComponents, propertyCalendarBookingMap, propertyCalendarRows };
+  const components = new Function(...Object.keys(deps), `${js}; return { MiniCalendar, GregorianMiniCalendar };`)(...Object.values(deps));
+  assert.deepEqual(toHijriComponents(new Date(2026, 10, 4, 12)), { year: 1448, month: 5, day: 24 });
+  for (const period of ["morning", "evening", "full_day", null, "legacy"]) {
+    for (const [name, component, props] of [
+      ["hijri", components.MiniCalendar, { hijriYear: 1448, hijriMonth: 5 }],
+      ["gregorian", components.GregorianMiniCalendar, { gregYear: 2026, gregMonth: 11 }],
+    ] as const) {
+      const html = renderToStaticMarkup(React.createElement(component, {
+        ...props, availability: [], bookings: [{ id: 24, bookingDate: "2026-11-04", period, clientName: "حجز قادم" }], onDateClick() {},
+      }));
+      const cell = html.match(/<button[^>]*data-property-calendar-date="2026-11-04"[\s\S]*?<\/button>/)?.[0] ?? "";
+      assert.ok(cell.includes('data-calendar-booking-id="24"'), `${name}/${period}: missing future booking`);
+      assert.match(cell, /bg-(?:red|amber)-100/, `${name}/${period}: booking day must be colored`);
+      const previous = html.match(/<button[^>]*data-property-calendar-date="2026-11-03"[\s\S]*?<\/button>/)?.[0] ?? "";
+      assert.ok(!previous.includes('data-calendar-booking-id="24"'));
+    }
+  }
+});
+
+it("reveals a listed booking by synchronizing property, both calendar months, and calendar mode", () => {
+  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const start = source.indexOf("function revealBookingInCalendar(");
+  const code = source.slice(start, source.indexOf("\n  useEffect(", start));
+  const js = ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  for (const scope of ["global-property", "global-all", "local"]) {
+    const globalScope = scope !== "local";
+    const changed: Record<string, unknown> = {};
+    const deps = {
+      approvedOwnerChalets: [{ id: 900, submissionId: 17, nameAr: "العقار" }],
+      activityScope: { unit: scope === "global-all" ? { type: "all" } : { type: "chalet", id: 800 }, selectUnit: globalScope ? (unit: unknown) => { changed.unit = unit; } : undefined },
+      setSelectedChaletId: (id: number) => { changed.localId = id; },
+      toHijriComponents,
+      ...Object.fromEntries(["CalHijriYear", "CalHijriMonth", "CalGregYear", "CalGregMonth", "CalendarMode", "CalendarFocusDate"].map(key => [
+        `set${key}`, (value: unknown) => { changed[key] = value; },
+      ])),
+    };
+    const reveal = new Function(...Object.keys(deps), `${js}; return revealBookingInCalendar;`)(...Object.values(deps));
+    reveal({ submissionId: "17", bookingDate: "2026-11-04" });
+    assert.equal(changed.CalHijriYear, 1448);
+    assert.equal(changed.CalHijriMonth, 5);
+    assert.equal(changed.CalGregYear, 2026);
+    assert.equal(changed.CalGregMonth, 11);
+    assert.equal(changed.CalendarMode, "calendar");
+    assert.equal(changed.CalendarFocusDate, "2026-11-04");
+    if (scope === "global-property") assert.deepEqual(changed.unit, { type: "chalet", id: 900, submissionId: 17, name: "العقار" });
+    else if (scope === "global-all") assert.equal(changed.unit, undefined, "keep the all-properties selection when it already contains this booking");
+    else assert.equal(changed.localId, 900);
+  }
+});
+
 it("renders every booking in both actual property calendar components, with a scroll-safe page wrapper", () => {
   const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
   const calendarCode = source.slice(source.indexOf("function MiniCalendar("), source.indexOf("/* ── Cancellation Management Dialog"));

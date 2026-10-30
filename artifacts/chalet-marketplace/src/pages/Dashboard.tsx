@@ -4616,6 +4616,7 @@ function BookingCalendarTab({
   const _todayGreg = new Date();
   const [calGregYear, setCalGregYear] = useState(_todayGreg.getFullYear());
   const [calGregMonth, setCalGregMonth] = useState(_todayGreg.getMonth() + 1);
+  const [calendarFocusDate, setCalendarFocusDate] = useState<string | null>(null);
   const { calMonthDays, calMonthStart, calMonthEnd } = useMemo(() => {
     if (dashCalType === "gregorian") {
       const daysInMonth = new Date(calGregYear, calGregMonth, 0).getDate();
@@ -5240,6 +5241,35 @@ function BookingCalendarTab({
       return b.bookingDate <= calMonthEnd && bEnd >= calMonthStart;
     });
   }, [bookings, activeChalet, approvedCalendarSubmissionIds, calMonthStart, calMonthEnd, showAllChalets]);
+
+  function revealBookingInCalendar(booking: OwnerBooking) {
+    const property = approvedOwnerChalets.find((c: any) => Number(c.submissionId) === Number(booking.submissionId));
+    const date = new Date(`${booking.bookingDate}T12:00:00`);
+    if (!property || !Number.isFinite(date.getTime())) return;
+    // The list spans months/properties; explicitly align BOTH calendar scopes.
+    if (activityScope.selectUnit) {
+      if (activityScope.unit.type !== "all" && !(activityScope.unit.type === "chalet" && activityScope.unit.id === property.id)) {
+        activityScope.selectUnit({ type: "chalet", id: property.id, submissionId: property.submissionId, name: property.nameAr });
+      }
+    }
+    else setSelectedChaletId(property.id);
+    const hijri = toHijriComponents(date);
+    setCalHijriYear(hijri.year);
+    setCalHijriMonth(hijri.month);
+    setCalGregYear(date.getFullYear());
+    setCalGregMonth(date.getMonth() + 1);
+    setCalendarMode("calendar");
+    setCalendarFocusDate(booking.bookingDate);
+  }
+
+  useEffect(() => {
+    if (!calendarFocusDate || availLoading || bookingsLoading) return;
+    const cell = document.querySelector<HTMLButtonElement>(`[data-property-calendar-date="${calendarFocusDate}"]`);
+    if (!cell) return;
+    cell.focus({ preventScroll: true });
+    cell.scrollIntoView({ behavior: "smooth", block: "center" });
+    setCalendarFocusDate(null);
+  }, [calendarFocusDate, availLoading, bookingsLoading, calMonthStart, activeChaletId, calendarMode]);
 
   /* Stats computed from the currently visible calendar scope */
   const calScopeStats = useMemo(() => {
@@ -7254,6 +7284,16 @@ function BookingCalendarTab({
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">
+                          {approvedCalendarSubmissionIds.has(Number(b.submissionId)) && (
+                            <button
+                              type="button"
+                              data-testid={`show-booking-in-calendar-${b.id}`}
+                              onClick={() => revealBookingInCalendar(b)}
+                              className="text-xs font-semibold px-2 py-1 rounded-lg border border-primary/30 text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary"
+                            >
+                              عرض في التقويم
+                            </button>
+                          )}
                           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${b.source === "platform" ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
                             {b.source === "platform" ? "المنصة" : "خارجي"}
                           </span>

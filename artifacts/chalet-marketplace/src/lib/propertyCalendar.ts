@@ -14,7 +14,8 @@ export function propertyCalendarBookingMap(bookings: CalendarBooking[]) {
     if (!booking.bookingDate || booking.cancelledAt) continue;
     const [year, month, day] = booking.bookingDate.split("-").map(Number);
     const duration = Math.max(1, booking.durationDays ?? 1);
-    const period = booking.period || "full_day";
+    // Legacy/unspecified periods still occupy the day, just as in the booking list.
+    const period = booking.period === "morning" || booking.period === "evening" ? booking.period : "full_day";
     for (let offset = 0; offset < duration; offset++) {
       const date = new Date(year, month - 1, day + offset);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
