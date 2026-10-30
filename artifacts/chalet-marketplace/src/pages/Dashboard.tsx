@@ -52,6 +52,8 @@ import { SubmissionDate } from "@/components/owner/SubmissionDate";
 import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard";
 import { ServiceBookingCard, serviceFinancialState } from "@/components/owner/ServiceBookingCard";
 import { sortServiceBookings, serviceBookingPage } from "@/lib/serviceBookingList";
+import { serviceCalendarBookings, serviceBookingMatches, type ServiceBookingScope } from "@/lib/serviceBookingOperations";
+import { useSaudiDayClock } from "@/hooks/useSaudiDayClock";
 import { ServiceBookingPaymentDialog } from "@/components/owner/ServiceBookingPaymentDialog";
 import { useRecordServiceAppointmentPayment } from "@workspace/api-client-react";
 import { ServiceManagementNavigation } from "@/components/owner/ServiceManagementNavigation";
@@ -10785,7 +10787,9 @@ function ServiceCalendarBookingsTab() {
   const { providerId } = useServiceErp();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const now = new Date();
+  const serviceClock = useSaudiDayClock();
+  const now = new Date(`${new Date(serviceClock + 3 * 60 * 60 * 1000).toISOString().slice(0, 10)}T12:00:00`);
+  const serviceCalendarRootRef = useRef<HTMLDivElement>(null);
   const todayHijri = toHijriComponents(now);
   const [calendarType, setCalendarType] = useState<"hijri" | "gregorian">(
     () => (localStorage.getItem("dashCalDefaultType") as "hijri" | "gregorian") ?? "hijri",
@@ -10795,6 +10799,7 @@ function ServiceCalendarBookingsTab() {
   const [gregYear, setGregYear] = useState(now.getFullYear());
   const [gregMonth, setGregMonth] = useState(now.getMonth() + 1);
   const [calendarPickerOpen, setCalendarPickerOpen] = useState(false);
+  const [serviceCalendarFocusDate, setServiceCalendarFocusDate] = useState<string | null>(null);
   const [calendarPickerYear, setCalendarPickerYear] = useState(
     calendarType === "hijri" ? todayHijri.year : now.getFullYear(),
   );
@@ -10823,13 +10828,15 @@ function ServiceCalendarBookingsTab() {
   const [receiptWhatsAppLoading, setReceiptWhatsAppLoading] = useState(false);
   const [contractPreviewAppointment, setContractPreviewAppointment] = useState<any | null>(null);
   const receiptPdfExportNonceRef = useRef(0);
-  const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending" | "cancelled">("all");
+  const [listFilter, setListFilter] = useState<"all" | "confirmed" | "pending">("all");
+  const [serviceBookingScope, setServiceBookingScope] = useState<ServiceBookingScope>("active");
+  const [servicePaymentFilter, setServicePaymentFilter] = useState<PropertyPaymentFilter>("all");
   const [serviceListPage, setServiceListPage] = useState(1);
   const serviceListRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setServiceListPage(1);
     setOpenServiceMessageMenuId(null);
-  }, [providerId, listFilter]);
+  }, [providerId, listFilter, serviceBookingScope, servicePaymentFilter]);
   const emptyForm = {
     clientName: "",
     clientPhone: "",
@@ -10884,15 +10891,41 @@ function ServiceCalendarBookingsTab() {
     enabled: !!providerId,
   });
 
-  const { data: appointments = [], isLoading: apptLoading } = useQuery<any[]>({
+  const { data: appointments = [], isLoading: apptLoading, isError: apptError, refetch: refetchAppointments } = useQuery<any[]>({
     queryKey: ["service-appointments", providerId],
     queryFn: async () => {
       const r = await apiFetch(`/providers/my/approved/${providerId}/appointments`);
-      return r.ok ? r.json() : [];
+      if (!r.ok) throw new Error("تعذر تحميل حجوزات الخدمة");
+      return r.json();
     },
     enabled: !!providerId,
     refetchInterval: 30_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
+
+  const serviceCalendarMap = useMemo(() => serviceCalendarBookings<any>(appointments), [appointments]);
+
+  function showServiceBookingInCalendar(appointment: any) {
+    const date = new Date(`${appointment.dateStr}T12:00:00`);
+    if (!Number.isFinite(date.getTime())) return;
+    const hijri = toHijriComponents(date);
+    setHijriYear(hijri.year);
+    setHijriMonth(hijri.month);
+    setGregYear(date.getFullYear());
+    setGregMonth(date.getMonth() + 1);
+    setSummaryDate(null);
+    setServiceCalendarFocusDate(appointment.dateStr);
+  }
+
+  useEffect(() => {
+    if (!serviceCalendarFocusDate || apptLoading) return;
+    const day = serviceCalendarRootRef.current?.querySelector<HTMLButtonElement>(`[data-service-calendar-date="${serviceCalendarFocusDate}"]`);
+    if (!day) return;
+    day.focus({ preventScroll: true });
+    day.scrollIntoView({ behavior: "smooth", block: "center" });
+    setServiceCalendarFocusDate(null);
+  }, [serviceCalendarFocusDate, apptLoading, gregMonth, gregYear, hijriMonth, hijriYear, calendarType]);
 
   // Keep an open receipt aligned with the same persisted booking as the calendar.
   useEffect(() => {
@@ -10948,10 +10981,9 @@ function ServiceCalendarBookingsTab() {
   }, [form.clientPhone, editingAppointmentId]);
 
   const blockedSet = new Set(blockedDates.map(d => d.dateStr));
-  const apptDays = new Map<string, number>();
-  appointments.filter(a => a.status !== "cancelled").forEach(a => {
-    apptDays.set(a.dateStr, (apptDays.get(a.dateStr) ?? 0) + 1);
-  });
+  const apptDays = new Map([...serviceCalendarMap].map(([date, entries]) => [
+    date, entries.filter(a => a.status !== "cancelled").length,
+  ]));
   const dailyCapacity = Math.max(1, Number(provider?.dailyCapacity) || 1);
 
   function revealBookingForm() {
@@ -11598,14 +11630,13 @@ function ServiceCalendarBookingsTab() {
   const lastCalendarDate = calendarDays[calendarDays.length - 1]?.date;
   const firstDow = firstCalendarDate?.getDay() ?? 0;
   const dayNames = ["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"];
-  const todayStr = getLocalDateStr(now);
+  const todayStr = new Date(serviceClock + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const calendarStart = firstCalendarDate ? toGregorianStr(firstCalendarDate) : "";
   const calendarEnd = lastCalendarDate ? toGregorianStr(lastCalendarDate) : "";
   const monthAppts = appointments.filter(
     (appointment) =>
       appointment.status !== "cancelled" &&
-      appointment.dateStr >= calendarStart &&
-      appointment.dateStr <= calendarEnd,
+      [...serviceCalendarMap].some(([date, entries]) => date >= calendarStart && date <= calendarEnd && entries.some(entry => entry.id === appointment.id)),
   );
 
   const gregorianSpanLabel = useMemo(() => {
@@ -11637,17 +11668,17 @@ function ServiceCalendarBookingsTab() {
 
   const filteredAppts = useMemo(
     () => sortServiceBookings<any>(
-      listFilter === "all" ? appointments : appointments.filter(a => a.status === listFilter),
+      appointments.filter(a => serviceBookingMatches(a, serviceBookingScope, listFilter, servicePaymentFilter, serviceClock)),
       todayStr,
     ),
-    [appointments, listFilter, todayStr],
+    [appointments, listFilter, todayStr, serviceBookingScope, servicePaymentFilter, serviceClock],
   );
   const pagedAppts = serviceBookingPage(filteredAppts, serviceListPage);
   useEffect(() => {
     if (serviceListPage !== pagedAppts.page) setServiceListPage(pagedAppts.page);
   }, [serviceListPage, pagedAppts.page]);
   const summaryAppointments = summaryDate
-    ? sortServiceBookings(appointments.filter((appointment) => appointment.dateStr === summaryDate), todayStr)
+    ? sortServiceBookings(serviceCalendarMap.get(summaryDate) ?? [], todayStr)
     : [];
   const summaryActiveAppointments = summaryAppointments.filter((appointment) => appointment.status !== "cancelled");
   const summaryBlocked = summaryDate ? blockedSet.has(summaryDate) : false;
@@ -11661,7 +11692,12 @@ function ServiceCalendarBookingsTab() {
   ).length;
 
   return (
-    <div className="space-y-5">
+    <div ref={serviceCalendarRootRef} className="space-y-5">
+      {apptError && (
+        <p role="alert" className="rounded-xl border border-destructive/30 p-3 text-sm text-destructive">
+          تعذر تحديث حجوزات الخدمة؛ لا تعتمد على ألوان الإتاحة حتى تنجح إعادة التحميل.
+        </p>
+      )}
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -11819,7 +11855,7 @@ function ServiceCalendarBookingsTab() {
               const isToday = ds === todayStr;
               const isPast  = ds < todayStr;
               const gregorianDay = calendarDay.date.getDate();
-              const cellAppointments = appointments.filter((appointment) => appointment.dateStr === ds);
+              const cellAppointments = serviceCalendarMap.get(ds) ?? [];
               const bookingCount = cellAppointments.length;
               const hasConfirmed = cellAppointments.some((appointment) => appointment.status === "confirmed");
               const hasPending = cellAppointments.some((appointment) => appointment.status === "pending");
@@ -11829,16 +11865,18 @@ function ServiceCalendarBookingsTab() {
               return (
                 <button key={ds} type="button"
                   onClick={() => {
-                    if (isPast) return;
+                    if (isPast && bookingCount === 0) return;
                     setOpenServiceMessageMenuId(null);
                     setSummaryDate(ds);
                   }}
-                  disabled={isPast || togglingDate === ds}
+                  disabled={(isPast && bookingCount === 0) || togglingDate === ds}
+                  data-service-calendar-date={ds}
                   data-testid={`service-calendar-day-${ds}`}
                   data-capacity-state={blocked ? "blocked" : full ? "full" : "available"}
                   aria-label={`${formatDualDate(ds).gregorian} — ${blocked ? "مغلق" : full ? "مكتمل الحجوزات" : `متبقي ${toArN(remaining)}`}`}
                   title={blocked ? "اليوم مغلق — اضغط لفتحه" : full ? "اكتملت الطاقة اليومية" : `${remaining} حجوزات متبقية`}
                   className={[
+                    "focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary",
                     "flex flex-col items-center justify-start pt-1.5 pb-1 px-0.5 w-full",
                     "transition-colors focus:outline-none focus:z-10 focus:ring-2 focus:ring-inset focus:ring-primary/60",
                     "min-h-[88px] relative",
@@ -11881,6 +11919,12 @@ function ServiceCalendarBookingsTab() {
                       </span>
                     </span>
                   )}
+                  {cellAppointments.filter(appointment => appointment.status !== "cancelled").map(appointment => (
+                    <span key={appointment.id} data-service-calendar-booking-id={appointment.id}
+                      className="mt-1 w-full truncate text-center text-[10px] font-semibold" title={appointment.clientName}>
+                      {appointment.clientName?.trim().split(/\s+/)[0] || "حجز"}
+                    </span>
+                  ))}
                 </button>
               );
             })}
@@ -11963,6 +12007,8 @@ function ServiceCalendarBookingsTab() {
                   {summaryAppointments.map((appointment) => (
                       <ServiceBookingCard
                         key={appointment.id}
+                        now={serviceClock}
+                        onShowInCalendar={() => showServiceBookingInCalendar(appointment)}
                         appointment={appointment}
                         serviceName={provider?.businessName ?? "الخدمة"}
                         sourceLabel={SOURCE_LABELS[appointment.source] ?? appointment.source ?? "غير محدد"}
@@ -12440,10 +12486,21 @@ function ServiceCalendarBookingsTab() {
 
       {/* ── APPOINTMENTS LIST ── */}
       <div ref={serviceListRef} className="min-w-0 space-y-3 scroll-mt-24" data-testid="service-bookings-register">
+        <div role="group" aria-label="نطاق سجل حجوزات الخدمات" className="flex flex-wrap gap-2">
+          {([["active", "الحجوزات النشطة"], ["completed", "أرشيف المكتملة"], ["cancelled", "الملغية"]] as const).map(([scope, label]) => (
+            <button key={scope} type="button" aria-pressed={serviceBookingScope === scope}
+              onClick={() => { setServiceBookingScope(scope); setServiceListPage(1); }}
+              className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-primary ${serviceBookingScope === scope ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+        <PropertyBookingPaymentFilters value={servicePaymentFilter}
+          onChange={filter => { setServicePaymentFilter(filter); setServiceListPage(1); }} />
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-sm font-bold text-foreground">سجل الحجوزات</h3>
-          <div className="flex gap-1">
-            {(["all", "confirmed", "pending", "cancelled"] as const).map(f => (
+          <div className={serviceBookingScope === "cancelled" ? "hidden" : "flex gap-1"}>
+            {(["all", "confirmed", "pending"] as const).map(f => (
               <button key={f} type="button" onClick={() => setListFilter(f)}
                 className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${listFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
                 {f === "all" ? "الكل" : statusLabel[f]}
@@ -12452,18 +12509,25 @@ function ServiceCalendarBookingsTab() {
           </div>
         </div>
 
-        {apptLoading ? (
+        {apptError ? (
+          <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm">
+            تعذر تحميل حجوزات الخدمة. لا تمثل هذه الحالة عدم وجود حجوزات.
+            <Button variant="outline" size="sm" onClick={() => refetchAppointments()}>إعادة المحاولة</Button>
+          </div>
+        ) : apptLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
         ) : filteredAppts.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <Calendar className="w-8 h-8 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">لا توجد حجوزات بعد</p>
+            <p className="font-medium">لا توجد حجوزات مطابقة للنطاق والفلاتر المحددة</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {pagedAppts.items.map((a: any) => (
                       <ServiceBookingCard
                         key={a.id}
+                        now={serviceClock}
+                        onShowInCalendar={() => showServiceBookingInCalendar(a)}
                         appointment={a}
                         serviceName={provider?.businessName ?? "الخدمة"}
                         sourceLabel={SOURCE_LABELS[a.source] ?? a.source ?? "غير محدد"}

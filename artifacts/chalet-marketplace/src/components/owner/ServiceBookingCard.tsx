@@ -3,6 +3,7 @@ import { Calendar, CheckCircle, ChevronDown, Clock, Edit2, Eye, Globe, Loader2, 
 import { formatDualDate, withHijriEra } from "@/lib/hijri";
 import { serviceReceiptMoney, servicePaymentMethodLabel } from "@/lib/serviceReceipt";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { PropertyBookingArrivalBadge as UpcomingArrivalBadge } from "../PropertyBookingStatus";
 
 const toAr = (v: unknown) => String(v ?? "").replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
 const STATUS_LABEL: Record<string, string> = { confirmed: "مؤكد", pending: "معلق", cancelled: "ملغي" };
@@ -67,6 +68,8 @@ export type ServiceBookingCardProps = {
   onToggleContractSigned: () => void;
   onToggleCashDeposited: () => void;
   onSendReview: () => void;
+  now?: number;
+  onShowInCalendar?: () => void;
 };
 
 export function ServiceBookingCard(p: ServiceBookingCardProps) {
@@ -100,6 +103,13 @@ export function ServiceBookingCard(p: ServiceBookingCardProps) {
                   : <span className="text-xs text-muted-foreground">لا يوجد رقم تواصل</span>}
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
+                {!fin.cancelled && p.now != null && <UpcomingArrivalBadge bookingDate={effectiveDate} now={p.now} />}
+                {p.onShowInCalendar && (
+                  <button type="button" onClick={p.onShowInCalendar}
+                    className="rounded-lg border border-primary/30 px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary">
+                    عرض في التقويم
+                  </button>
+                )}
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[a.status] ?? "bg-muted text-muted-foreground"}`}>{STATUS_LABEL[a.status] ?? a.status}</span>
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${a.source === "platform" ? "bg-primary/10 text-primary" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>{p.sourceLabel}</span>
                 {edited && (
@@ -151,10 +161,15 @@ export function ServiceBookingCard(p: ServiceBookingCardProps) {
         )}
 
         <div className="grid grid-cols-3 gap-2 bg-muted/40 rounded-lg p-2.5 text-center">
-          <div><p className="text-[10px] text-muted-foreground">الإجمالي</p><p className="text-xs font-bold text-foreground">{serviceReceiptMoney(fin.total)}</p></div>
+          <div><p className="text-[10px] text-muted-foreground">قيمة الخدمة دون التأمين</p><p className="text-xs font-bold text-foreground">{serviceReceiptMoney(fin.total)}</p></div>
           <div><p className="text-[10px] text-muted-foreground">{fin.total > 0 && fin.remaining === 0 ? "كامل المبلغ" : "المدفوع"}</p><p className="text-xs font-bold text-green-600 dark:text-green-400">{serviceReceiptMoney(fin.paid)}</p></div>
           <div><p className="text-[10px] text-muted-foreground">المتبقي</p><p className={`text-xs font-bold ${fin.remaining === 0 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>{serviceReceiptMoney(fin.remaining)}</p></div>
         </div>
+        {Number(a.insuranceAmount ?? 0) > 0 && (
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            التأمين القابل للاسترداد: {serviceReceiptMoney(Number(a.insuranceAmount))} — منفصل عن المدفوع والمتبقي لأصل الخدمة.
+          </p>
+        )}
 
         <div
           className={`grid min-w-0 max-w-full grid-rows-2 items-stretch gap-1.5 ${actionColumns >= 5 ? "[&>button]:px-0.5 [&>button]:text-[10px]" : ""}`}
