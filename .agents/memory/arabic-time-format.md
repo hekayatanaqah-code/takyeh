@@ -38,7 +38,7 @@ Offer separate hour, minute and AM/PM selections with a provider-selectable 12/2
 
 **Why:** The user requested a consistent, organized picker instead of the overlapping browser-native controls, with an optional 12/24-hour choice.
 
-**How to apply:** Preserve all 60 minutes and correct noon/midnight conversions. Keep the browser's display preference separate from booking data and avoid timezone conversion. Arabic Intl Hijri dates may already contain «هـ»; normalize the era before adding it to service-booking labels.
+**How to apply:** Offer only quarter-hour minute choices (00, 15, 30, 45), as subsequently requested by the user to speed selection and reduce entry errors. Preserve historical non-quarter-hour values without silently rounding them when opening or cancelling the picker; parsing and display must still accept those saved times. Keep correct noon/midnight conversions and the browser's display preference separate from booking data, without timezone conversion. Arabic Intl Hijri dates may already contain «هـ»; normalize the era before adding it to service-booking labels.
 
 ## Approved time-picker design
 التنسيق الحالي لمنتقي وقت الخدمات معتمد نهائيًا بالكامل، بما فيه نص التوقيت المصغّر والمتناسق مع بقية حقول نافذة التعديل.

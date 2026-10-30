@@ -54,7 +54,7 @@ function readFormat(): TimeFormat {
 
 const HOURS_12 = Array.from({ length: 12 }, (_, i) => i + 1);
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES = Array.from({ length: 60 }, (_, i) => i);
+const MINUTES = [0, 15, 30, 45];
 
 interface ColumnProps<T extends string | number> {
   label: string;
@@ -78,8 +78,8 @@ function Column<T extends string | number>({ label, options, selected, render, o
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const idx = options.indexOf(selected);
     let next = idx;
-    if (e.key === "ArrowDown") next = (idx + 1) % options.length;
-    else if (e.key === "ArrowUp") next = (idx - 1 + options.length) % options.length;
+    if (e.key === "ArrowDown") next = idx < 0 ? 0 : (idx + 1) % options.length;
+    else if (e.key === "ArrowUp") next = idx < 0 ? options.length - 1 : (idx - 1 + options.length) % options.length;
     else if (e.key === "Home") next = 0;
     else if (e.key === "End") next = options.length - 1;
     else if (e.key === "PageDown") next = Math.min(options.length - 1, idx + 5);
@@ -96,7 +96,7 @@ function Column<T extends string | number>({ label, options, selected, render, o
         ref={listRef}
         role="listbox"
         aria-label={label}
-        aria-activedescendant={`${optionId}-${String(selected)}`}
+        aria-activedescendant={options.includes(selected) ? `${optionId}-${String(selected)}` : undefined}
         tabIndex={0}
         onKeyDown={onKey}
         data-testid={testId}

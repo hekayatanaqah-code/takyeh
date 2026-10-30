@@ -38,9 +38,30 @@ it("shows separate constrained columns and leaves an unsaved blank time blank", 
   assert(html.includes("list-time-hour-12"));
   assert(!html.includes("list-time-hour-0\""));
   assert(!html.includes("list-time-hour-13"));
-  assert(html.includes("list-time-minute-59"));
-  assert(!html.includes("list-time-minute-60"));
+  const minutes = [...html.matchAll(/data-testid="list-time-minute-(\d+)"/g)].map(match => Number(match[1]));
+  assert.deepEqual(minutes, [0, 15, 30, 45]);
   assert(html.includes("list-time-period"));
   assert(html.includes("button-time-format-24"));
   assert(html.includes("تأكيد الوقت"));
+});
+it("preserves historical non-quarter-hour values without adding them to the selectable minutes or committing on open", () => {
+  const html = renderToStaticMarkup(React.createElement(ServiceTimePicker, {
+    id: "historical-time", value: "13:07", defaultOpen: true,
+    onChange: () => { throw new Error("Opening must not round or commit a historical time"); },
+  }));
+  assert(html.includes('data-time-value="13:07"'));
+  assert(html.includes('value="13:07"'));
+  assert(html.includes("١:٠٧ م"));
+  const minutes = [...html.matchAll(/data-testid="list-time-minute-(\d+)"/g)].map(match => Number(match[1]));
+  assert.deepEqual(minutes, [0, 15, 30, 45]);
+});
+it("selects every quarter-hour correctly while keeping noon/midnight conversions unchanged", () => {
+  for (const minute of [0, 15, 30, 45]) {
+    const value = formatCanonical(12, minute);
+    const html = renderToStaticMarkup(React.createElement(ServiceTimePicker, {
+      id: `quarter-${minute}`, value, defaultOpen: true, onChange() {},
+    }));
+    assert.match(html, new RegExp(`aria-selected="true"[^>]*data-testid="list-time-minute-${minute}"`));
+    assert.equal(displayTime(value, "12"), `١٢:${String(minute).padStart(2, "0").replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[Number(d)])} م`);
+  }
 });
