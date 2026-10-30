@@ -13,3 +13,9 @@ Navigating from the owner-wide booking list to a calendar day must align both th
 **Why:** The list can span multiple months and properties while the grid shows only one selected month/scope; a visible list entry alone does not mean its day is currently on the grid.
 
 **How to apply:** Make the list-to-calendar connection explicit without creating availability records or changing booking data to force a visual marker.
+
+Keep the owner's live calendar and active list restricted to genuine recorded bookings; never insert random or synthetic bookings into the owner's account for a demonstration or visual fix.
+
+**Why:** The user explicitly requested removal of automatically generated fictitious bookings and visual agreement based only on their genuine manually recorded bookings.
+
+**How to apply:** Keep calendar rendering fixtures in isolated tests. Before purging a suspected live fixture, establish its provenance; a matching date alone does not prove a booking is synthetic, especially when it has recorded financial amounts.
