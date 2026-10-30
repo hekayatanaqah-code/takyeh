@@ -39,7 +39,7 @@ import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
-import { buildActivitySummaryReportHtml, buildPropertyReportClosingHtml, buildPropertyBookingDetailsHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "@/lib/financialReport";
+import { buildActivitySummaryReportHtml, buildPropertyReportClosingHtml, buildPropertyBookingDetailsHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount, PROPERTY_REPORT_REVENUE_NOTE } from "@/lib/financialReport";
 import { finalizePropertyReportHtml, propertyPdfSliceRanges } from "@/lib/propertyReportLayout";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
@@ -21897,7 +21897,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       {propertyClosingTotals && <section data-testid="property-report-closing" className="rounded-2xl border border-border bg-card p-5">
         <h3 className="mb-4 font-bold">الحسابات الختامية</h3>
         <dl className="space-y-3 text-sm">
-          <div className="flex flex-wrap justify-between gap-2"><dt>إجمالي الإيرادات</dt><dd><FinancialReportNumber value={propertyClosingTotals.revenue} currency /></dd></div>
+          <div className="flex flex-wrap justify-between gap-2"><dt className="flex-1 min-w-0">إجمالي الإيرادات<span className="mt-1 block max-w-2xl text-sm font-normal leading-relaxed text-slate-700 dark:text-slate-300">{PROPERTY_REPORT_REVENUE_NOTE}</span></dt><dd className="whitespace-nowrap"><FinancialReportNumber value={propertyClosingTotals.revenue} currency /></dd></div>
           <div className="flex flex-wrap justify-between gap-2"><dt>إجمالي المصروفات</dt><dd className="text-red-600"><FinancialReportNumber value={propertyClosingTotals.expenses} currency /></dd></div>
           <div className="flex flex-wrap justify-between gap-2 border-t border-border pt-3 font-bold"><dt>صافي الربح / الدخل النهائي</dt><dd className={propertyClosingTotals.netProfit < 0 ? "text-red-600" : "text-primary"}><FinancialReportNumber value={propertyClosingTotals.netProfit} currency /></dd></div>
         </dl>

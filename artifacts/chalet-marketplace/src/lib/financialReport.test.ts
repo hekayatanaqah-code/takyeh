@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
-import { buildActivitySummaryReportHtml, buildPropertyBookingDetailsHtml, buildPropertyReportClosingHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount } from "./financialReport";
+import { buildActivitySummaryReportHtml, buildPropertyBookingDetailsHtml, buildPropertyReportClosingHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount, PROPERTY_REPORT_REVENUE_NOTE } from "./financialReport";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { finalizePropertyReportHtml } from "./propertyReportLayout";
+
+it("explains collected versus contractual revenue consistently without changing closing amounts", () => {
+  const html = buildPropertyReportClosingHtml({ revenue: 300, expenses: 100, netProfit: 200 });
+  assert.ok(html.includes(PROPERTY_REPORT_REVENUE_NOTE));
+  for (const phrase of ["الإيرادات المحصّلة فعلياً", "إجمالي قيمة الحجوزات التعاقدية", "غير مدفوعة أو مؤجلة", "التأمين القابل للاسترداد"]) {
+    assert.ok(html.includes(phrase));
+  }
+  for (const amount of [300, 100, 200]) assert.ok(html.includes(formatFinancialAmount(amount)));
+  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  assert.ok(source.includes("{PROPERTY_REPORT_REVENUE_NOTE}"));
+});
 
 it("property print/PDF builders hide details by default but retain identical closing totals", () => {
   const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");

@@ -1,7 +1,9 @@
+export const PROPERTY_REPORT_REVENUE_NOTE = "الإيرادات المحصّلة فعلياً: العربون والمتبقي عند تحصيله، مع التلفيات المحتسبة. تختلف عن إجمالي قيمة الحجوزات التعاقدية إذا بقيت مبالغ غير مدفوعة أو مؤجلة؛ ولا يشمل الإيراد التأمين القابل للاسترداد.";
+
 /** Property detail visibility changes presentation only, never the supplied totals. */
 export function buildPropertyReportClosingHtml(totals: { revenue: number; expenses: number; netProfit: number }) {
   return `<section class="section financial-closing"><h2 class="section-title">الحسابات الختامية</h2><table><tbody>
-    <tr><td>إجمالي الإيرادات</td><td>${formatFinancialAmount(totals.revenue)}</td></tr>
+    <tr><td>إجمالي الإيرادات<span class="financial-revenue-note" style="display:block;font-size:13px;line-height:1.5;color:#374151;font-weight:400;margin-top:4px;max-width:480px">${PROPERTY_REPORT_REVENUE_NOTE}</span></td><td style="white-space:nowrap">${formatFinancialAmount(totals.revenue)}</td></tr>
     <tr><td>إجمالي المصروفات</td><td>${formatFinancialAmount(totals.expenses)}</td></tr>
     <tr class="total-row"><td>صافي الربح / الدخل النهائي</td><td>${formatFinancialAmount(totals.netProfit)}</td></tr>
     </tbody></table></section>`;

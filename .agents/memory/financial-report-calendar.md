@@ -61,3 +61,9 @@ Property reports default to summaries and closing accounts with detailed booking
 **Why:** The user requested concise property reports by default, optional long tables for financial review, and then explicitly required a one-page compact print/PDF with larger, higher-contrast secondary text.
 
 **How to apply:** Keep closing revenue, expenses and net income visible for monthly, annual and custom reports in either state. Invalidate cached exports when visibility changes; sharing and archived PDFs must use the same choice. Long detailed exports may use multiple pages at readable size; never clip them or shrink all their pages into one tiny image.
+
+Property closing accounts must explain beside revenue that collected income is not the total contractual booking value; unpaid/deferred balances explain differences. The explanation must also appear in print/PDF without changing accounting.
+
+**Why:** The user explicitly requested this clarification to prevent owners interpreting different totals as an error.
+
+**How to apply:** Describe the existing recognized collections and damage deductions accurately, distinguish refundable insurance, and retain the same wording on screen and in exports.
