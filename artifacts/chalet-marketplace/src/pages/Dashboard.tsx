@@ -41,6 +41,7 @@ import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/rev
 import { Download } from "lucide-react";
 import { buildActivitySummaryReportHtml, buildPropertyReportClosingHtml, buildPropertyBookingDetailsHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount, PROPERTY_REPORT_REVENUE_NOTE } from "@/lib/financialReport";
 import { propertyCalendarBookingMap, propertyCalendarRows } from "@/lib/propertyCalendar";
+import { resolveManualBookingProperty } from "@/lib/manualBookingProperty";
 import { finalizePropertyReportHtml, propertyPdfSliceRanges } from "@/lib/propertyReportLayout";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
@@ -1955,7 +1956,7 @@ export function AddBookingDialog({
   const [durationDays, setDurationDays] = useState(1);
   const [period, setPeriod] = useState<string>("");
   const [source, setSource] = useState<"platform" | "external">("external");
-  const [submissionId, setSubmissionId] = useState<string>("");
+  const [submissionId, setSubmissionId] = useState<string>(() => resolveManualBookingProperty(submissions, "", prefilledChaletId));
   const [notes, setNotes] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
   const [depositPaid, setDepositPaid] = useState("");
@@ -2106,10 +2107,15 @@ export function AddBookingDialog({
   // Pre-fill date, chalet and period when opened from calendar click or booking footer
   useEffect(() => {
     if (open && prefilledDate) setBookingDate(prefilledDate);
-    if (open && prefilledChaletId) setSubmissionId(prefilledChaletId);
     if (open && prefilledPeriod) setPeriod(prefilledPeriod);
     if (!open) { setBookingDate(""); setPeriod(""); }
   }, [open, prefilledDate, prefilledChaletId, prefilledPeriod]);
+
+  // Resolve late-loaded inventory too, without overwriting a valid manual choice.
+  useEffect(() => {
+    if (!open) { setSubmissionId(""); return; }
+    setSubmissionId(current => resolveManualBookingProperty(submissions, current, prefilledChaletId));
+  }, [open, submissions, prefilledChaletId]);
 
   /* ── Auto-fill price when period or date changes ── */
   useEffect(() => {
@@ -2343,6 +2349,15 @@ export function AddBookingDialog({
           {submissions.length > 0 && (
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">اسم العقار <span className="text-destructive">*</span></label>
+              {submissions.length === 1 ? (
+                <Input
+                  aria-label="اسم العقار"
+                  data-testid="manual-booking-single-property"
+                  value={submissions[0].nameAr}
+                  readOnly
+                  className="text-right bg-muted/40"
+                />
+              ) : (
               <Select value={submissionId} onValueChange={setSubmissionId}>
                 <SelectTrigger><SelectValue placeholder="اختر العقار..." /></SelectTrigger>
                 <SelectContent>
@@ -2351,6 +2366,7 @@ export function AddBookingDialog({
                   ))}
                 </SelectContent>
               </Select>
+              )}
             </div>
           )}
 
