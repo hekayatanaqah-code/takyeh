@@ -25,7 +25,8 @@ export function ServiceFinancialReportPanels({ rows, details, closingRows }: {
       </div>)}
     </div>
     <p className="text-xs leading-6 text-muted-foreground">
-      العربون ضمن إيرادات الحجوزات وليس إيرادًا إضافيًا، والتأمينات ليست إيرادًا.
+      الإيرادات هي المبالغ المحصلة فعليًا؛ العربون جزء منها وليس إيرادًا إضافيًا. القيمة التعاقدية تشمل غير المسدد.
+      التأمين القابل للاسترداد منفصل عن الإيرادات وعن المتبقي لأصل الخدمة.
       تُخصم مصروفات الخدمة المسجلة خلال الفترة كاملة من إيرادات النطاق المختار؛ لا تُوزّع المصروفات تلقائيًا بين الحجوزات والبيع السريع.
     </p>
     {details.map(section => <section key={section.title} className="space-y-3 rounded-2xl border border-border bg-card p-4" data-testid="service-report-details">

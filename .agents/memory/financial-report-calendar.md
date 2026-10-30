@@ -67,3 +67,9 @@ Property closing accounts must explain beside revenue that collected income is n
 **Why:** The user explicitly requested this clarification to prevent owners interpreting different totals as an error.
 
 **How to apply:** Describe the existing recognized collections and damage deductions accurately, distinguish refundable insurance, and retain the same wording on screen and in exports.
+
+Service reports apply payment status to service principal only, using the same selected requests for summaries, details and exports. Completed quick sales are fully collected, so unpaid-only reports exclude them. Refundable insurance affects neither collections, outstanding principal nor net profit.
+
+**Why:** The user requested complete financial parity with property reports without mixing insurance into receivables or showing totals from a different request scope.
+
+**How to apply:** Keep full-period service expenses explicit rather than inventing allocations by payment status. Offer a service-local compact default and detailed mode consistently across page, printing, PDF and sharing; neither changes the property report's controls. Translate generated status/category codes into Arabic and use Arabic or numeric dates, preserving owner-authored identities and historical accounting data.

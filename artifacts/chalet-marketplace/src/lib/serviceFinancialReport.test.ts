@@ -3,7 +3,10 @@ import { it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { QuickSale } from "@workspace/api-client-react";
-import { buildServiceFinancialReport, serviceExpensesForPeriod, serviceReportRows, serviceReportSourceLabels } from "./serviceFinancialReport";
+import { buildServiceFinancialReport, serviceExpensesForPeriod, serviceReportRows, serviceReportSourceLabels,
+  serviceBookingReport, serviceSalesForPaymentFilter, serviceReportDate, serviceReportStatus,
+  serviceReportPaymentLabels, type ServiceReportBooking } from "./serviceFinancialReport";
+import { readFileSync } from "node:fs";
 import { revenueMonthKey } from "./revenuePeriod";
 import { buildActivitySummaryReportHtml } from "./financialReport";
 import { ServiceFinancialReportPanels } from "../components/owner/ServiceFinancialReportPanels";
@@ -21,6 +24,111 @@ const expenses = [
   { id: 5, dateStr: "2026-10-28", amount: "500", category: "عام غير موزع" },
   { id: 6, providerId: 10, dateStr: "2025-01-01", amount: "500", category: "فترة أخرى" },
 ];
+
+const appointments: ServiceReportBooking[] = [
+  { id: 101, providerId: 10, dateStr: "2026-10-28", status: "confirmed", amount: "100.10", deposit: "25.05", insuranceAmount: "500" },
+  { id: 102, providerId: 10, dateStr: "2026-10-28", status: "confirmed", amount: "80.20", deposit: "80.20", insuranceAmount: "1000" },
+  { id: 103, providerId: 10, dateStr: "2026-10-28", status: "pending", amount: "60", deposit: "0", insuranceAmount: "700" },
+  { id: 104, providerId: 10, dateStr: "2026-10-28", status: "cancelled", amount: "500", deposit: "400", insuranceAmount: "300" },
+  { id: 105, providerId: 20, dateStr: "2026-10-28", status: "confirmed", amount: "900", deposit: "900" },
+  { id: 106, providerId: 10, dateStr: "2026-12-28", status: "confirmed", amount: "900", deposit: "900" },
+];
+
+it("uses the identical service, period and payment selection for booking totals and details in either calendar", () => {
+  const original = JSON.stringify(appointments);
+  for (const calendar of ["gregorian", "hijri"] as const) {
+    const month = calendar === "gregorian" ? "2026-10" : revenueMonthKey("2026-10-28", "hijri");
+    const period = { calendar, year: month.slice(0, 4), month };
+    const expected = {
+      all: { ids: [101, 102, 103], collected: 105.25, contractual: 240.3, outstanding: 135.05, insurance: 2200 },
+      unpaid: { ids: [101, 103], collected: 25.05, contractual: 160.1, outstanding: 135.05, insurance: 1200 },
+      paid: { ids: [102], collected: 80.2, contractual: 80.2, outstanding: 0, insurance: 1000 },
+    };
+    for (const payment of ["all", "unpaid", "paid"] as const) {
+      const selected = serviceBookingReport(appointments, 10, period, payment);
+      const wanted = expected[payment];
+      assert.equal(selected.hasInvalidAmounts, false);
+      assert.deepEqual(selected.bookings.map(booking => booking.id), wanted.ids);
+      assert.equal(selected.summary.totalRevenue, wanted.collected);
+      assert.equal(selected.summary.totalContractValue, wanted.contractual);
+      assert.equal(selected.summary.totalOutstanding, wanted.outstanding);
+      assert.equal(selected.summary.totalInsurance, wanted.insurance);
+      const noInsurance = serviceBookingReport(appointments.map(booking => ({ ...booking, insuranceAmount: "0" })), 10, period, payment);
+      assert.equal(noInsurance.summary.totalRevenue, wanted.collected);
+      assert.equal(noInsurance.summary.totalOutstanding, wanted.outstanding);
+      for (const source of ["all", "bookings", "quick_sales"] as const) {
+        const filteredSales = serviceSalesForPaymentFilter(sales, payment);
+        const report = buildServiceFinancialReport(selected.summary, filteredSales, expenses.slice(0, 2), source)!;
+        const bookingRevenue = source === "quick_sales" ? 0 : wanted.collected;
+        const saleRevenue = source === "bookings" || payment === "unpaid" ? 0 : 35.9;
+        assert.equal(report.totalRevenue, Math.round((bookingRevenue + saleRevenue) * 100) / 100);
+        assert.equal(report.totalOutstanding, source === "quick_sales" ? 0 : wanted.outstanding);
+        assert.equal(report.totalExpenses, 35.9);
+        assert.equal(report.netProfit, (Math.round(report.totalRevenue * 100) - 3590) / 100);
+        assert.equal(report.totalContractValue, Math.round(((source === "quick_sales" ? 0 : wanted.contractual) + saleRevenue) * 100) / 100);
+        assert.equal(serviceReportRows(report, source, "compact").length, 5);
+      }
+    }
+  }
+  assert.equal(JSON.stringify(appointments), original);
+});
+
+it("flags missing or invalid booking prices rather than reporting fake zeros", () => {
+  for (const amount of [null, "", "not-a-number", "-1"]) {
+    const selected = serviceBookingReport([{ ...appointments[0], amount }], 10, {
+      calendar: "gregorian", year: "2026", month: "2026-10",
+    }, "all");
+    assert.equal(selected.hasInvalidAmounts, true);
+  }
+});
+
+it("compact/detailed page and print exports retain the same closing amounts and only detailed mode includes requests", () => {
+  const selected = serviceBookingReport(appointments, 10, { calendar: "gregorian", year: "2026", month: "2026-10" }, "all");
+  const report = buildServiceFinancialReport(selected.summary, serviceSalesForPaymentFilter(sales, "all"), expenses.slice(0, 2), "all")!;
+  const detail = { title: "تفاصيل الطلبات", headers: ["رقم", "الحالة", "قيمة الحجز", "المحصّل", "المتبقي"], rows: [
+    ["١٠١", serviceReportStatus("confirmed"), "١٠٠٫١٠", "٢٥٫٠٥", "٧٥٫٠٥"],
+  ] };
+  for (const mode of ["compact", "detailed"] as const) {
+    const rows = serviceReportRows(report, "all", mode);
+    const closingRows = serviceReportRows(report, "all", "compact");
+    const details = mode === "detailed" ? [detail] : [];
+    const page = renderToStaticMarkup(createElement(ServiceFinancialReportPanels, { rows, details, closingRows }));
+    assert.equal(page.includes(detail.title), mode === "detailed");
+    assert.ok(page.includes("المبالغ المتبقية"));
+    assert.ok(page.includes("القيمة التعاقدية"));
+    for (const forPrint of [false, true]) {
+      const html = buildActivitySummaryReportHtml({
+        title: "التقرير المالي", period: serviceReportDate("2026-10-28", true), activityName: "خدمة",
+        fileName: "٢٠٢٦-١٠.pdf", rows, closingRows, detailSections: mode === "detailed" ? details : undefined,
+        scopeLabel: `حالة السداد: ${serviceReportPaymentLabels.all}`, logo: null, css: "", forPrint,
+      });
+      assert.equal(html.includes(detail.title), mode === "detailed");
+      assert.ok(html.includes("المبالغ المتبقية"));
+      assert.ok(html.includes("صافي الربح / الدخل النهائي"));
+      assert.ok(!html.includes("confirmed"));
+      assert.ok(!html.includes("October"));
+    }
+  }
+});
+
+it("uses Arabic statuses and numeric dual-calendar dates in report output and wires all controls to that output", () => {
+  for (const firstHijri of [true, false]) {
+    const date = serviceReportDate("2026-10-28", firstHijri);
+    assert.ok(!/[A-Za-z]/.test(date));
+    assert.ok(date.includes("هـ") && date.includes("م"));
+    assert.match(date, /[٠-٩]/);
+  }
+  for (const status of ["confirmed", "pending", "cancelled", "legacy_internal_status"]) {
+    assert.ok(!/[A-Za-z]/.test(serviceReportStatus(status)));
+  }
+  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  assert.ok(source.includes('useState<ServiceReportMode>("compact")'));
+  assert.ok(source.includes("value={serviceReportPayment} onChange={setServiceReportPayment}"));
+  assert.ok(source.includes("serviceReportRows(serviceClosing, serviceReportSource, serviceReportMode)"));
+  assert.ok(source.includes('detailSections: serviceReportMode === "detailed" ? serviceReportDetails : undefined'));
+  assert.ok(source.includes('expense.customCategory || catMap[expense.category]?.label || "أخرى"'));
+  assert.ok(source.includes("serviceReportSource, serviceReportPayment, serviceReportMode, showPropertyReportDetails"));
+});
 
 it("scopes expenses to the exact service and period in both calendars without distributing general/property expenses", () => {
   for (const calendar of ["hijri", "gregorian"] as const) {

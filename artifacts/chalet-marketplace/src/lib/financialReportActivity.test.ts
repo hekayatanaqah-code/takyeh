@@ -12,7 +12,7 @@ it("keeps the service summary before provider and sales details, and waits for b
   const serviceSection = dashboard.slice(dashboard.indexOf("{/* ── Services Report ── */}"), dashboard.indexOf("{/* ── Unified Report ── */}"));
   assert.ok(serviceSection.includes("!serviceDataLoading && !serviceDataError"));
   assert.ok(serviceSection.includes("<ServiceFinancialReportPanels"));
-  assert.ok(serviceSection.includes("details={serviceReportDetails} closingRows={serviceClosingRows}"));
+  assert.ok(serviceSection.includes('details={serviceReportMode === "detailed" ? serviceReportDetails : []} closingRows={serviceClosingRows}'));
   assert.ok(dashboard.includes("reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services)"));
 });
 
