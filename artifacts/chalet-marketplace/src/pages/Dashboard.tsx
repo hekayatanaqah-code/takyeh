@@ -42,6 +42,8 @@ import { Download } from "lucide-react";
 import { buildActivitySummaryReportHtml, buildPropertyReportClosingHtml, buildPropertyBookingDetailsHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount, PROPERTY_REPORT_REVENUE_NOTE } from "@/lib/financialReport";
 import { propertyCalendarBookingMap, propertyCalendarRows } from "@/lib/propertyCalendar";
 import { resolveManualBookingProperty } from "@/lib/manualBookingProperty";
+import { matchesPropertyPaymentFilter, type PropertyPaymentFilter } from "@/lib/propertyBookingStatus";
+import { PropertyBookingPaymentFilters, PropertyBookingArrivalBadge } from "@/components/PropertyBookingStatus";
 import { finalizePropertyReportHtml, propertyPdfSliceRanges } from "@/lib/propertyReportLayout";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
@@ -4681,6 +4683,7 @@ function BookingCalendarTab({
   const [bookingCalView, setBookingCalView] = useState<"hijri" | "gregorian">("hijri");
   const [bookingMonthFilter, setBookingMonthFilter] = useState<string>("all");
   const [bookingYearFilter, setBookingYearFilter] = useState<string>("");
+  const [bookingPaymentFilter, setBookingPaymentFilter] = useState<PropertyPaymentFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
   const [bookingDepositTarget, setBookingDepositTarget] = useState<{ bookingId: number; maxAmount: number; totalCash: number; submissionId?: number | null; label?: string } | null>(null);
@@ -5373,16 +5376,19 @@ function BookingCalendarTab({
     if (bookingMonthFilter !== "all") {
       result = result.filter(b => getBookingMonthKey(b.bookingDate, bookingCalView) === bookingMonthFilter);
     }
-    return result;
-  }, [filteredBookings, bookingMonthFilter, bookingCalView, bookingYearFilter]);
+    return result.filter(booking => matchesPropertyPaymentFilter(booking, bookingPaymentFilter));
+  }, [filteredBookings, bookingMonthFilter, bookingCalView, bookingYearFilter, bookingPaymentFilter]);
 
   const totalBookingPages = Math.max(1, Math.ceil(monthFilteredBookings.length / BOOKINGS_PER_PAGE));
+  useEffect(() => {
+    setBookingPage(current => Math.min(current, totalBookingPages - 1));
+  }, [totalBookingPages]);
   const pagedBookings = useMemo(() => {
     const start = bookingPage * BOOKINGS_PER_PAGE;
     return monthFilteredBookings.slice(start, start + BOOKINGS_PER_PAGE);
   }, [monthFilteredBookings, bookingPage]);
 
-  useEffect(() => { setBookingPage(0); }, [searchQuery, filterFrom, filterTo]);
+  useEffect(() => { setBookingPage(0); }, [searchQuery, filterFrom, filterTo, bookingPaymentFilter]);
   useEffect(() => { setBookingPage(0); setBookingMonthFilter("all"); setBookingYearFilter(""); }, [bookingCalView]);
   useEffect(() => { setBookingPage(0); }, [bookingMonthFilter]);
   useEffect(() => { setBookingPage(0); setBookingMonthFilter("all"); }, [bookingYearFilter]);
@@ -7132,6 +7138,10 @@ function BookingCalendarTab({
 
       {/* Bookings List */}
       <div>
+        <PropertyBookingPaymentFilters
+          value={bookingPaymentFilter}
+          onChange={(filter) => { setBookingPaymentFilter(filter); setBookingPage(0); }}
+        />
         {/* Search bar */}
         <div className="relative mb-3">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
@@ -7157,7 +7167,7 @@ function BookingCalendarTab({
         </div>
         <div className="mb-4 space-y-2">
           <h3 className="font-bold text-foreground">قائمة الحجوزات
-            {(searchQuery || bookingYearFilter || bookingMonthFilter !== "all") && monthFilteredBookings.length > 0 && (
+            {(searchQuery || bookingYearFilter || bookingMonthFilter !== "all" || bookingPaymentFilter !== "all") && monthFilteredBookings.length > 0 && (
               <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(monthFilteredBookings.length)} نتيجة)</span>
             )}
           </h3>
@@ -7237,9 +7247,9 @@ function BookingCalendarTab({
         ) : monthFilteredBookings.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
             <BookOpen className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-            <h3 className="text-base font-semibold mb-2">{(bookingYearFilter || bookingMonthFilter !== "all") ? "لا توجد حجوزات في هذه الفترة" : "لا توجد حجوزات بعد"}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{(bookingYearFilter || bookingMonthFilter !== "all") ? "جرّب تغيير الفترة الزمنية" : "سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك"}</p>
-            {!bookingYearFilter && bookingMonthFilter === "all" && (
+            <h3 className="text-base font-semibold mb-2">{bookingPaymentFilter !== "all" ? "لا توجد حجوزات تطابق حالة الدفع المحددة" : (bookingYearFilter || bookingMonthFilter !== "all") ? "لا توجد حجوزات في هذه الفترة" : "لا توجد حجوزات بعد"}</h3>
+            <p className="text-sm text-muted-foreground mb-4">{bookingPaymentFilter !== "all" ? "اختر «الكل» أو غيّر حالة الدفع والفترة لعرض الحجوزات الأخرى" : (bookingYearFilter || bookingMonthFilter !== "all") ? "جرّب تغيير الفترة الزمنية" : "سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك"}</p>
+            {!bookingYearFilter && bookingMonthFilter === "all" && bookingPaymentFilter === "all" && (
               <Button size="sm" disabled={isReadOnly} onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setAddOpen(true); }}>
                 <Plus className="w-4 h-4 me-2" />
                 إضافة أول حجز
@@ -7300,6 +7310,7 @@ function BookingCalendarTab({
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">
+                          <PropertyBookingArrivalBadge bookingDate={b.bookingDate} now={stayClock} />
                           {approvedCalendarSubmissionIds.has(Number(b.submissionId)) && (
                             <button
                               type="button"

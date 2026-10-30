@@ -19,3 +19,9 @@ Keep the owner's live calendar and active list restricted to genuine recorded bo
 **Why:** The user explicitly requested removal of automatically generated fictitious bookings and visual agreement based only on their genuine manually recorded bookings.
 
 **How to apply:** Keep calendar rendering fixtures in isolated tests. Before purging a suspected live fixture, establish its provenance; a matching date alone does not prove a booking is synthetic, especially when it has recorded financial amounts.
+
+Arrival preparation badges mean the booking starts today or tomorrow in Saudi time, rather than a rolling 48-hour timestamp window.
+
+**Why:** The user specified “حجوزات اليوم أو الغد”; a precise-hour window could omit today's arrivals or include the day after tomorrow.
+
+**How to apply:** Distinguish the start day from continued occupancy in multi-day stays; the existing whole-day active/archive boundary remains unchanged.
