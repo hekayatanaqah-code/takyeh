@@ -51,6 +51,7 @@ import { FinancialMonthOption } from "@/components/FinancialMonthOption";
 import { SubmissionDate } from "@/components/owner/SubmissionDate";
 import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard";
 import { ServiceBookingCard, serviceFinancialState } from "@/components/owner/ServiceBookingCard";
+import { ServiceBookingFilters } from "@/components/owner/ServiceBookingFilters";
 import { sortServiceBookings, serviceBookingPage } from "@/lib/serviceBookingList";
 import { serviceCalendarBookings, serviceBookingMatches, type ServiceBookingScope } from "@/lib/serviceBookingOperations";
 import { useSaudiDayClock } from "@/hooks/useSaudiDayClock";
@@ -12486,28 +12487,15 @@ function ServiceCalendarBookingsTab() {
 
       {/* ── APPOINTMENTS LIST ── */}
       <div ref={serviceListRef} className="min-w-0 space-y-3 scroll-mt-24" data-testid="service-bookings-register">
-        <div role="group" aria-label="نطاق سجل حجوزات الخدمات" className="flex flex-wrap gap-2">
-          {([["active", "الحجوزات النشطة"], ["completed", "أرشيف المكتملة"], ["cancelled", "الملغية"]] as const).map(([scope, label]) => (
-            <button key={scope} type="button" aria-pressed={serviceBookingScope === scope}
-              onClick={() => { setServiceBookingScope(scope); setServiceListPage(1); }}
-              className={`min-h-10 rounded-xl border px-3 py-2 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-primary ${serviceBookingScope === scope ? "bg-primary text-primary-foreground" : "bg-card text-foreground"}`}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <PropertyBookingPaymentFilters value={servicePaymentFilter}
-          onChange={filter => { setServicePaymentFilter(filter); setServiceListPage(1); }} />
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h3 className="text-sm font-bold text-foreground">سجل الحجوزات</h3>
-          <div className={serviceBookingScope === "cancelled" ? "hidden" : "flex gap-1"}>
-            {(["all", "confirmed", "pending"] as const).map(f => (
-              <button key={f} type="button" onClick={() => setListFilter(f)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${listFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"}`}>
-                {f === "all" ? "الكل" : statusLabel[f]}
-              </button>
-            ))}
-          </div>
-        </div>
+        <h3 className="text-sm font-bold text-foreground">سجل الحجوزات</h3>
+        <ServiceBookingFilters
+          scope={serviceBookingScope}
+          payment={servicePaymentFilter}
+          status={listFilter}
+          onScopeChange={scope => { setServiceBookingScope(scope); setServiceListPage(1); }}
+          onPaymentChange={filter => { setServicePaymentFilter(filter); setServiceListPage(1); }}
+          onStatusChange={filter => { setListFilter(filter); setServiceListPage(1); }}
+        />
 
         {apptError ? (
           <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm">
