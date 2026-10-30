@@ -40,6 +40,7 @@ import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { Download } from "lucide-react";
 import { buildActivitySummaryReportHtml, buildPropertyReportClosingHtml, buildPropertyBookingDetailsHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount, PROPERTY_REPORT_REVENUE_NOTE } from "@/lib/financialReport";
+import { propertyCalendarBookingMap, propertyCalendarRows } from "@/lib/propertyCalendar";
 import { finalizePropertyReportHtml, propertyPdfSliceRanges } from "@/lib/propertyReportLayout";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
@@ -3332,22 +3333,9 @@ function MiniCalendar({
     return m;
   }, [availability]);
 
-  /* Map actual DB bookings → period → guestName, expanded across durationDays */
+  /* Preserve every booking per period, expanded across its full duration. */
   const bookingMap = useMemo(() => {
-    const m = new Map<string, Map<string, string>>();
-    for (const b of bookings) {
-      if (!b.bookingDate) continue;
-      const duration = Math.max(1, b.durationDays ?? 1);
-      const period = b.period ?? "full_day";
-      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
-      for (let i = 0; i < duration; i++) {
-        const d = new Date(sy, sm - 1, sd + i);
-        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        if (!m.has(ds)) m.set(ds, new Map());
-        m.get(ds)!.set(period, b.clientName ?? "");
-      }
-    }
-    return m;
+    return propertyCalendarBookingMap(bookings);
   }, [bookings]);
 
   /* Dates that have a cash booking NOT yet deposited to bank */
@@ -3487,13 +3475,9 @@ function MiniCalendar({
           const bkEntry = bookingMap.get(dateStr); // Map<period, guestName>
 
           /* Resolve per-period blocked state + guest names */
-          const morningGuest = bkEntry?.get("morning") ?? (avEntry?.periodMorning ? null : undefined);
-          const eveningGuest = bkEntry?.get("evening") ?? (avEntry?.periodEvening ? null : undefined);
-          const fullDayGuest = bkEntry?.get("full_day") ?? (avEntry?.periodFullDay ? null : undefined);
-
-          const morningBlocked = morningGuest !== undefined;
-          const eveningBlocked = eveningGuest !== undefined;
-          const fullDayBlocked = fullDayGuest !== undefined;
+          const morningBlocked = bkEntry?.has("morning") || !!avEntry?.periodMorning;
+          const eveningBlocked = bkEntry?.has("evening") || !!avEntry?.periodEvening;
+          const fullDayBlocked = bkEntry?.has("full_day") || !!avEntry?.periodFullDay;
           const isBlocked = morningBlocked || eveningBlocked || fullDayBlocked;
           const isPartial = isBlocked && !fullDayBlocked && (morningBlocked !== eveningBlocked);
           const isToday = dateStr === today;
@@ -3503,16 +3487,7 @@ function MiniCalendar({
           /* Hijri day number */
 
           /* Build per-period rows for display */
-          type PRow = { label: string; guest: string; amber: boolean; cleaning?: boolean; period?: string };
-          const pRows: PRow[] = [];
-          if (!isManualBlock) {
-            if (fullDayBlocked) {
-              pRows.push({ label: "يوم كامل", guest: fullDayGuest ? _getFirstName(fullDayGuest) : "", amber: false });
-            } else {
-              if (morningBlocked) pRows.push({ label: "صباحي", guest: morningGuest ? _getFirstName(morningGuest) : "", amber: true });
-              if (eveningBlocked) pRows.push({ label: "مسائي", guest: eveningGuest ? _getFirstName(eveningGuest) : "", amber: true });
-            }
-          }
+          const pRows = propertyCalendarRows(bkEntry, avEntry);
           /* Cleaning-time virtual rows */
           const cleanPeriods = cleaningTimePeriods.get(dateStr);
           if (cleanPeriods) {
@@ -3525,6 +3500,7 @@ function MiniCalendar({
           return (
             <button
               key={dateStr}
+              data-property-calendar-date={dateStr}
               onClick={() => onDateClick(dateStr)}
               className={[
                 "relative flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
@@ -3556,7 +3532,7 @@ function MiniCalendar({
               {pRows.length > 0 && (
                 <div className="mt-1 w-full flex flex-col items-center gap-[2px]">
                   {pRows.map((row, ri) => (
-                    <div key={ri} className="w-full flex flex-col items-center">
+                    <div key={row.bookingId ?? `block-${ri}`} data-calendar-booking-id={row.bookingId} className="w-full min-w-0 flex flex-col items-center">
                       <span
                       className={`text-[0.44rem] font-bold leading-none text-center ${
                         row.cleaning
@@ -3650,20 +3626,7 @@ function GregorianMiniCalendar({
   }, [availability]);
 
   const bookingMap = useMemo(() => {
-    const m = new Map<string, Map<string, string>>();
-    for (const b of bookings) {
-      if (!b.bookingDate) continue;
-      const duration = Math.max(1, b.durationDays ?? 1);
-      const period = b.period ?? "full_day";
-      const [sy, sm, sd] = b.bookingDate.split("-").map(Number);
-      for (let i = 0; i < duration; i++) {
-        const d = new Date(sy, sm - 1, sd + i);
-        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-        if (!m.has(ds)) m.set(ds, new Map());
-        m.get(ds)!.set(period, b.clientName ?? "");
-      }
-    }
-    return m;
+    return propertyCalendarBookingMap(bookings);
   }, [bookings]);
 
   const cashUndepositedDates = useMemo(() => {
@@ -3772,25 +3735,14 @@ function GregorianMiniCalendar({
           const dateStr = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, "0")}-${String(cellDate.getDate()).padStart(2, "0")}`;
           const avEntry = availMap.get(dateStr);
           const bkEntry = bookingMap.get(dateStr);
-          const morningGuest = bkEntry?.get("morning") ?? (avEntry?.periodMorning ? null : undefined);
-          const eveningGuest = bkEntry?.get("evening") ?? (avEntry?.periodEvening ? null : undefined);
-          const fullDayGuest = bkEntry?.get("full_day") ?? (avEntry?.periodFullDay ? null : undefined);
-          const morningBlocked = morningGuest !== undefined;
-          const eveningBlocked = eveningGuest !== undefined;
-          const fullDayBlocked = fullDayGuest !== undefined;
+          const morningBlocked = bkEntry?.has("morning") || !!avEntry?.periodMorning;
+          const eveningBlocked = bkEntry?.has("evening") || !!avEntry?.periodEvening;
+          const fullDayBlocked = bkEntry?.has("full_day") || !!avEntry?.periodFullDay;
           const isBlocked = morningBlocked || eveningBlocked || fullDayBlocked;
           const isPartial = isBlocked && !fullDayBlocked && (morningBlocked !== eveningBlocked);
           const isToday = dateStr === today;
           const isManualBlock = !!avEntry?.notes && (!bkEntry || bkEntry.size === 0);
-          type PRow = { label: string; guest: string; amber: boolean; cleaning?: boolean; period?: string };
-          const pRows: PRow[] = [];
-          if (!isManualBlock) {
-            if (fullDayBlocked) pRows.push({ label: "يوم كامل", guest: fullDayGuest ? fullDayGuest.trim().split(/\s+/)[0] : "", amber: false });
-            else {
-              if (morningBlocked) pRows.push({ label: morningGuest === null ? "🔒 صباحي" : "صباحي", guest: morningGuest ? morningGuest.trim().split(/\s+/)[0] : "", amber: true });
-              if (eveningBlocked) pRows.push({ label: eveningGuest === null ? "🔒 مسائي" : "مسائي", guest: eveningGuest ? eveningGuest.trim().split(/\s+/)[0] : "", amber: true });
-            }
-          }
+          const pRows = propertyCalendarRows(bkEntry, avEntry);
           const cleanPeriods = cleaningTimePeriods.get(dateStr);
           if (cleanPeriods) {
             if (cleanPeriods.has("morning") && !morningBlocked && !fullDayBlocked)
@@ -3801,6 +3753,7 @@ function GregorianMiniCalendar({
           return (
             <button
               key={dateStr}
+              data-property-calendar-date={dateStr}
               onClick={() => onDateClick(dateStr)}
               className={[
                 "relative flex flex-col items-center justify-start pt-1.5 pb-1.5 px-0.5 w-full",
@@ -3825,7 +3778,7 @@ function GregorianMiniCalendar({
               {pRows.length > 0 && (
                 <div className="mt-1 w-full flex flex-col items-center gap-[2px]">
                   {pRows.map((row, ri) => (
-                    <div key={ri} className="w-full flex flex-col items-center">
+                    <div key={row.bookingId ?? `block-${ri}`} data-calendar-booking-id={row.bookingId} className="w-full min-w-0 flex flex-col items-center">
                       <span
                         className={`text-[0.44rem] font-bold leading-none text-center ${row.cleaning ? "text-teal-700 dark:text-teal-300 cursor-pointer hover:text-emerald-600 dark:hover:text-emerald-400 underline decoration-dotted" : row.amber ? "text-amber-800 dark:text-amber-200" : "text-red-800 dark:text-red-200"}`}
                         onClick={row.cleaning && row.period ? (e) => { e.stopPropagation(); onCleaningBlockClick?.(dateStr, row.period!); } : undefined}
@@ -4935,13 +4888,16 @@ function BookingCalendarTab({
     enabled: !!activeChaletId,
   });
 
-  const { data: bookings = [], isLoading: bookingsLoading } = useQuery<OwnerBooking[]>({
+  const { data: bookings = [], isLoading: bookingsLoading, isError: bookingsError, refetch: retryCalendarBookings } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings"],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذّر تحميل الحجوزات");
       return r.json();
     },
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    refetchInterval: 30_000,
   });
   /* phones that appear in 2+ bookings = returning guests */
   const returningPhonesSet = useMemo(() => {
@@ -5268,9 +5224,9 @@ function BookingCalendarTab({
     if (!showAllChalets && !activeChalet) return [];
     if (!calMonthStart || !calMonthEnd) return [];
     return bookings.filter((b) => {
-      if (!b.bookingDate) return false;
+      if (!b.bookingDate || b.cancelledAt) return false;
       if (showAllChalets && !approvedCalendarSubmissionIds.has(Number(b.submissionId))) return false;
-      if (!showAllChalets && b.submissionId !== activeChalet?.submissionId) return false;
+      if (!showAllChalets && Number(b.submissionId) !== Number(activeChalet?.submissionId)) return false;
       const [by, bm, bd] = b.bookingDate.split("-").map(Number);
       const dur = Math.max(1, b.durationDays ?? 1);
       const bEndDate = new Date(by, bm - 1, bd + dur - 1);
@@ -5664,7 +5620,7 @@ function BookingCalendarTab({
   }, [agendaScope, calMonthStart, calMonthEnd, calMonthDays, calBookings]);
 
   return (
-    <div className="space-y-6">
+    <div className="property-booking-management space-y-6" data-testid="property-booking-management">
       <div className="flex items-center gap-3 flex-wrap justify-between">
         <div className="flex items-center gap-2">
           <h2 className="text-xl font-bold text-foreground">سجل وتقويم الحجوزات</h2>
@@ -5675,6 +5631,11 @@ function BookingCalendarTab({
           إضافة حجز يدوي
         </Button>
       </div>
+
+      {bookingsError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-card p-4">
+        <p className="text-sm font-semibold">تعذّر تحديث الحجوزات. قد تكون البيانات المعروضة غير مكتملة؛ أعد المحاولة.</p>
+        <Button variant="outline" size="sm" onClick={() => void retryCalendarBookings()}>إعادة المحاولة</Button>
+      </div>}
 
       {/* ── Stats Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -5743,7 +5704,7 @@ function BookingCalendarTab({
 
       {/* Day Booking Summary Dialog */}
       {summaryDate && (() => {
-        const sumBkgs = bookings.filter((b) => {
+        const sumBkgs = calBookings.filter((b) => {
           if (!b.bookingDate) return false;
           const end = new Date(b.bookingDate);
           end.setDate(end.getDate() + Math.max(1, b.durationDays ?? 1) - 1);
@@ -6716,7 +6677,7 @@ function BookingCalendarTab({
                   })}
                 </div>
               </div>
-            ) : availLoading ? (
+            ) : availLoading || bookingsLoading ? (
               <Skeleton className="h-48 w-full rounded-xl" />
             ) : dashCalType === "gregorian" ? (
               <GregorianMiniCalendar

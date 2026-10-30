@@ -240,6 +240,23 @@ input, textarea, select, [contenteditable] {
 }
 
 @layer utilities {
+  /* Property calendar stays in the root scroll flow, including expanded archives. */
+  .property-booking-management {
+    display: flow-root;
+    width: 100%;
+    min-width: 0;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .property-booking-management > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #root:has(.property-booking-management) {
+    scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .verify-phone-number {
     display: inline-block !important;
   }
