@@ -32,6 +32,7 @@ export function isInRevenuePeriod(dateStr: string | null | undefined, period: Re
 }
 
 export function revenueSalesTitle(period: RevenuePeriod): string {
+  if (period.range) return "إجمالي المبيعات خلال الفترة المحددة";
   if (!period.year) return "إجمالي المبيعات العام";
   if (!period.month) {
     const year = Number(period.year).toLocaleString("ar-SA", { useGrouping: false });

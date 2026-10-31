@@ -29,7 +29,6 @@ import { DashboardActivitySelector } from "@/components/owner/DashboardActivityS
 import { FinanceUpgradeDialog } from "@/components/owner/FinanceUpgradeDialog";
 import { activityKey, financialManagementAllowed, notificationInActivity, type DashboardActivity } from "@/lib/dashboardActivity";
 import { filterOwnerNotifications, type NotificationFilters } from "@/lib/ownerNotificationFilters";
-import { RevenueMonthItem } from "@/components/owner/RevenueMonthItem";
 import { PropertyOffersTab } from "@/components/owner/PropertyOffersTab";
 import { Tag } from "lucide-react";
 import { ServiceActivityDetailsSection, ServiceDetailsStickySave } from "@/components/owner/ServiceActivityDetailsSection";
@@ -42,6 +41,8 @@ import { defaultExpenseActivity, expenseTarget } from "@/lib/expenseTarget";
 import { buildBankLedger, formatBankAmount, bankLedgerTotals, type LedgerDeposit, type LedgerExpense, type LedgerPayment, type LedgerServiceAppointment } from "@/lib/bankLedger";
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
+import { revenueFilterPeriod, type RevenueFilterMode } from "@/lib/revenueFilterPeriod";
+import { RevenueFilterBar } from "@/components/owner/RevenueFilterBar";
 import { Download } from "lucide-react";
 import { buildActivitySummaryReportHtml, buildPropertyReportClosingHtml, buildPropertyBookingDetailsHtml, resolveReportCalendar, financialPeriodOptions, reconcileFinancialMonth, finalizeFinancialReportHtml, formatFinancialAmount, PROPERTY_REPORT_REVENUE_NOTE } from "@/lib/financialReport";
 import { propertyCalendarBookingMap, propertyCalendarRows } from "@/lib/propertyCalendar";
@@ -66,7 +67,7 @@ import { ServiceManagementNavigation } from "@/components/owner/ServiceManagemen
 import { ServiceCatalogPanel, ServiceOffersPanel } from "@/components/owner/ServiceCatalogPanels";
 import { QuickSalesPanel } from "@/components/owner/QuickSalesPanel";
 import { QuickSalesSettingsPanel } from "@/components/owner/QuickSalesSettingsPanel";
-import { QuickSalesRevenueDetails, RevenueSourceFilter } from "@/components/owner/QuickSalesRevenue";
+import { QuickSalesRevenueDetails } from "@/components/owner/QuickSalesRevenue";
 import { useListQuickSales, useGetQuickSalesSettings } from "@workspace/api-client-react";
 import { quickSalesForPeriod, quickSalesTotal, type RevenueSource } from "@/lib/quickSalesRevenue";
 import { revenueMonthLabel } from "@/lib/revenueMonthLabel";
@@ -14041,6 +14042,9 @@ function RevenueTab() {
   const [serviceSelectedMonth, setServiceSelectedMonth] = useState(currentMonth);
   const [serviceSelectedHijriMonth, setServiceSelectedHijriMonth] = useState(() => getCurrentFinanceMonth("hijri"));
   const [serviceRevenueYear, setServiceRevenueYear] = useState(() => String(toHijriComponents(new Date()).year));
+  const [revenueMode, setRevenueMode] = useState<RevenueFilterMode>("monthly");
+  const [revenueFrom, setRevenueFrom] = useState("");
+  const [revenueTo, setRevenueTo] = useState("");
   const [filter, setFilter] = useState<"all" | "deposit" | "balance" | "damage" | "cancellation" | "refund" | "insurance">("all");
   const [svcFilter, setSvcFilter] = useState<"all" | "deposit" | "balance" | "damage">("all");
   const [proofTarget, setProofTarget] = useState<OwnerBooking | null>(null);
@@ -14099,11 +14103,9 @@ function RevenueTab() {
     return mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
   });
   const [pendingYear, setPendingYear] = useState<string>(() => String(toHijriComponents(new Date()).year));
-  const revenuePeriod = useMemo(() => ({
-    calendar: calType,
-    year: revYear,
-    month: revYear ? (calType === "hijri" ? selectedHijriMonth : selectedMonth) : "",
-  }), [calType, revYear, selectedHijriMonth, selectedMonth]);
+  const revenuePeriod = useMemo(() => revenueFilterPeriod(revenueMode, calType, revYear,
+    calType === "hijri" ? selectedHijriMonth : selectedMonth, revenueFrom, revenueTo),
+  [revenueMode, calType, revYear, selectedHijriMonth, selectedMonth, revenueFrom, revenueTo]);
   const salesTitle = revenueSalesTitle(revenuePeriod);
 
   const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
@@ -14525,11 +14527,8 @@ function RevenueTab() {
   }, [monthBookings]);
 
   // Service-unit: use the exact selected Gregorian or Hijri period.
-  const selectedServicePeriod = {
-    calendar: calType,
-    year: serviceRevenueYear,
-    month: calType === "gregorian" ? serviceSelectedMonth : serviceSelectedHijriMonth,
-  };
+  const selectedServicePeriod = revenueFilterPeriod(revenueMode, calType, serviceRevenueYear,
+    calType === "gregorian" ? serviceSelectedMonth : serviceSelectedHijriMonth, revenueFrom, revenueTo);
   const monthSvcAppts = revenueSource === "quick_sales" ? [] : serviceRevenueBookings(serviceAppts, unit, selectedServicePeriod);
   const serviceQuickSales = revenueSource === "bookings" ? [] : quickSalesForPeriod(activityQuickSales, unit, selectedServicePeriod);
   const serviceQuickTotal = quickSalesTotal(serviceQuickSales);
@@ -14738,6 +14737,83 @@ function RevenueTab() {
     };
   }, [allBookings, depositLogs, unit, financial?.cashBreakdown]);
 
+  const filterYear = serviceOnlyRevenue ? serviceRevenueYear : revYear;
+  const filterMonth = serviceOnlyRevenue
+    ? calType === "hijri" ? serviceSelectedHijriMonth : serviceSelectedMonth
+    : calType === "hijri" ? selectedHijriMonth : selectedMonth;
+  const filterYears = serviceOnlyRevenue ? serviceYearOptions
+    : calType === "hijri" ? revHijriYearOptions.map(String) : revGregYearOptions;
+  const filterMonths = serviceOnlyRevenue ? serviceMonthsForYear : revMonthsForYear;
+  const setFilterMonth = (month: string) => {
+    if (serviceOnlyRevenue) {
+      if (calType === "hijri") setServiceSelectedHijriMonth(month);
+      else setServiceSelectedMonth(month);
+    } else if (calType === "hijri") setSelectedHijriMonth(month);
+    else setSelectedMonth(month);
+  };
+  // Year changes must select a real month rather than silently show a whole year
+  // while the visible period control still says "شهري".
+  useEffect(() => {
+    if (revenueMode === "monthly" && filterMonths.length && !filterMonths.includes(filterMonth)) {
+      const month = filterMonths[0];
+      if (serviceOnlyRevenue) {
+        if (calType === "hijri") setServiceSelectedHijriMonth(month);
+        else setServiceSelectedMonth(month);
+      } else if (calType === "hijri") setSelectedHijriMonth(month);
+      else setSelectedMonth(month);
+    }
+  }, [revenueMode, filterMonths, filterMonth, serviceOnlyRevenue, calType]);
+  const revenueHeader = <div className="space-y-5">
+    <div className="flex flex-wrap items-center gap-3">
+      <TrendingUp className="h-5 w-5 shrink-0 text-primary" />
+      <h2 className="text-lg font-bold text-foreground">
+        {unit.type === "chalet" || unit.type === "service" ? `إيرادات: ${unit.name}`
+          : serviceOnlyRevenue ? revenueProviders.length === 1 ? `إيرادات: ${revenueProviders[0].businessName}` : "إيرادات الخدمات"
+          : "الإيرادات"}
+      </h2>
+      <SectionGuideButton sectionKey="revenues" />
+    </div>
+    {!serviceOnlyRevenue && <div className="flex flex-wrap gap-2">
+      <div role="group" aria-label="عرض الإيرادات" className="flex rounded-xl border border-border bg-muted/60 p-1 text-sm">
+        {([["monthly", "الحسابات الشهرية"], ["receivables", "متبقي مستحقات الضيوف"]] as const).map(([tab, label]) =>
+          <button key={tab} type="button" aria-pressed={revSubTab === tab} onClick={() => setRevSubTab(tab)}
+            className={`flex min-h-10 items-center gap-2 rounded-lg px-3 py-2 font-bold transition-colors ${revSubTab === tab ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"}`}>
+            {label}
+            {tab === "receivables" && allReceivables.length > 0 && <span className="rounded-full bg-amber-100 px-2 text-xs text-amber-950">{toArN(allReceivables.length)}</span>}
+          </button>)}
+      </div>
+    </div>}
+    {(serviceOnlyRevenue || !showAllFuture) && <RevenueFilterBar
+      mode={revenueMode} onModeChange={setRevenueMode} calendar={calType}
+      onCalendarChange={mode => {
+        setCalType(mode);
+        const newYear = mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
+        if (serviceOnlyRevenue) {
+          const years = mode === "gregorian" ? serviceGregorianMonths.map(month => month.slice(0, 4))
+            : serviceHijriMonths.map(month => String(month.year));
+          setServiceRevenueYear(years[0] || newYear);
+          setServiceSelectedMonth("");
+          setServiceSelectedHijriMonth("");
+        } else {
+          setRevYear(newYear);
+          setSelectedMonth(currentMonth);
+          setSelectedHijriMonth(getCurrentFinanceMonth("hijri"));
+        }
+        localStorage.setItem("revCalType", mode);
+      }}
+      years={filterYears} year={filterYear} onYearChange={year => {
+        if (serviceOnlyRevenue) setServiceRevenueYear(year);
+        else setRevYear(year);
+        setFilterMonth("");
+      }}
+      months={filterMonths} month={filterMonth} onMonthChange={setFilterMonth}
+      monthLabel={revenueMonthLabel} from={revenueFrom} to={revenueTo}
+      onFromChange={setRevenueFrom} onToChange={setRevenueTo}
+      today={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" })}
+      source={unit.type !== "chalet" ? revenueSource : undefined}
+      onSourceChange={unit.type !== "chalet" ? setRevenueSource : undefined} />}
+  </div>;
+
   if (svcError || (unit.type !== "chalet" && quickSalesQuery.isError)) {
     return <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 space-y-3" dir="rtl">
       <p className="text-sm font-semibold">تعذّر تحميل إيرادات الخدمات أو المبيعات المفردة. لا يمكن عرض الإجماليات كاملة حالياً.</p>
@@ -14746,6 +14822,16 @@ function RevenueTab() {
         serviceRevenueQueries.forEach(query => { void query.refetch(); });
         void quickSalesQuery.refetch();
       }}>إعادة المحاولة</Button>
+    </div>;
+  }
+
+  if ((serviceOnlyRevenue || !showAllFuture) && revenueMode === "custom"
+    && (!revenueFrom || !revenueTo || revenueFrom > revenueTo)) {
+    return <div className="space-y-5" dir="rtl">{revenueHeader}
+      <p role="status" className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-base font-medium leading-8 text-foreground">
+        {!revenueFrom || !revenueTo ? "اختر تاريخ البداية والنهاية لعرض إيرادات الفترة المحددة."
+          : "يجب أن يكون تاريخ النهاية مساويًا لتاريخ البداية أو بعدها."}
+      </p>
     </div>;
   }
 
@@ -14771,94 +14857,12 @@ function RevenueTab() {
       return s + Math.max(0, amt - dep);
     }, 0);
 
-    const serviceMonthLabel = revenueMonthLabel;
-    const activeServiceMonth = !serviceRevenueYear ? "" : calType === "gregorian"
-      ? serviceSelectedMonth
-      : serviceSelectedHijriMonth;
-    const servicePeriod = { calendar: calType, year: serviceRevenueYear, month: activeServiceMonth };
+    const activeServiceMonth = selectedServicePeriod.month;
+    const servicePeriod = selectedServicePeriod;
 
     return (
       <div className="space-y-5" dir="rtl">
-        {/* Header */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <Activity className="w-5 h-5 text-amber-500 shrink-0" />
-          <h2 className="text-lg font-bold text-foreground">إيرادات: {unit.type === "service" ? unit.name : revenueProviders.length === 1 ? revenueProviders[0].businessName : "جميع الخدمات"}</h2>
-          <div className="grid w-full min-w-0 grid-cols-[auto_minmax(0,0.8fr)_minmax(0,1.2fr)] items-center gap-1.5 sm:flex sm:flex-nowrap sm:gap-2" dir="rtl">
-            <div className="flex h-9 items-stretch rounded-lg border border-border overflow-hidden text-xs shrink-0">
-              {(["gregorian", "hijri"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => {
-                    const years = mode === "gregorian"
-                      ? Array.from(new Set(serviceGregorianMonths.map((month) => month.slice(0, 4)))).sort().reverse()
-                      : Array.from(new Set(serviceHijriMonths.map((month) => String(month.year)))).sort().reverse();
-                    setCalType(mode);
-                    if (serviceRevenueYear && years[0]) setServiceRevenueYear(years[0]);
-                    localStorage.setItem("revCalType", mode);
-                  }}
-                  className={`px-2 sm:px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-                >
-                  {mode === "gregorian" ? "ميلادي" : "هجري"}
-                </button>
-              ))}
-            </div>
-            {serviceYearOptions.length > 0 && (
-              <Select dir="rtl" value={serviceRevenueYear || "__all__"} onValueChange={(value) => {
-                setServiceRevenueYear(value === "__all__" ? "" : value);
-                setServiceSelectedMonth("");
-                setServiceSelectedHijriMonth("");
-              }}>
-                <SelectTrigger aria-label="السنة" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[7.5rem] [&>svg]:shrink-0" dir="rtl">
-                  <SelectValue placeholder="السنة" />
-                </SelectTrigger>
-                <SelectContent dir="rtl" align="start" className="text-right">
-                  <SelectItem value="__all__">كل السنوات</SelectItem>
-                  {serviceYearOptions.map((year) => (
-                    <SelectItem key={year} value={year}>
-                      {calType === "hijri" ? `${toArN(Number(year))} هـ` : `${toArN(Number(year))} م`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {serviceYearOptions.length > 0 && (
-              <Select
-                dir="rtl"
-                value={activeServiceMonth || "__all__"}
-                disabled={!serviceRevenueYear}
-                onValueChange={(value) => {
-                  const month = value === "__all__" ? "" : value;
-                  if (calType === "gregorian") setServiceSelectedMonth(month);
-                  else setServiceSelectedHijriMonth(month);
-                }}
-              >
-                <SelectTrigger aria-label="الشهر" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[11rem] [&>svg]:shrink-0" dir="rtl">
-                  <span className="min-w-0 flex-1 truncate text-right text-sm font-medium">
-                    {activeServiceMonth ? serviceMonthLabel(
-                      activeServiceMonth,
-                      calType,
-                    ).primary : "كل الأشهر"}
-                  </span>
-                </SelectTrigger>
-                <SelectContent dir="rtl" align="start" className="revenue-gregorian-month-menu text-right">
-                  <SelectItem value="__all__">كل الأشهر</SelectItem>
-                  {serviceMonthsForYear.map((month) => {
-                    const label = serviceMonthLabel(month, calType);
-                    return (
-                      <RevenueMonthItem key={month} value={month} primary={label.primary} secondary={label.secondary} />
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            )}
-            {serviceYearOptions.length === 0 && !svcLoading && (
-              <span className="text-xs text-muted-foreground">لا توجد أشهر بها حجوزات</span>
-            )}
-          </div>
-        </div>
-
-        <RevenueSourceFilter value={revenueSource} onChange={setRevenueSource} />
+        {revenueHeader}
         {/* KPI cards — same financial definitions used for properties */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-2xl p-4 space-y-1">
@@ -14869,7 +14873,7 @@ function RevenueTab() {
             {svcLoading || quickSalesQuery.isLoading ? <Skeleton className="h-7 w-24" /> : (
               <OwnerStatAmount amount={fmtN(svcSales)} className="text-blue-700 dark:text-blue-400" />
             )}
-            <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي الحجوزات والمبيعات وفق نوع الإيراد المختار {activeServiceMonth ? "في الشهر المحدد" : serviceRevenueYear ? "في السنة المحددة" : "لكامل الفترة"}</div>
+            <div className="text-sm font-medium leading-relaxed text-foreground/80">إجمالي الحجوزات والمبيعات وفق نوع الإيراد المختار {servicePeriod.range ? "بين التاريخين المحددين" : activeServiceMonth ? "في الشهر المحدد" : servicePeriod.year ? "في السنة المحددة" : "لكامل الفترة"}</div>
           </div>
           <div className="bg-green-50/60 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-2xl p-4 space-y-1">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
@@ -14913,7 +14917,7 @@ function RevenueTab() {
           ) : filteredSvcRows.length === 0 ? (
             <div className="text-center text-muted-foreground text-sm py-8">لا توجد إيرادات للفترة المحددة</div>
           ) : (
-            <PaginatedItems items={filteredSvcRows} resetKey={`${calType}|${serviceRevenueYear}|${serviceSelectedMonth}|${serviceSelectedHijriMonth}|${svcFilter}`}>
+            <PaginatedItems items={filteredSvcRows} resetKey={`${JSON.stringify(selectedServicePeriod)}|${svcFilter}`}>
               {(pagination) => (
                 <div ref={pagination.tableRef} className="scroll-mt-4">
                   <div className="overflow-x-auto">
@@ -14997,122 +15001,7 @@ function RevenueTab() {
   return (
     <div className="space-y-5" dir="rtl">
 
-      {/* Month selector + Calendar type toggle */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <TrendingUp className="w-5 h-5 text-primary shrink-0" />
-        <h2 className="text-lg font-bold text-foreground">
-          {unit.type === "chalet" ? `إيرادات: ${(unit as any).name}` : "الإيرادات"}
-        </h2>
-        <SectionGuideButton sectionKey="revenues" />
-        <div className="flex w-full items-center gap-2 flex-wrap justify-start" dir="rtl">
-          {/* Revenue sub-tab pills */}
-          <div className="flex rounded-lg border border-border overflow-hidden text-xs">
-            <button
-              onClick={() => setRevSubTab("monthly")}
-              className={`px-3 py-1.5 font-semibold transition-colors ${revSubTab === "monthly" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-            >الحسابات الشهرية</button>
-            <button
-              onClick={() => setRevSubTab("receivables")}
-              className={`px-3 py-1.5 font-semibold transition-colors flex items-center gap-1 ${revSubTab === "receivables" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-            >
-              متبقي مستحقات الضيوف
-              {allReceivables.length > 0 && (
-                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${revSubTab === "receivables" ? "bg-white/30 text-white" : "bg-amber-500 text-white"}`}>{allReceivables.length}</span>
-              )}
-            </button>
-          </div>
-          {/* Keep calendar, year and month together in one RTL row, including mobile. */}
-          {!showAllFuture && (
-            <div className="grid w-full min-w-0 grid-cols-[auto_minmax(0,0.8fr)_minmax(0,1.2fr)] items-center gap-1.5 sm:flex sm:flex-nowrap sm:gap-2" dir="rtl">
-              {/* Calendar toggle */}
-              <div className="flex h-9 items-stretch rounded-lg border border-border overflow-hidden text-xs shrink-0">
-                {(["gregorian", "hijri"] as const).map(mode => (
-                  <button key={mode}
-                    onClick={() => {
-                      const newYear = mode === "hijri" ? String(toHijriComponents(new Date()).year) : String(new Date().getFullYear());
-                      setCalType(mode); setRevYear(newYear);
-                      if (mode === "gregorian") { const d = new Date(); setSelectedMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`); }
-                      else { setSelectedHijriMonth(getCurrentFinanceMonth("hijri")); }
-                      localStorage.setItem("revCalType", mode);
-                      setTimeout(() => { refetchFinancial(); refetchBookings(); refetchRefunds(); }, 50);
-                    }}
-                    className={`px-2 sm:px-3 py-1.5 font-medium transition-colors ${calType === mode ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
-                  >
-                    {mode === "gregorian" ? "ميلادي" : "هجري"}
-                  </button>
-                ))}
-              </div>
-              {/* Year dropdown */}
-              <Select dir="rtl" value={revYear || "__all__"} onValueChange={yr => { setRevYear(yr === "__all__" ? "" : yr); setSelectedMonth(""); setSelectedHijriMonth(""); }}>
-                <SelectTrigger aria-label="السنة" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[7.5rem] [&>svg]:shrink-0" dir="rtl">
-                  <SelectValue placeholder="السنة" />
-                </SelectTrigger>
-                <SelectContent dir="rtl" align="start" className="text-right">
-                  <SelectItem value="__all__">كل السنوات</SelectItem>
-                  {(calType === "gregorian" ? revGregYearOptions : revHijriYearOptions.map(String)).map(yr => (
-                    <SelectItem key={yr} value={yr}>
-                      {calType === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {/* Month dropdown — data-driven */}
-              {calType === "gregorian" ? (
-                <Select dir="rtl" value={selectedMonth || "__all__"} onValueChange={v => setSelectedMonth(v === "__all__" ? "" : v)} disabled={!revYear}>
-                  <SelectTrigger aria-label="الشهر" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[11rem] [&>svg]:shrink-0 [&>span]:min-w-0 [&>span]:truncate" dir="rtl">
-                    {(() => {
-                      const ym = selectedMonth;
-                      if (!revYear || !ym) return <span className="text-sm text-muted-foreground">كل الشهور</span>;
-                      const [y,m] = ym.split("-").map(Number);
-                      return <span className="text-sm font-medium">{new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"})}</span>;
-                    })()}
-                  </SelectTrigger>
-                  <SelectContent dir="rtl" align="start" className="revenue-gregorian-month-menu text-right">
-                    <SelectItem value="__all__">كل الشهور</SelectItem>
-                    {revMonthsForYear.map(ym => {
-                      const [y,m] = ym.split("-").map(Number);
-                      const gregPrimary = new Date(y,m-1,15).toLocaleDateString("ar-SA",{month:"long",calendar:"gregory"});
-                      const h1 = toHijriComponents(new Date(y,m-1,1));
-                      const h2 = toHijriComponents(new Date(y,m,0));
-                      const hijriSec = (h1.year===h2.year&&h1.month===h2.month)
-                        ? `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} هـ`
-                        : h1.year===h2.year
-                          ? `${HIJRI_MONTHS_AR[h1.month-1]} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h1.year)} هـ`
-                          : `${HIJRI_MONTHS_AR[h1.month-1]} ${toArN(h1.year)} / ${HIJRI_MONTHS_AR[h2.month-1]} ${toArN(h2.year)} هـ`;
-                      return (
-                        <RevenueMonthItem key={ym} value={ym} primary={gregPrimary} secondary={hijriSec} />
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Select dir="rtl" value={selectedHijriMonth || "__all__"} onValueChange={v => setSelectedHijriMonth(v === "__all__" ? "" : v)} disabled={!revYear}>
-                  <SelectTrigger aria-label="الشهر" className="h-9 min-w-0 w-full gap-1 px-2 text-right text-sm rounded-lg border-border sm:w-[11rem] [&>svg]:shrink-0 [&>span]:min-w-0 [&>span]:truncate" dir="rtl">
-                    {revYear && selectedHijriMonth
-                      ? <span className="text-sm font-medium truncate">{getBookingMonthLabel(selectedHijriMonth, "hijri")}</span>
-                      : <span className="text-sm text-muted-foreground">كل الشهور</span>}
-                  </SelectTrigger>
-                  <SelectContent dir="rtl" align="start" className="revenue-gregorian-month-menu text-right">
-                    <SelectItem value="__all__">كل الشهور</SelectItem>
-                    {revMonthsForYear.map(key => {
-                      const gregSec = getCalCorrespondenceHint(key, "hijri");
-                      return (
-                        <RevenueMonthItem key={key} value={key} primary={getBookingMonthLabel(key, "hijri")} secondary={gregSec} />
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {unit.type !== "chalet" && <RevenueSourceFilter value={revenueSource} onChange={setRevenueSource} />}
-
-{false && null}
-
-{false && null}
+      {revenueHeader}
 
       {/* ══════════════ ALL RECEIVABLES VIEW ══════════════ */}
       {showAllFuture && (
@@ -15256,7 +15145,7 @@ function RevenueTab() {
             <OwnerStatAmount amount={fmtN(big3.sales)} className="text-blue-700 dark:text-blue-400" />
           )}
           <div className="text-sm font-medium leading-relaxed text-foreground/80">
-            {revenuePeriod.month ? "إجمالي المبيعات والحجوزات المختارة في الشهر" : revYear ? "إجمالي المبيعات والحجوزات المختارة في السنة" : "إجمالي المبيعات والحجوزات المختارة منذ بدء التشغيل"}
+            {revenuePeriod.range ? "إجمالي المبيعات والحجوزات بين التاريخين المحددين" : revenuePeriod.month ? "إجمالي المبيعات والحجوزات المختارة في الشهر" : revenuePeriod.year ? "إجمالي المبيعات والحجوزات المختارة في السنة" : "إجمالي المبيعات والحجوزات المختارة منذ بدء التشغيل"}
           </div>
         </div>
 

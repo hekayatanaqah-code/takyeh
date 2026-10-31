@@ -19,3 +19,9 @@ Revenue year/month filters belong at the right-hand start of their own row, orde
 **Why:** The user explicitly reported the filter placement as left-aligned/reversed, then rejected wrapping the month onto a separate line. They require a consistent single-row Arabic layout, not changes to financial calculations.
 
 **How to apply:** Preserve financial filtering behavior; fit the group's widths to mobile without wrapping, and check the alignment inside its menus.
+
+The Revenue page's period, calendar, year/month or custom date fields and revenue-source selector must use the same grouped presentation, readable labels, button sizing and spacing as Financial Reports. Revenue source must not remain an isolated filter outside the group.
+
+**Why:** The user explicitly requested visual and interaction consistency across financial sections, not a new revenue calculation policy.
+
+**How to apply:** Preserve month, year and all-history choices and keep cash custody and refundable insurance separate from period sales. Custom date ranges must filter bookings and quick sales by identical inclusive bounds; incomplete ranges should request dates rather than present zero financial totals.
