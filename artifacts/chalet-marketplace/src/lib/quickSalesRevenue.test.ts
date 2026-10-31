@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { QuickSale } from "@workspace/api-client-react";
-import { quickSalesForPeriod, quickSalesTotal } from "./quickSalesRevenue";
+import { effectiveRevenueSource, revenueSourceOptions, quickSalesForPeriod, quickSalesTotal } from "./quickSalesRevenue";
 import { revenueMonthKey } from "./revenuePeriod";
 
 const sales = [
@@ -11,6 +11,15 @@ const sales = [
   { id: 4, providerId: 10, dateStr: "2025-01-02", status: "completed", total: 10 },
   { id: 5, providerId: 10, dateStr: "2026-10-28", status: "cancelled", total: 999 },
 ] as QuickSale[];
+test("property revenue offers only bookings including attached property services, never quick sales", () => {
+  assert.deepEqual(revenueSourceOptions(true), [["bookings", "الحجوزات فقط"]]);
+  assert.ok(!JSON.stringify(revenueSourceOptions(true)).includes("المبيعات المفردة"));
+  for (const selected of ["all", "bookings", "quick_sales"] as const) {
+    assert.equal(effectiveRevenueSource(selected, true), "bookings");
+    assert.equal(effectiveRevenueSource(selected, false), selected);
+  }
+  assert.deepEqual(revenueSourceOptions(false).map(([value]) => value), ["all", "bookings", "quick_sales"]);
+});
 test("direct sales respect activity, cancellation and exact decimal totals", () => {
   const period = { calendar: "gregorian", year: "2026", month: "2026-10" } as const;
   assert.equal(quickSalesTotal(quickSalesForPeriod(sales, { type: "all" }, period)), 50.55);

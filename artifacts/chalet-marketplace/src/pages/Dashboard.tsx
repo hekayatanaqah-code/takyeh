@@ -69,7 +69,7 @@ import { QuickSalesPanel } from "@/components/owner/QuickSalesPanel";
 import { QuickSalesSettingsPanel } from "@/components/owner/QuickSalesSettingsPanel";
 import { QuickSalesRevenueDetails } from "@/components/owner/QuickSalesRevenue";
 import { useListQuickSales, useGetQuickSalesSettings } from "@workspace/api-client-react";
-import { quickSalesForPeriod, quickSalesTotal, type RevenueSource } from "@/lib/quickSalesRevenue";
+import { effectiveRevenueSource, quickSalesForPeriod, quickSalesTotal, type RevenueSource } from "@/lib/quickSalesRevenue";
 import { revenueMonthLabel } from "@/lib/revenueMonthLabel";
 import { ReviewObjection } from "@/components/owner/ReviewObjection";
 import { ServiceBookingScheduleFields } from "@/components/owner/ServiceBookingScheduleFields";
@@ -14028,7 +14028,7 @@ export function BankLedgerTab() {
 
 function RevenueTab() {
   const { unit } = useAdminFinance();
-  const [revenueSource, setRevenueSource] = useState<RevenueSource>("all");
+  const [selectedRevenueSource, setRevenueSource] = useState<RevenueSource>("all");
   const quickSalesQuery = useListQuickSales(undefined, { query: {
     enabled: unit.type !== "chalet", staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000,
   } });
@@ -14154,6 +14154,12 @@ function RevenueTab() {
     refetchInterval: 30_000,
   });
   const revenueProviders = revenueProvidersQ.data ?? [];
+  const propertyOnlyRevenue = unit.type === "chalet" || (unit.type === "all"
+    && revOwnerChalets.length > 0 && revenueProvidersQ.isSuccess && revenueProviders.length === 0
+    && quickSalesQuery.isSuccess && activityQuickSales.length === 0);
+  const revenueSource = effectiveRevenueSource(selectedRevenueSource, propertyOnlyRevenue);
+  const revenueSourceScopeReady = unit.type !== "all"
+    || (revenueProvidersQ.isSuccess && quickSalesQuery.isSuccess);
   // Share the calendar cache so booking/payment invalidation updates revenue.
   const revenueProviderIds = unit.type === "service" ? [unit.id]
     : unit.type === "all" ? revenueProviders.map(provider => provider.id) : [];
@@ -14810,8 +14816,9 @@ function RevenueTab() {
       monthLabel={revenueMonthLabel} from={revenueFrom} to={revenueTo}
       onFromChange={setRevenueFrom} onToChange={setRevenueTo}
       today={new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Riyadh" })}
-      source={unit.type !== "chalet" ? revenueSource : undefined}
-      onSourceChange={unit.type !== "chalet" ? setRevenueSource : undefined} />}
+      propertyOnly={propertyOnlyRevenue}
+      source={revenueSourceScopeReady ? revenueSource : undefined}
+      onSourceChange={revenueSourceScopeReady ? setRevenueSource : undefined} />}
   </div>;
 
   if (svcError || (unit.type !== "chalet" && quickSalesQuery.isError)) {

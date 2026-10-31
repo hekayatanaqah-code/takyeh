@@ -2,7 +2,7 @@ import { CalendarDays } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "../ui/DualCalendarPicker";
 import { RevenueMonthItem } from "./RevenueMonthItem";
-import type { RevenueSource } from "../../lib/quickSalesRevenue";
+import { effectiveRevenueSource, revenueSourceOptions, type RevenueSource } from "../../lib/quickSalesRevenue";
 import type { RevenueFilterMode } from "../../lib/revenueFilterPeriod";
 
 export type { RevenueFilterMode } from "../../lib/revenueFilterPeriod";
@@ -17,11 +17,11 @@ type Props = {
   from: string; to: string; today: string;
   onFromChange: (date: string) => void; onToChange: (date: string) => void;
   source?: RevenueSource; onSourceChange?: (source: RevenueSource) => void;
+  propertyOnly?: boolean;
   disabled?: boolean;
 };
 
 const MODES: [RevenueFilterMode, string][] = [["monthly", "شهري"], ["yearly", "سنوي"], ["custom", "مخصص"], ["all", "جميع الفترات"]];
-const SOURCES: [RevenueSource, string][] = [["all", "الحجوزات والمبيعات المفردة"], ["bookings", "الحجوزات فقط"], ["quick_sales", "المبيعات المفردة فقط"]];
 const segClass = (active: boolean) =>
   `min-h-10 min-w-0 rounded-lg px-2 py-2 text-sm font-bold transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:px-4 ${active ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"}`;
 const dateTriggerClass = "min-h-24 w-full rounded-xl border-2 border-primary/40 bg-background px-4 py-4 pr-16 text-right shadow-sm transition-colors hover:border-primary hover:bg-primary/5 focus-visible:ring-primary [&>p]:text-base [&>p]:font-semibold [&>p]:text-foreground [&>div>p]:leading-7 [&>div>p:first-child]:text-base [&>div>p:last-child]:text-sm [&>div>p:last-child]:text-foreground";
@@ -54,14 +54,15 @@ export function RevenueFilterBar(props: Props) {
         {props.source !== undefined && props.onSourceChange && (
           <div className="min-w-0">
             <span id="revenue-filter-source-label" className="mb-2 block text-sm font-bold text-foreground">نوع الإيراد</span>
-            <Select dir="rtl" value={props.source} disabled={props.disabled}
+            <Select dir="rtl" value={effectiveRevenueSource(props.source, !!props.propertyOnly)} disabled={props.disabled}
               onValueChange={v => props.onSourceChange?.(v as RevenueSource)}>
               <SelectTrigger aria-labelledby="revenue-filter-source-label" data-testid="revenue-filter-source"
                 className="h-12 w-full min-w-0 bg-background text-right text-base"><SelectValue /></SelectTrigger>
               <SelectContent dir="rtl" align="start">
-                {SOURCES.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                {revenueSourceOptions(!!props.propertyOnly).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
               </SelectContent>
             </Select>
+            {props.propertyOnly && <p className="mt-2 text-base font-medium leading-8 text-foreground">تشمل قيمة الحجز والإضافات العقارية التابعة له.</p>}
           </div>
         )}
       </div>
