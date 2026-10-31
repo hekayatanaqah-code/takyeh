@@ -63,3 +63,12 @@ test("all-history mode hides calendar controls and ignores retained period selec
     assert.equal(period.range, undefined);
   }
 });
+
+test("property revenue omits the source field and its empty grid column entirely", () => {
+  const component = readFileSync(new URL("../components/owner/RevenueFilterBar.tsx", import.meta.url), "utf8");
+  assert.ok(component.includes("const showSource = !props.propertyOnly"));
+  assert.ok(component.includes("{showSource && ("));
+  assert.ok(component.includes('showSource ? "lg:grid-cols-2" : ""'));
+  assert.ok(!component.includes("تشمل قيمة الحجز والإضافات العقارية التابعة له."));
+  assert.ok(component.includes('props.propertyOnly ? "تشمل الفترة يوم البداية ويوم النهاية."'));
+});

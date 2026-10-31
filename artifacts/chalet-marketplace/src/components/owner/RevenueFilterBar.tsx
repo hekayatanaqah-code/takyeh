@@ -2,7 +2,7 @@ import { CalendarDays } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DualCalendarPicker } from "../ui/DualCalendarPicker";
 import { RevenueMonthItem } from "./RevenueMonthItem";
-import { effectiveRevenueSource, revenueSourceOptions, type RevenueSource } from "../../lib/quickSalesRevenue";
+import { revenueSourceOptions, type RevenueSource } from "../../lib/quickSalesRevenue";
 import type { RevenueFilterMode } from "../../lib/revenueFilterPeriod";
 
 export type { RevenueFilterMode } from "../../lib/revenueFilterPeriod";
@@ -29,6 +29,7 @@ const digits = (v: string) => v.replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[Numbe
 
 export function RevenueFilterBar(props: Props) {
   const { mode, calendar } = props;
+  const showSource = !props.propertyOnly && props.source !== undefined && !!props.onSourceChange;
   const showYear = mode === "monthly" || mode === "yearly";
   const showMonth = mode === "monthly";
   const monthSel = props.months.includes(props.month) ? props.month : "";
@@ -37,12 +38,13 @@ export function RevenueFilterBar(props: Props) {
     : mode === "all" ? "يعرض جميع الإيرادات المسجلة منذ البداية دون تقييد بفترة."
     : !props.from || !props.to ? "اضغط على حقل «من تاريخ» ثم «إلى تاريخ» لاختيار الفترة. تشمل الإيرادات اليوم الأول والأخير."
     : props.from > props.to ? "يجب أن يكون تاريخ النهاية مساويًا لتاريخ البداية أو بعدها."
+    : props.propertyOnly ? "تشمل الفترة يوم البداية ويوم النهاية."
     : "تشمل الفترة يوم البداية ويوم النهاية، وتُطبّق على نوع الإيراد المختار.";
 
   return (
     <section dir="rtl" aria-label="فلاتر الإيرادات" data-testid="revenue-filter-bar"
       className="space-y-5 rounded-2xl border border-border bg-card p-4 sm:p-5">
-      <div className="grid min-w-0 grid-cols-1 items-start gap-5 lg:grid-cols-2">
+      <div className={`grid min-w-0 grid-cols-1 items-start gap-5 ${showSource ? "lg:grid-cols-2" : ""}`}>
         <fieldset disabled={props.disabled} className="min-w-0">
           <legend className="mb-2 text-sm font-bold text-foreground">فترة الإيرادات</legend>
           <div role="group" aria-label="فترة الإيرادات" className="grid grid-cols-4 rounded-xl border border-border bg-muted/60 p-1">
@@ -51,18 +53,17 @@ export function RevenueFilterBar(props: Props) {
                 onClick={() => props.onModeChange(m)} className={segClass(mode === m)}>{label}</button>)}
           </div>
         </fieldset>
-        {props.source !== undefined && props.onSourceChange && (
+        {showSource && (
           <div className="min-w-0">
             <span id="revenue-filter-source-label" className="mb-2 block text-sm font-bold text-foreground">نوع الإيراد</span>
-            <Select dir="rtl" value={effectiveRevenueSource(props.source, !!props.propertyOnly)} disabled={props.disabled}
+            <Select dir="rtl" value={props.source} disabled={props.disabled}
               onValueChange={v => props.onSourceChange?.(v as RevenueSource)}>
               <SelectTrigger aria-labelledby="revenue-filter-source-label" data-testid="revenue-filter-source"
                 className="h-12 w-full min-w-0 bg-background text-right text-base"><SelectValue /></SelectTrigger>
               <SelectContent dir="rtl" align="start">
-                {revenueSourceOptions(!!props.propertyOnly).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                {revenueSourceOptions(false).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
               </SelectContent>
             </Select>
-            {props.propertyOnly && <p className="mt-2 text-base font-medium leading-8 text-foreground">تشمل قيمة الحجز والإضافات العقارية التابعة له.</p>}
           </div>
         )}
       </div>
