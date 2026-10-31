@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { readFileSync } from "node:fs";
-import { financialReportPageSlices, FINANCIAL_PAGE_BREAK_CSS } from "./financialReportPagination";
+import { financialReportPageSlices, FINANCIAL_PAGE_BREAK_CSS, FINANCIAL_REPORT_MARGINS_MM } from "./financialReportPagination";
 import { buildActivitySummaryReportHtml } from "./financialReport";
 import { finalizePropertyReportHtml } from "./propertyReportLayout";
 
@@ -55,9 +55,16 @@ it("applies final native-print rules to services and properties after their lega
     assert.ok(html.includes("break-after:avoid-page!important"));
     assert.ok(html.includes("max-height:none!important;overflow:visible!important"));
     assert.ok(html.includes("position:static!important"));
+    assert.ok(html.includes("margin:8mm 10mm 8mm 10mm!important"));
+    assert.ok(html.includes(".summary-section,.footer-accounts"));
+    assert.ok(!html.includes("@page{size:A4 portrait;margin:10mm!important"));
   }
   const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
   assert.ok(source.includes("financialReportPageSlices(canvas.height"));
   assert.ok(source.includes('!iDoc.body.classList.contains("property-report-compact") && canvas.height > pageHeightCanvasPx'));
   assert.ok(source.includes("headerSpace + tableSpace + end - start"));
+  assert.ok(source.includes("const margins = FINANCIAL_REPORT_MARGINS_MM"));
+  assert.ok(source.includes("A4_H_MM - margins.top - margins.bottom"));
+  assert.ok(source.includes('"JPEG", margins.left, margins.top'));
+  assert.deepEqual(FINANCIAL_REPORT_MARGINS_MM, { top: 8, right: 10, bottom: 8, left: 10 });
 });

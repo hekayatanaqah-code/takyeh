@@ -49,7 +49,7 @@ import { resolveManualBookingProperty } from "@/lib/manualBookingProperty";
 import { matchesPropertyPaymentFilter, type PropertyPaymentFilter } from "@/lib/propertyBookingStatus";
 import { PropertyBookingPaymentFilters, PropertyBookingArrivalBadge } from "@/components/PropertyBookingStatus";
 import { finalizePropertyReportHtml } from "@/lib/propertyReportLayout";
-import { financialReportPageSlices } from "@/lib/financialReportPagination";
+import { financialReportPageSlices, FINANCIAL_REPORT_MARGINS_MM } from "@/lib/financialReportPagination";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
@@ -19926,16 +19926,16 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
       logging: false,
     });
 
-    // A4 multi-page: 210mm × 297mm, 15mm margins on each side/top/bottom.
+    // Match the native financial print margins: 8mm vertically, 10mm horizontally.
     // canvas is rendered at scale:2, so canvas.width = CONTENT_PX × 2.
     // Mapping: contentWidthMm / canvas.width  →  mm per canvas-pixel.
     const A4_W_MM = 210;
     const A4_H_MM = 297;
-    const MARGIN_MM = 10;
-    const contentWidthMm = A4_W_MM - MARGIN_MM * 2; // 180mm
-    const contentHeightPerPageMm = A4_H_MM - MARGIN_MM * 2; // 267mm
-    const mmPerCanvasPx = contentWidthMm / canvas.width; // e.g. 180/1500 = 0.12
-    const pageHeightCanvasPx = Math.round(contentHeightPerPageMm / mmPerCanvasPx); // ≈2225px
+    const margins = FINANCIAL_REPORT_MARGINS_MM;
+    const contentWidthMm = A4_W_MM - margins.left - margins.right;
+    const contentHeightPerPageMm = A4_H_MM - margins.top - margins.bottom;
+    const mmPerCanvasPx = contentWidthMm / canvas.width;
+    const pageHeightCanvasPx = Math.floor(contentHeightPerPageMm / mmPerCanvasPx);
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -19979,7 +19979,7 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
         if (tableHeader) context.drawImage(canvas, 0, tableHeader.top, canvas.width, tableHeader.bottom - tableHeader.top,
           0, headerSpace, canvas.width, tableHeader.bottom - tableHeader.top);
         context.drawImage(canvas, 0, start, canvas.width, end - start, 0, headerSpace + tableSpace, canvas.width, end - start);
-        pdf.addImage(slice.toDataURL("image/jpeg", 0.93), "JPEG", MARGIN_MM, MARGIN_MM,
+        pdf.addImage(slice.toDataURL("image/jpeg", 0.93), "JPEG", margins.left, margins.top,
           contentWidthMm, slice.height * mmPerCanvasPx);
       });
     } else {
@@ -19994,8 +19994,8 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
     const renderW = contentWidthMm * scaleFactor;
     const renderH = contentHeightMm * scaleFactor;
     // Center horizontally if scaled down
-    const offsetX = MARGIN_MM + (contentWidthMm - renderW) / 2;
-    pdf.addImage(canvas.toDataURL("image/jpeg", 0.93), "JPEG", offsetX, MARGIN_MM, renderW, renderH);
+    const offsetX = margins.left + (contentWidthMm - renderW) / 2;
+    pdf.addImage(canvas.toDataURL("image/jpeg", 0.93), "JPEG", offsetX, margins.top, renderW, renderH);
     }
 
     // إخراج الـ PDF كـ ArrayBuffer نقي ثم بناء Blob بترميز صريح

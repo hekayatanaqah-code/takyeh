@@ -73,7 +73,6 @@ tr.financial-net td{background:#efe4d8!important;font-weight:800!important;font-
 .financial-money .financial-currency{direction:rtl;font-size:.85em;}
 .financial-money.financial-negative,.financial-money.financial-negative bdi{color:#b42318!important;}
 .footer{margin-top:auto;padding-top:12px;text-align:center;direction:rtl;flex-shrink:0;border-top:1px solid #e6d9cc;color:#8a7b70!important;font-size:11px!important;}
-@page{size:A4 portrait;margin:10mm!important;@top-left{content:none}@top-center{content:none}@top-right{content:none}@bottom-left{content:none}@bottom-center{content:none}@bottom-right{content:none}}
 @media print{
  html,body{margin:0!important;padding:0!important;background:#fffdfa!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
  .page{box-sizing:border-box;width:100%!important;min-height:296mm;padding:14mm 15mm 22mm!important;}
@@ -113,7 +112,7 @@ export function buildActivitySummaryReportHtml(options: {
   const escape = (value: string) => value.replace(/[&<>"']/g, character =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
   return finalizeFinancialReportHtml(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${escape(options.fileName.replace(/\.pdf$/, ""))}</title>
-    <style>${options.css}@page{size:A4;margin:12mm}@media print{.page{width:100%;padding:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
+    <style>${options.css}@media print{.page{width:100%;padding:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
     <body><main class="page"><header class="header"><div class="header-brand">${options.logo ? `<img alt="تكية" src="${escape(options.logo)}" style="width:110px;height:auto">` : '<div class="brand-name">تكية</div>'}</div>
     <div class="header-center"><h1 class="report-title">${escape(options.title)}</h1><p class="report-sub">${escape(options.period)}</p></div></header>
     ${options.generatedAt ? `<div class="financial-summary-meta"><span>تاريخ الإصدار: ${escape(options.generatedAt)}</span></div>` : ""}

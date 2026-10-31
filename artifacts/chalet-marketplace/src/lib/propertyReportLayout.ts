@@ -40,7 +40,6 @@ export const PROPERTY_REPORT_CSS = `
 .property-report-compact .page>.header + .section .kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr));}
 .property-report-compact .slot-row{gap:5px;}
 .property-report-compact .slot-chip{padding:4px 7px;}
-@page{size:A4 portrait;margin:10mm!important;}
 @media print{
  html:has(.property-report),body.property-report{margin:0!important;padding:0!important;max-height:none!important;overflow:visible!important;background:#fff!important;}
  .property-report .page{width:100%!important;max-width:100%!important;min-height:0!important;padding:0!important;margin:0 auto!important;}

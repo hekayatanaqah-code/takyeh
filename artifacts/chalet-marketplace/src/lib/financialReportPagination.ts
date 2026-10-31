@@ -1,3 +1,5 @@
+export const FINANCIAL_REPORT_MARGINS_MM = { top: 8, right: 10, bottom: 8, left: 10 } as const;
+
 export type ReportBlock = { top: number; bottom: number };
 export type ReportTable = ReportBlock & { headerTop: number; headerBottom: number };
 export type ReportPageSlice = {
@@ -42,12 +44,12 @@ export function financialReportPageSlices(
 
 /** Shared by native print for services and every property-report period. */
 export const FINANCIAL_PAGE_BREAK_CSS = `
-@page{size:A4 portrait;margin:10mm!important;@top-left{content:none}@top-center{content:none}@top-right{content:none}@bottom-left{content:none}@bottom-center{content:none}@bottom-right{content:none}}
+@page{size:A4 portrait;margin:${FINANCIAL_REPORT_MARGINS_MM.top}mm ${FINANCIAL_REPORT_MARGINS_MM.right}mm ${FINANCIAL_REPORT_MARGINS_MM.bottom}mm ${FINANCIAL_REPORT_MARGINS_MM.left}mm!important;@top-left{content:none}@top-center{content:none}@top-right{content:none}@bottom-left{content:none}@bottom-center{content:none}@bottom-right{content:none}}
 @media print{
  html,body,body.property-report{margin:0!important;padding:0!important;max-height:none!important;overflow:visible!important;}
  .page,.property-report .page{width:100%!important;max-width:100%!important;min-height:0!important;margin:0!important;padding:0!important;overflow:visible!important;}
  body:not(.property-report-compact) .page{display:block!important;}
- .header,.financial-closing,.property-report .financial-closing,.kpi-card,.financial-summary-table,.current-period-notice,.financial-report-scope{
+ .header,.financial-closing,.property-report .financial-closing,.summary-section,.footer-accounts,.kpi-card,.financial-summary-table,.current-period-notice,.financial-report-scope{
    page-break-inside:avoid!important;break-inside:avoid!important;
  }
  h1,h2,h3,.section-title{page-break-inside:avoid!important;break-inside:avoid!important;page-break-after:avoid!important;break-after:avoid-page!important;}

@@ -42,7 +42,7 @@ Financial print pagination must keep fitting tables, rows, titles with their fir
 
 **Why:** The user requested clean multi-page transitions for both services and properties while retaining readable compact reports.
 
-**How to apply:** Treat native printing and bitmap PDF export separately: print CSS does not paginate a canvas capture. PDF continuation headers consume page space and must be reserved before selecting the next row boundary. Keep one authoritative margin policy rather than conflicting legacy template overrides.
+**How to apply:** Treat native printing and bitmap PDF export separately: print CSS does not paginate a canvas capture. PDF continuation headers consume page space and must be reserved before selecting the next row boundary. Keep one authoritative margin policy rather than conflicting legacy template overrides. The user specified A4 margins of 8mm top/bottom and 10mm left/right for financial reports; use the same margins for native printing and PDF export.
 
 Completed quick sales belong in the selected activity's unified report revenue and explicit transaction details, on screen and in print/PDF; cancelled sales do not. Include periods whose only revenue comes from quick sales, even when new quick-sale entry is disabled.
 
