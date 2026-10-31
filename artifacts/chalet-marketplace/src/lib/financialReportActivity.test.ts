@@ -7,6 +7,29 @@ import { quickSalesForPeriod } from "./quickSalesRevenue";
 import { revenueMonthKey } from "./revenuePeriod";
 import { readFileSync } from "node:fs";
 
+it("prints the activity once in the header and keeps scope/issue notes readable without altering totals", () => {
+  const activityName = "خدمة <المناسبات>";
+  for (const forPrint of [false, true]) {
+    for (const generatedAt of [undefined, "٣١/١٠/٢٠٢٦"]) {
+      const html = buildActivitySummaryReportHtml({
+        title: financialReportTitle({ type: "service", id: 10, name: activityName }),
+        period: "جمادى الأولى ١٤٤٨ هـ", activityName, fileName: "تقرير.pdf", forPrint, generatedAt,
+        scopeLabel: "نطاق التقرير: الحجوزات والمبيعات — التأمين ليس إيرادًا.",
+        rows: [{ label: "إجمالي الإيرادات", amount: 150.25 }], logo: null, css: "",
+      });
+      const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? "";
+      assert.equal((header.match(/خدمة &lt;المناسبات&gt;/g) ?? []).length, 1);
+      assert.match(header, /<h1 class="report-title">التقرير المالي - خدمة &lt;المناسبات&gt;<\/h1>/);
+      assert.ok(!html.includes('<span>خدمة &lt;المناسبات&gt;</span>'));
+      assert.equal(html.includes("تاريخ الإصدار:"), !!generatedAt);
+      assert.ok(html.includes('<p class="financial-report-scope">نطاق التقرير:'));
+      assert.ok(html.includes(".report-sub{font-size:14px!important;line-height:1.65!important;color:#292524!important;"));
+      assert.ok(html.includes(".financial-report-scope{font-size:14px!important;line-height:1.8!important;color:#292524!important;"));
+      assert.ok(html.includes("١٥٠٫٢٥"));
+    }
+  }
+});
+
 it("keeps the service summary before provider and sales details, and waits for booking data", () => {
   const dashboard = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
   const serviceSection = dashboard.slice(dashboard.indexOf("{/* ── Services Report ── */}"), dashboard.indexOf("{/* ── Unified Report ── */}"));

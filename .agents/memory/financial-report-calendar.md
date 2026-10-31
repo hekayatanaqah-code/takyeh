@@ -32,6 +32,12 @@ The financial reports section has its own activity filter, initially the current
 
 **How to apply:** Do not change the global dashboard activity to implement this filter. Keep published property IDs distinct from submission IDs, filter service totals by provider, and reset report-local export/share state when changing activity.
 
+Printed headers show the activity only once, within «التقرير المالي - [اسم النشاط]», not as another subtitle or beside the issue date. Scope, accounting explanations and issue-date text must remain dark and readable on screen and in print.
+
+**Why:** The user explicitly objected to repeated activity names in printed report headers and repeatedly requested larger, higher-contrast explanatory text.
+
+**How to apply:** Keep the period and issue date distinct from the title. Keep the activity selector available where needed on screen, but do not copy it into extra print-header labels. Preserve all amounts and the accounting wording when changing typography.
+
 Completed quick sales belong in the selected activity's unified report revenue and explicit transaction details, on screen and in print/PDF; cancelled sales do not. Include periods whose only revenue comes from quick sales, even when new quick-sale entry is disabled.
 
 **Why:** The user reported quick sales being omitted from comprehensive reports and their printed/PDF output.

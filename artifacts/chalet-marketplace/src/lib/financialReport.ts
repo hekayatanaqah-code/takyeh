@@ -51,7 +51,10 @@ body{font-family:'Segoe UI',Tahoma,'Noto Naskh Arabic',sans-serif!important;colo
 .header-brand img{max-height:76px;width:auto!important;object-fit:contain;}
 .header-center{flex:1;text-align:center;}
 .report-title{font-size:22px!important;font-weight:800!important;color:#3f2a1d!important;margin:0 0 6px!important;letter-spacing:0!important;}
-.report-sub{font-size:12px!important;color:#6f6157!important;margin:2px 0!important;}
+.report-sub{font-size:14px!important;line-height:1.65!important;color:#292524!important;font-weight:500!important;margin:4px 0!important;}
+.financial-report-scope{font-size:14px!important;line-height:1.8!important;color:#292524!important;font-weight:500!important;text-align:right!important;margin:0 0 18px!important;padding:12px 14px;border:1px solid #d6c8ba;border-radius:8px;background:#faf6f0;overflow-wrap:anywhere;}
+.brand-sub,.qr-caption,.kpi-note{font-size:13px!important;line-height:1.5!important;color:#374151!important;}
+.current-period-notice{font-size:14px!important;line-height:1.65!important;color:#78350f!important;}
 .section-title{color:#7a5238!important;border-color:#c9ab92!important;}
 table{width:100%!important;border-collapse:collapse!important;font-size:14px!important;line-height:1.6;table-layout:auto;}
 thead th{background:#f3ebe3!important;color:#5a3a26!important;font-weight:700!important;padding:10px 12px!important;border-bottom:1.5px solid #8C6246!important;text-align:right;}
@@ -61,7 +64,7 @@ td:not(:first-child),th:not(:first-child){font-variant-numeric:tabular-nums;whit
 .financial-amount-col{text-align:left!important;width:34%;}
 tr.total-row td,tr.financial-total td{background:#f3ebe3!important;font-weight:800!important;border-top:1.5px solid #8C6246!important;border-bottom:1.5px solid #8C6246!important;}
 tr.financial-net td{background:#efe4d8!important;font-weight:800!important;font-size:13.5px!important;border-top:2px solid #6f4a33!important;border-bottom:3px double #6f4a33!important;}
-.financial-summary-meta{display:flex;justify-content:space-between;font-size:11px;color:#7d6e63;margin:-8px 0 14px;}
+.financial-summary-meta{display:flex;justify-content:flex-end;flex-wrap:wrap;font-size:14px;line-height:1.65;color:#292524;margin:0 0 14px;}
 .financial-money{display:inline-flex;align-items:baseline;gap:.25em;white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;direction:rtl;unicode-bidi:isolate;letter-spacing:normal!important;font-variant-ligatures:normal;font-variant-numeric:tabular-nums;}
 .financial-money bdi{white-space:nowrap!important;word-break:keep-all!important;letter-spacing:normal!important;font-family:Tahoma,Arial,sans-serif!important;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"sups" 0,"subs" 0,"onum" 0;vertical-align:baseline;}
 .financial-thousands{position:relative;top:.18em;}
@@ -110,9 +113,9 @@ export function buildActivitySummaryReportHtml(options: {
   return finalizeFinancialReportHtml(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${escape(options.fileName.replace(/\.pdf$/, ""))}</title>
     <style>${options.css}@page{size:A4;margin:12mm}@media print{.page{width:100%;padding:0}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
     <body><main class="page"><header class="header"><div class="header-brand">${options.logo ? `<img alt="تكية" src="${escape(options.logo)}" style="width:110px;height:auto">` : '<div class="brand-name">تكية</div>'}</div>
-    <div class="header-center"><h1 class="report-title">${escape(options.title)}</h1><p class="report-sub">${escape(options.activityName)}</p><p class="report-sub">${escape(options.period)}</p></div></header>
-    ${options.generatedAt ? `<div class="financial-summary-meta"><span>${escape(options.activityName)}</span><span>تاريخ الإصدار: ${escape(options.generatedAt)}</span></div>` : ""}
-    ${options.scopeLabel ? `<p class="report-sub">${escape(options.scopeLabel)}</p>` : ""}
+    <div class="header-center"><h1 class="report-title">${escape(options.title)}</h1><p class="report-sub">${escape(options.period)}</p></div></header>
+    ${options.generatedAt ? `<div class="financial-summary-meta"><span>تاريخ الإصدار: ${escape(options.generatedAt)}</span></div>` : ""}
+    ${options.scopeLabel ? `<p class="financial-report-scope">${escape(options.scopeLabel)}</p>` : ""}
     <table class="financial-summary-table"><thead><tr><th>البيان</th><th class="financial-amount-col">المبلغ</th></tr></thead><tbody>${options.rows.map(row => {
       const emphasis = row.emphasis ?? (/^(صافي|الصافي)/.test(row.label) ? "net" : /^(إجمالي|الإجمالي)/.test(row.label) ? "total" : "");
       const amount = Math.abs(row.amount).toLocaleString("ar-SA", { maximumFractionDigits: 2 });

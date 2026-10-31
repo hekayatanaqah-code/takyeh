@@ -67,7 +67,7 @@ it("uses the platform Hijri default even for legacy Gregorian preferences", () =
 });
 
 it("uses the requested period and activity in both print and PDF summaries, escaping names", () => {
-  const base = { title: "التقرير الموحّد", period: "جمادى الأولى ١٤٤٨ هـ", activityName: '<script>نشاط</script>',
+  const base = { title: "التقرير المالي - <script>نشاط</script>", period: "جمادى الأولى ١٤٤٨ هـ", activityName: '<script>نشاط</script>',
     fileName: "تقرير.pdf", rows: [{ label: "إيرادات الخدمات", amount: 1500 }], logo: null, css: "" };
   const pdf = buildActivitySummaryReportHtml({ ...base, forPrint: false });
   const print = buildActivitySummaryReportHtml({ ...base, forPrint: true });

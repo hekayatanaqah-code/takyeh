@@ -18,13 +18,13 @@ export function ServiceFinancialReportPanels({ rows, details, closingRows }: {
   return <div className="space-y-5" data-testid="service-report-content">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="service-report-summary">
       {rows.map(row => <div key={row.label} className="rounded-2xl border border-border bg-card p-4 text-center">
-        <p className="mb-2 text-xs text-muted-foreground">{row.label}</p>
+        <p className="mb-2 text-sm font-semibold leading-6 text-foreground">{row.label}</p>
         <p className={`text-2xl font-bold ${row.amount < 0 || row.label.startsWith("المصروفات") ? "text-destructive" : row.label.startsWith("صافي") || row.label.startsWith("إجمالي") ? "text-green-600" : "text-foreground"}`}>
           <Amount value={row.amount} />
         </p>
       </div>)}
     </div>
-    <p className="text-xs leading-6 text-muted-foreground">
+    <p className="rounded-xl border border-border bg-muted/30 p-4 text-base font-medium leading-8 text-foreground">
       الإيرادات هي المبالغ المحصلة فعليًا؛ العربون جزء منها وليس إيرادًا إضافيًا. القيمة التعاقدية تشمل غير المسدد.
       التأمين القابل للاسترداد منفصل عن الإيرادات وعن المتبقي لأصل الخدمة.
       تُخصم مصروفات الخدمة المسجلة خلال الفترة كاملة من إيرادات النطاق المختار؛ لا تُوزّع المصروفات تلقائيًا بين الحجوزات والبيع السريع.

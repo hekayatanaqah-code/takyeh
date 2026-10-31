@@ -20949,7 +20949,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-foreground" data-testid="financial-report-title">{reportHeading}</h2>
-          <p className={`mt-1 ${repUnit.type === "service" ? "text-base leading-8 text-foreground" : "text-xs text-muted-foreground"}`}>{loneReportActivity
+          <p className="mt-1 text-base font-medium leading-8 text-foreground">{loneReportActivity
             ? "يُعرض التقرير المالي لنشاطك مباشرة."
             : "اختر جميع الأنشطة أو نشاطًا محددًا لاستخراج تقريره المالي فقط."}</p>
         </div>
@@ -20964,7 +20964,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           onChange={event => setShowPropertyReportDetails(event.target.checked)}
           className="mt-1 h-4 w-4 accent-primary" />
         <span><span className="block text-sm font-semibold">إظهار الجداول التفصيلية للحجوزات والمصروفات</span>
-          <span className="text-xs text-muted-foreground">يشمل العرض والطباعة وPDF. تبقى الملخصات والحسابات الختامية ظاهرة دون تغيير الإجماليات.</span></span>
+          <span className="block text-base leading-8 text-foreground">يشمل العرض والطباعة وPDF. تبقى الملخصات والحسابات الختامية ظاهرة دون تغيير الإجماليات.</span></span>
       </label>}
       <SectionGuideButton sectionKey="reports" />
       {repUnit.type === "service" && <ServiceReportPeriodControls mode={viewMode} onModeChange={setViewMode}
