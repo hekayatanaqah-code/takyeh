@@ -11,6 +11,34 @@ import * as zod from 'zod';
 
 
 
+
+export const ListOwnerLedgerTransactionsQueryParams = zod.object({
+  "submissionId": zod.coerce.number().int().min(1).optional(),
+  "providerId": zod.coerce.number().int().min(1).optional()
+})
+
+export const ListOwnerLedgerTransactionsResponseItem = zod.object({
+  "id": zod.string(),
+  "date": zod.string(),
+  "type": zod.enum(['income', 'expense', 'withdrawal', 'refund']),
+  "label": zod.string(),
+  "amount": zod.number(),
+  "method": zod.string(),
+  "status": zod.string(),
+  "cashDeposited": zod.boolean().nullable(),
+  "paymentReceiptUrl": zod.string().nullish(),
+  "bookingId": zod.number().int().nullish(),
+  "remainingBalance": zod.number().nullish(),
+  "source": zod.string().optional(),
+  "providerId": zod.number().int().optional(),
+  "appointmentId": zod.number().int().optional()
+})
+export const ListOwnerLedgerTransactionsResponse = zod.array(ListOwnerLedgerTransactionsResponseItem)
+
+
+
+
+
 export const ReplyToOwnerSupportTicketParams = zod.object({
   "id": zod.coerce.number().int().min(1)
 })

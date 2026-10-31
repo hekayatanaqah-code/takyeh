@@ -118,6 +118,7 @@ import { formatDateWithHijri, formatDualDate, withHijriEra, toHijri, getHijriMon
 import { clampPage, filterServiceContracts, paginate, serviceContractStatus, serviceMonthOptions, serviceYearOptions, SERVICE_CONTRACTS_PAGE_SIZE, type ServiceCalView, type ServiceContractStatus } from "@/lib/serviceContractArchive";
 import { serviceRevenueBookings, serviceRevenueTotals } from "@/lib/serviceRevenue";
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
+import { transactionHistoryTotals, type FinancialTransaction } from "@/lib/transactionHistory";
 import SupportConversation, { type SupportConversationMessage } from "@/components/support/SupportConversation";
 import type { SupportConversationReplyInput } from "@workspace/api-client-react";
 import { CustomerDate } from "@/components/owner/CustomerDate";
@@ -16116,19 +16117,18 @@ function TransactionHistoryTab() {
 
   const [receiptLightboxTx, setReceiptLightboxTx] = useState<string | null>(null);
 
-  const { data: allItems = [], isLoading } = useQuery<{
-    id: string; date: string; type: "income" | "expense" | "withdrawal" | "refund";
-    label: string; amount: number; method: string; status: string; cashDeposited: boolean | null;
-    paymentReceiptUrl?: string | null; bookingId?: number | null; remainingBalance?: number | null;
-  }[]>({
-    queryKey: ["owner", "transaction-history", submissionId ?? "all"],
+  const { data: allItems = [], isLoading, isError, refetch } = useQuery<FinancialTransaction[]>({
+    queryKey: ["owner", "transaction-history", unit],
     queryFn: async () => {
       const params = new URLSearchParams();
+      if (unit.type === "chalet" && !submissionId) throw new Error("تعذّر تحديد العقار");
       if (submissionId) params.set("submissionId", String(submissionId));
-      const r = await fetch(`/api/owner/transaction-history?${params}`, { credentials: "include" });
-      if (!r.ok) return [];
+      if (unit.type === "service") params.set("providerId", String(unit.id));
+      const r = await apiFetch(`/owner/transaction-history?${params}`);
+      if (!r.ok) throw new Error("تعذّر تحميل سجل المعاملات");
       return r.json();
     },
+    staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000,
   });
 
   /* Build year/month option lists from fetched data (client-side dual calendar) */
@@ -16175,6 +16175,7 @@ function TransactionHistoryTab() {
   };
 
   const statusLabel = (s: string) => {
+    if (s === "unpaid") return { text: "غير محصّل", cls: "text-amber-700 dark:text-amber-400" };
     if (s === "collected") return { text: "مدفوع بالكامل", cls: "text-blue-600 dark:text-blue-400" };
     if (s === "deposit_only") return { text: "عربون", cls: "text-amber-600 dark:text-amber-400" };
     if (s === "cancelled") return { text: "ملغي", cls: "text-slate-400 dark:text-slate-500" };
@@ -16182,9 +16183,8 @@ function TransactionHistoryTab() {
     return { text: "مدفوع", cls: "text-slate-500" };
   };
 
-  const totalIn = items.filter(i => i.type === "income" && i.status !== "cancelled").reduce((s, i) => s + i.amount, 0);
-  const totalRefunds = items.filter(i => i.type === "refund").reduce((s, i) => s + i.amount, 0);
-  const totalOut = items.filter(i => i.type === "expense" || i.type === "withdrawal").reduce((s, i) => s + i.amount, 0);
+  const { income: totalIn, refunds: totalRefunds, expenses: totalOut, net, receivables } = transactionHistoryTotals(items);
+  const showTotal = (value: number) => isLoading || isError ? "—" : value.toLocaleString("ar-SA");
 
   return (
     <div className="space-y-4">
@@ -16197,7 +16197,7 @@ function TransactionHistoryTab() {
             <p className="text-[11px] text-muted-foreground">سجل مفصّل لجميع الإيرادات والمصروفات</p>
           </div>
           <SectionGuideButton sectionKey="transactions" />
-          {!isLoading && (
+          {!isLoading && !isError && (
             <div className="ms-auto text-xs font-semibold text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg">
               {items.length} معاملة
             </div>
@@ -16267,23 +16267,37 @@ function TransactionHistoryTab() {
       </div>
 
       {/* Summary cards — 3 cards: إيرادات / مسترجع / مصروفات */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-900/10 p-3.5">
-          <div className="text-xs text-green-700 dark:text-green-400 font-semibold">إجمالي الإيرادات</div>
-          <div className="text-xl font-extrabold text-green-700 dark:text-green-300 tabular-nums mt-0.5">{totalIn.toLocaleString("ar-SA")} <span className="text-xs font-normal">ر.س</span></div>
+          <div className="text-sm text-green-700 dark:text-green-400 font-semibold">الإيرادات المحصّلة</div>
+          <div className="text-xl font-extrabold text-green-700 dark:text-green-300 tabular-nums mt-0.5">{showTotal(totalIn)} <span className="text-xs font-normal">ر.س</span></div>
         </div>
         <div className="rounded-xl border border-orange-200 bg-orange-50 dark:bg-orange-900/10 p-3.5">
           <div className="text-xs text-orange-700 dark:text-orange-400 font-semibold">إجمالي المسترجع</div>
-          <div className="text-xl font-extrabold text-orange-700 dark:text-orange-300 tabular-nums mt-0.5">{totalRefunds.toLocaleString("ar-SA")} <span className="text-xs font-normal">ر.س</span></div>
+          <div className="text-xl font-extrabold text-orange-700 dark:text-orange-300 tabular-nums mt-0.5">{showTotal(totalRefunds)} <span className="text-xs font-normal">ر.س</span></div>
         </div>
         <div className="rounded-xl border border-red-200 bg-red-50 dark:bg-red-900/10 p-3.5">
           <div className="text-xs text-red-700 dark:text-red-400 font-semibold">إجمالي المصروفات</div>
-          <div className="text-xl font-extrabold text-red-700 dark:text-red-300 tabular-nums mt-0.5">{totalOut.toLocaleString("ar-SA")} <span className="text-xs font-normal">ر.س</span></div>
+          <div className="text-xl font-extrabold text-red-700 dark:text-red-300 tabular-nums mt-0.5">{showTotal(totalOut)} <span className="text-xs font-normal">ر.س</span></div>
+        </div>
+        <div className="rounded-xl border border-primary/30 bg-primary/5 p-3.5">
+          <div className="text-sm text-foreground font-semibold">صافي الدخل</div>
+          <div className={`text-xl font-extrabold tabular-nums mt-0.5 ${net < 0 ? "text-red-700 dark:text-red-400" : "text-foreground"}`}>{showTotal(net)} <span className="text-xs font-normal">ر.س</span></div>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/10 p-3.5">
+          <div className="text-sm text-amber-800 dark:text-amber-300 font-semibold">المبالغ المتبقية</div>
+          <div className="text-xl font-extrabold text-amber-800 dark:text-amber-300 tabular-nums mt-0.5">{showTotal(receivables)} <span className="text-xs font-normal">ر.س</span></div>
         </div>
       </div>
+      <p className="text-sm text-muted-foreground leading-relaxed">الإجماليات تخص النشاط والفترة المعروضين. صافي الدخل = المحصّل − المسترجع − المصروفات والمسحوبات. المبالغ المتبقية والتأمينات القابلة للاسترداد ليست إيراداً محصّلاً، والإيداع البنكي لا يكرر الإيراد.</p>
 
       {/* Table */}
-      {isLoading ? (
+      {isError ? (
+        <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-destructive">
+          تعذّر تحميل سجل المعاملات. لم تُعرض أرقام صفرية بديلة.
+          <Button variant="outline" size="sm" className="ms-3" onClick={() => void refetch()}>إعادة المحاولة</Button>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-2">{[1,2,3].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}</div>
       ) : items.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground text-sm">
@@ -16309,7 +16323,8 @@ function TransactionHistoryTab() {
                   const sl = statusLabel(item.status);
                   const isIncome = item.type === "income";
                   const isCancelled = item.status === "cancelled";
-                  const needsDeposit = isIncome && item.method === "cash" && item.cashDeposited === false && !isCancelled;
+                  const cashPending = isIncome && item.method === "cash" && item.cashDeposited === false && !isCancelled;
+                  const needsDeposit = cashPending && /^b-\d+$/.test(item.id);
                   const isUpdating = updatingId === item.id;
                   const methodBadge = isIncome
                     ? item.method === "transfer"
@@ -16338,7 +16353,7 @@ function TransactionHistoryTab() {
                       </td>
                       <td className="px-4 py-3 space-y-1">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tl.cls}`}>{tl.text}</span>
-                        {needsDeposit && (
+                        {cashPending && (
                           <div>
                             <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">💵 سيولة يدوية</span>
                           </div>

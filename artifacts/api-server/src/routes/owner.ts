@@ -75,6 +75,7 @@ import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { createAddonCheckout, previewAddonCheckout, readAddonCheckoutQuote, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
 import { getSubscriptionBillingReadiness } from "../lib/subscription-renewals";
 import { ownerIdentityAliases } from "../lib/broadcast-utils";
+import { ledgerDate, monetaryCents, quickSaleTransactionEntries, serviceTransactionEntries } from "../lib/transaction-income";
 import { isSupportClosed, preserveLegacySupportReply, supportMessagesSql, SupportTicketClosedError } from "../lib/support-conversation";
 
 const router = Router();
@@ -5909,23 +5910,53 @@ router.get("/notification-settings", async (req, res) => {
 });
 
 /* ── GET /owner/transaction-history ───────────────────────────
-   Combined log: bookings income + refunds + expenses + withdrawals
+   Combined log: property/service receipts + quick sales + refunds + expenses.
    Client-side filtering by month; API returns all data for owner. */
 router.get("/transaction-history", async (req, res) => {
-  const ownerId = req.user!.id;
+  const ownerIds = await getOwnerIds(req);
   const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
+  const providerId = req.query.providerId ? Number(req.query.providerId) : undefined;
+  if ((submissionId !== undefined && (!Number.isSafeInteger(submissionId) || submissionId <= 0)) ||
+      (providerId !== undefined && (!Number.isSafeInteger(providerId) || providerId <= 0)) ||
+      (submissionId !== undefined && providerId !== undefined)) {
+    return res.status(400).json({ error: "اختر نشاطاً مالياً صحيحاً واحداً" });
+  }
+  const providers = submissionId ? [] : await db.select({ id: serviceProvidersTable.id, name: serviceProvidersTable.businessName })
+    .from(serviceProvidersTable).where(and(inArray(serviceProvidersTable.ownerId, ownerIds),
+      providerId ? eq(serviceProvidersTable.id, providerId) : undefined));
+  if (providerId && !providers.length) return res.status(404).json({ error: "الخدمة غير موجودة" });
 
-  const bConds: Parameters<typeof and>[0][] = [eq(ownerBookingsTable.ownerId, ownerId)];
-  const eConds: Parameters<typeof and>[0][] = [eq(ownerExpensesTable.ownerId, ownerId)];
-  const pConds: Parameters<typeof and>[0][] = [eq(bookingPaymentsTable.ownerId, ownerId)];
+  const bConds: Parameters<typeof and>[0][] = [inArray(ownerBookingsTable.ownerId, ownerIds)];
+  const eConds: Parameters<typeof and>[0][] = [inArray(ownerExpensesTable.ownerId, ownerIds)];
+  const pConds: Parameters<typeof and>[0][] = [
+    inArray(bookingPaymentsTable.ownerId, ownerIds), inArray(ownerBookingsTable.ownerId, ownerIds),
+  ];
   if (submissionId) {
     bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
-    eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+    pConds.push(eq(ownerBookingsTable.submissionId, submissionId));
+    eConds.push(isNull(ownerExpensesTable.providerId), or(eq(ownerExpensesTable.submissionId, submissionId),
+      and(isNull(ownerExpensesTable.submissionId), isNull(ownerExpensesTable.providerId))));
+  }
+  if (providerId) {
+    bConds.push(sql`false`);
+    pConds.push(sql`false`);
+    eConds.push(or(eq(ownerExpensesTable.providerId, providerId),
+      and(isNull(ownerExpensesTable.submissionId), isNull(ownerExpensesTable.providerId),
+        eq(ownerExpensesTable.category, "salaries"))));
   }
 
-  const [bookings, expenses, instPayments] = await Promise.all([
-    db.select().from(ownerBookingsTable).where(and(...bConds)).orderBy(ownerBookingsTable.bookingDate),
-    db.select().from(ownerExpensesTable).where(and(...eConds)).orderBy(ownerExpensesTable.dateStr),
+  const [bookings, expenses, instPayments, appointments, sales, refunds] = await Promise.all([
+    db.select({
+      id: ownerBookingsTable.id, clientName: ownerBookingsTable.clientName, bookingDate: ownerBookingsTable.bookingDate,
+      depositPaid: ownerBookingsTable.depositPaid, totalPrice: ownerBookingsTable.totalPrice, revenueAmount: ownerBookingsTable.revenueAmount,
+      balanceCollected: ownerBookingsTable.balanceCollected, cancelledAt: ownerBookingsTable.cancelledAt,
+      cancelRefundAmount: ownerBookingsTable.cancelRefundAmount, paymentMethod: ownerBookingsTable.paymentMethod,
+      paymentReceiptUrl: ownerBookingsTable.paymentReceiptUrl, cashDeposited: ownerBookingsTable.cashDeposited,
+    }).from(ownerBookingsTable).where(and(...bConds)).orderBy(ownerBookingsTable.bookingDate),
+    db.select({
+      id: ownerExpensesTable.id, dateStr: ownerExpensesTable.dateStr, category: ownerExpensesTable.category,
+      customCategory: ownerExpensesTable.customCategory, amount: ownerExpensesTable.amount,
+    }).from(ownerExpensesTable).where(and(...eConds)).orderBy(ownerExpensesTable.dateStr),
     db.select({
       id: bookingPaymentsTable.id,
       bookingId: bookingPaymentsTable.bookingId,
@@ -5940,6 +5971,26 @@ router.get("/transaction-history", async (req, res) => {
     .from(bookingPaymentsTable)
     .innerJoin(ownerBookingsTable, eq(bookingPaymentsTable.bookingId, ownerBookingsTable.id))
     .where(and(...pConds)),
+    providers.length ? db.select({
+      id: serviceAppointmentsTable.id, providerId: serviceAppointmentsTable.providerId,
+      clientName: serviceAppointmentsTable.clientName, dateStr: serviceAppointmentsTable.dateStr,
+      amount: serviceAppointmentsTable.amount, deposit: serviceAppointmentsTable.deposit,
+      paymentMethod: serviceAppointmentsTable.paymentMethod, cashDeposited: serviceAppointmentsTable.cashDeposited,
+      paymentReceiptUrl: serviceAppointmentsTable.paymentReceiptUrl, status: serviceAppointmentsTable.status,
+      cancelledAt: serviceAppointmentsTable.cancelledAt, cancelRefundAmount: serviceAppointmentsTable.cancelRefundAmount,
+    }).from(serviceAppointmentsTable).where(and(
+      inArray(serviceAppointmentsTable.providerId, providers.map(provider => provider.id)),
+      inArray(serviceAppointmentsTable.ownerId, ownerIds))) : Promise.resolve([]),
+    !submissionId ? db.select().from(quickSalesTable).where(and(
+      inArray(quickSalesTable.ownerId, ownerIds), providerId ? eq(quickSalesTable.providerId, providerId) : undefined,
+    )) : Promise.resolve([]),
+    providerId ? Promise.resolve([]) : db.select({
+      id: ownerRefundsTable.id, bookingId: ownerRefundsTable.bookingId, amount: ownerRefundsTable.amount,
+      createdAt: ownerRefundsTable.createdAt, clientName: ownerBookingsTable.clientName,
+    }).from(ownerRefundsTable).leftJoin(ownerBookingsTable, eq(ownerRefundsTable.bookingId, ownerBookingsTable.id))
+      .where(and(inArray(ownerRefundsTable.ownerId, ownerIds),
+        submissionId ? eq(ownerBookingsTable.submissionId, submissionId) : undefined,
+        or(isNull(ownerRefundsTable.bookingId), inArray(ownerBookingsTable.ownerId, ownerIds)))),
   ]);
 
   const bookingIdsWithInstallments = new Set(instPayments.map(p => p.bookingId));
@@ -5947,26 +5998,26 @@ router.get("/transaction-history", async (req, res) => {
   const items = [
     /* Booking entries — distinguish refund vs cancelled vs normal income */
     ...bookings.flatMap(b => {
-      const dep = Number(b.depositPaid ?? 0);
-      const refundAmt = Number((b as any).cancelRefundAmount ?? 0);
+      const dep = monetaryCents(b.depositPaid ?? (b.totalPrice == null ? b.revenueAmount : null)) / 100;
+      const refundAmt = monetaryCents(b.cancelRefundAmount) / 100;
       const hasInst = bookingIdsWithInstallments.has(b.id);
-      const bal = (!hasInst && b.balanceCollected) ? Math.max(0, Number(b.totalPrice ?? 0) - dep) : 0;
+      const bal = (!hasInst && b.balanceCollected) ? Math.max(0, monetaryCents(b.totalPrice) - monetaryCents(b.depositPaid)) / 100 : 0;
 
       /* Helper: safely convert Drizzle Date object or string to YYYY-MM-DD */
       const toDateStr = (v: unknown): string => {
         if (!v) return b.bookingDate ?? "";
-        if (v instanceof Date) return v.toISOString().slice(0, 10);
+        if (v instanceof Date) return ledgerDate(v);
         const s = String(v);
         /* Already ISO YYYY-MM-DD or YYYY-MM-DDTHH… */
-        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
         /* Fallback: parse and format */
         const d = new Date(s);
-        return isNaN(d.getTime()) ? (b.bookingDate ?? "") : d.toISOString().slice(0, 10);
+        return isNaN(d.getTime()) ? (b.bookingDate ?? "") : ledgerDate(d);
       };
 
       if (b.cancelledAt) {
         const cancelDate = toDateStr(b.cancelledAt);
-        if (dep > 0 && refundAmt > 0) {
+        if (refundAmt > 0) {
           /* Money was received AND partially/fully refunded →
              Keep original deposit row (+dep) AND add a refund row (-refundAmt).
              The difference (dep - refundAmt) = cancellation fee that stays with owner. */
@@ -5976,7 +6027,7 @@ router.get("/transaction-history", async (req, res) => {
               date: b.bookingDate ?? "",
               type: "income" as const,
               label: `إيداع — ${b.clientName}`,
-              amount: dep,
+              amount: (monetaryCents(dep) + monetaryCents(bal)) / 100,
               method: (b.paymentMethod ?? "transfer") as string,
               status: "collected" as string,
               cashDeposited: true as boolean | null,
@@ -5999,15 +6050,15 @@ router.get("/transaction-history", async (req, res) => {
             },
           ];
         }
-        /* Cancelled — no money ever paid (dep==0), or 100% kept as fee (refundAmt==0) */
+        /* Retained collections remain income even when cancellation involved no refund. */
         return [{
           id: `b-${b.id}`,
           date: b.bookingDate ?? "",
           type: "income" as const,
           label: `إيداع — ${b.clientName}`,
-          amount: dep,
+          amount: (monetaryCents(dep) + monetaryCents(bal)) / 100,
           method: (b.paymentMethod ?? "transfer") as string,
-          status: "cancelled" as string,
+          status: dep + bal > 0 ? "collected" : "cancelled",
           cashDeposited: null as boolean | null,
           paymentReceiptUrl: null as string | null,
           bookingId: b.id as number | null,
@@ -6016,20 +6067,20 @@ router.get("/transaction-history", async (req, res) => {
       }
 
       /* Normal income — determine full-payment status by comparing amount vs totalPrice */
-      const total = Number(b.totalPrice ?? 0);
-      const fullAmountCollected = b.balanceCollected || (total > 0 && dep >= total);
-      const remaining = (total > 0 && !fullAmountCollected && !hasInst)
-        ? Math.max(0, total - dep)
-        : 0;
+      const total = monetaryCents(b.totalPrice);
+      const collected = monetaryCents(dep) + monetaryCents(bal) +
+        instPayments.filter(payment => payment.bookingId === b.id).reduce((sum, payment) => sum + monetaryCents(payment.amount), 0);
+      const fullAmountCollected = collected >= total;
+      const remaining = Math.max(0, total - collected) / 100;
       return [{
         id: `b-${b.id}`,
         date: b.bookingDate,
         type: "income" as const,
         label: `إيداع — ${b.clientName}`,
-        amount: dep + bal,
+        amount: (monetaryCents(dep) + monetaryCents(bal)) / 100,
         method: (b.paymentMethod ?? "transfer") as string,
-        status: hasInst ? "deposit_only" : (fullAmountCollected ? "collected" : "deposit_only"),
-        cashDeposited: true as boolean | null,
+        status: fullAmountCollected ? "collected" : collected === 0 ? "unpaid" : "deposit_only",
+        cashDeposited: b.cashDeposited as boolean | null,
         paymentReceiptUrl: b.paymentReceiptUrl ?? null,
         bookingId: b.id as number | null,
         remainingBalance: remaining > 0 ? remaining : null as number | null,
@@ -6060,6 +6111,14 @@ router.get("/transaction-history", async (req, res) => {
       cashDeposited: null as boolean | null,
       paymentReceiptUrl: null as string | null,
       bookingId: null as number | null,
+    })),
+    ...serviceTransactionEntries(appointments, new Map(providers.map(provider => [provider.id, provider.name ?? "خدمة"]))),
+    ...quickSaleTransactionEntries(sales),
+    ...refunds.map(refund => ({
+      id: `r-${refund.id}`, date: ledgerDate(refund.createdAt), type: "refund" as const,
+      label: `استرداد مسجل — ${refund.clientName ?? "عميل"}`, amount: monetaryCents(refund.amount) / 100,
+      method: "na", status: "refunded", cashDeposited: null, bookingId: refund.bookingId,
+      paymentReceiptUrl: null, remainingBalance: null,
     })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 

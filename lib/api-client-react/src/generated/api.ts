@@ -89,6 +89,7 @@ import type {
   InvitePhotographer200,
   InvitePhotographerBody,
   ListAdminServiceReviewObjections200Item,
+  ListOwnerLedgerTransactionsParams,
   ListOwnerNotificationHistoryParams,
   ListPropertyOffersParams,
   ListQuickSalesParams,
@@ -98,6 +99,7 @@ import type {
   MarkOwnerNotificationScopeRead200,
   OwnerFreeAccessGrantInput,
   OwnerFreeAccessGrantResponse,
+  OwnerLedgerTransaction,
   OwnerNotificationHistoryItem,
   OwnerNotificationScopeInput,
   OwnerService,
@@ -215,6 +217,108 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListOwnerLedgerTransactionsUrl = (params?: ListOwnerLedgerTransactionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/owner/transaction-history?${stringifiedParams}` : `/api/owner/transaction-history`
+}
+
+export const listOwnerLedgerTransactions = async (params?: ListOwnerLedgerTransactionsParams, options?: Parameters<typeof customFetch>[1]): Promise<OwnerLedgerTransaction[]> => {
+
+  return customFetch<OwnerLedgerTransaction[]>(getListOwnerLedgerTransactionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOwnerLedgerTransactionsQueryKey = (params?: ListOwnerLedgerTransactionsParams,) => {
+    return [
+    `/api/owner/transaction-history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListOwnerLedgerTransactionsQueryOptions = <TData = Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError = ErrorType<void>>(params?: ListOwnerLedgerTransactionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOwnerLedgerTransactionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOwnerLedgerTransactions>>> = ({ signal }) => listOwnerLedgerTransactions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListOwnerLedgerTransactionsQueryResult = NonNullable<Awaited<ReturnType<typeof listOwnerLedgerTransactions>>>
+export type ListOwnerLedgerTransactionsQueryError = ErrorType<void>
+
+
+export function useListOwnerLedgerTransactions<TData = Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError = ErrorType<void>>(
+ params: undefined |  ListOwnerLedgerTransactionsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listOwnerLedgerTransactions>>,
+          TError,
+          Awaited<ReturnType<typeof listOwnerLedgerTransactions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListOwnerLedgerTransactions<TData = Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError = ErrorType<void>>(
+ params?: ListOwnerLedgerTransactionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listOwnerLedgerTransactions>>,
+          TError,
+          Awaited<ReturnType<typeof listOwnerLedgerTransactions>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListOwnerLedgerTransactions<TData = Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError = ErrorType<void>>(
+ params?: ListOwnerLedgerTransactionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useListOwnerLedgerTransactions<TData = Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError = ErrorType<void>>(
+ params?: ListOwnerLedgerTransactionsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerLedgerTransactions>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListOwnerLedgerTransactionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getReplyToOwnerSupportTicketUrl = (id: number,) => {
 

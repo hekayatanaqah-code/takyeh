@@ -21,6 +21,28 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/transaction-history:
+    get:
+      operationId: listOwnerLedgerTransactions
+      tags: [owner]
+      parameters:
+        - in: query
+          name: submissionId
+          schema: { type: integer, minimum: 1 }
+        - in: query
+          name: providerId
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Owner-scoped property/service receipts, sales, refunds and expenses. Select at most one activity.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OwnerLedgerTransaction" }
+        "400": { description: Invalid or conflicting activity filters }
+        "401": { description: Authentication required }
+        "404": { description: Service is not owned by this account }
   /owner/support-requests/{id}/reply:
     post:
       operationId: replyToOwnerSupportTicket
@@ -1654,6 +1676,24 @@ components:
       schema:
         type: string
   schemas:
+    OwnerLedgerTransaction:
+      type: object
+      required: [id, date, type, label, amount, method, status, cashDeposited]
+      properties:
+        id: { type: string }
+        date: { type: string }
+        type: { type: string, enum: [income, expense, withdrawal, refund] }
+        label: { type: string }
+        amount: { type: number }
+        method: { type: string }
+        status: { type: string }
+        cashDeposited: { type: [boolean, "null"] }
+        paymentReceiptUrl: { type: [string, "null"] }
+        bookingId: { type: [integer, "null"] }
+        remainingBalance: { type: [number, "null"] }
+        source: { type: string }
+        providerId: { type: integer }
+        appointmentId: { type: integer }
     SupportConversationReplyInput:
       type: object
       required: [message]

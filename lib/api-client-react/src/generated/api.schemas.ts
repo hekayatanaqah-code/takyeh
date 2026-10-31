@@ -5,6 +5,37 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type OwnerLedgerTransactionType = typeof OwnerLedgerTransactionType[keyof typeof OwnerLedgerTransactionType];
+
+
+export const OwnerLedgerTransactionType = {
+  income: 'income',
+  expense: 'expense',
+  withdrawal: 'withdrawal',
+  refund: 'refund',
+} as const;
+
+export interface OwnerLedgerTransaction {
+  id: string;
+  date: string;
+  type: OwnerLedgerTransactionType;
+  label: string;
+  amount: number;
+  method: string;
+  status: string;
+  /** @nullable */
+  cashDeposited: boolean | null;
+  /** @nullable */
+  paymentReceiptUrl?: string | null;
+  /** @nullable */
+  bookingId?: number | null;
+  /** @nullable */
+  remainingBalance?: number | null;
+  source?: string;
+  providerId?: number;
+  appointmentId?: number;
+}
+
 export interface SupportConversationReplyInput {
   /**
      * @minLength 1
@@ -1699,6 +1730,17 @@ export interface AdminPhotographerProfileInput {
  * Opaque session token — `Bearer <sid>`.
  */
 export type AuthorizationSessionHeaderParameter = string;
+
+export type ListOwnerLedgerTransactionsParams = {
+/**
+ * @minimum 1
+ */
+submissionId?: number;
+/**
+ * @minimum 1
+ */
+providerId?: number;
+};
 
 export type ListQuickSalesParams = {
 /**
