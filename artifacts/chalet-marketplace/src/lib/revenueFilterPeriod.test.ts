@@ -48,3 +48,18 @@ test("both revenue surfaces use one grouped filter bar and no incomplete range i
   assert.equal((component.match(/selectOnOpen=\{false\}/g) ?? []).length, 2);
   assert.ok(component.includes("<RevenueMonthItem"));
 });
+
+test("all-history mode hides calendar controls and ignores retained period selections", () => {
+  const component = readFileSync(new URL("../components/owner/RevenueFilterBar.tsx", import.meta.url), "utf8");
+  assert.ok(component.includes('["all", "جميع الفترات"]'));
+  assert.ok(!component.includes("كل الفترات"));
+  assert.match(component, /\{mode !== "all" && \(\s*<div className="grid min-w-0 gap-2 sm:gap-4"/);
+  for (const calendar of ["hijri", "gregorian"] as const) {
+    const period = revenueFilterPeriod("all", calendar, "2026", "2026-10", "2026-10-01", "2026-10-31");
+    assert.equal(isInRevenuePeriod("2024-01-01", period), true);
+    assert.equal(isInRevenuePeriod("2026-11-01", period), true);
+    assert.equal(period.year, "");
+    assert.equal(period.month, "");
+    assert.equal(period.range, undefined);
+  }
+});

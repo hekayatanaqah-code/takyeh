@@ -20,7 +20,7 @@ type Props = {
   disabled?: boolean;
 };
 
-const MODES: [RevenueFilterMode, string][] = [["monthly", "شهري"], ["yearly", "سنوي"], ["custom", "مخصص"], ["all", "كل الفترات"]];
+const MODES: [RevenueFilterMode, string][] = [["monthly", "شهري"], ["yearly", "سنوي"], ["custom", "مخصص"], ["all", "جميع الفترات"]];
 const SOURCES: [RevenueSource, string][] = [["all", "الحجوزات والمبيعات المفردة"], ["bookings", "الحجوزات فقط"], ["quick_sales", "المبيعات المفردة فقط"]];
 const segClass = (active: boolean) =>
   `min-h-10 min-w-0 rounded-lg px-2 py-2 text-sm font-bold transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 sm:px-4 ${active ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"}`;
@@ -66,6 +66,7 @@ export function RevenueFilterBar(props: Props) {
         )}
       </div>
 
+      {mode !== "all" && (
       <div className="grid min-w-0 gap-2 sm:gap-4"
         style={{ gridTemplateColumns: showMonth ? "minmax(0,1fr) minmax(0,1fr) minmax(0,1.3fr)" : showYear ? "minmax(0,1fr) minmax(0,1fr)" : "minmax(0,1fr)" }}>
         <fieldset disabled={props.disabled} className="min-w-0">
@@ -109,6 +110,7 @@ export function RevenueFilterBar(props: Props) {
           </div>
         )}
       </div>
+      )}
 
       {mode === "custom" && (
         <div className="grid min-w-0 gap-5 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:grid-cols-2"
