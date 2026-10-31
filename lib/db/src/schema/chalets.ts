@@ -1274,7 +1274,7 @@ export const ownerSupportRequestsTable = pgTable("owner_support_requests", {
   ownerName: text("owner_name"),
   subject: text("subject").notNull(),
   message: text("message").notNull(),
-  status: text("status").notNull().default("new"), /* new | in_progress | resolved */
+  status: text("status").notNull().default("new"), /* new | in_progress | replied | resolved */
   source: text("source").notNull().default("owner_request"),
   adminReply: text("admin_reply"),
   adminReplyAt: timestamp("admin_reply_at", { withTimezone: true }),

@@ -2282,19 +2282,11 @@ router.get(["/dashboard", "/smart-dashboard"], requireGlobalFinancialsAdmin, asy
     status: string; created_at: Date;
   }>(sql`
     SELECT s.id, s.owner_id,
-           COALESCE(NULLIF(TRIM(s.owner_name), ''), oa.full_name, s.owner_id) AS owner_name,
+           ${supportOwnerNameSql} AS owner_name,
            s.subject, s.status, s.created_at
     FROM owner_support_requests s
-    LEFT JOIN LATERAL (
-      SELECT full_name FROM owner_applications oa2
-      WHERE oa2.phone = (
-        SELECT whatsapp_number FROM chalet_submissions
-        WHERE owner_id = s.owner_id LIMIT 1
-      )
-      LIMIT 1
-    ) oa ON true
+    ${supportIdentityJoinsSql}
     WHERE LOWER(COALESCE(s.status, 'new')) IN ('new', 'in_progress')
-      AND s.admin_reply IS NULL
     ORDER BY s.created_at ASC
     LIMIT 100
   `);
@@ -2311,7 +2303,6 @@ router.get(["/dashboard", "/smart-dashboard"], requireGlobalFinancialsAdmin, asy
     db.execute<{ count: string }>(sql`
       SELECT COUNT(*) AS count FROM owner_support_requests
       WHERE LOWER(COALESCE(status, 'new')) IN ('new', 'in_progress')
-        AND admin_reply IS NULL
     `),
   ]);
 
@@ -2417,6 +2408,27 @@ router.patch(["/contact-inquiries/:id/status", "/contact-inquiries/:id"], requir
 });
 
 /* ── Owner Support Requests ──────────────────────────────── */
+const supportOwnerNameSql = sql`COALESCE(
+  NULLIF(TRIM(linked_oa.full_name), ''),
+  CASE WHEN TRIM(COALESCE(s.owner_name, '')) !~ '^owner_[0-9]+$'
+    THEN NULLIF(NULLIF(TRIM(s.owner_name), ''), s.owner_id) END,
+  NULLIF(TRIM(oa.full_name), ''), 'مالك غير مسمى')`;
+const supportIdentityJoinsSql = sql`
+  LEFT JOIN owner_account_links oal ON oal.user_id = s.owner_id
+    AND s.owner_id !~ '^owner_[0-9]+$'
+  LEFT JOIN owner_applications linked_oa ON linked_oa.id =
+    CASE WHEN s.owner_id ~ '^owner_[1-9][0-9]*$'
+      THEN SUBSTRING(s.owner_id FROM 7)::numeric ELSE oal.owner_application_id END
+  LEFT JOIN LATERAL (
+    SELECT user_id FROM owner_account_links WHERE owner_application_id = linked_oa.id
+      AND user_id !~ '^owner_[0-9]+$' LIMIT 1
+  ) canonical_support_owner ON true
+  LEFT JOIN LATERAL (
+    SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
+  ) cs ON true
+  LEFT JOIN LATERAL (
+    SELECT full_name FROM owner_applications WHERE phone = cs.whatsapp_number ORDER BY id LIMIT 1
+  ) oa ON true`;
 router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) => {
   try {
     const ownerId = req.query.ownerId as string | undefined;
@@ -2425,7 +2437,8 @@ router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) =>
       const applicationId = Number(ownerId.slice("owner_".length));
       if (Number.isFinite(applicationId)) {
         const linked = await db.execute<{ user_id: string }>(
-          sql`SELECT user_id FROM owner_account_links WHERE owner_application_id = ${applicationId} LIMIT 1`
+          sql`SELECT user_id FROM owner_account_links WHERE owner_application_id = ${applicationId}
+            AND user_id !~ '^owner_[0-9]+$' LIMIT 1`
         );
         if (linked.rows[0]?.user_id) ownerIds.push(linked.rows[0].user_id);
       }
@@ -2438,54 +2451,30 @@ router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) =>
       }
     }
     const uniqueOwnerIds = Array.from(new Set(ownerIds));
-    /*
-     * Multi-strategy name resolution (owner_id may be a Replit user ID like "56719001"
-     * or a custom key like "owner_4" — neither maps directly to owner_applications.email).
-     *
-     * Correct path:  owner_id → chalet_submissions.owner_id → whatsapp_number
-     *                         → owner_applications.phone → full_name
-     *
-     * COALESCE priority:
-     *   1. owner_name stored on the record (set at insert time when possible)
-     *   2. full_name from owner_applications via whatsapp/chalet join
-     *   3. Raw owner_id as last-resort fallback
-     */
+    // Resolve reserved owner aliases directly; external IDs use their durable link.
+    // Names are presentation data only and never alter ticket authorization.
     const result = await db.execute(
       ownerId
-        ? sql`SELECT s.id, s.owner_id, COALESCE(oal.user_id, s.owner_id) AS owner_group_id,
-                COALESCE(NULLIF(TRIM(s.owner_name), ''), linked_oa.full_name, oa.full_name, s.owner_id) AS owner_name,
+        ? sql`SELECT s.id, s.owner_id, COALESCE(canonical_support_owner.user_id, s.owner_id) AS owner_group_id,
+                ${supportOwnerNameSql} AS owner_name,
                 s.subject, s.message, s.status,
                 CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
                 s.admin_reply, s.admin_reply_at,
                 CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
                 s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
-              LEFT JOIN owner_account_links oal
-                ON oal.user_id = s.owner_id
-                OR ('owner_' || oal.owner_application_id::text) = s.owner_id
-              LEFT JOIN owner_applications linked_oa ON linked_oa.id = oal.owner_application_id
-              LEFT JOIN LATERAL (
-                SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
-              ) cs ON true
-              LEFT JOIN owner_applications oa ON oa.phone = cs.whatsapp_number
+              ${supportIdentityJoinsSql}
                WHERE s.owner_id IN (${sql.join(uniqueOwnerIds.map((id) => sql`${id}`), sql`, `)})
               ORDER BY s.created_at DESC LIMIT 300`
-        : sql`SELECT s.id, s.owner_id, COALESCE(oal.user_id, s.owner_id) AS owner_group_id,
-                COALESCE(NULLIF(TRIM(s.owner_name), ''), linked_oa.full_name, oa.full_name, s.owner_id) AS owner_name,
+        : sql`SELECT s.id, s.owner_id, COALESCE(canonical_support_owner.user_id, s.owner_id) AS owner_group_id,
+                ${supportOwnerNameSql} AS owner_name,
                 s.subject, s.message, s.status,
                 CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
                 s.admin_reply, s.admin_reply_at,
                 CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
                 s.is_read_by_owner, s.created_at
               FROM owner_support_requests s
-              LEFT JOIN owner_account_links oal
-                ON oal.user_id = s.owner_id
-                OR ('owner_' || oal.owner_application_id::text) = s.owner_id
-              LEFT JOIN owner_applications linked_oa ON linked_oa.id = oal.owner_application_id
-              LEFT JOIN LATERAL (
-                SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
-              ) cs ON true
-              LEFT JOIN owner_applications oa ON oa.phone = cs.whatsapp_number
+              ${supportIdentityJoinsSql}
               ORDER BY s.created_at DESC LIMIT 300`
     );
     return res.json((result as any).rows);
@@ -2499,10 +2488,11 @@ router.patch("/support-requests/:id/status", requireSupportDisputesAdmin, async 
   const id = Number(req.params.id);
   const body = z.object({ status: z.enum(["new", "in_progress", "resolved"]) }).safeParse(req.body);
   if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  await db.execute(
-    sql`UPDATE owner_support_requests SET status = ${body.data.status} WHERE id = ${id}`
+  const updated = await db.execute(
+    sql`UPDATE owner_support_requests SET status = ${body.data.status} WHERE id = ${id} RETURNING status`
   );
-  return res.json({ ok: true });
+  if (!updated.rows.length) return res.status(404).json({ error: "الطلب غير موجود" });
+  return res.json({ ok: true, status: updated.rows[0].status });
 });
 
 router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminReplyUpload.array("files", 10), async (req, res) => {
@@ -2538,16 +2528,18 @@ router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminRep
   }
 
   try {
-    await db.execute(
+    const updated = await db.execute(
       sql`UPDATE owner_support_requests
           SET admin_reply = ${reply},
               admin_reply_at = NOW(),
-              status = 'in_progress',
+              status = 'replied',
               is_read_by_owner = false
               ${adminAttachmentUrls.length > 0 ? sql`, admin_attachment_urls = ${`{${adminAttachmentUrls.join(",")}}`}::text[]` : sql``}
-          WHERE id = ${id}`
+          WHERE id = ${id}
+          RETURNING status, admin_reply, admin_reply_at, is_read_by_owner`
     );
-    return res.json({ ok: true, admin_attachment_urls: adminAttachmentUrls });
+    if (!updated.rows.length) return res.status(404).json({ error: "الطلب غير موجود" });
+    return res.json({ ok: true, ...updated.rows[0], ...(adminAttachmentUrls.length ? { admin_attachment_urls: adminAttachmentUrls } : {}) });
   } catch (err) {
     console.error("[POST /admin/support-requests/:id/reply]", err);
     return res.status(500).json({ error: "حدث خطأ" });

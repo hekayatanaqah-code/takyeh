@@ -27938,7 +27938,8 @@ interface OwnerSupportMsg {
 
 const SUPPORT_STATUS_AR: Record<string, { label: string; color: string }> = {
   new:         { label: "قيد المراجعة", color: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/40" },
-  in_progress: { label: "تم الرد",      color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/40" },
+  in_progress: { label: "قيد المعالجة", color: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/40" },
+  replied:     { label: "تم الرد",      color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/40" },
   resolved:    { label: "مُغلق",         color: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/40" },
   admin_message: { label: "رسالة من المنصة", color: "text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-700/40" },
 };

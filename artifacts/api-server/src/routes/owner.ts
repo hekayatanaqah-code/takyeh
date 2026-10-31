@@ -1082,7 +1082,12 @@ router.post("/support-request", requireAuth, supportUpload.array("files", 10), a
     /* Resolve name */
     let ownerName: string | null = null;
     try {
-      if (ownerId.includes("@")) {
+      const account = await resolveOwnerApplication(req);
+      if (account) {
+        const names = await db.execute(sql`SELECT full_name FROM owner_applications WHERE id = ${account.id}`);
+        ownerName = (names.rows[0]?.full_name as string | undefined) ?? null;
+      }
+      if (!ownerName && ownerId.includes("@")) {
         const r = await db.execute(sql`SELECT full_name FROM owner_applications WHERE LOWER(email) = LOWER(${ownerId}) LIMIT 1`);
         ownerName = ((r as any).rows as Array<{ full_name: string }>)[0]?.full_name ?? null;
       }

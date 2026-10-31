@@ -7853,11 +7853,12 @@ interface OwnerSupportRequest {
 const SUPPORT_STATUS_LABELS: Record<string, { label: string; className: string }> = {
   new:         { label: "جديد",          className: "bg-red-900/40 text-red-300 border border-red-700/40" },
   in_progress: { label: "قيد المعالجة", className: "bg-amber-900/40 text-amber-300 border border-amber-700/40" },
+  replied:     { label: "تم الرد", className: "bg-blue-900/40 text-blue-300 border border-blue-700/40" },
   resolved:    { label: "تم الحل",       className: "bg-green-900/40 text-green-300 border border-green-700/40" },
 };
 
 function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
-  const [activeTab, setActiveTab] = useState<"all" | "new" | "in_progress" | "resolved">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "new" | "in_progress" | "replied" | "resolved">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"newest" | "oldest">("newest");
@@ -7875,6 +7876,13 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
   const queryKey = ownerIdFilter
     ? ["admin", "support-requests", ownerIdFilter]
     : ["admin", "support-requests"];
+  const { toast } = useToast();
+  function applySupportUpdate(id: number, update: Partial<OwnerSupportRequest>) {
+    qc.setQueriesData<OwnerSupportRequest[]>({ queryKey: ["admin", "support-requests"] },
+      rows => rows?.map(row => row.id === id ? { ...row, ...update } : row));
+    void qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
+    void qc.invalidateQueries({ queryKey: ["admin", "smart-dashboard"] });
+  }
 
   const { data: requests = [], isLoading } = useQuery<OwnerSupportRequest[]>({
     queryKey,
@@ -7892,12 +7900,16 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
   async function updateStatus(id: number, status: string) {
     setUpdating(id);
     try {
-      await apiFetch(`/admin/support-requests/${id}/status`, {
+      const response = await apiFetch(`/admin/support-requests/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
+      if (!response.ok) throw new Error("تعذّر تحديث الحالة");
+      const result = await response.json();
+      applySupportUpdate(id, { status: result.status });
+    } catch {
+      toast({ title: "تعذّر تحديث حالة الطلب. حاول مجدداً.", variant: "destructive" });
     } finally {
       setUpdating(null);
     }
@@ -7916,12 +7928,14 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
         credentials: "include",
       });
       if (r.ok) {
+        const result = await r.json();
+        applySupportUpdate(id, result);
         setReplyingId(null);
         setReplyText("");
         setReplyFiles([]);
-        qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
-        qc.invalidateQueries({ queryKey: ["admin", "support-requests", ownerIdFilter ?? ""] });
-      }
+      } else throw new Error("تعذّر إرسال الرد");
+    } catch {
+      toast({ title: "تعذّر إرسال الرد. احتُفظ بالنص والمرفقات لإعادة المحاولة.", variant: "destructive" });
     } finally {
       setReplySending(false);
     }
@@ -7933,6 +7947,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
     all: requests.length,
     new: requests.filter((request) => request.status === "new").length,
     in_progress: requests.filter((request) => request.status === "in_progress").length,
+    replied: requests.filter((request) => request.status === "replied").length,
     resolved: requests.filter((request) => request.status === "resolved").length,
   }), [requests]);
 
@@ -7969,6 +7984,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
       requests: typeof requests;
       newCount: number;
       inProgressCount: number;
+      repliedCount: number;
       resolvedCount: number;
       latestDate: number;
     }> = {};
@@ -7982,6 +7998,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
           requests: [],
           newCount: 0,
           inProgressCount: 0,
+          repliedCount: 0,
           resolvedCount: 0,
           latestDate: 0,
         };
@@ -7989,6 +8006,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
       groups[oid].requests.push(req);
       if (req.status === "new") groups[oid].newCount++;
       if (req.status === "in_progress") groups[oid].inProgressCount++;
+      if (req.status === "replied") groups[oid].repliedCount++;
       if (req.status === "resolved") groups[oid].resolvedCount++;
       const time = new Date(req.created_at).getTime();
       if (time > groups[oid].latestDate) groups[oid].latestDate = time;
@@ -8018,9 +8036,6 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                 <>
                   <span className="text-slate-300 text-sm truncate">{req.subject}</span>
                 </>
-              )}
-              {req.admin_reply && (
-                <span className="text-[10px] bg-green-900/30 text-green-400 border border-green-700/30 px-1.5 py-0.5 rounded-full shrink-0">تم الرد</span>
               )}
             </div>
             <p className="text-slate-500 text-xs mt-0.5">{fmtDate(req.created_at)}</p>
@@ -8209,8 +8224,8 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
       {/* Controls */}
       <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-slate-800/40 p-3 rounded-xl border border-slate-700/50">
         <div className="flex bg-slate-900/50 p-1 rounded-lg border border-slate-700/50 w-full xl:w-auto overflow-x-auto scrollbar-hide">
-          {(["all", "new", "in_progress", "resolved"] as const).map(tab => {
-            const labels = { all: "الكل", new: "الجديدة", in_progress: "قيد المعالجة", resolved: "تم الحل" };
+          {(["all", "new", "in_progress", "replied", "resolved"] as const).map(tab => {
+            const labels = { all: "الكل", new: "الجديدة", in_progress: "قيد المعالجة", replied: "تم الرد", resolved: "تم الحل" };
             const isActive = activeTab === tab;
             return (
               <button
@@ -8297,7 +8312,6 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-bold text-slate-100 truncate">{group.owner_name}</h3>
-                    <span className="text-xs text-slate-500 font-mono hidden sm:inline-block">({group.owner_id})</span>
                   </div>
                   <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                     <span className="text-xs text-slate-400 flex items-center gap-1">
@@ -8314,6 +8328,11 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
                       <span className="text-[10px] text-amber-300 flex items-center gap-1 bg-amber-900/30 px-2 py-0.5 rounded-full border border-amber-800/50">
                         <Clock className="w-3 h-3" />
                         {toAr(group.inProgressCount)} قيد المعالجة
+                      </span>
+                    )}
+                    {group.repliedCount > 0 && (
+                      <span className="text-[10px] text-blue-300 bg-blue-900/30 px-2 py-0.5 rounded-full border border-blue-800/50">
+                        {toAr(group.repliedCount)} تم الرد
                       </span>
                     )}
                   </div>
