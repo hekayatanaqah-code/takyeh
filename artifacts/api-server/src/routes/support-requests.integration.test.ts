@@ -83,6 +83,16 @@ test("reply atomically persists replied status and subsequent explicit statuses 
     assert.equal(replied.status, 200);
     assert.equal(replied.body.status, "replied");
     assert.equal(replied.body.is_read_by_owner, false);
+    assert.equal(replied.body.ticket.id, tickets[0]);
+    assert.equal(replied.body.ticket.status, "replied");
+    assert.equal(replied.body.ticket.admin_reply, `رد اختبار ${status}`);
+    assert.equal(replied.body.ticket.owner_name, `${prefix}-مالك-0`);
+    assert.equal(replied.body.ticket.subject, prefix);
+    assert.equal(replied.body.ticket.message, "رسالة اختبار معزولة");
+    assert.ok(replied.body.ticket.admin_reply_at);
+    assert.deepEqual(replied.body.ticket.admin_attachment_urls, []);
+    const listed = await request(`/support-requests?ownerId=owner_${owners[0]}`);
+    assert.deepEqual(replied.body.ticket, listed.body.find((row: any) => row.id === tickets[0]));
     const persisted = await db.execute(sql`SELECT status,admin_reply FROM owner_support_requests WHERE id=${tickets[0]}`);
     assert.equal(persisted.rows[0].status, "replied");
     assert.equal(persisted.rows[0].admin_reply, `رد اختبار ${status}`);

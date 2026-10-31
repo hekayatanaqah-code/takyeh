@@ -6,7 +6,7 @@ An administration reply puts its support ticket in «تم الرد». Manual cha
 
 **Why:** The user reported conflicting «تم الرد» and «قيد المعالجة» labels after sending replies and requested automatic, synchronized updates.
 
-**How to apply:** Save the reply and resulting state together; only update the interface after server success. Keep unread-reply tracking separate from workflow state. Refresh both support lists and administrative pending-work counts, and preserve an unsent reply when saving fails.
+**How to apply:** Save the reply and resulting state in one explicit database transaction, and return the complete updated ticket only after commit. The interface must immediately consume that saved ticket rather than wait for a reload or infer state from the draft. Keep unread-reply tracking separate from workflow state. Refresh both support lists and administrative pending-work counts, and preserve an unsent reply when saving fails.
 
 Support administration must display the real owner or activity name, not identifiers such as «owner_79», including for owners without property submissions.
 

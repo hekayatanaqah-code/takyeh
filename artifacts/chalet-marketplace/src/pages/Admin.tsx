@@ -7929,7 +7929,11 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
       });
       if (r.ok) {
         const result = await r.json();
-        applySupportUpdate(id, result);
+        const ticket = result.ticket as OwnerSupportRequest | undefined;
+        if (!ticket || ticket.id !== id || ticket.status !== "replied") {
+          throw new Error("استجابة التذكرة غير مكتملة");
+        }
+        applySupportUpdate(ticket.id, ticket);
         setReplyingId(null);
         setReplyText("");
         setReplyFiles([]);

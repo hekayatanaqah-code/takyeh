@@ -2429,6 +2429,15 @@ const supportIdentityJoinsSql = sql`
   LEFT JOIN LATERAL (
     SELECT full_name FROM owner_applications WHERE phone = cs.whatsapp_number ORDER BY id LIMIT 1
   ) oa ON true`;
+const supportTicketColumnsSql = sql`
+  s.id, s.owner_id, COALESCE(canonical_support_owner.user_id, s.owner_id) AS owner_group_id,
+  ${supportOwnerNameSql} AS owner_name, s.subject, s.message, s.status,
+  CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls
+    WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
+  s.admin_reply, s.admin_reply_at,
+  CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls
+    WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
+  s.is_read_by_owner, s.created_at`;
 router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) => {
   try {
     const ownerId = req.query.ownerId as string | undefined;
@@ -2455,24 +2464,12 @@ router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) =>
     // Names are presentation data only and never alter ticket authorization.
     const result = await db.execute(
       ownerId
-        ? sql`SELECT s.id, s.owner_id, COALESCE(canonical_support_owner.user_id, s.owner_id) AS owner_group_id,
-                ${supportOwnerNameSql} AS owner_name,
-                s.subject, s.message, s.status,
-                CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
-                s.admin_reply, s.admin_reply_at,
-                CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
-                s.is_read_by_owner, s.created_at
+        ? sql`SELECT ${supportTicketColumnsSql}
               FROM owner_support_requests s
               ${supportIdentityJoinsSql}
                WHERE s.owner_id IN (${sql.join(uniqueOwnerIds.map((id) => sql`${id}`), sql`, `)})
               ORDER BY s.created_at DESC LIMIT 300`
-        : sql`SELECT s.id, s.owner_id, COALESCE(canonical_support_owner.user_id, s.owner_id) AS owner_group_id,
-                ${supportOwnerNameSql} AS owner_name,
-                s.subject, s.message, s.status,
-                CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
-                s.admin_reply, s.admin_reply_at,
-                CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
-                s.is_read_by_owner, s.created_at
+        : sql`SELECT ${supportTicketColumnsSql}
               FROM owner_support_requests s
               ${supportIdentityJoinsSql}
               ORDER BY s.created_at DESC LIMIT 300`
@@ -2528,18 +2525,26 @@ router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminRep
   }
 
   try {
-    const updated = await db.execute(
-      sql`UPDATE owner_support_requests
+    const ticket = await db.transaction(async tx => {
+      const updated = await tx.execute(sql`UPDATE owner_support_requests
           SET admin_reply = ${reply},
               admin_reply_at = NOW(),
               status = 'replied',
               is_read_by_owner = false
               ${adminAttachmentUrls.length > 0 ? sql`, admin_attachment_urls = ${`{${adminAttachmentUrls.join(",")}}`}::text[]` : sql``}
           WHERE id = ${id}
-          RETURNING status, admin_reply, admin_reply_at, is_read_by_owner`
-    );
-    if (!updated.rows.length) return res.status(404).json({ error: "الطلب غير موجود" });
-    return res.json({ ok: true, ...updated.rows[0], ...(adminAttachmentUrls.length ? { admin_attachment_urls: adminAttachmentUrls } : {}) });
+          RETURNING id`);
+      if (!updated.rows.length) return null;
+      // The UPDATE retains its row lock until commit, so this snapshot belongs
+      // to the same saved reply, not a concurrent administrator's later update.
+      const saved = await tx.execute(sql`SELECT ${supportTicketColumnsSql}
+        FROM owner_support_requests s ${supportIdentityJoinsSql} WHERE s.id = ${id}`);
+      if (!saved.rows[0]) throw new Error("تعذّر قراءة التذكرة المحفوظة");
+      return saved.rows[0];
+    });
+    if (!ticket) return res.status(404).json({ error: "الطلب غير موجود" });
+    // Keep the old flat fields for existing callers; the UI consumes the full ticket.
+    return res.json({ ok: true, ...ticket, ticket });
   } catch (err) {
     console.error("[POST /admin/support-requests/:id/reply]", err);
     return res.status(500).json({ error: "حدث خطأ" });
