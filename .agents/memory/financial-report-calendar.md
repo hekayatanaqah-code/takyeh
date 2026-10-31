@@ -24,7 +24,7 @@ Financial report print/PDF output uses the literal abbreviation «ر.س» in one
 
 **Why:** The user explicitly requested this currency presentation and a unified platform-only footer for financial reports.
 
-**How to apply:** Keep these report-specific choices separate from the platform's general riyal artwork convention. Zero page margins and empty page-margin boxes suppress native browser furniture where supported; never promise to override every browser's user-controlled header/footer setting.
+**How to apply:** Keep these report-specific choices separate from the platform's general riyal artwork convention. Use consistent per-page print margins and empty page-margin boxes; zero-margin legacy overrides can crop continuation pages. Never promise to override every browser's user-controlled header/footer setting.
 
 The financial reports section has its own activity filter, initially the current dashboard activity. With exactly one available activity, fix the report to that activity and display its name without a dropdown or «جميع الأنشطة». With multiple activities, retain «جميع الأنشطة» as an explicit local choice. Selecting a property or service scopes its report and updates both the screen and PDF heading to «التقرير المالي - [اسم النشاط]».
 
@@ -37,6 +37,12 @@ Printed headers show the activity only once, within «التقرير المال�
 **Why:** The user explicitly objected to repeated activity names in printed report headers and repeatedly requested larger, higher-contrast explanatory text.
 
 **How to apply:** Keep the period and issue date distinct from the title. Keep the activity selector available where needed on screen, but do not copy it into extra print-header labels. Preserve all amounts and the accounting wording when changing typography.
+
+Financial print pagination must keep fitting tables, rows, titles with their first row, and closing accounts intact. Oversized tables must continue at row boundaries with repeated column headings, without clipping or overlapping fixed footers.
+
+**Why:** The user requested clean multi-page transitions for both services and properties while retaining readable compact reports.
+
+**How to apply:** Treat native printing and bitmap PDF export separately: print CSS does not paginate a canvas capture. PDF continuation headers consume page space and must be reserved before selecting the next row boundary. Keep one authoritative margin policy rather than conflicting legacy template overrides.
 
 Completed quick sales belong in the selected activity's unified report revenue and explicit transaction details, on screen and in print/PDF; cancelled sales do not. Include periods whose only revenue comes from quick sales, even when new quick-sale entry is disabled.
 

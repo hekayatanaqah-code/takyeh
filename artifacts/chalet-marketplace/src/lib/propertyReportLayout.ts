@@ -1,4 +1,5 @@
 import { finalizeFinancialReportHtml } from "./financialReport";
+import { FINANCIAL_PAGE_BREAK_CSS } from "./financialReportPagination";
 
 /** Appended after shared report styles, so property layout cannot affect services. */
 export const PROPERTY_REPORT_CSS = `
@@ -39,10 +40,10 @@ export const PROPERTY_REPORT_CSS = `
 .property-report-compact .page>.header + .section .kpi-grid{grid-template-columns:repeat(4,minmax(0,1fr));}
 .property-report-compact .slot-row{gap:5px;}
 .property-report-compact .slot-chip{padding:4px 7px;}
-@page{size:A4 portrait;margin:0!important;}
+@page{size:A4 portrait;margin:10mm!important;}
 @media print{
  html:has(.property-report),body.property-report{margin:0!important;padding:0!important;max-height:none!important;overflow:visible!important;background:#fff!important;}
- .property-report .page{width:210mm!important;max-width:210mm!important;min-height:0!important;padding:10mm!important;margin:0 auto!important;}
+ .property-report .page{width:100%!important;max-width:100%!important;min-height:0!important;padding:0!important;margin:0 auto!important;}
  .property-report .header{break-inside:avoid;page-break-inside:avoid;}
  .property-report .footer{left:auto!important;right:auto!important;bottom:auto!important;}
  .property-report-compact .page{break-inside:avoid;page-break-inside:avoid;}
@@ -53,7 +54,7 @@ export const PROPERTY_REPORT_CSS = `
 export function finalizePropertyReportHtml(html: string, showDetails: boolean) {
   return finalizeFinancialReportHtml(html)
     .replace("<body>", `<body class="property-report${showDetails ? "" : " property-report-compact"}">`)
-    .replace("</head>", `<style>${PROPERTY_REPORT_CSS}</style></head>`);
+    .replace("</head>", `<style>${PROPERTY_REPORT_CSS}${FINANCIAL_PAGE_BREAK_CSS}</style></head>`);
 }
 
 /** Keep detailed property exports legible instead of shrinking many pages to one. */

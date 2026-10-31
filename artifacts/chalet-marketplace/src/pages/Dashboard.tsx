@@ -48,7 +48,8 @@ import { propertyCalendarBookingMap, propertyCalendarRows } from "@/lib/property
 import { resolveManualBookingProperty } from "@/lib/manualBookingProperty";
 import { matchesPropertyPaymentFilter, type PropertyPaymentFilter } from "@/lib/propertyBookingStatus";
 import { PropertyBookingPaymentFilters, PropertyBookingArrivalBadge } from "@/components/PropertyBookingStatus";
-import { finalizePropertyReportHtml, propertyPdfSliceRanges } from "@/lib/propertyReportLayout";
+import { finalizePropertyReportHtml } from "@/lib/propertyReportLayout";
+import { financialReportPageSlices } from "@/lib/financialReportPagination";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
 import { FinancialMonthOption } from "@/components/FinancialMonthOption";
@@ -19644,7 +19645,7 @@ function buildMonthlyReportHtml(
   const currentPeriodNotice = isCurrentPeriod
     ? `<div class="current-period-notice">ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم ${printDate}.</div>`
     : "";
-  const printMediaCss = `@page{size:A4 portrait;margin:0!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;border-top:18px solid transparent!important;background-clip:padding-box!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+  const printMediaCss = ""; // Shared final print rules own per-page margins and fragmentation.
 
   const dailyChartSvg = report?.dailyRevenue && report.dailyRevenue.length > 0
     ? buildRevBarSvg(report.dailyRevenue) : "";
@@ -19769,14 +19770,11 @@ function buildYearlyReportHtml(
     ? `<img src="${logoDataUrl}" style="height:68px;width:auto;object-fit:contain;display:block;" alt="تكية" />`
     : `<svg width="148" height="52" viewBox="0 0 148 52" xmlns="http://www.w3.org/2000/svg"><polygon points="10,27 26,11 42,27" fill="none" stroke="#8C6246" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/><rect x="14" y="26" width="24" height="18" rx="2" fill="#8C6246" opacity="0.1" stroke="#8C6246" stroke-width="2"/><rect x="21" y="31" width="10" height="13" rx="1.5" fill="#8C6246" opacity="0.45"/><line x1="52" y1="10" x2="52" y2="43" stroke="#d9c9b8" stroke-width="1"/><text x="60" y="28" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="21" font-weight="900" fill="#8C6246">تكية</text><text x="60" y="42" font-family="Segoe UI,Tahoma,Arial,sans-serif" font-size="9.5" fill="#a07852">منصة الشاليهات</text></svg>`;
   const chartSvg = buildMonthlyBarChartSvg(yearly.monthly, isCustom ? calMode : undefined);
-  // Compact single-page layout for very short periods (≤14 days), multi-page for longer ones
-  const isCompact = !showDetails && isShortPeriod && !!daysDiff && daysDiff <= 14;
+  // The shared property finalizer owns compact versus detailed print layout.
   const currentPeriodNotice = isCurrentPeriod
     ? `<div class="current-period-notice">ملاحظة: هذا التقرير يعرض البيانات المالية المحققة حتى تاريخ اليوم ${printDate}.</div>`
     : "";
-  const printMediaCss = isCompact
-    ? `@page{size:A4 portrait;margin:0!important;}@media print{html,body{max-height:277mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.header{padding-bottom:6px!important;margin-bottom:8px!important;}.section{margin-bottom:6px!important;page-break-inside:avoid;break-inside:avoid;}.section-auto{margin-bottom:6px!important;}.kpi-card{padding:5px 10px!important;}table th,table td{height:26px!important;padding-top:1px!important;padding-bottom:4px!important;}}`
-    : `@page{size:A4 portrait;margin:0!important;}@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;}body{padding:12mm!important;margin:0!important;}body,.print-container{margin:0!important;}.print-container{padding:0!important;}.page{width:100%!important;padding:0!important;}table{break-before:auto;margin-top:12mm!important;margin-bottom:15mm!important;border-collapse:collapse;}thead{display:table-header-group;}thead tr th{padding-top:10px!important;padding-bottom:10px!important;border-top:18px solid transparent!important;background-clip:padding-box!important;}thead tr:first-child th{padding-top:15px!important;}tr{page-break-inside:avoid!important;break-inside:avoid!important;}.section{page-break-inside:avoid;break-inside:avoid;}.section-auto{page-break-inside:auto;break-inside:auto;}}`;
+  const printMediaCss = ""; // Compact layout is scoped by finalizePropertyReportHtml.
 
   return finalizePropertyReportHtml(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"/>
  <title>${fileName}</title>
@@ -19941,25 +19939,48 @@ async function htmlToPdfBlob(html: string, fileName: string): Promise<{ blob: Bl
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
-    if (iDoc.body.classList.contains("property-report") && !iDoc.body.classList.contains("property-report-compact")) {
+    if (!iDoc.body.classList.contains("property-report-compact") && canvas.height > pageHeightCanvasPx) {
       const pageRect = pageEl.getBoundingClientRect();
       const pixelRatio = canvas.height / pageRect.height;
-      const closing = pageEl.querySelector(".financial-closing")?.getBoundingClientRect();
-      const boundaries = Array.from(pageEl.querySelectorAll(".header,.section,.section-auto,.footer,tr"))
-        .map(element => element.getBoundingClientRect().bottom)
-        .filter(bottom => !closing || bottom <= closing.top || bottom >= closing.bottom)
-        .map(bottom => (bottom - pageRect.top) * pixelRatio);
-      const ranges = propertyPdfSliceRanges(canvas.height, pageHeightCanvasPx, boundaries);
-      ranges.forEach(({ start, end }, index) => {
+      const measure = (element: Element) => {
+        const rect = element.getBoundingClientRect();
+        return { top: Math.floor((rect.top - pageRect.top) * pixelRatio),
+          bottom: Math.ceil((rect.bottom - pageRect.top) * pixelRatio) };
+      };
+      const boundaries = Array.from(pageEl.querySelectorAll(".header,.section,.section-auto,.financial-sales-details,.footer,tr"))
+        .flatMap(element => { const block = measure(element); return [block.top, block.bottom]; });
+      const protectedBlocks = Array.from(pageEl.querySelectorAll(".header,.section,.financial-closing,table,tr,.kpi-card,.financial-summary-table,.financial-report-scope"))
+        .map(measure);
+      // A section title stays with its first table row, not alone at a page foot.
+      for (const section of pageEl.querySelectorAll(".section,.section-auto,.financial-sales-details")) {
+        const heading = section.querySelector(".section-title,h2,h3") ?? section.firstElementChild;
+        const firstRow = section.querySelector("tbody tr");
+        if (heading && firstRow) protectedBlocks.push({ top: measure(heading).top, bottom: measure(firstRow).bottom });
+      }
+      const header = pageEl.querySelector(".header");
+      const headerBottom = header ? measure(header).bottom : 0;
+      const tables = Array.from(pageEl.querySelectorAll("table")).flatMap(table => {
+        const head = table.querySelector("thead");
+        return head ? [{ ...measure(table), headerTop: measure(head).top, headerBottom: measure(head).bottom }] : [];
+      });
+      const ranges = financialReportPageSlices(canvas.height, pageHeightCanvasPx, boundaries, protectedBlocks, headerBottom, tables);
+      ranges.forEach(({ start, end, repeatHeader, tableHeader }, index) => {
         if (index) pdf.addPage();
+        const headerSpace = repeatHeader ? headerBottom + 16 : 0;
+        const tableSpace = tableHeader ? tableHeader.bottom - tableHeader.top + 12 : 0;
         const slice = document.createElement("canvas");
         slice.width = canvas.width;
-        slice.height = end - start;
+        slice.height = headerSpace + tableSpace + end - start;
         const context = slice.getContext("2d");
         if (!context) throw new Error("تعذّر تجهيز صفحات التقرير التفصيلي");
-        context.drawImage(canvas, 0, start, canvas.width, end - start, 0, 0, canvas.width, end - start);
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, slice.width, slice.height);
+        if (repeatHeader) context.drawImage(canvas, 0, 0, canvas.width, headerBottom, 0, 0, canvas.width, headerBottom);
+        if (tableHeader) context.drawImage(canvas, 0, tableHeader.top, canvas.width, tableHeader.bottom - tableHeader.top,
+          0, headerSpace, canvas.width, tableHeader.bottom - tableHeader.top);
+        context.drawImage(canvas, 0, start, canvas.width, end - start, 0, headerSpace + tableSpace, canvas.width, end - start);
         pdf.addImage(slice.toDataURL("image/jpeg", 0.93), "JPEG", MARGIN_MM, MARGIN_MM,
-          contentWidthMm, (end - start) * mmPerCanvasPx);
+          contentWidthMm, slice.height * mmPerCanvasPx);
       });
     } else {
     // Compact reports keep their whole summary and closing accounts on one page.

@@ -1,3 +1,5 @@
+import { FINANCIAL_PAGE_BREAK_CSS } from "./financialReportPagination";
+
 export const PROPERTY_REPORT_REVENUE_NOTE = "الإيرادات المحصّلة فعلياً: العربون والمتبقي عند تحصيله، مع التلفيات المحتسبة. تختلف عن إجمالي قيمة الحجوزات التعاقدية إذا بقيت مبالغ غير مدفوعة أو مؤجلة؛ ولا يشمل الإيراد التأمين القابل للاسترداد.";
 
 /** Property detail visibility changes presentation only, never the supplied totals. */
@@ -71,7 +73,7 @@ tr.financial-net td{background:#efe4d8!important;font-weight:800!important;font-
 .financial-money .financial-currency{direction:rtl;font-size:.85em;}
 .financial-money.financial-negative,.financial-money.financial-negative bdi{color:#b42318!important;}
 .footer{margin-top:auto;padding-top:12px;text-align:center;direction:rtl;flex-shrink:0;border-top:1px solid #e6d9cc;color:#8a7b70!important;font-size:11px!important;}
-@page{size:A4 portrait;margin:0!important;@top-left{content:none}@top-center{content:none}@top-right{content:none}@bottom-left{content:none}@bottom-center{content:none}@bottom-right{content:none}}
+@page{size:A4 portrait;margin:10mm!important;@top-left{content:none}@top-center{content:none}@top-right{content:none}@bottom-left{content:none}@bottom-center{content:none}@bottom-right{content:none}}
 @media print{
  html,body{margin:0!important;padding:0!important;background:#fffdfa!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
  .page{box-sizing:border-box;width:100%!important;min-height:296mm;padding:14mm 15mm 22mm!important;}
@@ -89,7 +91,7 @@ export function finalizeFinancialReportHtml(html: string) {
       const shown = `${negative ? "-" : ""}${digits}`.replace(/٬/g, '<span class="financial-thousands">٬</span>');
       return `<span class="financial-money${negative ? " financial-negative" : ""}"><bdi dir="ltr">${shown}</bdi><bdi class="financial-currency" dir="rtl">ر.س</bdi></span>${negative || !closing ? "" : closing}`;
     },
-  )).join("").replace("</head>", `<style>${FINANCIAL_PRINT_CSS}</style></head>`)
+  )).join("").replace("</head>", `<style>${FINANCIAL_PRINT_CSS}${FINANCIAL_PAGE_BREAK_CSS}</style></head>`)
     .replace("window.onload=function(){window.print();}", "window.onload=async function(){await document.fonts.ready;window.focus();window.print();}");
 }
 
