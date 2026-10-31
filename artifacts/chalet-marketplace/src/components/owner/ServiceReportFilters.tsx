@@ -40,7 +40,7 @@ export function ServiceReportFilters(props: Props) {
           </div>
         </fieldset>
       </div>
-      <div className="mt-4 space-y-1 border-t border-border pt-3 text-sm leading-7 text-foreground/85">
+      <div className="mt-4 space-y-2 border-t border-border pt-4 text-base font-medium leading-8 text-foreground">
         <p>المبيعات الفردية المكتملة مسددة بالكامل؛ لا تظهر عند اختيار «متبقي عليه مبالغ».</p>
         <p>تُطبّق هذه الخيارات على الملخص والتفاصيل والطباعة. العرض المختصر يخفي الجداول دون تغيير الحسابات.</p>
       </div>

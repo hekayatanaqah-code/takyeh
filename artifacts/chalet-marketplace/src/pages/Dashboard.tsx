@@ -20,6 +20,7 @@ import { buildServiceFinancialReport, serviceExpensesForPeriod, serviceReportRow
   serviceBookingReport, serviceSalesForPaymentFilter, serviceReportDate, serviceReportStatus,
   serviceReportPaymentLabels, serviceReportPeriodForView, type ServiceReportMode, type ServiceReportBooking } from "@/lib/serviceFinancialReport";
 import { ServiceReportFilters } from "@/components/owner/ServiceReportFilters";
+import { ServiceReportPeriodControls } from "@/components/owner/ServiceReportPeriodControls";
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { OwnerNotificationCard } from "@/components/owner/OwnerNotificationCard";
@@ -20948,7 +20949,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-foreground" data-testid="financial-report-title">{reportHeading}</h2>
-          <p className={`mt-1 ${repUnit.type === "service" ? "text-sm leading-7 text-foreground/85" : "text-xs text-muted-foreground"}`}>{loneReportActivity
+          <p className={`mt-1 ${repUnit.type === "service" ? "text-base leading-8 text-foreground" : "text-xs text-muted-foreground"}`}>{loneReportActivity
             ? "يُعرض التقرير المالي لنشاطك مباشرة."
             : "اختر جميع الأنشطة أو نشاطًا محددًا لاستخراج تقريره المالي فقط."}</p>
         </div>
@@ -20966,19 +20967,16 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           <span className="text-xs text-muted-foreground">يشمل العرض والطباعة وPDF. تبقى الملخصات والحسابات الختامية ظاهرة دون تغيير الإجماليات.</span></span>
       </label>}
       <SectionGuideButton sectionKey="reports" />
-      {isActivitySummary && (
+      {repUnit.type === "service" && <ServiceReportPeriodControls mode={viewMode} onModeChange={setViewMode}
+        hijri={isHijri} onCalendarChange={hijri => { setIsHijri(hijri); setIsYearlyHijri(hijri); }}
+        months={activePeriods.months} years={activePeriods.years} month={activeSelectedMonth}
+        year={isHijri ? selectedHijriYear : selectedYear} monthNames={isHijri ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR}
+        onMonthChange={isHijri ? setSelectedHijriMonthVal : setSelectedMonth}
+        onYearChange={isHijri ? setSelectedHijriYear : setSelectedYear}
+        from={customFrom} to={customTo} onFromChange={setCustomFrom} onToChange={setCustomTo}
+        today={todayLocalDate} disabled={!!quickAction} periodsUnavailable={periodsLoading || periodsError} />}
+      {isActivitySummary && repUnit.type !== "service" && (
         <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
-          {repUnit.type === "service" && <fieldset disabled={!!quickAction}>
-            <legend className="mb-2 text-sm font-bold">فترة التقرير</legend>
-            <div className="flex rounded-lg border border-border bg-muted/60 p-1">
-              {(["monthly", "yearly", "custom"] as const).map(mode =>
-                <button type="button" key={mode} aria-pressed={viewMode === mode}
-                  data-testid={`service-report-period-${mode}`} onClick={() => setViewMode(mode)}
-                  className={`min-h-9 rounded-md px-4 py-2 text-sm font-bold ${viewMode === mode ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"}`}>
-                  {mode === "monthly" ? "شهري" : mode === "yearly" ? "سنوي" : "مخصص"}
-                </button>)}
-            </div>
-          </fieldset>}
           <div>
           <span className="mb-2 block text-sm font-bold">تقويم التقرير</span>
           <div className="flex rounded-lg border border-border p-0.5">
@@ -20992,36 +20990,11 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
             ))}
           </div>
           </div>
-          {repUnit.type === "service" && viewMode === "custom" ? (
-            <div className="grid w-full gap-4 sm:grid-cols-2" data-testid="service-report-custom-range">
-              <div className="min-w-0 space-y-2">
-                <span className="block text-sm font-bold">من تاريخ</span>
-                <div className={quickAction ? "pointer-events-none opacity-50" : ""} inert={quickAction ? true : undefined}>
-                  <DualCalendarPicker value={customFrom} onChange={setCustomFrom} selectOnOpen={false}
-                    placeholder="اختر تاريخ البداية" maxDate={customTo || todayLocalDate}
-                    mode={isHijri ? "hijri" : "gregorian"} />
-                </div>
-              </div>
-              <div className="min-w-0 space-y-2">
-                <span className="block text-sm font-bold">إلى تاريخ</span>
-                <div className={quickAction ? "pointer-events-none opacity-50" : ""} inert={quickAction ? true : undefined}>
-                  <DualCalendarPicker value={customTo} onChange={setCustomTo} selectOnOpen={false}
-                    placeholder="اختر تاريخ النهاية" minDate={customFrom || undefined} maxDate={todayLocalDate}
-                    openingDate={customFrom || undefined} mode={isHijri ? "hijri" : "gregorian"} />
-                </div>
-              </div>
-              <p role="status" className="text-sm leading-7 text-foreground/85 sm:col-span-2">
-                {!customFrom || !customTo ? "حدد تاريخ البداية والنهاية لعرض التقرير. يشمل الحساب اليوم الأول والأخير."
-                  : customFrom > customTo ? "يجب أن يكون تاريخ النهاية مساويًا لتاريخ البداية أو بعدها."
-                  : "يشمل التقرير الحجوزات والمبيعات والمصروفات الواقعة بين التاريخين المحددين."}
-              </p>
-            </div>
-          ) : <FinancialPeriodControls months={activePeriods.months} years={activePeriods.years}
-            annual={repUnit.type === "service" && viewMode === "yearly"}
+          <FinancialPeriodControls months={activePeriods.months} years={activePeriods.years}
             month={activeSelectedMonth} year={isHijri ? selectedHijriYear : selectedYear}
             monthNames={isHijri ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR} hijri={isHijri}
             disabled={periodsLoading || periodsError || !!quickAction} onMonthChange={isHijri ? setSelectedHijriMonthVal : setSelectedMonth}
-            onYearChange={isHijri ? setSelectedHijriYear : setSelectedYear} />}
+            onYearChange={isHijri ? setSelectedHijriYear : setSelectedYear} />
         </div>
       )}
 
