@@ -9,6 +9,7 @@ type Props = {
   year: string;
   annual?: boolean;
   prominent?: boolean;
+  inline?: boolean;
   hijri: boolean;
   disabled?: boolean;
   onMonthChange: (value: string) => void;
@@ -20,7 +21,7 @@ export function FinancialPeriodControls(props: Props) {
   const months = props.months.filter(key => key.startsWith(`${year}-`));
   const digits = (value: string) => value.replace(/\d/g, digit => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
   return (
-    <div className={props.prominent ? "grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2" : "flex flex-wrap items-center gap-2"} dir="rtl">
+    <div className={props.prominent ? (props.inline ? "contents" : "grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2") : "flex flex-wrap items-center gap-2"} dir="rtl">
       <label className={props.prominent ? "flex min-w-0 flex-col gap-2 text-sm font-bold text-foreground" : "flex items-center gap-2 text-xs font-semibold"}>
         السنة
         <Select dir="rtl" value={props.years.includes(year) ? year : ""} disabled={props.disabled || !props.years.length}

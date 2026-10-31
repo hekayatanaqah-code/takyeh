@@ -198,18 +198,18 @@ it("groups service filters with readable explanations and connects periods to pa
     assert.ok(html.includes("<fieldset disabled="));
   }
   const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
-  assert.ok(source.includes('<ServiceReportPeriodControls mode={viewMode} onModeChange={setViewMode}'));
+  assert.ok(source.includes('(repUnit.type === "service" || !isActivitySummary) && <ServiceReportPeriodControls'));
   const controls = readFileSync(new URL("../components/owner/ServiceReportPeriodControls.tsx", import.meta.url), "utf8");
   assert.ok(controls.includes('annual={props.mode === "yearly"} prominent'));
   assert.ok(controls.includes('service-report-period-${mode}'));
-  assert.ok(controls.includes("xl:grid-cols-[auto_auto_minmax(0,1fr)]"));
+  assert.ok(controls.includes('props.mode === "yearly" ? "grid-cols-2" : "grid-cols-3"'));
   assert.ok(controls.includes("min-h-24"));
   assert.equal((controls.match(/<CalendarDays /g) ?? []).length, 2);
   assert.ok(controls.includes('placeholder="اضغط لاختيار تاريخ البداية"'));
   assert.ok(controls.includes('placeholder="اضغط لاختيار تاريخ النهاية"'));
   assert.ok(controls.includes("selectOnOpen={false}"));
   assert.ok(controls.includes("maxDate={props.to || props.today}"));
-  assert.ok(controls.includes("minDate={props.from || undefined}"));
+  assert.ok(controls.includes("minDate={props.from || props.earliestDate || undefined}"));
   assert.ok(source.includes('repUnit.type === "service" ? servicePeriodReady'));
   assert.ok(source.includes("period: servicePeriodLabel"));
   assert.ok(source.includes("isYearlyHijri, customFrom, customTo, selectedSubmissionId"));

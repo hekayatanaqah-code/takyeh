@@ -91,3 +91,9 @@ Service reports must offer the same monthly, annual and custom period choices as
 **Why:** The user explicitly requested period parity for services while preserving the property reports, and repeated that the upper controls, custom date click targets and explanatory text need stronger visual clarity.
 
 **How to apply:** Keep bookings, quick sales, full-period expenses and exported period headings on the identical selected period. Annual Hijri scopes follow the Hijri year, not its overlapping Gregorian year; incomplete or reversed ranges must not issue a report.
+
+Property report filters must match the service-report design: period choices first, then one aligned calendar/year/month row, with prominent custom-date fields and dark, readable explanations. Property reports also offer «جميع الفترات», which hides all date controls.
+
+**Why:** The user explicitly requested visual parity for property reports while retaining their financial stability.
+
+**How to apply:** Preserve existing property accounting and print layouts. All-period scope must follow the selected property's recorded dates rather than a retained month/year; switching back to custom should retain the owner's custom dates. Never show incomplete or failed all-period reads as zero totals.

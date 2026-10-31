@@ -21,6 +21,7 @@ import { buildServiceFinancialReport, serviceExpensesForPeriod, serviceReportRow
   serviceReportPaymentLabels, serviceReportPeriodForView, type ServiceReportMode, type ServiceReportBooking } from "@/lib/serviceFinancialReport";
 import { ServiceReportFilters } from "@/components/owner/ServiceReportFilters";
 import { ServiceReportPeriodControls } from "@/components/owner/ServiceReportPeriodControls";
+import { propertyReportAllPeriodBounds } from "@/lib/propertyReportPeriod";
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { OwnerNotificationCard } from "@/components/owner/OwnerNotificationCard";
@@ -53,7 +54,6 @@ import { finalizePropertyReportHtml } from "@/lib/propertyReportLayout";
 import { financialReportPageSlices, FINANCIAL_REPORT_MARGINS_MM } from "@/lib/financialReportPagination";
 import type { GetOwnerFinancialPeriods200 } from "@workspace/api-client-react";
 import { FinancialPeriodControls } from "@/components/FinancialPeriodControls";
-import { FinancialMonthOption } from "@/components/FinancialMonthOption";
 import { SubmissionDate } from "@/components/owner/SubmissionDate";
 import { ServiceSubmissionCard } from "@/components/owner/ServiceSubmissionCard";
 import { ServiceBookingCard, serviceFinancialState } from "@/components/owner/ServiceBookingCard";
@@ -19965,8 +19965,6 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const _nowRep = new Date();
   const currentMonth = `${_nowRep.getFullYear()}-${String(_nowRep.getMonth() + 1).padStart(2, "0")}`;
   const currentYear = String(_nowRep.getFullYear());
-  const nowGregorianMonthNum = _nowRep.getMonth() + 1;
-  const nowGregorianYearNum  = _nowRep.getFullYear();
   const _nowHijri = getHijriYMClient(_nowRep);
   const nowHijriYearNum  = _nowHijri.year;
   const nowHijriMonthNum = _nowHijri.month;
@@ -19974,6 +19972,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const todayReportLabel = formatDateWithHijri(_nowRep);
 
   const [viewMode, setViewMode] = useState<"monthly" | "yearly" | "custom">("monthly");
+  const [allPropertyPeriods, setAllPropertyPeriods] = useState(false);
   const reportType = repUnit.type === "all" ? "unified" : repUnit.type === "service" ? "services" : "chalets";
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
   const [selectedYear, setSelectedYear] = useState(currentYear);
@@ -20005,11 +20004,35 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [archiveSaving, setArchiveSaving] = useState(false);
   const [archiveSavedId, setArchiveSavedId] = useState<number | null>(null);
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const [customFromInput, setCustomFrom] = useState("");
+  const [customToInput, setCustomTo] = useState("");
+  const propertyBookingsQuery = useQuery<OwnerBooking[]>({
+    queryKey: ["owner", "bookings-revenue"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings");
+      if (!r.ok) throw new Error("تعذّر تحميل حجوزات التقرير");
+      return r.json();
+    },
+    enabled: viewMode === "monthly" || viewMode === "custom",
+  });
+  const propertyExpensesQuery = useQuery<OwnerExpense[]>({
+    queryKey: ["owner", "expenses"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/expenses");
+      if (!r.ok) throw new Error("تعذّر تحميل مصروفات التقرير");
+      return r.json();
+    },
+  });
+  const repAllBookings = propertyBookingsQuery.data ?? [];
+  const repAllExpenses = propertyExpensesQuery.data ?? [];
+  const allPropertyBounds = propertyReportAllPeriodBounds(repAllBookings, repAllExpenses, selectedSubmissionId, todayLocalDate);
+  const customFrom = allPropertyPeriods ? allPropertyBounds.from : customFromInput;
+  const customTo = allPropertyPeriods ? allPropertyBounds.to : customToInput;
+  const allPropertyDataLoading = allPropertyPeriods && (propertyBookingsQuery.isLoading || propertyExpensesQuery.isLoading);
+  const allPropertyDataError = allPropertyPeriods && (propertyBookingsQuery.isError || propertyExpensesQuery.isError);
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, customFrom, customTo, selectedSubmissionId, reportType, activityKey(repUnit), serviceReportSource, serviceReportPayment, serviceReportMode, showPropertyReportDetails]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, allPropertyPeriods, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, customFrom, customTo, selectedSubmissionId, reportType, activityKey(repUnit), serviceReportSource, serviceReportPayment, serviceReportMode, showPropertyReportDetails]);
 
   const hijriReportParsed = useMemo(() => {
     if (!isHijri || !selectedHijriMonthVal) return null;
@@ -20038,8 +20061,6 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const activePeriods = isHijri ? hijriPeriods : gregorianPeriods;
   const activeSelectedMonth = isHijri ? selectedHijriMonthVal : selectedMonth;
   const monthlyPeriodReady = activePeriods.months.includes(activeSelectedMonth);
-  const yearOptions = gregorianPeriods.years.map(val => ({ val, label: `${toAr(val)} م` }));
-  const hijriYearOptions = hijriPeriods.years.map(val => ({ val, label: `${toAr(val)} هـ` }));
   useEffect(() => {
     const gregorian = reconcileFinancialMonth(gregorianPeriods.months, selectedMonth);
     const hijri = reconcileFinancialMonth(hijriPeriods.months, selectedHijriMonthVal);
@@ -20268,27 +20289,6 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     val, label: `${GREGORIAN_MONTHS_AR[Number(val.slice(5)) - 1]} ${toAr(val.slice(0, 4))} م`,
   }));
 
-  // ── Fetch all owner bookings for revenue breakdown in التقارير المالية ───
-  const { data: repAllBookings = [] } = useQuery<OwnerBooking[]>({
-    queryKey: ["owner", "bookings-revenue"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/bookings");
-      if (!r.ok) return [];
-      return r.json();
-    },
-    enabled: viewMode === "monthly" || viewMode === "custom",
-  });
-
-  // ── Fetch all owner expenses so we can tell which months actually have data ───
-  const { data: repAllExpenses = [] } = useQuery<OwnerExpense[]>({
-    queryKey: ["owner", "expenses"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/expenses");
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
-
   // ── Compute monthly booking breakdown for the selected month/property ───
   const repBreakdown = useMemo(() => {
     const getAddonSum = (b: OwnerBooking): number => {
@@ -20444,6 +20444,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
 
   function selectReportActivity(activity: FinanceUnit) {
     setReportUnit(activity);
+    setAllPropertyPeriods(false);
     setViewMode("monthly");
     setPdfUrl(null);
     setArchiveSavedId(null);
@@ -20712,7 +20713,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     }
   }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel, showPropertyReportDetails]);
 
-  const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && (repUnit.type === "service" ? servicePeriodReady : viewMode === "monthly" ? monthlyPeriodReady
+  const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && !allPropertyDataLoading && !allPropertyDataError && (repUnit.type === "service" ? servicePeriodReady : viewMode === "monthly" ? monthlyPeriodReady
     : viewMode === "yearly" ? (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear))
       : activePeriods.years.length > 0) && (isActivitySummary
     ? repUnit.type === "service" ? !!serviceClosing && !serviceDataLoading && !serviceDataError
@@ -20877,14 +20878,19 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
           <span className="block text-base leading-8 text-foreground">يشمل العرض والطباعة وPDF. تبقى الملخصات والحسابات الختامية ظاهرة دون تغيير الإجماليات.</span></span>
       </label>}
       <SectionGuideButton sectionKey="reports" />
-      {repUnit.type === "service" && <ServiceReportPeriodControls mode={viewMode} onModeChange={setViewMode}
+      {(repUnit.type === "service" || !isActivitySummary) && <ServiceReportPeriodControls
+        ariaLabel={repUnit.type === "service" ? "فترة وتقويم تقرير الخدمات" : "فترة وتقويم تقرير العقارات"}
+        mode={viewMode} allPeriods={!isActivitySummary && allPropertyPeriods}
+        onAllPeriods={!isActivitySummary ? () => { setAllPropertyPeriods(true); setViewMode("custom"); } : undefined}
+        onModeChange={mode => { setAllPropertyPeriods(false); setViewMode(mode); }}
         hijri={isHijri} onCalendarChange={hijri => { setIsHijri(hijri); setIsYearlyHijri(hijri); }}
         months={activePeriods.months} years={activePeriods.years} month={activeSelectedMonth}
         year={isHijri ? selectedHijriYear : selectedYear} monthNames={isHijri ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR}
         onMonthChange={isHijri ? setSelectedHijriMonthVal : setSelectedMonth}
         onYearChange={isHijri ? setSelectedHijriYear : setSelectedYear}
         from={customFrom} to={customTo} onFromChange={setCustomFrom} onToChange={setCustomTo}
-        today={todayLocalDate} disabled={!!quickAction} periodsUnavailable={periodsLoading || periodsError} />}
+        earliestDate={!isActivitySummary ? earliestTransactionDate : undefined}
+        today={todayLocalDate} disabled={!!quickAction || waLoading || emailLoading || archiveSaving} periodsUnavailable={periodsLoading || periodsError} />}
       {isActivitySummary && repUnit.type !== "service" && (
         <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
           <div>
@@ -20976,190 +20982,8 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       {/* Show standard report only for "chalets" type or when unit is not "all" */}
       {!isActivitySummary && (<>
 
-      {/* Subscription Card */}
-      {/* Subscription card moved to profile header area — not shown in Reports */}
-
-      {/* ── Filters ── */}
-      <div className="bg-card border border-border rounded-2xl px-4 py-3">
-        <div className="flex items-center gap-2 flex-wrap">
-
-          {/* ٠. شهري / سنوي / مخصص */}
-          <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
-            {(["monthly", "yearly", "custom"] as const).map((m) => (
-              <button key={m} type="button" onClick={() => setViewMode(m)}
-                className={`h-full px-3 rounded-md text-xs font-bold transition-colors ${
-                  viewMode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}>
-                {m === "monthly" ? "شهري" : m === "yearly" ? "سنوي" : "مخصص"}
-              </button>
-            ))}
-          </div>
-
-          {/* ١. العقار — أقصى اليمين */}
-          {/* ٢. نوع التقويم — أزرار التبديل (مخفي في وضع مخصص) */}
-          {viewMode !== "custom" && <div className="flex h-9 items-center gap-0 bg-muted/60 border border-border rounded-lg p-0.5 shrink-0">
-            {(["gregorian", "hijri"] as const).map((c) => (
-              <button key={c} type="button"
-                aria-pressed={(viewMode === "monthly" ? isHijri : isYearlyHijri) === (c === "hijri")}
-                data-testid={`financial-report-calendar-${c}`}
-                onClick={() => {
-                  if (viewMode === "monthly") {
-                    setIsHijri(c === "hijri");
-                    setIsYearlyHijri(c === "hijri");
-                  } else {
-                    const toHijri = c === "hijri";
-                    setIsYearlyHijri(toHijri);
-                    setIsHijri(toHijri);
-                    /* ── Snap immediately to latest year of the new calendar ── */
-                    if (toHijri && reportYears?.hijriYears?.length) {
-                      setSelectedHijriYear(String(reportYears.hijriYears[0]));
-                    } else if (!toHijri && reportYears?.gregorianYears?.length) {
-                      setSelectedYear(String(reportYears.gregorianYears[0]));
-                    }
-                  }
-                }}
-                className={`h-full px-3 rounded-md text-xs font-bold transition-colors ${
-                  (viewMode === "monthly" ? isHijri : isYearlyHijri) === (c === "hijri")
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {c === "hijri" ? "هجري" : "ميلادي"}
-              </button>
-            ))}
-          </div>}
-
-          {/* ٢ب. حقول الفترة المخصصة */}
-          {viewMode === "custom" && (
-            <div className="flex items-center gap-2 shrink-0">
-              {/* حقل "من" */}
-              <div className="flex items-center gap-1.5 h-9 border border-border bg-background rounded-lg px-3 min-w-[130px] max-w-[160px] cursor-pointer hover:border-primary/60 transition-colors">
-                <span className="text-[11px] font-semibold text-muted-foreground shrink-0 leading-none">من</span>
-                <div className="flex-1 min-w-0">
-                  <DualCalendarPicker
-                    value={customFrom}
-                    onChange={setCustomFrom}
-                    selectOnOpen={false}
-                    placeholder="تاريخ"
-                    compact
-                    minDate={earliestTransactionDate}
-                    maxDate={todayLocalDate}
-                    mode={isHijri ? "hijri" : "gregorian"}
-                  />
-                </div>
-              </div>
-              {/* فاصل */}
-              <span className="text-muted-foreground/60 text-sm select-none shrink-0">←</span>
-              {/* حقل "إلى" */}
-              <div className="flex items-center gap-1.5 h-9 border border-border bg-background rounded-lg px-3 min-w-[130px] max-w-[160px] cursor-pointer hover:border-primary/60 transition-colors">
-                <span className="text-[11px] font-semibold text-muted-foreground shrink-0 leading-none">إلى</span>
-                <div className="flex-1 min-w-0">
-                  <DualCalendarPicker
-                    value={customTo}
-                    onChange={setCustomTo}
-                    selectOnOpen={false}
-                    placeholder="تاريخ"
-                    compact
-                    minDate={customFrom || earliestTransactionDate}
-                    maxDate={todayLocalDate}
-                    openingDate={customFrom || undefined}
-                    mode={isHijri ? "hijri" : "gregorian"}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ٣. السنة (مخفي في وضع مخصص) */}
-          {viewMode !== "custom" && (viewMode === "monthly" ? (
-            <Select
-              value={monthlyPeriodReady ? activeSelectedMonth.slice(0, 4) : ""}
-              disabled={periodsLoading || periodsError || !activePeriods.years.length}
-              onValueChange={(y) => {
-                const latest = activePeriods.months.find(key => key.startsWith(`${y}-`));
-                if (latest) (isHijri ? setSelectedHijriMonthVal : setSelectedMonth)(latest);
-              }}
-            >
-              <SelectTrigger className="h-9 w-[120px] shrink-0 text-sm" aria-label="سنة التقرير المالي" data-testid="financial-report-year"><SelectValue placeholder="لا توجد سنوات" /></SelectTrigger>
-              <SelectContent>
-                {(isHijri ? hijriYearOptions : yearOptions).map(o => (
-                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Select value={(isYearlyHijri ? hijriPeriods : gregorianPeriods).years.includes(isYearlyHijri ? selectedHijriYear : selectedYear) ? (isYearlyHijri ? selectedHijriYear : selectedYear) : ""} onValueChange={isYearlyHijri ? setSelectedHijriYear : setSelectedYear} disabled={periodsLoading || periodsError || !(isYearlyHijri ? hijriPeriods : gregorianPeriods).years.length}>
-              <SelectTrigger className="h-9 w-[90px] shrink-0 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(isYearlyHijri ? hijriYearOptions : yearOptions).map(o => (
-                  <SelectItem key={o.val} value={o.val}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ))}
-
-          {/* ٤. الشهر — أقصى اليسار (فقط في العرض الشهري) */}
-          {viewMode === "monthly" && (() => {
-            const selYearNum = isHijri
-              ? Number(selectedHijriMonthVal.split("-")[0])
-              : Number(selectedMonth.split("-")[0]);
-            const isCurrentYear = isHijri
-              ? selYearNum === nowHijriYearNum
-              : selYearNum === nowGregorianYearNum;
-            const maxMonth = isCurrentYear
-              ? (isHijri ? nowHijriMonthNum : nowGregorianMonthNum)
-              : 12;
-            return (
-              <Select
-                value={monthlyPeriodReady ? String(Number(activeSelectedMonth.slice(5))) : ""}
-                disabled={periodsLoading || periodsError || !monthlyPeriodReady}
-                onValueChange={(m) => {
-                  const mNum = Number(m);
-                  if (isCurrentYear && mNum > maxMonth) return;
-                  const padded = m.padStart(2, "0");
-                  if (isHijri) {
-                    const y = selectedHijriMonthVal.split("-")[0];
-                    setSelectedHijriMonthVal(`${y}-${padded}`);
-                  } else {
-                    const y = selectedMonth.split("-")[0];
-                    setSelectedMonth(`${y}-${padded}`);
-                  }
-                }}
-              >
-                <SelectTrigger className="h-9 min-w-[90px] flex-1 text-sm" aria-label="شهر التقرير المالي" data-testid="financial-report-month"><SelectValue placeholder="لا توجد أشهر">{monthlyPeriodReady ? (isHijri ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR)[Number(activeSelectedMonth.slice(5)) - 1] : undefined}</SelectValue></SelectTrigger>
-                <SelectContent dir="rtl">
-                  {Array.from({ length: 12 }, (_, i) => {
-                    const mNum = 12 - i;
-                    const isFuture = isCurrentYear && mNum > maxMonth;
-                    const isCurrentMonthOption = isCurrentYear && mNum === maxMonth;
-                    const monthKey = `${selYearNum}-${String(mNum).padStart(2, "0")}`;
-                    const hasData = activePeriods.months.includes(monthKey);
-                    /* أشهر مستقبلية أو فارغة تماماً → تُخفى كلياً من القائمة */
-                    const hide = isFuture || !hasData;
-                    return {
-                      val: String(mNum),
-                      monthKey,
-                      label: isHijri ? HIJRI_MONTHS_AR[mNum - 1] : GREGORIAN_MONTHS_AR[mNum - 1],
-                      hide,
-                    };
-                  }).filter(o => !o.hide).map(o => (
-                    <SelectItem key={o.val} value={o.val} textValue={o.label}>
-                      <FinancialMonthOption name={o.label} monthKey={o.monthKey} hijri={isHijri} />
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            );
-          })()}
-        </div>
-
-        {selectedSubmissionId !== "all" && (
-          <p className="text-xs text-primary font-medium flex items-center gap-1 mt-2">
-            <Building2 className="w-3.5 h-3.5" />
-            يعرض بيانات: {selectedPropertyName}
-          </p>
-        )}
-      </div>
+      {allPropertyDataLoading && <p role="status" className="text-base font-medium leading-8 text-foreground">جارٍ تحميل بيانات جميع الفترات…</p>}
+      {allPropertyDataError && <p role="alert" className="text-base font-medium leading-8 text-destructive">تعذّر تحميل الحجوزات أو المصروفات كاملة. أعد تحميل الصفحة؛ العرض والتصدير متوقفان لتجنب إظهار أرقام ناقصة.</p>}
 
       {/* ── YEARLY VIEW ── */}
       {viewMode === "yearly" && (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear)) && (() => {
@@ -21392,7 +21216,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       })()}
 
       {/* ── CUSTOM RANGE VIEW ── */}
-      {viewMode === "custom" && (() => {
+      {viewMode === "custom" && !allPropertyDataLoading && !allPropertyDataError && (() => {
         const customCalMode = isHijri ? "hijri" : "gregorian";
         // Pick the right grouped dataset: Hijri groups when calMode=hijri to avoid cross-month bleed
         const activeCustomData = customCalMode === "hijri" ? customRangeDataHijri : customRangeData;
