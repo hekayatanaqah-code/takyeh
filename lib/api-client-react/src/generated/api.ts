@@ -176,6 +176,8 @@ import type {
   StaffHoldingInput,
   SubmissionResponse,
   SubmitServiceReviewObjectionBody,
+  SupportConversationReplyInput,
+  SupportConversationReplyResult,
   UpdateAdminPhotographerProfile200,
   UpdatePhotographyPackage200,
   UpdatePhotographyPackageBody,
@@ -213,6 +215,89 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getReplyToOwnerSupportTicketUrl = (id: number,) => {
+
+
+
+
+  return `/api/owner/support-requests/${id}/reply`
+}
+
+export const replyToOwnerSupportTicket = async (id: number,
+    supportConversationReplyInput: SupportConversationReplyInput, options?: Parameters<typeof customFetch>[1]): Promise<SupportConversationReplyResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SupportConversationReplyResult>(getReplyToOwnerSupportTicketUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(supportConversationReplyInput)
+  }
+);}
+
+
+
+
+
+export const getReplyToOwnerSupportTicketMutationKey = () => ['replyToOwnerSupportTicket'] as const;
+
+export const getReplyToOwnerSupportTicketMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replyToOwnerSupportTicket>>, TError,ReplyToOwnerSupportTicketMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replyToOwnerSupportTicket>>, TError,ReplyToOwnerSupportTicketMutationVariables, TContext> => {
+
+const mutationKey = getReplyToOwnerSupportTicketMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replyToOwnerSupportTicket>>, ReplyToOwnerSupportTicketMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  replyToOwnerSupportTicket(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplyToOwnerSupportTicketMutationResult = NonNullable<Awaited<ReturnType<typeof replyToOwnerSupportTicket>>>
+    export type ReplyToOwnerSupportTicketMutationBody = BodyType<SupportConversationReplyInput>
+    export type ReplyToOwnerSupportTicketMutationError = ErrorType<void>
+    export type ReplyToOwnerSupportTicketMutationVariables = {id: number;data: BodyType<SupportConversationReplyInput>}
+
+    export const useReplyToOwnerSupportTicket = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replyToOwnerSupportTicket>>, TError,ReplyToOwnerSupportTicketMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof replyToOwnerSupportTicket>>,
+        TError,
+        ReplyToOwnerSupportTicketMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReplyToOwnerSupportTicketMutationOptions(options), queryClient);
+    }
 
 export const getGetQuickSalesSettingsUrl = () => {
 

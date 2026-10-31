@@ -5,6 +5,60 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface SupportConversationReplyInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  message: string;
+}
+
+export type SupportConversationEntryAuthorRole = typeof SupportConversationEntryAuthorRole[keyof typeof SupportConversationEntryAuthorRole];
+
+
+export const SupportConversationEntryAuthorRole = {
+  owner: 'owner',
+  admin: 'admin',
+} as const;
+
+export interface SupportConversationEntry {
+  id: number;
+  author_role: SupportConversationEntryAuthorRole;
+  body: string;
+  attachment_urls: string[];
+  /** @nullable */
+  created_at: string | null;
+}
+
+export type SupportConversationTicketStatus = typeof SupportConversationTicketStatus[keyof typeof SupportConversationTicketStatus];
+
+
+export const SupportConversationTicketStatus = {
+  new: 'new',
+  in_progress: 'in_progress',
+  replied: 'replied',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
+
+export interface SupportConversationTicket {
+  id: number;
+  subject: string;
+  message: string;
+  status: SupportConversationTicketStatus;
+  /** @nullable */
+  admin_reply?: string | null;
+  /** @nullable */
+  admin_reply_at?: string | null;
+  is_read_by_owner?: boolean;
+  messages: SupportConversationEntry[];
+}
+
+export interface SupportConversationReplyResult {
+  ok: boolean;
+  ticket: SupportConversationTicket;
+}
+
 export interface QuickSalesSettings {
   enabled: boolean;
 }

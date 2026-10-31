@@ -6,6 +6,7 @@ import InventoryFilters, { type InventoryFilterState } from "@/components/admin/
 import { useInventoryCatalogs } from "@/hooks/useInventoryCatalogs";
 import { emptyInventoryFilters, filterAndSortInventory, servicePricingOptions, type InventoryDescriptor } from "@/lib/inventory-filters";
 import { useToast } from "@/hooks/use-toast";
+import SupportConversation, { type SupportConversationMessage } from "@/components/support/SupportConversation";
 import { useLocation } from "wouter";
 import OwnerServicesAdmin from "@/features/owner-services/OwnerServicesAdmin";
 import {
@@ -7848,16 +7849,22 @@ interface OwnerSupportRequest {
   admin_attachment_urls?: string[];
   is_read_by_owner: boolean;
   created_at: string;
+  messages?: SupportConversationMessage[];
 }
+
+const SUPPORT_REPLY_MAX_FILE_MB = 5;
+const SUPPORT_REPLY_MAX_FILES = 10;
+const isSupportTicketClosed = (status: string) => status === "resolved" || status === "closed";
 
 const SUPPORT_STATUS_LABELS: Record<string, { label: string; className: string }> = {
   new:         { label: "جديد",          className: "bg-red-900/40 text-red-300 border border-red-700/40" },
   in_progress: { label: "قيد المعالجة", className: "bg-amber-900/40 text-amber-300 border border-amber-700/40" },
   replied:     { label: "تم الرد", className: "bg-blue-900/40 text-blue-300 border border-blue-700/40" },
-  resolved:    { label: "تم الحل",       className: "bg-green-900/40 text-green-300 border border-green-700/40" },
+  resolved:    { label: "مُغلقة",        className: "bg-green-900/40 text-green-300 border border-green-700/40" },
+  closed:      { label: "مُغلقة",        className: "bg-green-900/40 text-green-300 border border-green-700/40" },
 };
 
-function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
+export function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
   const [activeTab, setActiveTab] = useState<"all" | "new" | "in_progress" | "replied" | "resolved">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
@@ -7866,11 +7873,31 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
 
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [updating, setUpdating] = useState<number | null>(null);
-  const [replyingId, setReplyingId] = useState<number | null>(null);
-  const [replyText, setReplyText] = useState("");
-  const [replySending, setReplySending] = useState(false);
-  const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
+  const [replyFilesById, setReplyFilesById] = useState<Record<number, File[]>>({});
+  const [replyErrors, setReplyErrors] = useState<Record<number, string>>({});
+  const [replySendingId, setReplySendingId] = useState<number | null>(null);
   const replyFileInputRef = useRef<HTMLInputElement>(null);
+  const replyFileTargetRef = useRef<number | null>(null);
+
+  function setReplyError(id: number, msg?: string) {
+    setReplyErrors(prev => { const next = { ...prev }; if (msg) next[id] = msg; else delete next[id]; return next; });
+  }
+
+  function addReplyFiles(id: number, picked: File[]) {
+    const accepted: File[] = [];
+    for (const f of picked) {
+      const okType = f.type.startsWith("image/") || f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
+      if (!okType) { toast({ title: `نوع الملف غير مدعوم: ${f.name}`, description: "يُسمح بالصور وملفات PDF فقط.", variant: "destructive" }); continue; }
+      if (f.size > SUPPORT_REPLY_MAX_FILE_MB * 1024 * 1024) { toast({ title: `الملف أكبر من ${SUPPORT_REPLY_MAX_FILE_MB} ميجابايت: ${f.name}`, variant: "destructive" }); continue; }
+      accepted.push(f);
+    }
+    setReplyFilesById(prev => {
+      const merged = [...(prev[id] ?? []), ...accepted];
+      if (merged.length > SUPPORT_REPLY_MAX_FILES) toast({ title: `الحد الأقصى ${SUPPORT_REPLY_MAX_FILES} ملفات للرد الواحد.`, variant: "destructive" });
+      return { ...prev, [id]: merged.slice(0, SUPPORT_REPLY_MAX_FILES) };
+    });
+  }
   const qc = useQueryClient();
 
   const queryKey = ownerIdFilter
@@ -7916,32 +7943,39 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
   }
 
   async function sendReply(id: number) {
-    if (!replyText.trim()) return;
-    setReplySending(true);
+    const text = (replyDrafts[id] ?? "").trim();
+    if (!text || replySendingId !== null) return;
+    setReplySendingId(id);
+    setReplyError(id);
     try {
       const fd = new FormData();
-      fd.append("reply", replyText.trim());
-      for (const f of replyFiles) fd.append("files", f);
+      fd.append("reply", text);
+      for (const f of replyFilesById[id] ?? []) fd.append("files", f);
       const r = await fetch(`${BASE}/api/admin/support-requests/${id}/reply`, {
         method: "POST",
         body: fd,
         credentials: "include",
       });
-      if (r.ok) {
-        const result = await r.json();
-        const ticket = result.ticket as OwnerSupportRequest | undefined;
-        if (!ticket || ticket.id !== id || ticket.status !== "replied") {
-          throw new Error("استجابة التذكرة غير مكتملة");
-        }
-        applySupportUpdate(ticket.id, ticket);
-        setReplyingId(null);
-        setReplyText("");
-        setReplyFiles([]);
-      } else throw new Error("تعذّر إرسال الرد");
-    } catch {
+      const result = await r.json().catch(() => null);
+      if (r.status === 409) {
+        const msg = (result && (result.error || result.message)) || "هذه التذكرة مغلقة ولا يمكن إضافة ردود عليها.";
+        setReplyError(id, msg);
+        if (result?.ticket && result.ticket.id === id) applySupportUpdate(id, result.ticket);
+        else applySupportUpdate(id, {});
+        return;
+      }
+      if (!r.ok) throw new Error((result && (result.error || result.message)) || "تعذّر إرسال الرد");
+      const ticket = result?.ticket as OwnerSupportRequest | undefined;
+      if (!ticket || ticket.id !== id) throw new Error("استجابة التذكرة غير مكتملة");
+      applySupportUpdate(ticket.id, ticket);
+      setReplyDrafts(prev => { const n = { ...prev }; delete n[id]; return n; });
+      setReplyFilesById(prev => { const n = { ...prev }; delete n[id]; return n; });
+    } catch (err) {
+      const msg = err instanceof Error && err.message ? err.message : "تعذّر إرسال الرد";
+      setReplyError(id, `${msg}. احتُفظ بالنص والمرفقات لإعادة المحاولة.`);
       toast({ title: "تعذّر إرسال الرد. احتُفظ بالنص والمرفقات لإعادة المحاولة.", variant: "destructive" });
     } finally {
-      setReplySending(false);
+      setReplySendingId(null);
     }
   }
 
@@ -7952,7 +7986,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
     new: requests.filter((request) => request.status === "new").length,
     in_progress: requests.filter((request) => request.status === "in_progress").length,
     replied: requests.filter((request) => request.status === "replied").length,
-    resolved: requests.filter((request) => request.status === "resolved").length,
+    resolved: requests.filter((request) => isSupportTicketClosed(request.status)).length,
   }), [requests]);
 
   const uniqueSubjects = useMemo(() => {
@@ -7963,7 +7997,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
 
   const filteredRequests = useMemo(() => {
     return requests.filter(req => {
-      if (activeTab !== "all" && req.status !== activeTab) return false;
+      if (activeTab === "resolved" ? !isSupportTicketClosed(req.status) : (activeTab !== "all" && req.status !== activeTab)) return false;
       if (subjectFilter !== "all" && req.subject !== subjectFilter) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -8011,7 +8045,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
       if (req.status === "new") groups[oid].newCount++;
       if (req.status === "in_progress") groups[oid].inProgressCount++;
       if (req.status === "replied") groups[oid].repliedCount++;
-      if (req.status === "resolved") groups[oid].resolvedCount++;
+      if (isSupportTicketClosed(req.status)) groups[oid].resolvedCount++;
       const time = new Date(req.created_at).getTime();
       if (time > groups[oid].latestDate) groups[oid].latestDate = time;
     });
@@ -8023,13 +8057,16 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
 
   const renderRequestItem = (req: OwnerSupportRequest) => {
     const isExpanded = expandedId === req.id;
-    const isReplying = replyingId === req.id;
+    const isClosed = isSupportTicketClosed(req.status);
+    const draft = replyDrafts[req.id] ?? "";
+    const files = replyFilesById[req.id] ?? [];
+    const sendingThis = replySendingId === req.id;
     const statusInfo = SUPPORT_STATUS_LABELS[req.status] ?? { label: req.status, className: "bg-slate-800 text-slate-400 border border-slate-600" };
     return (
       <div key={req.id} className={`bg-slate-800/80 border rounded-xl overflow-hidden transition-all ${req.status === "new" ? "border-red-700/50" : "border-slate-700"}`}>
         <div
           className="flex items-center gap-3 px-4 py-3.5 cursor-pointer hover:bg-slate-700/60 transition-colors"
-          onClick={() => { setExpandedId(isExpanded ? null : req.id); if (!isExpanded) setReplyingId(null); }}
+          onClick={() => { setExpandedId(isExpanded ? null : req.id); }}
         >
           {req.status === "new" && <span className="w-2 h-2 rounded-full bg-red-400 shrink-0 animate-pulse" />}
           <div className="flex-1 min-w-0">
@@ -8074,126 +8111,84 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
               })()}
             </div>
 
-            {req.admin_reply && (
-              <div className="space-y-2">
-                <p className="text-xs text-green-500 mb-1.5 font-medium flex items-center gap-1.5">
-                  <Send className="w-3 h-3" /> ردّ الإدارة — {req.admin_reply_at ? fmtDate(req.admin_reply_at) : ""}:
-                </p>
-                <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 text-green-200 text-sm leading-relaxed whitespace-pre-wrap">{req.admin_reply}</div>
-                {(() => {
-                  const adminUrls = req.admin_attachment_urls?.length ? req.admin_attachment_urls : req.admin_attachment_url ? [req.admin_attachment_url] : [];
-                  return adminUrls.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {adminUrls.map((url: string, i: number) => url.toLowerCase().includes(".pdf") ? (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-amber-900/30 border border-amber-700/40 text-amber-300 hover:bg-amber-900/50 transition-colors">
-                          <FileText className="w-3.5 h-3.5" />
-                          مرفق PDF {adminUrls.length > 1 ? `(${i + 1})` : ""}
-                          <ExternalLink className="w-3 h-3 opacity-60" />
-                        </a>
-                      ) : (
-                        <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
-                          <img src={url} alt="مرفق الإدارة" className="max-h-48 max-w-xs rounded-lg border border-green-700/40 object-cover hover:border-green-500/50 hover:opacity-90 transition-all" />
-                        </a>
-                      ))}
-                    </div>
-                  ) : null;
-                })()}
-              </div>
-            )}
-
-            {isReplying ? (
-              <div className="space-y-2">
-                <p className="text-xs text-amber-400 font-medium">{req.admin_reply ? "تعديل الرد:" : "كتابة رد:"}</p>
-                <textarea
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="اكتب ردّك هنا..."
-                  rows={4}
-                  dir="rtl"
-                  className="w-full bg-slate-800 border border-slate-600 text-slate-200 text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-amber-500 placeholder:text-slate-500"
-                />
-                <div className="flex items-center gap-2">
-                  <input
-                    ref={replyFileInputRef}
-                    type="file"
-                    accept="image/*,.pdf"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      const newFs = Array.from(e.target.files ?? []);
-                      setReplyFiles(prev => [...prev, ...newFs].slice(0, 10));
-                      e.target.value = "";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => replyFileInputRef.current?.click()}
-                    className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 flex items-center gap-1.5"
-                  >
-                    <Paperclip className="w-3 h-3" />
-                    إرفاق ملفات
-                  </button>
-                  {replyFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 max-w-[160px]">
-                      {f.type === "application/pdf"
-                        ? <FileText className="w-3 h-3 text-amber-400 shrink-0" />
-                        : <ImageIcon className="w-3 h-3 text-blue-400 shrink-0" />}
-                      <span className="truncate">{f.name}</span>
+            {(() => {
+              const msgs: SupportConversationMessage[] = req.messages && req.messages.length > 0
+                ? req.messages
+                : req.admin_reply
+                  ? [{
+                      id: `legacy-${req.id}`,
+                      author_role: "admin",
+                      body: req.admin_reply,
+                      attachment_urls: req.admin_attachment_urls?.length ? req.admin_attachment_urls : req.admin_attachment_url ? [req.admin_attachment_url] : [],
+                      created_at: req.admin_reply_at,
+                      author_name: "الإدارة",
+                    }]
+                  : [];
+              return (
+                <SupportConversation
+                  messages={msgs}
+                  audience="admin"
+                  closed={isClosed}
+                  draft={draft}
+                  onDraftChange={(v) => { setReplyDrafts(prev => ({ ...prev, [req.id]: v })); if (replyErrors[req.id]) setReplyError(req.id); }}
+                  onSend={() => sendReply(req.id)}
+                  sending={sendingThis}
+                  error={replyErrors[req.id]}
+                  composerExtras={
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
-                        onClick={() => setReplyFiles(prev => prev.filter((_, j) => j !== i))}
-                        className="text-slate-500 hover:text-red-400 shrink-0 ml-0.5"
-                      ><X className="w-3 h-3" /></button>
+                        disabled={sendingThis || files.length >= SUPPORT_REPLY_MAX_FILES}
+                        onClick={() => { replyFileTargetRef.current = req.id; replyFileInputRef.current?.click(); }}
+                        className="text-xs px-2.5 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600 flex items-center gap-1.5 disabled:opacity-40"
+                      >
+                        <Paperclip className="w-3 h-3" />
+                        إرفاق صور أو PDF
+                      </button>
+                      <span className="text-[11px] text-slate-500">حتى {toAr(SUPPORT_REPLY_MAX_FILES)} ملفات، {toAr(SUPPORT_REPLY_MAX_FILE_MB)} ميجابايت لكل ملف</span>
+                      {files.map((f, i) => (
+                        <div key={`${f.name}-${i}`} className="flex items-center gap-1.5 text-xs text-slate-300 bg-slate-700/60 border border-slate-600 rounded-lg px-2.5 py-1.5 max-w-[180px]">
+                          {f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")
+                            ? <FileText className="w-3 h-3 text-amber-400 shrink-0" />
+                            : <ImageIcon className="w-3 h-3 text-blue-400 shrink-0" />}
+                          <span className="truncate">{f.name}</span>
+                          <button
+                            type="button"
+                            aria-label="إزالة المرفق"
+                            disabled={sendingThis}
+                            onClick={() => setReplyFilesById(prev => ({ ...prev, [req.id]: (prev[req.id] ?? []).filter((_, j) => j !== i) }))}
+                            className="text-slate-500 hover:text-red-400 shrink-0"
+                          ><X className="w-3 h-3" /></button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => { setReplyingId(null); setReplyText(""); setReplyFiles([]); }}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 border border-slate-600 text-slate-300 hover:bg-slate-600"
-                  >إلغاء</button>
-                  <button
-                    onClick={() => sendReply(req.id)}
-                    disabled={!replyText.trim() || replySending}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 flex items-center gap-1.5"
-                  >
-                    {replySending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                    إرسال الرد
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setReplyingId(req.id);
-                    setReplyText(req.admin_reply ?? "");
-                  }}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-amber-600/20 border border-amber-600/40 text-amber-300 hover:bg-amber-600/30 flex items-center gap-1.5"
-                >
-                  <Send className="w-3 h-3" />
-                  {req.admin_reply ? "تعديل الرد" : "رد"}
-                </button>
-                <span className="text-slate-600 text-xs">|</span>
-                <span className="text-slate-400 text-xs">الحالة:</span>
-                {(["new", "in_progress", "resolved"] as const).map((s) => (
+                  }
+                />
+              );
+            })()}
+
+            <div className="flex items-center gap-2 flex-wrap border-t border-slate-700/60 pt-3">
+              <span className="text-slate-400 text-xs">الحالة:</span>
+              {(["new", "in_progress", "resolved"] as const).map((s) => {
+                const active = s === "resolved" ? isClosed : req.status === s;
+                const label = s === "resolved" ? "تم الحل / إغلاق التذكرة" : `${isClosed ? "إعادة فتح: " : ""}${SUPPORT_STATUS_LABELS[s]?.label}`;
+                return (
                   <button
                     key={s}
-                    disabled={req.status === s || updating === req.id}
+                    type="button"
+                    disabled={active || updating === req.id}
                     onClick={(e) => { e.stopPropagation(); updateStatus(req.id, s); }}
                     className={`text-xs px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
-                      req.status === s
+                      active
                         ? "bg-amber-500/20 border-amber-600 text-amber-200 cursor-default"
                         : "bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600"
                     }`}
                   >
-                    {updating === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : SUPPORT_STATUS_LABELS[s]?.label}
+                    {updating === req.id ? <Loader2 className="w-3 h-3 animate-spin" /> : label}
                   </button>
-                ))}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -8202,6 +8197,18 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
 
   return (
     <div className="space-y-6" dir="rtl">
+      <input
+        ref={replyFileInputRef}
+        type="file"
+        accept="image/*,.pdf,application/pdf"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const target = replyFileTargetRef.current;
+          if (target !== null) addReplyFiles(target, Array.from(e.target.files ?? []));
+          e.target.value = "";
+        }}
+      />
       {!ownerIdFilter && (
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
@@ -8229,7 +8236,7 @@ function OwnerInboxTab({ ownerIdFilter }: { ownerIdFilter?: string } = {}) {
       <div className="flex flex-col xl:flex-row gap-4 justify-between items-start xl:items-center bg-slate-800/40 p-3 rounded-xl border border-slate-700/50">
         <div className="flex bg-slate-900/50 p-1 rounded-lg border border-slate-700/50 w-full xl:w-auto overflow-x-auto scrollbar-hide">
           {(["all", "new", "in_progress", "replied", "resolved"] as const).map(tab => {
-            const labels = { all: "الكل", new: "الجديدة", in_progress: "قيد المعالجة", replied: "تم الرد", resolved: "تم الحل" };
+            const labels = { all: "الكل", new: "الجديدة", in_progress: "قيد المعالجة", replied: "تم الرد", resolved: "مُغلقة" };
             const isActive = activeTab === tab;
             return (
               <button

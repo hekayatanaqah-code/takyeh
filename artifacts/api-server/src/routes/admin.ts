@@ -62,6 +62,7 @@ import { getOrStartOwnerSubscription, latestOwnerFreeAccess, subscriptionOwnerKe
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { accountDiscountView, latestDiscountForDisplay, saudiCalendarDate } from "../lib/subscription-discounts";
 import { REMINDER_PREVIEW_PREFIX, getReminderPreview, parseReminderPreview } from "../lib/subscription-reminder-preview";
+import { isSupportClosed, preserveLegacySupportReply, supportMessagesSql, SupportTicketClosedError } from "../lib/support-conversation";
 
 declare global {
   namespace Express {
@@ -2437,7 +2438,7 @@ const supportTicketColumnsSql = sql`
   s.admin_reply, s.admin_reply_at,
   CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls
     WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
-  s.is_read_by_owner, s.created_at`;
+  s.is_read_by_owner, s.created_at, ${supportMessagesSql(sql`s.id`)} AS messages`;
 router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) => {
   try {
     const ownerId = req.query.ownerId as string | undefined;
@@ -2519,19 +2520,30 @@ router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminRep
         const url = await adminReplyStorageSvc.uploadBuffer(buffer, contentType, ext);
         adminAttachmentUrls.push(url);
       } catch (uploadErr) {
-        console.error("[POST /admin/support-requests/:id/reply] attachment upload failed:", uploadErr);
+        req.log.error({ err: uploadErr }, "Support reply attachment upload failed");
+        return res.status(502).json({ error: "تعذّر رفع مرفق الرد. لم يُحفظ الرد، أعد المحاولة." });
       }
     }
   }
 
   try {
     const ticket = await db.transaction(async tx => {
+      const locked = await tx.execute(sql`SELECT status FROM owner_support_requests WHERE id = ${id} FOR UPDATE`);
+      if (!locked.rows[0]) return null;
+      if (isSupportClosed(locked.rows[0].status)) throw new SupportTicketClosedError();
+      await preserveLegacySupportReply(tx, id);
+      await tx.execute(sql`INSERT INTO owner_support_messages
+        (ticket_id, author_role, author_id, author_name, body, attachment_urls)
+        VALUES (${id}, 'admin', ${String(req.adminStaff?.id ?? req.user?.id ?? "superadmin")},
+          ${req.adminStaff?.name ?? "فريق الدعم"}, ${reply},
+          ${`{${adminAttachmentUrls.join(",")}}`}::text[])`);
       const updated = await tx.execute(sql`UPDATE owner_support_requests
           SET admin_reply = ${reply},
               admin_reply_at = NOW(),
               status = 'replied',
-              is_read_by_owner = false
-              ${adminAttachmentUrls.length > 0 ? sql`, admin_attachment_urls = ${`{${adminAttachmentUrls.join(",")}}`}::text[]` : sql``}
+              is_read_by_owner = false,
+              admin_attachment_urls = ${`{${adminAttachmentUrls.join(",")}}`}::text[],
+              admin_attachment_url = NULL
           WHERE id = ${id}
           RETURNING id`);
       if (!updated.rows.length) return null;
@@ -2546,7 +2558,10 @@ router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminRep
     // Keep the old flat fields for existing callers; the UI consumes the full ticket.
     return res.json({ ok: true, ...ticket, ticket });
   } catch (err) {
-    console.error("[POST /admin/support-requests/:id/reply]", err);
+    if (err instanceof SupportTicketClosedError) {
+      return res.status(409).json({ error: "هذه التذكرة مغلقة. أعد فتحها أولاً لإرسال رد جديد." });
+    }
+    req.log.error({ err }, "Admin support reply failed");
     return res.status(500).json({ error: "حدث خطأ" });
   }
 });

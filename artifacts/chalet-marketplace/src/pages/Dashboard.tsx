@@ -118,6 +118,8 @@ import { formatDateWithHijri, formatDualDate, withHijriEra, toHijri, getHijriMon
 import { clampPage, filterServiceContracts, paginate, serviceContractStatus, serviceMonthOptions, serviceYearOptions, SERVICE_CONTRACTS_PAGE_SIZE, type ServiceCalView, type ServiceContractStatus } from "@/lib/serviceContractArchive";
 import { serviceRevenueBookings, serviceRevenueTotals } from "@/lib/serviceRevenue";
 import { toAr, fromAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
+import SupportConversation, { type SupportConversationMessage } from "@/components/support/SupportConversation";
+import type { SupportConversationReplyInput } from "@workspace/api-client-react";
 import { CustomerDate } from "@/components/owner/CustomerDate";
 import { CustomerNotes, type CustomerNotesHandle } from "@/components/owner/CustomerNotes";
 import { CustomerHistory } from "@/components/owner/CustomerHistory";
@@ -27934,6 +27936,7 @@ interface OwnerSupportMsg {
   admin_attachment_urls?: string[];
   is_read_by_owner: boolean;
   created_at: string;
+  messages?: SupportConversationMessage[];
 }
 
 const SUPPORT_STATUS_AR: Record<string, { label: string; color: string }> = {
@@ -27941,13 +27944,14 @@ const SUPPORT_STATUS_AR: Record<string, { label: string; color: string }> = {
   in_progress: { label: "قيد المعالجة", color: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700/40" },
   replied:     { label: "تم الرد",      color: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/40" },
   resolved:    { label: "مُغلق",         color: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/40" },
+  closed:      { label: "مُغلقة",        color: "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/40" },
   admin_message: { label: "رسالة من المنصة", color: "text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-700/40" },
 };
 
 const SUPPORT_MAX_FILE_SIZE_MB = 5;
 const SUPPORT_MAX_MESSAGE_LENGTH = 500;
 
-function OwnerSupportTab() {
+export function OwnerSupportTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -27986,6 +27990,10 @@ function OwnerSupportTab() {
   const [attachPreviews,setAttachPreviews] = useState<(string | "pdf")[]>([]);
   const [uploading,    setUploading]    = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
+  const [replyErrors, setReplyErrors] = useState<Record<number, string>>({});
+  const [sendingReply, setSendingReply] = useState<number | null>(null);
+  const replyInFlight = useRef(false);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const newFiles = Array.from(e.target.files ?? []);
@@ -28016,15 +28024,48 @@ function OwnerSupportTab() {
   }
 
   /* Fetch message history */
-  const { data: history = [], isLoading: histLoading } = useQuery<OwnerSupportMsg[]>({
+  const { data: history = [], isLoading: histLoading, isError: histError } = useQuery<OwnerSupportMsg[]>({
     queryKey: ["owner", "support-requests"],
     queryFn: async () => {
       const r = await apiFetch("/owner/support-requests");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذّر تحميل المحادثات");
       return r.json();
     },
-    refetchInterval: 30_000,
+    refetchInterval: 5_000,
   });
+
+  async function sendTicketReply(id: number) {
+    const draft = replyDrafts[id] ?? "";
+    if (!draft.trim() || replyInFlight.current) return;
+    replyInFlight.current = true;
+    setSendingReply(id);
+    setReplyErrors(previous => ({ ...previous, [id]: "" }));
+    try {
+      const body: SupportConversationReplyInput = { message: draft.trim() };
+      const response = await apiFetch(`/owner/support-requests/${id}/reply`, {
+        method: "POST", body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        if (response.status === 409) void qc.invalidateQueries({ queryKey: ["owner", "support-requests"] });
+        throw new Error(result.error ?? "تعذّر إرسال الرد");
+      }
+      if (!result.ticket || result.ticket.id !== id || !Array.isArray(result.ticket.messages)) {
+        throw new Error("استجابة المحادثة غير مكتملة");
+      }
+      qc.setQueryData<OwnerSupportMsg[]>(["owner", "support-requests"], previous =>
+        previous?.map(ticket => ticket.id === id ? { ...ticket, ...result.ticket } : ticket));
+      setReplyDrafts(previous => ({ ...previous, [id]: previous[id] === draft ? "" : previous[id] }));
+      void qc.invalidateQueries({ queryKey: ["owner", "support-requests"] });
+      void qc.invalidateQueries({ queryKey: ["owner", "support-unread-count"] });
+      void qc.invalidateQueries({ queryKey: ["admin", "support-requests"] });
+    } catch (err) {
+      setReplyErrors(previous => ({ ...previous, [id]: err instanceof Error ? err.message : "تعذّر إرسال الرد، احتُفظ بالمسودة" }));
+    } finally {
+      replyInFlight.current = false;
+      setSendingReply(null);
+    }
+  }
 
   async function markRead(id: number) {
     await apiFetch(`/owner/support-requests/${id}/mark-read`, { method: "POST" });
@@ -28226,6 +28267,8 @@ function OwnerSupportTab() {
         <h3 className="text-sm font-bold text-foreground">سجل المراسلات</h3>
         {histLoading ? (
           <div className="text-center py-8 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
+        ) : histError ? (
+          <p role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">تعذّر تحميل المحادثات. ستتم إعادة المحاولة تلقائياً دون فقد مسودتك.</p>
         ) : history.length === 0 ? (
           <div className="text-center py-10 bg-muted/30 border border-border rounded-xl">
             <MessageSquare className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
@@ -28269,7 +28312,7 @@ function OwnerSupportTab() {
                   </div>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0 ${statusInfo.color}`}>{statusInfo.label}</span>
                   {platformMessage && <span className="text-[10px] bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-700/40 px-2 py-0.5 rounded-full shrink-0">المرسل: المنصة</span>}
-                  {!platformMessage && msg.admin_reply && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full shrink-0">رد متاح</span>}
+                  {!platformMessage && msg.admin_reply && msg.status === "replied" && <span className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700/40 px-2 py-0.5 rounded-full shrink-0">رد متاح</span>}
                   <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform ${isExp ? "rotate-180" : ""}`} />
                 </div>
                 {isExp && (
@@ -28299,36 +28342,21 @@ function OwnerSupportTab() {
                         ) : null;
                       })()}
                     </div>
-                    {/* Admin reply */}
-                    {msg.admin_reply && (
-                      <div className="space-y-2">
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mb-1.5 font-medium flex items-center gap-1.5">
-                          <Send className="w-3 h-3" /> رد فريق تكية {msg.admin_reply_at ? ("— " + (() => { const d = new Date(msg.admin_reply_at!); const hc = toHijriComponents(d); const hijriStr = toArN(hc.day) + " " + HIJRI_MONTHS_AR[hc.month - 1] + " " + toArN(hc.year) + " هـ"; const gregStr = d.toLocaleDateString("ar-EG", { day: "numeric", month: "long", year: "numeric" }); const timeStr = d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true }); return hijriStr + " (" + gregStr + " م) | " + timeStr; })()) : ""}:
-                        </p>
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600/30 rounded-lg p-3 text-sm text-blue-900 dark:text-blue-200 leading-relaxed whitespace-pre-wrap">{msg.admin_reply}</div>
-                        {(() => {
-                          const adminUrls = msg.admin_attachment_urls?.length ? msg.admin_attachment_urls : msg.admin_attachment_url ? [msg.admin_attachment_url] : [];
-                          return adminUrls.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {adminUrls.map((url, i) => url.toLowerCase().includes(".pdf") ? (
-                                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                                  className="inline-flex min-h-10 items-center justify-center gap-2 text-center text-xs px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors font-medium">
-                                  <FileText className="w-3.5 h-3.5 shrink-0" />
-                                  مرفق {adminUrls.length > 1 ? `(${i + 1})` : ""}
-                                  <ExternalLink className="w-3 h-3 opacity-60" />
-                                </a>
-                              ) : (
-                                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block w-fit">
-                                  <img src={url} alt="مرفق فريق تكية" className="max-h-40 max-w-xs rounded-lg border border-blue-200 dark:border-blue-600/40 object-cover hover:opacity-90 transition-opacity" />
-                                </a>
-                              ))}
-                            </div>
-                          ) : null;
-                        })()}
-                      </div>
-                    )}
-                    {!platformMessage && !msg.admin_reply && (
-                      <p className="text-xs text-muted-foreground italic">لم يتم الرد بعد. سيتواصل فريق تكية معك في أقرب وقت.</p>
+                    {!platformMessage && (
+                      <SupportConversation
+                        messages={msg.messages?.length ? msg.messages : msg.admin_reply ? [{
+                          id: `legacy-${msg.id}`, author_role: "admin", body: msg.admin_reply,
+                          attachment_urls: msg.admin_attachment_urls?.length ? msg.admin_attachment_urls : msg.admin_attachment_url ? [msg.admin_attachment_url] : [],
+                          created_at: msg.admin_reply_at,
+                        }] : []}
+                        audience="owner"
+                        closed={msg.status === "resolved" || msg.status === "closed"}
+                        draft={replyDrafts[msg.id] ?? ""}
+                        onDraftChange={value => setReplyDrafts(previous => ({ ...previous, [msg.id]: value }))}
+                        onSend={() => void sendTicketReply(msg.id)}
+                        sending={sendingReply !== null}
+                        error={replyErrors[msg.id]}
+                      />
                     )}
                   </div>
                 )}

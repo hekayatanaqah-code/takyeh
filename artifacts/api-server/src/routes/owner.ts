@@ -75,6 +75,7 @@ import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { createAddonCheckout, previewAddonCheckout, readAddonCheckoutQuote, confirmAddonCheckout, redeemFreeAddonCheckout, SubscriptionAddonCheckoutError } from "../lib/subscription-addon-checkout";
 import { getSubscriptionBillingReadiness } from "../lib/subscription-renewals";
 import { ownerIdentityAliases } from "../lib/broadcast-utils";
+import { isSupportClosed, preserveLegacySupportReply, supportMessagesSql, SupportTicketClosedError } from "../lib/support-conversation";
 
 const router = Router();
 
@@ -1159,15 +1160,16 @@ router.get("/support-requests", requireAuth, async (req, res) => {
               CASE WHEN array_length(attachment_urls, 1) > 0 THEN attachment_urls WHEN attachment_url IS NOT NULL THEN ARRAY[attachment_url] ELSE '{}'::text[] END AS attachment_urls,
               admin_reply, admin_reply_at,
               CASE WHEN array_length(admin_attachment_urls, 1) > 0 THEN admin_attachment_urls WHEN admin_attachment_url IS NOT NULL THEN ARRAY[admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
-              is_read_by_owner, created_at, false AS platform_message, 'owner' AS sender
-            FROM owner_support_requests
+              is_read_by_owner, created_at, false AS platform_message, 'owner' AS sender,
+              ${supportMessagesSql(sql`s.id`)} AS messages
+            FROM owner_support_requests s
             WHERE owner_id IN (${ownerIdFilter}) AND source <> 'admin_broadcast'
             UNION ALL
             SELECT -id AS id, owner_id, subject, message, 'admin_message' AS status,
               'admin_broadcast' AS source, '{}'::text[] AS attachment_urls,
               NULL::text AS admin_reply, NULL::timestamptz AS admin_reply_at,
               '{}'::text[] AS admin_attachment_urls, is_read AS is_read_by_owner,
-              created_at, true AS platform_message, 'platform' AS sender
+              created_at, true AS platform_message, 'platform' AS sender, '[]'::jsonb AS messages
             FROM owner_broadcast_inbox
             WHERE owner_id IN (${ownerIdFilter})
           ) messages
@@ -1181,6 +1183,39 @@ router.get("/support-requests", requireAuth, async (req, res) => {
 });
 
 /* ── GET /owner/support-requests/unread-count — count unread admin replies ── */
+router.post("/support-requests/:id/reply", requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  if (!Number.isSafeInteger(id) || id <= 0 || !message || message.length > 2000) {
+    return res.status(400).json({ error: "اكتب رداً بين حرف واحد و٢٠٠٠ حرف" });
+  }
+  try {
+    const ownerIds = await getOwnerIds(req);
+    const ticket = await db.transaction(async tx => {
+      const locked = await tx.execute(sql`SELECT status FROM owner_support_requests
+        WHERE id = ${id} AND owner_id IN (${sql.join(ownerIds.map(value => sql`${value}`), sql`, `)})
+          AND source <> 'admin_broadcast' FOR UPDATE`);
+      if (!locked.rows[0]) return null;
+      if (isSupportClosed(locked.rows[0].status)) throw new SupportTicketClosedError();
+      await preserveLegacySupportReply(tx, id);
+      await tx.execute(sql`INSERT INTO owner_support_messages(ticket_id, author_role, author_id, body)
+        VALUES (${id}, 'owner', ${String(req.user!.id)}, ${message})`);
+      await tx.execute(sql`UPDATE owner_support_requests SET status = 'in_progress' WHERE id = ${id}`);
+      const saved = await tx.execute(sql`SELECT s.*, ${supportMessagesSql(sql`s.id`)} AS messages
+        FROM owner_support_requests s WHERE s.id = ${id}`);
+      return saved.rows[0];
+    });
+    if (!ticket) return res.status(404).json({ error: "التذكرة غير موجودة" });
+    return res.json({ ok: true, ticket });
+  } catch (err) {
+    if (err instanceof SupportTicketClosedError) {
+      return res.status(409).json({ error: "هذه التذكرة مغلقة، لا يمكن إرسال ردود جديدة." });
+    }
+    req.log.error({ err }, "Owner support reply failed");
+    return res.status(500).json({ error: "تعذّر حفظ الرد، حاول مرة أخرى" });
+  }
+});
+
 router.get("/support-requests/unread-count", requireAuth, async (req, res) => {
   try {
     const ownerIds = await getOwnerIds(req);

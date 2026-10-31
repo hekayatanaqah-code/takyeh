@@ -8,6 +8,42 @@
 import * as zod from 'zod';
 
 
+
+
+
+export const ReplyToOwnerSupportTicketParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const replyToOwnerSupportTicketBodyMessageMax = 2000;
+
+
+
+export const ReplyToOwnerSupportTicketBody = zod.object({
+  "message": zod.string().min(1).max(replyToOwnerSupportTicketBodyMessageMax)
+})
+
+export const ReplyToOwnerSupportTicketResponse = zod.object({
+  "ok": zod.boolean(),
+  "ticket": zod.object({
+  "id": zod.number().int(),
+  "subject": zod.string(),
+  "message": zod.string(),
+  "status": zod.enum(['new', 'in_progress', 'replied', 'resolved', 'closed']),
+  "admin_reply": zod.string().nullish(),
+  "admin_reply_at": zod.string().nullish(),
+  "is_read_by_owner": zod.boolean().optional(),
+  "messages": zod.array(zod.object({
+  "id": zod.number().int(),
+  "author_role": zod.enum(['owner', 'admin']),
+  "body": zod.string(),
+  "attachment_urls": zod.array(zod.string()),
+  "created_at": zod.string().nullable()
+}))
+})
+})
+
+
 export const GetQuickSalesSettingsResponse = zod.object({
   "enabled": zod.boolean()
 })

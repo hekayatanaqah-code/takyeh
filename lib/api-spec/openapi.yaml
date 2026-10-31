@@ -21,6 +21,30 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/support-requests/{id}/reply:
+    post:
+      operationId: replyToOwnerSupportTicket
+      tags: [owner]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SupportConversationReplyInput" }
+      responses:
+        "200":
+          description: Reply appended to the open ticket.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SupportConversationReplyResult" }
+        "400": { description: Invalid message }
+        "401": { description: Authentication required }
+        "404": { description: Ticket not owned by this account or not found }
+        "409": { description: Ticket closed by administration }
   /owner/quick-sales/settings:
     get:
       operationId: getQuickSalesSettings
@@ -1630,6 +1654,42 @@ components:
       schema:
         type: string
   schemas:
+    SupportConversationReplyInput:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 2000 }
+    SupportConversationEntry:
+      type: object
+      required: [id, author_role, body, attachment_urls, created_at]
+      properties:
+        id: { type: integer }
+        author_role: { type: string, enum: [owner, admin] }
+        body: { type: string }
+        attachment_urls:
+          type: array
+          items: { type: string }
+        created_at: { type: [string, "null"] }
+    SupportConversationTicket:
+      type: object
+      required: [id, subject, message, status, messages]
+      properties:
+        id: { type: integer }
+        subject: { type: string }
+        message: { type: string }
+        status: { type: string, enum: [new, in_progress, replied, resolved, closed] }
+        admin_reply: { type: [string, "null"] }
+        admin_reply_at: { type: [string, "null"] }
+        is_read_by_owner: { type: boolean }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/SupportConversationEntry" }
+    SupportConversationReplyResult:
+      type: object
+      required: [ok, ticket]
+      properties:
+        ok: { type: boolean }
+        ticket: { $ref: "#/components/schemas/SupportConversationTicket" }
     QuickSalesSettings:
       type: object
       required: [enabled]
