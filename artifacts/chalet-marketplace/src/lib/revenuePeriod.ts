@@ -5,6 +5,8 @@ export interface RevenuePeriod {
   year: string;
   /** Numeric YYYY-MM in the selected calendar; empty means the whole year. */
   month: string;
+  /** Inclusive ISO-date bounds; absent for existing month/year consumers. */
+  range?: { from: string; to: string };
 }
 
 const GREGORIAN_MONTHS = [
@@ -20,6 +22,10 @@ export function revenueMonthKey(dateStr: string, calendar: RevenuePeriod["calend
 
 export function isInRevenuePeriod(dateStr: string | null | undefined, period: RevenuePeriod): boolean {
   if (!dateStr) return false;
+  if (period.range) {
+    const { from, to } = period.range;
+    return !!from && !!to && from <= to && dateStr.slice(0, 10) >= from && dateStr.slice(0, 10) <= to;
+  }
   if (!period.year) return true;
   const key = revenueMonthKey(dateStr, period.calendar);
   return period.month ? key === period.month : key.startsWith(`${period.year}-`);

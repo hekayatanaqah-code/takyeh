@@ -5,6 +5,17 @@ import type { RevenueSource } from "./quickSalesRevenue";
 import { matchesPropertyPaymentFilter, type PropertyPaymentFilter } from "./propertyBookingStatus";
 
 export type ServiceReportMode = "compact" | "detailed";
+export type ServiceReportPeriodMode = "monthly" | "yearly" | "custom";
+
+/** Custom dates stay ISO internally even when the picker displays Hijri. */
+export function serviceReportPeriodForView(
+  mode: ServiceReportPeriodMode, calendar: RevenuePeriod["calendar"],
+  month: string, year: string, from: string, to: string,
+): RevenuePeriod {
+  if (mode === "custom") return { calendar, year: "", month: "", range: { from, to } };
+  return { calendar, year: mode === "monthly" ? month.slice(0, 4) : year,
+    month: mode === "monthly" ? month : "" };
+}
 export type ServiceReportBooking = {
   id: number; providerId: number; dateStr: string; status: string;
   amount?: string | number | null; deposit?: string | number | null;

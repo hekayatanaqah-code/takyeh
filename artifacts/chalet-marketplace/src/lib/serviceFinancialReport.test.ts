@@ -5,11 +5,14 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { QuickSale } from "@workspace/api-client-react";
 import { buildServiceFinancialReport, serviceExpensesForPeriod, serviceReportRows, serviceReportSourceLabels,
   serviceBookingReport, serviceSalesForPaymentFilter, serviceReportDate, serviceReportStatus,
-  serviceReportPaymentLabels, type ServiceReportBooking } from "./serviceFinancialReport";
+  serviceReportPaymentLabels, serviceReportPeriodForView, type ServiceReportBooking } from "./serviceFinancialReport";
 import { readFileSync } from "node:fs";
 import { revenueMonthKey } from "./revenuePeriod";
 import { buildActivitySummaryReportHtml } from "./financialReport";
 import { ServiceFinancialReportPanels } from "../components/owner/ServiceFinancialReportPanels";
+import { ServiceReportFilters } from "../components/owner/ServiceReportFilters";
+import { quickSalesForPeriod } from "./quickSalesRevenue";
+import { isInRevenuePeriod } from "./revenuePeriod";
 
 const summary = { totalRevenue: 100.1, totalDeposits: 100.1, totalInsurance: 50, byProvider: [
   { id: 10, name: "خدمة", revenue: 100.1, deposits: 100.1, insurance: 50 },
@@ -123,11 +126,84 @@ it("uses Arabic statuses and numeric dual-calendar dates in report output and wi
   }
   const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
   assert.ok(source.includes('useState<ServiceReportMode>("compact")'));
-  assert.ok(source.includes("value={serviceReportPayment} onChange={setServiceReportPayment}"));
+  assert.ok(source.includes("onPaymentChange={setServiceReportPayment}"));
   assert.ok(source.includes("serviceReportRows(serviceClosing, serviceReportSource, serviceReportMode)"));
   assert.ok(source.includes('detailSections: serviceReportMode === "detailed" ? serviceReportDetails : undefined'));
   assert.ok(source.includes('expense.customCategory || catMap[expense.category]?.label || "أخرى"'));
   assert.ok(source.includes("serviceReportSource, serviceReportPayment, serviceReportMode, showPropertyReportDetails"));
+});
+
+it("uses monthly, annual and inclusive custom periods for all service sources in either calendar", () => {
+  const dates = ["2025-12-31", "2026-01-01", "2026-10-28", "2026-12-31", "2027-01-01"];
+  const bookings = dates.map((dateStr, index) => ({
+    id: index, providerId: 10, dateStr, status: "confirmed", amount: "100", deposit: "60", insuranceAmount: "500",
+  }));
+  const recordedExpenses = dates.map((dateStr, id) => ({ id, providerId: 10, dateStr, amount: "10", category: "other" }));
+  const recordedSales = dates.map((dateStr, id) => ({
+    id, providerId: 10, dateStr, total: 20, status: "completed", providerName: "خدمة",
+  })) as QuickSale[];
+  for (const calendar of ["hijri", "gregorian"] as const) {
+    const month = revenueMonthKey("2026-10-28", calendar);
+    const year = month.slice(0, 4);
+    for (const mode of ["monthly", "yearly", "custom"] as const) {
+      const period = serviceReportPeriodForView(mode, calendar, month, year, "2026-01-01", "2026-12-31");
+      const expectedDates = dates.filter(date => mode === "custom"
+        ? date >= "2026-01-01" && date <= "2026-12-31"
+        : mode === "monthly" ? revenueMonthKey(date, calendar) === month : revenueMonthKey(date, calendar).startsWith(`${year}-`));
+      const selected = serviceBookingReport(bookings, 10, period, "all");
+      const selectedExpenses = serviceExpensesForPeriod(recordedExpenses, 10, period);
+      const selectedSales = quickSalesForPeriod(recordedSales, { type: "service", id: 10, name: "خدمة" }, period);
+      assert.deepEqual(selected.bookings.map(row => row.dateStr), expectedDates);
+      assert.deepEqual(selectedExpenses.map(row => row.dateStr), expectedDates);
+      assert.deepEqual(selectedSales.map(row => row.dateStr), expectedDates);
+      const report = buildServiceFinancialReport(selected.summary, selectedSales, selectedExpenses, "all")!;
+      assert.equal(report.totalRevenue, expectedDates.length * 80);
+      assert.equal(report.netProfit, expectedDates.length * 70);
+      assert.equal(report.totalOutstanding, expectedDates.length * 40);
+      for (const forPrint of [true, false]) {
+        const html = buildActivitySummaryReportHtml({ title: "التقرير المالي", period: mode === "yearly" ? `عام ${year}` : "فترة مختارة",
+          activityName: "خدمة", fileName: "تقرير.pdf", rows: serviceReportRows(report, "all", "compact"),
+          logo: null, css: "", forPrint });
+        assert.ok(html.includes("صافي الربح / الدخل النهائي"));
+      }
+    }
+  }
+});
+
+it("keeps Hijri annual boundaries distinct from Gregorian years and rejects incomplete custom ranges", () => {
+  const lastDay = "2026-06-15";
+  const nextDay = "2026-06-16";
+  assert.notEqual(revenueMonthKey(lastDay, "hijri").slice(0, 4), revenueMonthKey(nextDay, "hijri").slice(0, 4));
+  const period = serviceReportPeriodForView("yearly", "hijri", "", revenueMonthKey(lastDay, "hijri").slice(0, 4), "", "");
+  assert.equal(isInRevenuePeriod(lastDay, period), true);
+  assert.equal(isInRevenuePeriod(nextDay, period), false);
+  for (const [from, to] of [["", ""], ["2026-01-01", ""], ["", "2026-01-02"], ["2026-01-03", "2026-01-01"]]) {
+    assert.equal(isInRevenuePeriod("2026-01-02", serviceReportPeriodForView("custom", "hijri", "", "", from, to)), false);
+  }
+  const oneDay = serviceReportPeriodForView("custom", "hijri", "", "", lastDay, lastDay);
+  assert.equal(isInRevenuePeriod(lastDay, oneDay), true);
+  assert.equal(isInRevenuePeriod(nextDay, oneDay), false);
+});
+
+it("groups service filters with readable explanations and connects periods to page/export readiness", () => {
+  for (const mode of ["compact", "detailed"] as const) {
+    const html = renderToStaticMarkup(createElement(ServiceReportFilters, {
+      source: "all", payment: "all", mode, disabled: true,
+      onSourceChange() {}, onPaymentChange() {}, onModeChange() {},
+    }));
+    for (const label of ["نطاق التقرير", "حالة السداد", "طريقة العرض", "مختصر", "تفصيلي", "تُطبّق هذه الخيارات"]) assert.ok(html.includes(label));
+    assert.ok(html.includes("text-sm leading-7"));
+    assert.ok(html.includes('data-testid="service-report-source"'));
+    assert.match(html, new RegExp(`aria-pressed="true" data-testid="service-report-mode-${mode}"`));
+    assert.ok(html.includes("<fieldset disabled="));
+  }
+  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  assert.ok(source.includes('annual={repUnit.type === "service" && viewMode === "yearly"}'));
+  assert.ok(source.includes('service-report-period-${mode}'));
+  assert.ok(source.includes('repUnit.type === "service" ? servicePeriodReady'));
+  assert.ok(source.includes("period: servicePeriodLabel"));
+  assert.ok(source.includes("isYearlyHijri, customFrom, customTo, selectedSubmissionId"));
+  assert.ok(source.includes('repUnit.type === "service" && servicePeriodReady && serviceClosing'));
 });
 
 it("scopes expenses to the exact service and period in both calendars without distributing general/property expenses", () => {

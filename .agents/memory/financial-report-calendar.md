@@ -73,3 +73,9 @@ Service reports apply payment status to service principal only, using the same s
 **Why:** The user requested complete financial parity with property reports without mixing insurance into receivables or showing totals from a different request scope.
 
 **How to apply:** Keep full-period service expenses explicit rather than inventing allocations by payment status. Offer a service-local compact default and detailed mode consistently across page, printing, PDF and sharing; neither changes the property report's controls. Translate generated status/category codes into Arabic and use Arabic or numeric dates, preserving owner-authored identities and historical accounting data.
+
+Service reports must offer the same monthly, annual and custom period choices as property reports, with readable, grouped source/payment/detail controls. A custom range includes both endpoints, regardless of the calendar used to select them.
+
+**Why:** The user explicitly requested period parity for services while preserving the property reports and improving small explanatory text.
+
+**How to apply:** Keep bookings, quick sales, full-period expenses and exported period headings on the identical selected period. Annual Hijri scopes follow the Hijri year, not its overlapping Gregorian year; incomplete or reversed ranges must not issue a report.

@@ -18,7 +18,8 @@ import { getOwnerDeposits, getOwnerCrmProfile, type CrmCustomerSummary, type Own
 import { ServiceFinancialReportPanels, type ServiceReportDetailTable } from "@/components/owner/ServiceFinancialReportPanels";
 import { buildServiceFinancialReport, serviceExpensesForPeriod, serviceReportRows, serviceReportSourceLabels,
   serviceBookingReport, serviceSalesForPaymentFilter, serviceReportDate, serviceReportStatus,
-  serviceReportPaymentLabels, type ServiceReportMode, type ServiceReportBooking } from "@/lib/serviceFinancialReport";
+  serviceReportPaymentLabels, serviceReportPeriodForView, type ServiceReportMode, type ServiceReportBooking } from "@/lib/serviceFinancialReport";
+import { ServiceReportFilters } from "@/components/owner/ServiceReportFilters";
 import { buildInsuranceReport, filterInsuranceEntries, canSettleInsurance, insuranceAmounts, type InsuranceEntry } from "@/lib/insuranceReport";
 import { DepositBookingHeading } from "@/components/owner/DepositBookingHeading";
 import { OwnerNotificationCard } from "@/components/owner/OwnerNotificationCard";
@@ -20097,7 +20098,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const [customTo, setCustomTo] = useState("");
   const qc = useQueryClient();
 
-  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, reportType, activityKey(repUnit), serviceReportSource, serviceReportPayment, serviceReportMode, showPropertyReportDetails]);
+  useEffect(() => { setPdfUrl(null); setArchiveSavedId(null); }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, customFrom, customTo, selectedSubmissionId, reportType, activityKey(repUnit), serviceReportSource, serviceReportPayment, serviceReportMode, showPropertyReportDetails]);
 
   const hijriReportParsed = useMemo(() => {
     if (!isHijri || !selectedHijriMonthVal) return null;
@@ -20252,11 +20253,12 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const reportQuickSalesQuery = useListQuickSales(repUnit.type === "service" ? { providerId: repUnit.id } : undefined, {
     query: { enabled: isActivitySummary, staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000 },
   });
-  const serviceReportPeriod = {
-    calendar: isHijri ? "hijri" : "gregorian",
-    year: (isHijri ? selectedHijriMonthVal : selectedMonth).slice(0, 4),
-    month: isHijri ? selectedHijriMonthVal : selectedMonth,
-  } as const;
+  const serviceReportPeriod = serviceReportPeriodForView(
+    repUnit.type === "service" ? viewMode : "monthly", isHijri ? "hijri" : "gregorian",
+    isHijri ? selectedHijriMonthVal : selectedMonth, isHijri ? selectedHijriYear : selectedYear, customFrom, customTo);
+  const servicePeriodReady = viewMode === "monthly" ? monthlyPeriodReady
+    : viewMode === "yearly" ? activePeriods.years.includes(isHijri ? selectedHijriYear : selectedYear)
+    : !!customFrom && !!customTo && customFrom <= customTo && customTo <= todayLocalDate && activePeriods.years.length > 0;
   const periodQuickSales = includesServiceSales ? quickSalesForPeriod(reportQuickSalesQuery.data ?? [], repUnit, serviceReportPeriod) : [];
   const reportQuickSales = repUnit.type === "service"
     ? serviceSalesForPaymentFilter(periodQuickSales, serviceReportPayment) : periodQuickSales;
@@ -20506,6 +20508,9 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
   const activeMonthLabel = isHijri
     ? (report?.hijriMonthLabel ?? hijriMonthOptions.find(o => o.val === selectedHijriMonthVal)?.label ?? selectedHijriMonthVal)
     : (monthOptions.find(o => o.val === selectedMonth)?.label ?? selectedMonth);
+  const servicePeriodLabel = viewMode === "monthly" ? activeMonthLabel
+    : viewMode === "yearly" ? `عام ${toAr(isHijri ? selectedHijriYear : selectedYear)} ${isHijri ? "هـ" : "م"}`
+    : `من ${serviceReportDate(customFrom, isHijri)} إلى ${serviceReportDate(customTo, isHijri)}`;
   const isCurrentMonthlyPeriod = isHijri
     ? selectedHijriMonthVal === `${nowHijriYearNum}-${String(nowHijriMonthNum).padStart(2, "0")}`
     : selectedMonth === currentMonth;
@@ -20796,7 +20801,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
     }
   }, [viewMode, selectedMonth, selectedHijriMonthVal, isHijri, selectedYear, selectedHijriYear, isYearlyHijri, selectedSubmissionId, selectedPropertyName, report, financial, yearly, yearlyHijri, pdfUrl, archiveMutation, repBreakdown, activeMonthLabel, showPropertyReportDetails]);
 
-  const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && (viewMode === "monthly" ? monthlyPeriodReady
+  const quickReportReady = !activitiesLoading && !activitiesError && !periodsLoading && !periodsError && (repUnit.type === "service" ? servicePeriodReady : viewMode === "monthly" ? monthlyPeriodReady
     : viewMode === "yearly" ? (isYearlyHijri ? hijriPeriods.years.includes(selectedHijriYear) : gregorianPeriods.years.includes(selectedYear))
       : activePeriods.years.length > 0) && (isActivitySummary
     ? repUnit.type === "service" ? !!serviceClosing && !serviceDataLoading && !serviceDataError
@@ -20827,7 +20832,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       const logo = await getLogoDataUrl();
       let html: string;
       if (repUnit.type === "service" && serviceClosing) {
-        html = buildActivitySummaryReportHtml({ title: reportHeading, period: activeMonthLabel,
+        html = buildActivitySummaryReportHtml({ title: reportHeading, period: servicePeriodLabel,
           activityName: repUnit.name, fileName, rows: serviceReportRows(serviceClosing, serviceReportSource, serviceReportMode),
           scopeLabel: `نطاق التقرير: ${serviceReportSourceLabels[serviceReportSource]} — حالة السداد: ${serviceReportPaymentLabels[serviceReportPayment]} — عرض ${serviceReportMode === "compact" ? "مختصر" : "تفصيلي"}. تُخصم مصروفات الخدمة المسجلة للفترة كاملة من إيرادات النطاق المختار؛ لا تُوزّع تلقائيًا بين الحجوزات والبيع السريع. الإيرادات هي المحصّل فعليًا، والعربون جزء منها؛ القيمة التعاقدية تشمل غير المسدد، والتأمين القابل للاسترداد منفصل عن الإيرادات والمتبقي.`,
           detailSections: serviceReportMode === "detailed" ? serviceReportDetails : undefined, closingRows: serviceClosingRows,
@@ -20943,7 +20948,7 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-bold text-foreground" data-testid="financial-report-title">{reportHeading}</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{loneReportActivity
+          <p className={`mt-1 ${repUnit.type === "service" ? "text-sm leading-7 text-foreground/85" : "text-xs text-muted-foreground"}`}>{loneReportActivity
             ? "يُعرض التقرير المالي لنشاطك مباشرة."
             : "اختر جميع الأنشطة أو نشاطًا محددًا لاستخراج تقريره المالي فقط."}</p>
         </div>
@@ -20962,50 +20967,67 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       </label>}
       <SectionGuideButton sectionKey="reports" />
       {isActivitySummary && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
-          <span className="text-sm font-semibold">تقويم التقرير</span>
+        <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-4 sm:p-5">
+          {repUnit.type === "service" && <fieldset disabled={!!quickAction}>
+            <legend className="mb-2 text-sm font-bold">فترة التقرير</legend>
+            <div className="flex rounded-lg border border-border bg-muted/60 p-1">
+              {(["monthly", "yearly", "custom"] as const).map(mode =>
+                <button type="button" key={mode} aria-pressed={viewMode === mode}
+                  data-testid={`service-report-period-${mode}`} onClick={() => setViewMode(mode)}
+                  className={`min-h-9 rounded-md px-4 py-2 text-sm font-bold ${viewMode === mode ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"}`}>
+                  {mode === "monthly" ? "شهري" : mode === "yearly" ? "سنوي" : "مخصص"}
+                </button>)}
+            </div>
+          </fieldset>}
+          <div>
+          <span className="mb-2 block text-sm font-bold">تقويم التقرير</span>
           <div className="flex rounded-lg border border-border p-0.5">
             {(["hijri", "gregorian"] as const).map(calendar => (
               <button type="button" key={calendar} aria-pressed={isHijri === (calendar === "hijri")} data-testid={`financial-report-calendar-${calendar}`}
+                disabled={!!quickAction}
                 onClick={() => { setIsHijri(calendar === "hijri"); setIsYearlyHijri(calendar === "hijri"); }}
-                className={`rounded-md px-3 py-1.5 text-xs font-bold ${isHijri === (calendar === "hijri") ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"}`}>
+                className={`min-h-10 rounded-md px-3 py-2 text-sm font-bold ${isHijri === (calendar === "hijri") ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-muted"}`}>
                 {calendar === "hijri" ? "هجري" : "ميلادي"}
               </button>
             ))}
           </div>
-          <FinancialPeriodControls months={activePeriods.months} years={activePeriods.years}
+          </div>
+          {repUnit.type === "service" && viewMode === "custom" ? (
+            <div className="grid w-full gap-4 sm:grid-cols-2" data-testid="service-report-custom-range">
+              <div className="min-w-0 space-y-2">
+                <span className="block text-sm font-bold">من تاريخ</span>
+                <div className={quickAction ? "pointer-events-none opacity-50" : ""} inert={quickAction ? true : undefined}>
+                  <DualCalendarPicker value={customFrom} onChange={setCustomFrom} selectOnOpen={false}
+                    placeholder="اختر تاريخ البداية" maxDate={customTo || todayLocalDate}
+                    mode={isHijri ? "hijri" : "gregorian"} />
+                </div>
+              </div>
+              <div className="min-w-0 space-y-2">
+                <span className="block text-sm font-bold">إلى تاريخ</span>
+                <div className={quickAction ? "pointer-events-none opacity-50" : ""} inert={quickAction ? true : undefined}>
+                  <DualCalendarPicker value={customTo} onChange={setCustomTo} selectOnOpen={false}
+                    placeholder="اختر تاريخ النهاية" minDate={customFrom || undefined} maxDate={todayLocalDate}
+                    openingDate={customFrom || undefined} mode={isHijri ? "hijri" : "gregorian"} />
+                </div>
+              </div>
+              <p role="status" className="text-sm leading-7 text-foreground/85 sm:col-span-2">
+                {!customFrom || !customTo ? "حدد تاريخ البداية والنهاية لعرض التقرير. يشمل الحساب اليوم الأول والأخير."
+                  : customFrom > customTo ? "يجب أن يكون تاريخ النهاية مساويًا لتاريخ البداية أو بعدها."
+                  : "يشمل التقرير الحجوزات والمبيعات والمصروفات الواقعة بين التاريخين المحددين."}
+              </p>
+            </div>
+          ) : <FinancialPeriodControls months={activePeriods.months} years={activePeriods.years}
+            annual={repUnit.type === "service" && viewMode === "yearly"}
             month={activeSelectedMonth} year={isHijri ? selectedHijriYear : selectedYear}
             monthNames={isHijri ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR} hijri={isHijri}
-            disabled={periodsLoading || periodsError} onMonthChange={isHijri ? setSelectedHijriMonthVal : setSelectedMonth}
-            onYearChange={isHijri ? setSelectedHijriYear : setSelectedYear} />
+            disabled={periodsLoading || periodsError || !!quickAction} onMonthChange={isHijri ? setSelectedHijriMonthVal : setSelectedMonth}
+            onYearChange={isHijri ? setSelectedHijriYear : setSelectedYear} />}
         </div>
       )}
 
-      {repUnit.type === "service" && <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
-        <label htmlFor="service-report-source" className="text-sm font-semibold">نطاق التقرير</label>
-        <select id="service-report-source" data-testid="service-report-source" value={serviceReportSource}
-          disabled={!!quickAction} onChange={event => setServiceReportSource(event.target.value as RevenueSource)}
-          className="min-w-0 rounded-lg border border-border bg-background px-3 py-2 text-sm">
-          {(["all", "bookings", "quick_sales"] as const).map(source => <option key={source} value={source}>{serviceReportSourceLabels[source]}</option>)}
-        </select>
-        <fieldset disabled={!!quickAction} className="min-w-0">
-          <legend className="mb-2 text-sm font-semibold">حالة السداد</legend>
-          <PropertyBookingPaymentFilters value={serviceReportPayment} onChange={setServiceReportPayment} />
-        </fieldset>
-        <div role="group" aria-label="نمط عرض تقرير الخدمات" className="flex gap-1 rounded-xl bg-muted p-1">
-          {([["compact", "مختصر"], ["detailed", "تفصيلي"]] as const).map(([mode, label]) => (
-            <button key={mode} type="button" disabled={!!quickAction}
-              aria-pressed={serviceReportMode === mode} data-testid={`service-report-mode-${mode}`}
-              onClick={() => setServiceReportMode(mode)}
-              className={`min-h-10 rounded-lg px-4 py-2 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 ${serviceReportMode === mode ? "bg-primary text-primary-foreground" : "hover:bg-background"}`}>
-              {label}
-            </button>
-          ))}
-        </div>
-        <p className="w-full text-xs leading-relaxed text-muted-foreground">
-          المبيعات الفردية المكتملة مسددة بالكامل؛ لا تظهر عند اختيار «متبقي عليه مبالغ».
-        </p>
-      </div>}
+      {repUnit.type === "service" && <ServiceReportFilters source={serviceReportSource}
+        payment={serviceReportPayment} mode={serviceReportMode} disabled={!!quickAction}
+        onSourceChange={setServiceReportSource} onPaymentChange={setServiceReportPayment} onModeChange={setServiceReportMode} />}
 
       {/* ── Report Type Selector (only in "all" unit mode) ── */}
       {periodsLoading && <p role="status" className="text-sm text-muted-foreground">جارٍ تحميل الفترات المالية…</p>}
@@ -21031,9 +21053,12 @@ function ReportsTab({ calendarPreference, properties, services, activitiesLoadin
       </div>}
       {repUnit.type !== "service" && quickSaleDetailsSection}
       {/* ── Services Report ── */}
-      {repUnit.type === "service" && viewMode === "monthly" && monthlyPeriodReady && serviceClosing && !serviceDataLoading && !serviceDataError && (
-        <ServiceFinancialReportPanels rows={serviceReportRows(serviceClosing, serviceReportSource, serviceReportMode)}
-          details={serviceReportMode === "detailed" ? serviceReportDetails : []} closingRows={serviceClosingRows} />
+      {repUnit.type === "service" && servicePeriodReady && serviceClosing && !serviceDataLoading && !serviceDataError && (
+        <div className="space-y-4">
+          <p className="text-sm font-semibold leading-7" data-testid="service-report-active-period">{servicePeriodLabel}</p>
+          <ServiceFinancialReportPanels rows={serviceReportRows(serviceClosing, serviceReportSource, serviceReportMode)}
+            details={serviceReportMode === "detailed" ? serviceReportDetails : []} closingRows={serviceClosingRows} />
+        </div>
       )}
 
       {/* ── Unified Report ── */}
