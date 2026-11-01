@@ -39,11 +39,11 @@ Archive quick filters follow the account's saved reports-calendar preference, fa
 
 **How to apply:** Resolve Hijri boundaries with Umm al-Qura and send Gregorian ISO bounds to the existing archive API. Refresh the account preference after saving settings; keep quick filters, year labels, date pickers and the temporary calendar switch consistent.
 
-Archive period actions must read right-to-left in this order: all periods, this month, last month, choose year, custom range. The filtering-calendar selector places Hijri on the right and Gregorian on the left. Keep explanatory copy short, readable and high-contrast.
+Archive period actions stay in a single horizontal RTL row in this order: all periods, this month, last month, choose year, choose month, custom range. The filtering-calendar selector places Hijri on the right and Gregorian on the left. Keep explanatory copy short, readable and high-contrast.
 
-**Why:** The user explicitly requested consistent RTL ordering and cleaner guidance in the booking archive, without changing the filter calculations.
+**Why:** The user explicitly requested this six-action order, a selected-month filter, and clean RTL formatting throughout the archive.
 
-**How to apply:** Use responsive wrapping or grids without clipping any period action, preserve each action's existing filter value and export scope, and do not reverse the option array in addition to RTL layout.
+**How to apply:** Permit horizontal scrolling on narrow screens without hiding actions. Selected-month ranges must follow the chosen calendar and year, with identical results/export bounds. Preserve independent archive calendar switching, and do not reverse the option array in addition to RTL layout.
 
 Export metadata must print the exact earliest/latest stay dates in the exported matches, including all-period and selected-year reports. Rescheduling uses the new stay date, not its old date or edit timestamp.
 

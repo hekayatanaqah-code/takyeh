@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, useMemo, useRef, Fragment } from "react";
-import { archiveDateRange, archiveCalendarYear, archiveCalendarYears, EMPTY_ARCHIVE_FILTERS, getArchiveDateError } from "@/lib/bookingArchive";
+import { archiveDateRange, archiveCalendarYear, archiveCalendarMonth, archiveCalendarYears, EMPTY_ARCHIVE_FILTERS, getArchiveDateError } from "@/lib/bookingArchive";
 import { isStayComplete, isBookingCalendarComplete, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import { formatDateWithHijri, formatDualDate, getHijriMonthDays, toGregorianStr, prevHijriMonth, nextHijriMonth, HIJRI_MONTHS_AR, toHijriComponents } from "@/lib/hijri";
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
@@ -59,7 +59,9 @@ export function BookingCalendarTab({
   useEffect(() => {
     setArchiveCalendar(preferredReportCalendar);
     setArchiveFilters(previous => ({
-      ...previous, year: previous.period === "year" ? String(archiveCalendarYear(preferredReportCalendar)) : previous.year,
+      ...previous,
+      year: previous.period === "year" || previous.period === "month" ? String(archiveCalendarYear(preferredReportCalendar)) : previous.year,
+      month: previous.period === "month" ? String(archiveCalendarMonth(preferredReportCalendar)) : previous.month,
     }));
     setArchivePage(1);
   }, [preferredReportCalendar]);
@@ -3278,7 +3280,11 @@ export function BookingCalendarTab({
               calendarMode={archiveCalendar}
               onCalendarModeChange={calendar => {
                 setArchiveCalendar(calendar);
-                setArchiveFilters(previous => ({ ...previous, year: previous.period === "year" ? String(archiveCalendarYear(calendar)) : "" }));
+                setArchiveFilters(previous => ({
+                  ...previous,
+                  year: previous.period === "year" || previous.period === "month" ? String(archiveCalendarYear(calendar)) : "",
+                  month: previous.period === "month" ? String(archiveCalendarMonth(calendar)) : "",
+                }));
                 setArchivePage(1);
               }}
             />

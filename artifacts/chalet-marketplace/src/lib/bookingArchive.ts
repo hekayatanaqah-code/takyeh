@@ -2,13 +2,17 @@ import type { ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import { getHijriMonthDays, prevHijriMonth, toGregorianStr, toHijriComponents } from "./hijri";
 import type { ReportCalendar } from "./bookingArchiveReport";
 
-export const EMPTY_ARCHIVE_FILTERS: ArchiveFilters = { search: "", period: "all", year: "", from: "", to: "" };
+export const EMPTY_ARCHIVE_FILTERS: ArchiveFilters = { search: "", period: "all", year: "", month: "", from: "", to: "" };
 
 export function archiveToday(now = Date.now()): string {
   return new Date(now + 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 export function getArchiveDateError(filters: ArchiveFilters, now = Date.now()): string | null {
+  if (filters.period === "month") {
+    return /^\d{4}$/.test(filters.year) && /^(0?[1-9]|1[0-2])$/.test(filters.month)
+      ? null : "اختر السنة والشهر لعرض حجوزات الشهر المحدد";
+  }
   if (filters.period !== "custom") return null;
   const today = archiveToday(now);
   if (filters.from > today || filters.to > today) return "لا يمكن اختيار تاريخ بعد اليوم في الأرشيف والتقارير";
@@ -19,6 +23,11 @@ export function getArchiveDateError(filters: ArchiveFilters, now = Date.now()): 
 export function archiveCalendarYear(calendar: ReportCalendar, now = Date.now()): number {
   const today = archiveToday(now);
   return calendar === "hijri" ? toHijriComponents(new Date(`${today}T12:00:00`)).year : Number(today.slice(0, 4));
+}
+
+export function archiveCalendarMonth(calendar: ReportCalendar, now = Date.now()): number {
+  const today = archiveToday(now);
+  return calendar === "hijri" ? toHijriComponents(new Date(`${today}T12:00:00`)).month : Number(today.slice(5, 7));
 }
 
 /** API years are Gregorian; include all corresponding selectable years in the active calendar. */
@@ -46,6 +55,16 @@ function hijriMonthRange(year: number, month: number): { from: string; to: strin
 export function archiveDateRange(filters: ArchiveFilters, now = Date.now(), calendar: ReportCalendar = "gregorian"): { from?: string; to?: string } {
   if (filters.period === "all") return {};
   if (filters.period === "custom") return { from: filters.from || undefined, to: filters.to || undefined };
+  if (filters.period === "month") {
+    if (getArchiveDateError(filters, now)) return {};
+    const year = Number(filters.year), month = Number(filters.month);
+    return calendar === "hijri"
+      ? hijriMonthRange(year, month)
+      : {
+          from: `${filters.year}-${String(month).padStart(2, "0")}-01`,
+          to: new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10),
+        };
+  }
   if (filters.period === "year") {
     if (!/^\d{4}$/.test(filters.year)) return {};
     return calendar === "hijri"

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { archiveDateRange, archivePageNumbers, archiveCalendarYear, archiveCalendarYears, EMPTY_ARCHIVE_FILTERS } from "./bookingArchive";
+import { archiveDateRange, archivePageNumbers, archiveCalendarYear, archiveCalendarMonth, archiveCalendarYears, getArchiveDateError, EMPTY_ARCHIVE_FILTERS } from "./bookingArchive";
 import { toHijriComponents } from "./hijri";
 import { ARCHIVE_EXCEL_HEADER_ROW, SAR_ACCOUNTING_FORMAT, buildArchiveExportTable, createArchiveWorkbook } from "./bookingArchiveExport";
 import type { ArchiveReportContext } from "./bookingArchiveReport";
@@ -12,6 +12,39 @@ const context: ArchiveReportContext = {
 };
 
 describe("archive periods and numeric pagination", () => {
+  it("filters a selected Gregorian month with leap-year and year-boundary accuracy", () => {
+    assert.deepEqual(archiveDateRange({ ...EMPTY_ARCHIVE_FILTERS, period: "month", year: "2024", month: "2" }, undefined, "gregorian"), { from: "2024-02-01", to: "2024-02-29" });
+    assert.deepEqual(archiveDateRange({ ...EMPTY_ARCHIVE_FILTERS, period: "month", year: "2025", month: "2" }, undefined, "gregorian"), { from: "2025-02-01", to: "2025-02-28" });
+    assert.deepEqual(archiveDateRange({ ...EMPTY_ARCHIVE_FILTERS, period: "month", year: "2025", month: "12" }, undefined, "gregorian"), { from: "2025-12-01", to: "2025-12-31" });
+  });
+  it("filters the exact selected Umm al-Qura month, including first and last months", () => {
+    for (const month of [1, 5, 12]) {
+      const range = archiveDateRange({ ...EMPTY_ARCHIVE_FILTERS, period: "month", year: "1447", month: String(month) }, undefined, "hijri");
+      assert(range.from && range.to);
+      const first = toHijriComponents(new Date(`${range.from}T12:00:00`));
+      const last = toHijriComponents(new Date(`${range.to}T12:00:00`));
+      assert.deepEqual([first.year, first.month, first.day], [1447, month, 1]);
+      assert.equal(last.year, 1447);
+      assert.equal(last.month, month);
+      assert([29, 30].includes(last.day));
+      const next = new Date(`${range.to}T12:00:00`);
+      next.setDate(next.getDate() + 1);
+      assert.notEqual(toHijriComponents(next).month, month);
+    }
+  });
+  it("rejects incomplete or invalid selected months instead of silently running an unrestricted archive query", () => {
+    for (const month of ["", "0", "13", "invalid"]) {
+      assert(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "month", year: "1447", month }));
+    }
+    assert(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "month", year: "", month: "2" }));
+    assert.equal(getArchiveDateError({ ...EMPTY_ARCHIVE_FILTERS, period: "month", year: "1447", month: "2" }), null);
+  });
+  it("selects the current calendar month using the Saudi day at midnight rollover", () => {
+    const now = Date.parse("2026-12-31T22:00:00Z");
+    assert.equal(archiveCalendarMonth("gregorian", now), 1);
+    assert.equal(archiveCalendarYear("gregorian", now), 2027);
+    assert.equal(archiveCalendarMonth("hijri", now), toHijriComponents(new Date("2027-01-01T12:00:00")).month);
+  });
   it("uses Saudi month boundaries, including New Year and leap-year February", () => {
     const rollover = Date.parse("2026-12-31T22:00:00Z"); // January in Saudi Arabia
     assert.deepEqual(archiveDateRange({ ...EMPTY_ARCHIVE_FILTERS, period: "this-month" }, rollover), { from: "2027-01-01", to: "2027-01-31" });

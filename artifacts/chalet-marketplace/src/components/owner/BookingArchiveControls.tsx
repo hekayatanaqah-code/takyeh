@@ -3,7 +3,9 @@ import { Search, RotateCcw, Download, FileSpreadsheet, FileText, ChevronDown, Lo
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
-import { archiveToday, archiveCalendarYear, getArchiveDateError } from "@/lib/bookingArchive";
+import { archiveToday, archiveCalendarYear, archiveCalendarMonth, getArchiveDateError } from "@/lib/bookingArchive";
+import { HIJRI_MONTHS_AR } from "@/lib/hijri";
+import { GREGORIAN_MONTHS_AR } from "@/components/owner/owner-calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu,
@@ -15,12 +17,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-export type ArchivePeriod = "all" | "this-month" | "last-month" | "year" | "custom";
+export type ArchivePeriod = "all" | "this-month" | "last-month" | "year" | "month" | "custom";
 
 export interface ArchiveFilters {
   search: string;
   period: ArchivePeriod;
   year: string;
+  month: string;
   from: string;
   to: string;
 }
@@ -42,10 +45,11 @@ const PERIODS: { value: ArchivePeriod; label: string }[] = [
   { value: "this-month", label: "هذا الشهر" },
   { value: "last-month", label: "الشهر الماضي" },
   { value: "year", label: "اختيار سنة" },
+  { value: "month", label: "اختيار شهر" },
   { value: "custom", label: "تحديد فترة" },
 ];
 
-const DEFAULT_FILTERS: ArchiveFilters = { search: "", period: "all", year: "", from: "", to: "" };
+const DEFAULT_FILTERS: ArchiveFilters = { search: "", period: "all", year: "", month: "", from: "", to: "" };
 
 export default function BookingArchiveControls({
   filters,
@@ -61,31 +65,45 @@ export default function BookingArchiveControls({
   const uid = useId();
   const searchId = `${uid}-search`;
   const yearId = `${uid}-year`;
+  const monthId = `${uid}-month`;
   const errorId = `${uid}-err`;
 
   const dateError = getArchiveDateError(filters);
   const today = archiveToday();
   const isDirty =
-    filters.search !== "" || filters.period !== "all" || filters.year !== "" || filters.from !== "" || filters.to !== "";
+    filters.search !== "" || filters.period !== "all" || filters.year !== "" || filters.month !== "" || filters.from !== "" || filters.to !== "";
   const exportDisabled = loading || exporting || total === 0 || !!dateError;
 
   const set = (patch: Partial<ArchiveFilters>) => onChange({ ...filters, ...patch });
 
   const selectPeriod = (period: ArchivePeriod) => {
-    if (period === "year") {
-      set({ period, year: filters.year || years[0] || String(archiveCalendarYear(calendarMode)), from: "", to: "" });
+    if (period === "year" || period === "month") {
+      set({
+        period,
+        year: filters.year || years[0] || String(archiveCalendarYear(calendarMode)),
+        month: period === "month" ? filters.month || String(archiveCalendarMonth(calendarMode)) : "",
+        from: "",
+        to: "",
+      });
     } else if (period === "custom") {
-      set({ period, year: "" });
+      set({ period, year: "", month: "" });
     } else {
-      set({ period, year: "", from: "", to: "" });
+      set({ period, year: "", month: "", from: "", to: "" });
     }
+  };
+
+  const selectYear = (year: string) => {
+    const clampMonth = filters.period === "month"
+      && Number(year) === archiveCalendarYear(calendarMode)
+      && Number(filters.month) > archiveCalendarMonth(calendarMode);
+    set({ year, ...(clampMonth ? { month: String(archiveCalendarMonth(calendarMode)) } : {}) });
   };
 
   return (
     <section
       dir="rtl"
       aria-label="أدوات تصفية أرشيف الحجوزات"
-      className="rounded-xl border border-card-border bg-card p-3 sm:p-4 space-y-4 text-right"
+      className="min-w-0 rounded-xl border border-card-border bg-card p-3 sm:p-4 space-y-4 text-right"
       data-testid="section-archive-controls"
     >
       {/* Search + export row */}
@@ -150,7 +168,7 @@ export default function BookingArchiveControls({
       </div>
 
       {/* Period quick options */}
-      <div dir="rtl" role="radiogroup" aria-label="الفترة الزمنية" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+      <div dir="rtl" role="radiogroup" aria-label="الفترة الزمنية" className="flex max-w-full flex-nowrap gap-2 overflow-x-auto pb-1">
         {PERIODS.map((p) => {
           const active = filters.period === p.value;
           return (
@@ -161,8 +179,7 @@ export default function BookingArchiveControls({
               aria-checked={active}
               onClick={() => selectPeriod(p.value)}
               className={cn(
-                "min-h-11 min-w-0 rounded-lg border px-3 py-2.5 text-center text-sm font-semibold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                p.value === "custom" && "col-span-2 sm:col-span-1",
+                "min-h-11 shrink-0 rounded-lg border px-4 py-2.5 text-center text-sm font-semibold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring sm:flex-1",
                 active
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-secondary text-secondary-foreground hover:border-primary/40",
@@ -174,6 +191,7 @@ export default function BookingArchiveControls({
           );
         })}
       </div>
+      <p className="text-sm leading-6 text-foreground/80 sm:hidden">اسحب أفقياً لعرض بقية الفترات.</p>
 
       {onCalendarModeChange && (
         <div dir="rtl" className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3" aria-label="تقويم فلاتر الأرشيف">
@@ -189,16 +207,17 @@ export default function BookingArchiveControls({
           </div>
         </div>
       )}
-      {filters.period === "year" && (
-        <div className="space-y-1 sm:max-w-[14rem]">
-          <label htmlFor={yearId} className="text-sm font-semibold">
+      {(filters.period === "year" || filters.period === "month") && (
+        <div dir="rtl" className={cn("grid grid-cols-1 gap-3 rounded-xl border border-border bg-background p-3", filters.period === "month" ? "sm:max-w-xl sm:grid-cols-2" : "sm:max-w-xs")}>
+          <div className="space-y-2">
+          <label htmlFor={yearId} className="block text-sm font-semibold">
             السنة ({calendarMode === "hijri" ? "هجري" : "ميلادي"})
           </label>
-          <Select value={filters.year} onValueChange={(year) => set({ year })} dir="rtl">
-            <SelectTrigger id={yearId} className="h-10 rounded-lg" data-testid="select-archive-year">
+          <Select value={filters.year} onValueChange={selectYear} dir="rtl">
+            <SelectTrigger id={yearId} className="h-12 rounded-lg bg-card text-sm" data-testid="select-archive-year">
               <SelectValue placeholder={`اختر السنة ${calendarMode === "hijri" ? "الهجرية" : "الميلادية"}`} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent dir="rtl">
               {(years.length ? years : [String(archiveCalendarYear(calendarMode))]).map((y) => (
                 <SelectItem key={y} value={y} data-testid={`option-year-${y}`}>
                   {Number(y).toLocaleString("ar-SA", { useGrouping: false })} {calendarMode === "hijri" ? "هـ" : "م"}
@@ -206,12 +225,31 @@ export default function BookingArchiveControls({
               ))}
             </SelectContent>
           </Select>
+          </div>
+          {filters.period === "month" && (
+            <div className="space-y-2">
+              <label htmlFor={monthId} className="block text-sm font-semibold">الشهر ({calendarMode === "hijri" ? "هجري" : "ميلادي"})</label>
+              <Select value={filters.month} onValueChange={(month) => set({ month })} dir="rtl">
+                <SelectTrigger id={monthId} className="h-12 rounded-lg bg-card text-sm" data-testid="select-archive-month">
+                  <SelectValue placeholder="اختر الشهر" />
+                </SelectTrigger>
+                <SelectContent dir="rtl">
+                  {(calendarMode === "hijri" ? HIJRI_MONTHS_AR : GREGORIAN_MONTHS_AR).map((month, index) => (
+                    <SelectItem key={index + 1} value={String(index + 1)} disabled={Number(filters.year) === archiveCalendarYear(calendarMode) && index + 1 > archiveCalendarMonth(calendarMode)}>
+                      {month}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {filters.period === "month" && dateError && <p id={errorId} role="alert" className="text-sm leading-6 text-destructive sm:col-span-2">{dateError}</p>}
         </div>
       )}
 
       {filters.period === "custom" && (
         <div className="space-y-1.5">
-          <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:max-w-md">
+          <div dir="rtl" className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:max-w-xl">
             <div className="relative space-y-1 rounded-xl border border-border bg-background p-3 shadow-sm transition-colors hover:border-primary/60 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
               <CalendarDays aria-hidden="true" className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-primary" />
               <DualCalendarPicker
