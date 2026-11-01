@@ -1,0 +1,31 @@
+.addon-checkout-gateway .mysr-form-moyasarForm {
+  width: 100%;
+  max-width: 100%;
+  font-family: inherit;
+}
+
+.addon-checkout-gateway .mysr-form-label {
+  font-family: inherit;
+  text-align: right;
+  line-height: 1.8;
+}
+
+.addon-checkout-gateway .mysr-form-input {
+  min-height: 3rem;
+  font-family: inherit;
+}
+
+.addon-checkout-gateway input[inputmode="numeric"],
+.addon-checkout-gateway input[inputmode="decimal"],
+.addon-checkout-gateway input[type="tel"] {
+  direction: ltr;
+  text-align: left;
+}
+
+.addon-checkout-gateway .mysr-form-button {
+  min-height: 3rem;
+  margin-top: 1rem;
+  border-radius: 1rem;
+  font-family: inherit;
+  line-height: 1.7;
+}

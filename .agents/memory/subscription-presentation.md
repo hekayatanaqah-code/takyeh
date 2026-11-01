@@ -13,3 +13,9 @@ Presentation changes to subscription dialogs must not change prices, consent, wa
 **Why:** The requested fixes concern centering, clearer explanations and Arabic number/currency presentation, not new billing rules.
 
 **How to apply:** Format display numbers only. Preserve machine payment values and quote snapshots. Explain that historic one-time add-ons are not charged again but still require an active base subscription.
+
+Moyasar form methods must be configured explicitly; do not hide the gateway's entire error container to suppress Apple Pay setup errors.
+
+**Why:** The external Moyasar form SDK defaults to Apple Pay, card and STC Pay. Its Apple Pay configuration validation can replace the entire form with technical diagnostics when merchant validation is not configured, even though card networks were supplied.
+
+**How to apply:** Treat payment methods and card networks as separate SDK options. Offer only configured methods, preserve card-only recurring consent, and show understandable Arabic failures without suppressing payment validation or implying success.
