@@ -559,10 +559,15 @@ export function OwnerProfileTab() {
                 </label>
               ))}
             </div>
-            <Button onClick={saveBroadcastPreferences} disabled={savingBroadcastPreferences} variant="outline" className="gap-2">
-              {savingBroadcastPreferences && <Loader2 className="h-4 w-4 animate-spin" />}
+            <button
+              type="button"
+              onClick={saveBroadcastPreferences}
+              disabled={savingBroadcastPreferences}
+              className="flex items-center gap-1.5 text-sm font-semibold bg-primary text-primary-foreground px-5 py-2 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              {savingBroadcastPreferences && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               حفظ تفضيلات التعميمات
-            </Button>
+            </button>
           </div>
         )}
 
