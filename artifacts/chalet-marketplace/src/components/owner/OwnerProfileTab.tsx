@@ -3,7 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Calendar, CheckCircle, Lock, Loader2, Settings, Eye, EyeOff, Shield, Send } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { toAr, fromAr } from "@/lib/utils";
+import { toAr } from "@/lib/utils";
+import { contactDigits, contactPhoneInput, localContactPhone, profileContactErrors } from "@/lib/owner-profile-contact";
 import { Button } from "@/components/ui/button";
 
 
@@ -20,6 +21,8 @@ export function OwnerProfileTab() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone]       = useState("");
   const [email, setEmail]       = useState("");
+  const [contactTouched, setContactTouched] = useState({ phone: false, email: false });
+  const contactErrors = profileContactErrors(phone, email);
 
   /* ── baselines for dirty-detection ── */
   const [initName,  setInitName]  = useState("");
@@ -76,14 +79,15 @@ export function OwnerProfileTab() {
     Promise.all([
       apiFetch("/owner/profile").then(async (r) => {
         const d = await r.json().catch(() => null);
-        console.log("[OwnerProfileTab] API response:", d);
         if (!r.ok) { setFetchError(d?.error ?? "تعذّر تحميل بيانات الحساب"); return null; }
         if (d) {
-          const n = d.fullName ?? "", ph = d.phone ?? "", em = d.email ?? "";
-          console.log("[OwnerProfileTab] Setting fields — name:", n, "phone:", ph, "email:", em);
+          const n = d.fullName ?? "", ph = localContactPhone(d.phone ?? ""), em = d.email ?? "";
           setFullName(n); setInitName(n);
           setPhone(ph);   setInitPhone(ph);
           setEmail(em);   setInitEmail(em);
+          if (d.bookingsCalPref === "hijri" || d.bookingsCalPref === "gregorian") setBookingsCalPrefLocal(d.bookingsCalPref);
+          if (d.reportsCalPref === "hijri" || d.reportsCalPref === "gregorian") setReportsCalPrefLocal(d.reportsCalPref);
+          if (d.salaryCalPref === "hijri" || d.salaryCalPref === "gregorian") setSalaryCalPrefLocal(d.salaryCalPref);
           setWaSubscribe(!!d.whatsappNewsSubscribe);
           return ph;
         }
@@ -107,7 +111,7 @@ export function OwnerProfileTab() {
         setWaReviewEnabled(nd.waEnabled ?? false);
         setWaSupportEnabled(nd.waSupportEnabled ?? false);
         const raw = nd.waPhone ?? "";
-        const formatted = raw.startsWith("966") ? "0" + raw.slice(3) : raw;
+        const formatted = localContactPhone(raw);
         setWaUnifiedPhone(formatted || mainPhone || "");
       } else if (mainPhone) {
         setWaUnifiedPhone(mainPhone);
@@ -125,15 +129,11 @@ export function OwnerProfileTab() {
   }, []);
 
   function normalizeWaPhone(raw: string): string | null {
-    const digits = raw.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(/\D/g, "");
+    const digits = contactDigits(raw);
     if (!digits) return null;
     if (digits.startsWith("0")) return "966" + digits.slice(1);
     if (digits.startsWith("5") && digits.length === 9) return "966" + digits;
     return digits;
-  }
-
-  function toLatinDigits(val: string): string {
-    return val.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
   }
 
   function toArabicDigits(val: string): string {
@@ -141,9 +141,13 @@ export function OwnerProfileTab() {
   }
 
   async function saveWaSettings() {
+    if (waUnifiedPhone && !/^\d{1,10}$/.test(waUnifiedPhone)) {
+      toast({ title: "تحقّق من رقم الواتساب", description: "استخدم الأرقام فقط، بحد أقصى ١٠ أرقام.", variant: "destructive" });
+      return;
+    }
     setSavingWa(true);
     try {
-      await Promise.all([
+      const responses = await Promise.all([
         apiFetch("/owner/notification-settings", {
           method: "PATCH",
           body: JSON.stringify({ waEnabled: waReviewEnabled, waSupportEnabled, waPhone: normalizeWaPhone(waUnifiedPhone) }),
@@ -153,6 +157,9 @@ export function OwnerProfileTab() {
           body: JSON.stringify({ subscribe: waSubscribe }),
         }),
       ]);
+      for (const response of responses) {
+        if (!response.ok) throw new Error("تعذّر حفظ إعدادات الواتساب");
+      }
       toast({ title: "تم الحفظ ✓", description: "تم تحديث إعدادات الإشعارات عبر الواتساب" });
     } catch {
       toast({ title: "خطأ", description: "تعذّر حفظ الإعدادات", variant: "destructive" });
@@ -195,8 +202,16 @@ export function OwnerProfileTab() {
   const hasChanges = nameChanged || sensitiveChanged || pwEdited;
 
   /* ── Save (non-sensitive: name / password only) ── */
+  function validateContacts() {
+    setContactTouched({ phone: true, email: true });
+    const error = contactErrors.phone || contactErrors.email;
+    if (error) toast({ title: "تحقّق من بيانات التواصل", description: error, variant: "destructive" });
+    return !error;
+  }
+
   async function handleSave() {
     if (!fullName.trim()) { toast({ title: "الاسم مطلوب", variant: "destructive" }); return; }
+    if (!validateContacts()) return;
     if (sensitiveChanged) { setSecureStep("password"); setSecurePw(""); setSecureOtp(""); return; }
     if (showPwSection) {
       if (!currentPw) { toast({ title: "كلمة المرور الحالية مطلوبة", variant: "destructive" }); return; }
@@ -219,6 +234,7 @@ export function OwnerProfileTab() {
 
   /* ── Step 1: verify password & send OTP ── */
   async function handleSendOtp() {
+    if (!validateContacts()) return;
     if (!securePw) { toast({ title: "كلمة المرور مطلوبة", variant: "destructive" }); return; }
     setSendingOtp(true);
     try {
@@ -236,6 +252,7 @@ export function OwnerProfileTab() {
 
   /* ── Step 2: verify OTP & save all changes ── */
   async function handleVerifyAndSave() {
+    if (!validateContacts()) return;
     if (secureOtp.length < 6) { toast({ title: "رمز التحقق يجب أن يكون ٦ أرقام", variant: "destructive" }); return; }
     setVerifyingOtp(true);
     try {
@@ -264,7 +281,7 @@ export function OwnerProfileTab() {
   if (loading) return <div className="py-12 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
 
   return (
-    <div className="max-w-lg mx-auto space-y-5 py-4">
+    <div dir="rtl" className="max-w-lg mx-auto space-y-5 py-4 text-right">
       {fetchError && (
         <div className="bg-destructive/10 border border-destructive/30 rounded-xl px-4 py-3 text-sm text-destructive font-medium text-right">
           {fetchError}
@@ -279,7 +296,7 @@ export function OwnerProfileTab() {
           </div>
           <div>
             <h2 className="text-base font-bold text-foreground">إعدادات الحساب</h2>
-            <p className="text-xs text-muted-foreground">تعديل بياناتك الشخصية</p>
+            <p className="text-sm leading-6 text-foreground/80">حدّث بيانات التواصل وكلمة المرور، واضبط الإشعارات والتقويم من هنا.</p>
           </div>
         </div>
 
@@ -294,38 +311,59 @@ export function OwnerProfileTab() {
 
             {/* Phone */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold flex items-center gap-1.5">
-                رقم الجوال
+              <label htmlFor="owner-profile-phone" className="text-sm font-semibold flex items-center gap-1.5">
+                رقم الجوال <span className="text-destructive" aria-hidden="true">*</span>
                 {phoneChanged && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">تم التغيير</span>}
               </label>
               <Input
+                id="owner-profile-phone"
                 value={toAr(phone)}
-                onChange={(e) => setPhone(fromAr(e.target.value))}
+                onChange={(e) => setPhone(contactPhoneInput(e.target.value))}
+                onBlur={() => setContactTouched((current) => ({ ...current, phone: true }))}
                 className="text-right"
                 placeholder="٠٥xxxxxxxx"
-                type="text"
+                type="tel"
                 inputMode="numeric"
+                maxLength={10}
+                required
+                pattern="(05[0-9]{8}|٠٥[٠-٩]{8})"
+                autoComplete="tel-national"
+                dir="rtl"
+                aria-invalid={contactTouched.phone && !!contactErrors.phone}
+                aria-describedby="owner-profile-phone-help"
               />
+              <p id="owner-profile-phone-help" className={`text-sm leading-6 ${contactTouched.phone && contactErrors.phone ? "text-destructive" : "text-foreground/80"}`}>
+                {contactTouched.phone && contactErrors.phone ? contactErrors.phone : "مطلوب: رقم جوال من ١٠ أرقام يبدأ بـ ٠٥."}
+              </p>
             </div>
 
             {/* Email — editable */}
             <div className="space-y-1.5">
-              <label className="text-sm font-semibold flex items-center gap-1.5">
-                البريد الإلكتروني
+              <label htmlFor="owner-profile-email" className="text-sm font-semibold flex items-center gap-1.5">
+                البريد الإلكتروني <span className="text-destructive" aria-hidden="true">*</span>
                 {emailChanged && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">تم التغيير</span>}
               </label>
               <Input
+                id="owner-profile-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => setContactTouched((current) => ({ ...current, email: true }))}
                 className="text-right"
                 placeholder="example@email.com"
                 type="email"
                 dir="ltr"
+                required
+                autoComplete="email"
+                aria-invalid={contactTouched.email && !!contactErrors.email}
+                aria-describedby="owner-profile-email-help"
               />
+              <p id="owner-profile-email-help" className={`text-sm leading-6 ${contactTouched.email && contactErrors.email ? "text-destructive" : "text-foreground/80"}`}>
+                {contactTouched.email && contactErrors.email ? contactErrors.email : "مطلوب: بريدك الذي تستقبل عليه رسائل التحقق وتنبيهات الحساب."}
+              </p>
               {sensitiveChanged && (
                 <p className="text-xs text-amber-600 flex items-center gap-1">
                   <Shield className="w-3 h-3 shrink-0" />
-                  تغيير البريد أو الجوال يتطلب التحقق بكلمة المرور ورمز OTP
+                  لحماية حسابك، نطلب كلمة المرور ورمز تحقق عند تغيير الجوال أو البريد.
                 </p>
               )}
             </div>
@@ -401,7 +439,7 @@ export function OwnerProfileTab() {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-foreground">إشعارات التقييمات <span className="text-xs font-normal text-muted-foreground">(من الزبائن)</span></p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">تلقّي إشعار على الواتساب عند قيام أحد الزبائن بكتابة تقييم جديد لعقارك.</p>
+                <p className="text-sm text-foreground/80 mt-0.5 leading-6">يصلك تنبيه على واتساب عند إضافة تقييم جديد لعقارك.</p>
               </div>
             </label>
 
@@ -415,7 +453,7 @@ export function OwnerProfileTab() {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-foreground">أخبار تكيّة والتذكيرات <span className="text-xs font-normal text-muted-foreground">(من المنصة)</span></p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">الاشتراك في أخبار تكيّة عبر الواتساب وتلقّي تذكيرات التجديد وعروض الاشتراك.</p>
+                <p className="text-sm text-foreground/80 mt-0.5 leading-6">استقبل أخبار تكيّة وتذكيرات التجديد وعروض الاشتراك عبر واتساب.</p>
               </div>
             </label>
 
@@ -429,21 +467,27 @@ export function OwnerProfileTab() {
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-foreground">إشعارات الدعم الفني <span className="text-xs font-normal text-muted-foreground">(من المنصة)</span></p>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">تلقّي إشعار على الواتساب فور رد فريق تكيّة على تذاكر الدعم والطلبات الخاصة بك.</p>
+                <p className="text-sm text-foreground/80 mt-0.5 leading-6">يصلك تنبيه على واتساب عندما يرد فريق تكيّة على تذكرتك.</p>
               </div>
             </label>
 
             {/* Unified phone number */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">رقم الواتساب</label>
+              <label htmlFor="owner-profile-whatsapp" className="text-sm font-semibold text-foreground">رقم الواتساب <span className="font-normal text-foreground/80">(اختياري)</span></label>
               <input
+                id="owner-profile-whatsapp"
                 type="tel"
                 placeholder="٠٥xxxxxxxx"
                 value={toArabicDigits(waUnifiedPhone)}
-                onChange={(e) => setWaUnifiedPhone(e.target.value)}
+                onChange={(e) => setWaUnifiedPhone(contactPhoneInput(e.target.value))}
+                inputMode="numeric"
+                maxLength={10}
+                pattern="[0-9٠-٩]{1,10}"
+                autoComplete="tel-national"
                 dir="rtl"
                 className="w-full h-9 px-3 rounded-lg border border-border bg-background text-sm text-right focus:outline-none focus:ring-1 focus:ring-primary"
               />
+              <p className="mt-1 text-sm leading-6 text-foreground/80">رقم الواتساب اختياري؛ أدخل الأرقام فقط، بحد أقصى ١٠ أرقام.</p>
             </div>
 
             {/* Save button */}
@@ -465,7 +509,7 @@ export function OwnerProfileTab() {
           <div className="border-t border-border pt-5 space-y-4">
             <div className="space-y-1">
               <p className="text-sm font-bold text-foreground">تفضيلات استقبال التعميمات</p>
-              <p className="text-xs text-muted-foreground">اختر قناة أو أكثر لاستقبال تعميمات المنصة. هذه التفضيلات مستقلة لكل قناة.</p>
+              <p className="text-sm leading-6 text-foreground/80">اختر كيف تصلك أخبار المنصة وتعميماتها. يمكنك تشغيل كل قناة أو إيقافها بشكل مستقل.</p>
             </div>
             {broadcastPreferencesError && <p role="alert" className="text-xs text-destructive">{broadcastPreferencesError}</p>}
             <div className="grid gap-2 sm:grid-cols-2">
@@ -495,18 +539,18 @@ export function OwnerProfileTab() {
 
         {/* ══════════ Calendar Preferences ══════════ */}
         {secureStep === "idle" && (
-          <div className="border-t border-border pt-5 space-y-4">
+          <div dir="rtl" className="border-t border-border pt-5 space-y-4 text-right">
             <div className="flex items-center gap-2 mb-1">
               <Calendar className="w-4 h-4 text-primary" />
               <p className="text-sm font-bold text-foreground">تفضيلات التقويم</p>
             </div>
-            <p className="text-xs text-muted-foreground -mt-2">
-              التقويم الهجري هو الأساسي المعتمد للحجوزات والتقارير والتواريخ، ويظهر الميلادي بجانبه كتاريخ ثانوي. التبديل داخل الأقسام مؤقت ولا يغيّر التقويم المعتمد.
+            <p className="text-sm leading-7 text-foreground/80">
+              تظهر الحجوزات والتقارير بالهجري، وبجانبه التاريخ الميلادي. تغيير العرض داخل أي قسم مؤقت، أما دورة الرواتب فتختارها بشكل مستقل أدناه.
             </p>
             {/* Calendar default: Booking grid */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">التقويم الأساسي للحجوزات</label>
-              <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
+              <div dir="rtl" role="group" aria-label="التقويم الأساسي للحجوزات" className="grid grid-cols-1 w-full max-w-xs rounded-xl border border-border overflow-hidden text-sm">
                 {(["hijri"] as const).map(v => (
                   <button
                     key={v}
@@ -517,16 +561,17 @@ export function OwnerProfileTab() {
                       apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ bookingsCalPref: v }) })
                         .then(response => { if (response.ok) profileQueryClient.invalidateQueries({ queryKey: ["owner", "profile-btype"] }); });
                     }}
-                    className={`px-4 py-2 font-semibold transition-colors ${bookingsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                    aria-pressed={bookingsCalPrefLocal === v}
+                    className={`min-h-11 px-5 py-2.5 text-center font-semibold transition-colors ${bookingsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >{v === "hijri" ? "هجري" : "ميلادي"}</button>
                 ))}
               </div>
-              <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في تبويب «التقويم» عند بدء الجلسة.</p>
+              <p className="text-sm leading-6 text-foreground/80">التقويم المعتمد لعرض الحجوزات هو الهجري.</p>
             </div>
             {/* Calendar default: Financial reports */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">التقويم الأساسي للتقارير المالية</label>
-              <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
+              <div dir="rtl" role="group" aria-label="التقويم الأساسي للتقارير المالية" className="grid grid-cols-1 w-full max-w-xs rounded-xl border border-border overflow-hidden text-sm">
                 {(["hijri"] as const).map(v => (
                   <button
                     key={v}
@@ -537,17 +582,18 @@ export function OwnerProfileTab() {
                       apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ reportsCalPref: v }) })
                         .then(response => { if (response.ok) profileQueryClient.invalidateQueries({ queryKey: ["owner", "profile-btype"] }); });
                     }}
-                    className={`px-4 py-2 font-semibold transition-colors ${reportsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                    aria-pressed={reportsCalPrefLocal === v}
+                    className={`min-h-11 px-5 py-2.5 text-center font-semibold transition-colors ${reportsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >{v === "hijri" ? "هجري" : "ميلادي"}</button>
                 ))}
               </div>
-              <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في تبويب «التقارير المالية» عند بدء الجلسة.</p>
+              <p className="text-sm leading-6 text-foreground/80">تبدأ التقارير بالهجري، ويمكن تبديل العرض مؤقتاً داخل التقرير.</p>
             </div>
             {/* Salary calendar preference */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">دورة احتساب الرواتب (مستقلة عن عرض التواريخ)</label>
-              <div className="flex rounded-lg border border-border overflow-hidden text-sm w-fit">
-                {(["gregorian", "hijri"] as const).map(v => (
+              <div dir="rtl" role="group" aria-label="دورة احتساب الرواتب" className="grid grid-cols-2 w-full max-w-xs rounded-xl border border-border overflow-hidden text-sm">
+                {(["hijri", "gregorian"] as const).map(v => (
                   <button
                     key={v}
                     type="button"
@@ -557,11 +603,12 @@ export function OwnerProfileTab() {
                       window.dispatchEvent(new CustomEvent("salaryCalPrefChanged", { detail: v }));
                       apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ salaryCalPref: v }) });
                     }}
-                    className={`px-4 py-2 font-semibold transition-colors ${salaryCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
+                    aria-pressed={salaryCalPrefLocal === v}
+                    className={`min-h-11 px-5 py-2.5 text-center font-semibold transition-colors ${salaryCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >{v === "hijri" ? "هجري" : "ميلادي"}</button>
                 ))}
               </div>
-              <p className="text-[11px] text-muted-foreground">يحدد نوع التقويم في قسم الموظفين وجداول الرواتب عند بدء الجلسة.</p>
+              <p className="text-sm leading-6 text-foreground/80">اختر التقويم المستخدم لحساب دورة الرواتب؛ لا يغيّر طريقة عرض تواريخ الحجوزات والتقارير.</p>
             </div>
           </div>
         )}

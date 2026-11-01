@@ -855,6 +855,14 @@ router.put("/profile", async (req, res) => {
   if ((req.user as { isImpersonated?: boolean } | undefined)?.isImpersonated) {
     return res.status(403).json({ error: "تعديل البيانات الشخصية متاح للمالك فقط، وليس أثناء الدخول الإداري نيابة عنه" });
   }
+  const contacts = z.object({
+    phone: z.string().regex(/^05\d{8}$/, "رقم الجوال مطلوب ويجب أن يكون ١٠ أرقام تبدأ بـ ٠٥").optional(),
+    email: z.string().trim().email("البريد الإلكتروني مطلوب ويجب أن يكون صحيحاً").optional(),
+  }).safeParse(req.body);
+  if (!contacts.success) return res.status(400).json({ error: contacts.error.issues[0]?.message ?? "تحقّق من بيانات التواصل" });
+  if (req.body.sensitiveChange === "true" && (!contacts.data.phone || !contacts.data.email)) {
+    return res.status(400).json({ error: "رقم الجوال والبريد الإلكتروني مطلوبان" });
+  }
   try {
     const userId = req.user?.id;
     const ownerAccount = await resolveOwnerApplication(req);
@@ -1273,6 +1281,10 @@ router.post("/profile/request-change", async (req, res): Promise<void> => {
     const currentEmail = ownerAccount.email;
 
     const { currentPassword, newEmail, newPhone } = req.body as Record<string, string>;
+    if (newEmail !== undefined && !z.string().trim().email().safeParse(newEmail).success) {
+      res.status(400).json({ error: "البريد الإلكتروني مطلوب ويجب أن يكون صحيحاً" });
+      return;
+    }
     if (!currentPassword) {
       res.status(400).json({ error: "كلمة المرور الحالية مطلوبة" });
       return;
