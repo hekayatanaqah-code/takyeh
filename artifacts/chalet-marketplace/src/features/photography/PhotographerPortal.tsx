@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { toAr } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { DurationSelect, WeeklyAvailability, BlockedDatesCalendar } from "./availabilityControls";
 import { profileImageError } from "./imageRules";
+import { initialDraft, photographerDraft, profileDraftReducer, sameDraftValue, type Profile, type ProfileDraft } from "./profileDraft";
 import { BookingNotices, SessionCalendar, UpperTabs, TabPanel, type PortalNotification } from "./portalWidgets";
 import { BookingActions, StandingNotices, CancellationHistory, type PhotoPolicy, type PhotoCancellation } from "./operations";
 import { ApprovalsSummary } from "./approvals";
@@ -12,7 +13,6 @@ import { EarningsSummary, PortalStatementSection } from "./portalFinance";
 import { BankFields, bankError, ContractConsent, SupportCenter, type Bank, type Contract } from "./finance";
 import { call, BASE, sar, fmtDT, Field, inputCls, btnCls, brownBtnCls, ghostCls, cardCls, Skel, ErrorBox, Empty, Notice, StatusPill, GeoPicker, geoError, availabilityError, API, EXPERIENCE_AR, type ExperienceYears, type Photographer, type Booking, type Geo, type Interval } from "./shared";
 
-interface Profile { bio: string; email: string; sessionMinutes: number; availability: Interval[]; experienceYears: ExperienceYears | ""; portfolioUrl: string; profileImagePath: string; blockedDates: string[] }
 const emptyProfile: Profile = { bio: "", email: "", sessionMinutes: 90, availability: [], experienceYears: "", portfolioUrl: "", profileImagePath: "", blockedDates: [] };
 
 /** 9665XXXXXXXX -> 05XXXXXXXX, then Eastern digits. */
@@ -153,22 +153,57 @@ function Login() {
 
 function ProfileEditor({ p }: { p: Photographer }) {
   const qc = useQueryClient();
-  const [geo, setGeo] = useState<Geo>({ regionId: p.regionId, cityId: p.cityId, districtIds: p.districtIds ?? [], allDistricts: p.allDistricts });
-  const [prof, setProf] = useState<Profile>({ bio: p.bio ?? "", email: p.email ?? "", sessionMinutes: p.sessionMinutes || 90, availability: p.availability ?? [], experienceYears: p.experienceYears ?? "", portfolioUrl: p.portfolioUrl ?? "", profileImagePath: p.profileImagePath ?? "", blockedDates: p.blockedDates ?? [] });
+  const [state, dispatch] = useReducer(profileDraftReducer, p, person => initialDraft(photographerDraft(person)));
+  const { geo, prof, bank } = state.draft;
+  const setGeo = (value: Geo) => dispatch({ type: "edit", group: "geo", update: () => value });
+  const setBank = (value: Bank) => dispatch({ type: "edit", group: "bank", update: () => value });
+  const setProf: React.Dispatch<React.SetStateAction<Profile>> = value =>
+    dispatch({ type: "edit", group: "prof", update: current => typeof value === "function" ? value(current) : value });
   const [uploading, setUploading] = useState(false);
-  const [bank, setBank] = useState<Bank>({ iban: p.iban ?? "", bankName: p.bankName ?? "" });
   const [err, setErr] = useState<string | null>(null);
   const geoChanged = geo.regionId !== p.regionId || geo.cityId !== p.cityId || geo.allDistricts !== p.allDistricts || [...geo.districtIds].sort().join() !== [...(p.districtIds ?? [])].sort().join();
-  const m = useMutation({ mutationFn: () => call("/photography/portal", "PATCH", { ...payload(prof), ...geo, ...(bank.iban || bank.bankName ? { iban: bank.iban, bankName: bank.bankName.trim() } : {}) }), onSuccess: () => qc.invalidateQueries({ queryKey: ["ph-portal"] }) });
+  const m = useMutation({
+    mutationFn: async (draft: ProfileDraft) => {
+      await qc.cancelQueries({ queryKey: ["ph-portal"] });
+      return call<{ photographer: Photographer }>("/photography/portal", "PATCH", { ...payload(draft.prof), ...draft.geo, ...(draft.bank.iban || draft.bank.bankName ? { iban: draft.bank.iban, bankName: draft.bank.bankName.trim() } : {}) });
+    },
+    onSuccess: async ({ photographer }) => {
+      await qc.cancelQueries({ queryKey: ["ph-portal"] });
+      // Use the normalized saved response, not an older poll or the submitted draft.
+      qc.setQueryData(["ph-portal"], (current: { photographer: Photographer } | undefined) => current?.photographer.id === photographer.id ? { ...current, photographer } : current);
+      dispatch({ type: "saved", saved: photographerDraft(photographer) });
+      setErr(null);
+      void qc.invalidateQueries({ queryKey: ["ph-portal"] });
+    },
+  });
+  const dirty = !sameDraftValue(state.draft, state.baseline);
+  useEffect(() => {
+    dispatch({ type: "receive", latest: photographerDraft(p), busy: uploading || m.isPending });
+  }, [p, uploading, m.isPending, dirty]);
+  const newer = !sameDraftValue(state.baseline, photographerDraft(p));
+  const resolve = (type: "merge" | "replace") => {
+    if (type === "replace" && !window.confirm("سيتم حذف تعديلاتك غير المحفوظة واستبدالها بأحدث بيانات الملف. هل تريد المتابعة؟")) return;
+    dispatch({ type }); setErr(null); m.reset();
+  };
   return (
     <section className={`${cardCls} space-y-4`}>
       <h3 className="font-bold">ملفي</h3>
+      {newer && <div role="alert" className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm" data-testid="profile-update-warning">
+        <p>وصلت بيانات أحدث لملفك. احتفظنا بتعديلاتك غير المحفوظة. اختر كيفية التعامل معها قبل الحفظ.</p>
+        <p>الدمج يُبقي الحقول التي عدّلتها ويحدّث البقية؛ بيانات البنك والتغطية تُعامل كل منها كمجموعة واحدة.</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={ghostCls} disabled={uploading || m.isPending} onClick={() => resolve("merge")} data-testid="button-merge-profile">دمج مع الاحتفاظ بتعديلاتي</button>
+          <button type="button" className={ghostCls} disabled={uploading || m.isPending} onClick={() => resolve("replace")} data-testid="button-replace-profile">استبدال المسودة بالبيانات الأحدث</button>
+        </div>
+      </div>}
+      <fieldset disabled={m.isPending} className="min-w-0 space-y-4">
       <ProfileFields geo={geo} setGeo={setGeo} prof={prof} setProf={setProf} onBusy={setUploading} />
       <BankFields value={bank} onChange={setBank} optional />
+      </fieldset>
       {geoChanged && p.status === "approved" && <Notice tone="warn">تغيير منطقة التغطية يعيد ملفك إلى المراجعة قبل استقبال حجوزات جديدة.</Notice>}
       {(err || m.isError) && <ErrorBox error={err ? new Error(err) : m.error} />}
-      {m.isSuccess && <Notice tone="ok">تم حفظ التعديلات</Notice>}
-      <button className={btnCls} disabled={m.isPending || uploading} data-testid="button-save-profile" onClick={() => { const e = validate(geo, prof) ?? (bank.iban || bank.bankName ? bankError(bank) : null); setErr(e); if (!e) m.mutate(); }}>{m.isPending ? "جار الحفظ" : "حفظ التعديلات"}</button>
+      {m.isSuccess && !dirty && !newer && <Notice tone="ok">تم حفظ التعديلات</Notice>}
+      <button className={btnCls} disabled={m.isPending || uploading || newer} data-testid="button-save-profile" onClick={() => { const e = validate(geo, prof) ?? (bank.iban || bank.bankName ? bankError(bank) : null); setErr(e); if (!e) m.mutate(state.draft); }}>{m.isPending ? "جار الحفظ" : "حفظ التعديلات"}</button>
     </section>
   );
 }
@@ -191,7 +226,7 @@ export default function PhotographerPortal() {
   const [tab, setTab] = useState<PTab>("home");
   const out = useMutation({ mutationFn: () => call("/photography/portal/logout", "POST"), onSuccess: () => { qc.removeQueries({ queryKey: ["ph-portal"] }); q.refetch(); } });
   if (q.isLoading) return <Shell><Skel /></Shell>;
-  if (q.isError || !q.data) return <Login />;
+  if (!q.data) return <Login />;
   const { photographer: p, bookings, earnings, notifications = [], policy, cancellations = [], approvedPackages = [] } = q.data;
   const approvals = <ApprovalsSummary id="portal" packages={approvedPackages.map((x) => x.name)} specialties={p.approvedSpecialties ?? []} />;
   const now = Date.now();
@@ -232,7 +267,7 @@ export default function PhotographerPortal() {
         <p className="text-xs text-muted-foreground">الاعتمادات للعرض فقط ولا يمكن تعديلها من بوابتك؛ تواصل مع الإدارة عبر مركز الدعم لطلب تحديثها.</p>
       </section>
       {approvals}
-      <ProfileEditor key={JSON.stringify([p.email, p.iban, p.bankName, p.regionId, p.cityId, p.districtIds, p.bio, p.sessionMinutes, p.availability, p.experienceYears, p.portfolioUrl, p.profileImagePath, p.blockedDates])} p={p} />
+      <ProfileEditor key={p.id} p={p} />
       </TabPanel>
       <TabPanel id="ph" k="support" active={tab}>
       <SupportCenter photographerId={p.id} />
