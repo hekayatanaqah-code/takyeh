@@ -34,7 +34,7 @@ test("custom selection applies identical boundaries to service bookings and quic
 });
 
 test("both revenue surfaces use one grouped filter bar and no incomplete range is presented as zero totals", () => {
-  const dashboard = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const dashboard = readFileSync(new URL("../components/owner/RevenueTab.tsx", import.meta.url), "utf8");
   const revenue = dashboard.slice(dashboard.indexOf("function RevenueTab()"), dashboard.indexOf("function RevenueTab()") + 110000);
   assert.ok(revenue.includes("const revenueHeader"));
   assert.equal((revenue.match(/<RevenueFilterBar/g) ?? []).length, 1);

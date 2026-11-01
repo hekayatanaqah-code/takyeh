@@ -66,8 +66,7 @@ it("preserves midnight, noon and minute precision without timezone conversion", 
   }
 });
 it("keeps every service booking entry on one form with no standalone reschedule action", () => {
-  const source = readFileSync(new URL("../../pages/Dashboard.tsx", import.meta.url), "utf8");
-  const service = source.slice(source.indexOf("function ServiceCalendarBookingsTab()"), source.indexOf("/* ── Service Booking Insurance Tab"));
+  const service = readFileSync(new URL("./ServiceCalendarBookingsTab.tsx", import.meta.url), "utf8");
   assert(!service.includes("service-reschedule-"));
   assert(!service.includes("service-list-reschedule-"));
   assert(!service.includes(">تعديل الموعد"));

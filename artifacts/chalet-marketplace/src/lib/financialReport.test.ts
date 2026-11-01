@@ -12,14 +12,17 @@ it("explains collected versus contractual revenue consistently without changing 
     assert.ok(html.includes(phrase));
   }
   for (const amount of [300, 100, 200]) assert.ok(html.includes(formatFinancialAmount(amount)));
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../components/owner/ReportsTab.tsx", import.meta.url), "utf8");
   assert.ok(source.includes("{PROPERTY_REPORT_REVENUE_NOTE}"));
 });
 
 it("property print/PDF builders hide details by default but retain identical closing totals", () => {
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = [
+    readFileSync(new URL("../components/owner/financial-report-export.tsx", import.meta.url), "utf8"),
+    readFileSync(new URL("../components/owner/ReportsTab.tsx", import.meta.url), "utf8"),
+  ].join("\n");
   const builderSource = source.slice(source.indexOf("function buildMonthlyReportHtml("), source.indexOf("/* ── Fresh PDF"));
-  const js = ts.transpileModule(builderSource, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const js = ts.transpileModule(builderSource.replace(/^export /gm, ""), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   const deps = {
     toAr: (v: unknown) => String(v), toHijriComponents: () => ({ day: 1, month: 1, year: 1448 }),
     HIJRI_MONTHS_AR: ["محرم"], formatAmount: formatFinancialAmount, formatAmountSigned: formatFinancialAmount,

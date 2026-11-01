@@ -138,6 +138,52 @@ test("synthetic owner session saves the first service request then enters its ma
   ]);
 });
 
+for (const kind of ["chalet", "service"] as const) {
+  test(`a saved ${kind} draft retains management and never becomes owner onboarding`, async ({ page, owner }) => {
+    owner.businessType = kind;
+    if (kind === "chalet") owner.propertySubmissions = [{ id: 8101, status: "draft", nameAr: "مسودة عقار" }];
+    else owner.serviceSubmissions = [{ id: 8102, status: "draft", businessName: "مسودة خدمة" }];
+    await page.goto("/dashboard?view=requests");
+    await expect(page.getByTestId("owner-empty-state")).toHaveCount(0);
+    await expect(page.getByTestId(`owner-nav-${kind === "chalet" ? "chalets" : "services"}`)).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId("owner-empty-state")).toHaveCount(0);
+    await expect(page.getByTestId("owner-primary-navigation")).toBeVisible();
+    expect(owner.writes).toEqual([]);
+  });
+}
+
+for (const businessType of ["service", "both"] as const) {
+  test(`${businessType} account opens its selected service and keeps typing focus after section extraction`, async ({ page, owner }) => {
+    owner.businessType = businessType;
+    owner.serviceSubmissions = [{ id: 8101, status: "approved", businessName: "خدمة اختبارية" }];
+    owner.providers = [{
+      id: 9201, submissionId: 8101, businessName: "خدمة اختبارية", isActive: true,
+      category: "hospitality", city: "مدينة اختبارية", region: "منطقة اختبارية",
+      cityId: 6301, regionId: 6201, description: "وصف اختباري", price: "100",
+      pricingUnit: "day", galleryPhotos: [], features: [], serviceCities: [],
+      requiresInsurance: false, requiresContract: false,
+    }];
+    if (businessType === "both") {
+      owner.propertySubmissions = [{ id: 8102, status: "approved", nameAr: "عقار اختباري" }];
+      owner.properties = [{ id: 9202, submissionId: 8102, nameAr: "عقار اختباري", isActive: true }];
+    }
+    await page.goto("/dashboard?serviceId=9201");
+    await expect(page.getByTestId("owner-empty-state")).toHaveCount(0);
+    await expect(page.getByTestId("owner-nav-services")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByTestId("service-activity-details")).toBeVisible();
+    const field = page.getByTestId("service-activity-details")
+      .getByText("اسم النشاط", { exact: true }).locator("..").getByRole("textbox");
+    await field.click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" updated");
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue("خدمة اختبارية updated");
+    await expect(page.getByTestId("owner-nav-chalets")).toHaveCount(businessType === "both" ? 1 : 0);
+    expect(owner.writes).toEqual([]);
+  });
+}
+
 for (const role of ["staff", "preview"] as const) {
   test(`${role} retains its existing dashboard instead of owner onboarding`, async ({ page, owner }) => {
     owner.role = role;

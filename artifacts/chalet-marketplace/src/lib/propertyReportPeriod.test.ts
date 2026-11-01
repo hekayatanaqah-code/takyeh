@@ -30,7 +30,7 @@ test("expense-only periods and existing shared-expense treatment are retained", 
 });
 
 test("properties and services share controls; all-period selection does not overwrite custom dates", () => {
-  const dashboard = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const dashboard = readFileSync(new URL("../components/owner/ReportsTab.tsx", import.meta.url), "utf8");
   const reports = dashboard.slice(dashboard.indexOf("function ReportsTab("));
   assert.equal((reports.match(/<ServiceReportPeriodControls/g) ?? []).length, 1);
   assert.ok(reports.includes('allPeriods={!isActivitySummary && allPropertyPeriods}'));

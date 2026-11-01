@@ -13,7 +13,7 @@
     "test": "NODE_ENV=production tsx --test src/lib/serviceReceipt.test.ts",
     "check:playwright-image-version": "node scripts/check-playwright-image-version.mjs",
     "test:e2e": "playwright test",
-    "test:owner-navigation": "tsx --test src/lib/owner-service-navigation.test.ts",
+    "test:owner-navigation": "tsx --test src/lib/owner-service-navigation.test.ts src/lib/owner-module-boundaries.test.ts",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit",
     "test:e2e:owner-empty": "playwright test e2e/owner-empty-state.spec.ts --project=owner-onboarding",
     "test:e2e:iphone-calendar": "playwright test e2e/dual-calendar-iphone.spec.ts --project=webkit-iphone"

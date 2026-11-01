@@ -55,7 +55,7 @@ it("renders accessible payment controls and arrival alerts, and wires them befor
   assert.match(renderToStaticMarkup(React.createElement(PropertyBookingArrivalBadge, { bookingDate: "2026-10-31", now })), /الوصول اليوم/);
   assert.match(renderToStaticMarkup(React.createElement(PropertyBookingArrivalBadge, { bookingDate: "2026-11-01", now })), /الوصول غداً/);
   assert.equal(renderToStaticMarkup(React.createElement(PropertyBookingArrivalBadge, { bookingDate: "2026-11-02", now })), "");
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../components/owner/BookingCalendarTab.tsx", import.meta.url), "utf8");
   assert.ok(source.includes("return result.filter(booking => matchesPropertyPaymentFilter(booking, bookingPaymentFilter));"));
   assert.ok(source.includes("setBookingPaymentFilter(filter); setBookingPage(0);"));
   assert.ok(source.includes("<PropertyBookingArrivalBadge bookingDate={b.bookingDate} now={stayClock} />"));

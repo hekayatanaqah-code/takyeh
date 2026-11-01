@@ -56,7 +56,7 @@ it("forwards clicks to their existing independent handlers, without changing ano
 });
 
 it("places the unified controls before the service list, preserving state and pagination callbacks", () => {
-  const source = readFileSync(new URL("../../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("./ServiceCalendarBookingsTab.tsx", import.meta.url), "utf8");
   const code = source.slice(source.indexOf('data-testid="service-bookings-register"'));
   assert.ok(code.indexOf("<ServiceBookingFilters") < code.indexOf("pagedAppts.items.map"));
   assert.ok(code.includes("onScopeChange={scope => { setServiceBookingScope(scope); setServiceListPage(1); }}"));

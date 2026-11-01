@@ -80,7 +80,7 @@ it("the existing financial card keeps service settlement independent of refundab
 });
 
 it("wires service-only scope, fixed service identity, grid navigation and live badges to the actual dashboard", () => {
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../components/owner/ServiceCalendarBookingsTab.tsx", import.meta.url), "utf8");
   const code = source.slice(source.indexOf("function ServiceCalendarBookingsTab()"), source.indexOf("function ServiceSeasonsTab()"));
   assert.ok(code.includes('useState<ServiceBookingScope>("active")'));
   assert.ok(code.includes("serviceBookingMatches(a, serviceBookingScope, listFilter, servicePaymentFilter, serviceClock)"));

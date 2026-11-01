@@ -7,9 +7,9 @@ import { buildPropertyBookingDetailsHtml, buildPropertyReportClosingHtml, format
 import { escapeFinancialReportText } from "./financialReportActivity";
 
 it("generates property-scoped, readable compact and detailed templates without clipping", () => {
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../components/owner/financial-report-export.tsx", import.meta.url), "utf8");
   const builders = source.slice(source.indexOf(" const REPORT_CSS"), source.indexOf("/* ── Fresh PDF"));
-  const js = ts.transpileModule(builders, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+  const js = ts.transpileModule(builders.replace(/^export /gm, ""), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   const deps = {
     toAr: (value: unknown) => String(value).replace(/\d/g, digit => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]),
     toHijriComponents: () => ({ day: 18, month: 5, year: 1448 }),

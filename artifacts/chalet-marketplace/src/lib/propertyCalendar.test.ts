@@ -36,8 +36,8 @@ it("never lets full-day mirror availability hide real morning or evening booking
 });
 
 it("colors the upcoming 24 Jumada I booking in its exact Hijri and Gregorian day cells without an availability mirror", () => {
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
-  const calendarCode = source.slice(source.indexOf("function MiniCalendar("), source.indexOf("/* ── Cancellation Management Dialog"));
+  const source = readFileSync(new URL("../components/owner/PropertyMiniCalendars.tsx", import.meta.url), "utf8");
+  const calendarCode = source.slice(source.indexOf("function MiniCalendar(")).replace(/^export /gm, "");
   const js = ts.transpileModule(calendarCode, { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText;
   const deps = { React, useMemo, getHijriMonthDays, toHijriComponents, propertyCalendarBookingMap, propertyCalendarRows };
   const components = new Function(...Object.keys(deps), `${js}; return { MiniCalendar, GregorianMiniCalendar };`)(...Object.values(deps));
@@ -60,7 +60,7 @@ it("colors the upcoming 24 Jumada I booking in its exact Hijri and Gregorian day
 });
 
 it("reveals a listed booking by synchronizing property, both calendar months, and calendar mode", () => {
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../components/owner/BookingCalendarTab.tsx", import.meta.url), "utf8");
   const start = source.indexOf("function revealBookingInCalendar(");
   const code = source.slice(start, source.indexOf("\n  useEffect(", start));
   const js = ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -91,8 +91,9 @@ it("reveals a listed booking by synchronizing property, both calendar months, an
 });
 
 it("renders every booking in both actual property calendar components, with a scroll-safe page wrapper", () => {
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
-  const calendarCode = source.slice(source.indexOf("function MiniCalendar("), source.indexOf("/* ── Cancellation Management Dialog"));
+  const source = readFileSync(new URL("../components/owner/BookingCalendarTab.tsx", import.meta.url), "utf8");
+  const calendars = readFileSync(new URL("../components/owner/PropertyMiniCalendars.tsx", import.meta.url), "utf8");
+  const calendarCode = calendars.slice(calendars.indexOf("function MiniCalendar(")).replace(/^export /gm, "");
   const js = ts.transpileModule(calendarCode, { compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 } }).outputText;
   const deps = { React, useMemo, getHijriMonthDays, toHijriComponents, propertyCalendarBookingMap, propertyCalendarRows };
   const components = new Function(...Object.keys(deps), `${js}; return { MiniCalendar, GregorianMiniCalendar };`)(...Object.values(deps));

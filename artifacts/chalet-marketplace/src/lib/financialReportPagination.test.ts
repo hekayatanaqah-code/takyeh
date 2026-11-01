@@ -59,7 +59,7 @@ it("applies final native-print rules to services and properties after their lega
     assert.ok(html.includes(".summary-section,.footer-accounts"));
     assert.ok(!html.includes("@page{size:A4 portrait;margin:10mm!important"));
   }
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../components/owner/financial-report-export.tsx", import.meta.url), "utf8");
   assert.ok(source.includes("financialReportPageSlices(canvas.height"));
   assert.ok(source.includes('!iDoc.body.classList.contains("property-report-compact") && canvas.height > pageHeightCanvasPx'));
   assert.ok(source.includes("headerSpace + tableSpace + end - start"));

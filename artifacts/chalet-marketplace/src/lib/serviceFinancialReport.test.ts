@@ -124,7 +124,7 @@ it("uses Arabic statuses and numeric dual-calendar dates in report output and wi
   for (const status of ["confirmed", "pending", "cancelled", "legacy_internal_status"]) {
     assert.ok(!/[A-Za-z]/.test(serviceReportStatus(status)));
   }
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../components/owner/ReportsTab.tsx", import.meta.url), "utf8");
   assert.ok(source.includes('useState<ServiceReportMode>("compact")'));
   assert.ok(source.includes("onPaymentChange={setServiceReportPayment}"));
   assert.ok(source.includes("serviceReportRows(serviceClosing, serviceReportSource, serviceReportMode)"));
@@ -197,7 +197,7 @@ it("groups service filters with readable explanations and connects periods to pa
     assert.match(html, new RegExp(`aria-pressed="true" data-testid="service-report-mode-${mode}"`));
     assert.ok(html.includes("<fieldset disabled="));
   }
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../components/owner/ReportsTab.tsx", import.meta.url), "utf8");
   assert.ok(source.includes('(repUnit.type === "service" || !isActivitySummary) && <ServiceReportPeriodControls'));
   const controls = readFileSync(new URL("../components/owner/ServiceReportPeriodControls.tsx", import.meta.url), "utf8");
   assert.ok(controls.includes('annual={props.mode === "yearly"} prominent'));

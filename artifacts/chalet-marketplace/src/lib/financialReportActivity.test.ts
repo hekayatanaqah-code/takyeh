@@ -31,7 +31,7 @@ it("prints the activity once in the header and keeps scope/issue notes readable 
 });
 
 it("keeps the service summary before provider and sales details, and waits for booking data", () => {
-  const dashboard = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const dashboard = readFileSync(new URL("../components/owner/ReportsTab.tsx", import.meta.url), "utf8");
   const serviceSection = dashboard.slice(dashboard.indexOf("{/* ── Services Report ── */}"), dashboard.indexOf("{/* ── Unified Report ── */}"));
   assert.ok(serviceSection.includes("!serviceDataLoading && !serviceDataError"));
   assert.ok(serviceSection.includes("<ServiceFinancialReportPanels"));
@@ -56,7 +56,7 @@ it("fixes the sole financial activity and only offers switching for multiple act
   assert.equal(loneFinancialReportActivity([], []), null);
   assert.equal(loneFinancialReportActivity([], [{ id: 10 }, { id: 20 }]), null);
   assert.equal(loneFinancialReportActivity([{ id: 10, submissionId: 50 }], [{ id: 10 }]), null);
-  const dashboard = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
+  const dashboard = readFileSync(new URL("../components/owner/ReportsTab.tsx", import.meta.url), "utf8");
   assert.ok(dashboard.includes("loneReportActivity ?? (reportActivityOverride ??"));
   const selector = readFileSync(new URL("../components/FinancialReportActivitySelect.tsx", import.meta.url), "utf8");
   const fixedBranch = selector.slice(selector.indexOf("if (loneActivity"), selector.indexOf('<label htmlFor="financial-report-activity"'));

@@ -26,8 +26,7 @@ it("handles loading, reopening, inventory changes and refetches without keeping 
 });
 
 it("wires the resolved selection into the existing booking request and shows a fixed field for one property", () => {
-  const source = readFileSync(new URL("../pages/Dashboard.tsx", import.meta.url), "utf8");
-  const dialog = source.slice(source.indexOf("export function AddBookingDialog("), source.indexOf("function MiniCalendar("));
+  const dialog = readFileSync(new URL("../components/owner/PropertyBookingDialogs.tsx", import.meta.url), "utf8");
   assert.ok(dialog.includes('useState<string>(() => resolveManualBookingProperty(submissions, "", prefilledChaletId))'));
   assert.ok(dialog.includes("setSubmissionId(current => resolveManualBookingProperty(submissions, current, prefilledChaletId))"));
   assert.ok(dialog.includes('if (!open) { setSubmissionId(""); return; }'));
