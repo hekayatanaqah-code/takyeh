@@ -25,3 +25,9 @@ Owners may explicitly clear a saved pending card-subscription reference and sele
 **Why:** The user requested a visible manual escape from the pending-subscription notice. Clearing a browser reference is not cancellation of a bank payment or a refund.
 
 **How to apply:** Require explicit acknowledgement of possible duplicate payment, clear only the matching local card-checkout reference and stale return state, and leave existing subscriptions, payment records and uncertain wallet operations untouched. Do not unblock a fresh checkout if local removal fails.
+
+Show the subscription wallet-payment option only when the owner has an actual positive balance; do not show an empty wallet-payment box.
+
+**Why:** The user explicitly requested that owners with zero balance not see the wallet-payment option.
+
+**How to apply:** Apply this to offering a new wallet payment, not to the recovery notice for an earlier wallet transaction whose outcome is uncertain.

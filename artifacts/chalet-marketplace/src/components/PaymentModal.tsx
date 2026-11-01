@@ -5,12 +5,16 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import {
   Crown, CheckCircle2, Download, Loader2, AlertTriangle, CreditCard,
   Calendar, ShieldCheck, Star, Building2, Package, Zap, Wallet,
 } from "lucide-react";
 import { useOwnerWallet, useOwnerId, WALLET_KEY } from "@/features/photography/walletPanel";
 import { walletCall, isUncertain, useSubWalletMarker } from "@/features/photography/walletOps";
+import { addonCheckoutMethods as paymentMethods, addonCheckoutError as paymentErrorMessage } from "@/lib/addon-checkout-presentation";
+import { localizeGatewaySetupNotices } from "@/lib/payment-gateway-notices";
+import "@/pages/AddonCheckoutPage.css";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 async function apiFetch(path: string, opts?: RequestInit) {
@@ -543,12 +547,14 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
 
     const container = formContainerRef.current;
     container.innerHTML = ""; // clear any previous instance
+    const stopLocalizingNotices = localizeGatewaySetupNotices(container);
 
-    moyasarInstance.current = Moyasar.init({
+    try {
+      moyasarInstance.current = Moyasar.init({
       element: container,
       amount: initiateData.amountHalala,
       currency: "SAR",
-      description: `${initiateData.label} — حكاية أناقة [${initiateData.checkoutId}]`,
+      description: `${initiateData.label} — تكيّة [${initiateData.checkoutId}]`,
       publishable_api_key: initiateData.publishableKey,
       callback_url: (() => {
         const url = new URL(window.location.href);
@@ -564,18 +570,21 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
             isRedirectReturn: false,
           });
         } else {
-          setPayError(`لم يكتمل الدفع — الحالة: ${payment.status}`);
+          setPayError("لم يكتمل الدفع. يرجى التحقق من بيانات وسيلة الدفع والمحاولة مجدداً.");
         }
         return false; // prevent default redirect
       },
-      supported_networks: initiateData.consentToRecurring
-        ? ["mada", "visaMastercard"]
-        : ["mada", "visaMastercard", "stcpay", "applepay"],
+      methods: paymentMethods(initiateData.consentToRecurring),
+      supported_networks: ["mada", "visa", "mastercard"],
       ...(initiateData.consentToRecurring ? { credit_card: { save_card: true } } : {}),
       language: "ar",
-    });
+      });
+    } catch (cause) {
+      setPayError(paymentErrorMessage(cause instanceof Error ? cause.message : null));
+    }
 
     return () => {
+      stopLocalizingNotices();
       container.innerHTML = "";
       moyasarInstance.current = null;
     };
@@ -763,7 +772,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
 
   const formatPrice = (halala: number) =>
     `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ⃁`;
-  const cycleLabel = (days: number) => days === 30 ? "شهرياً" : `لكل دورة (${days} يوم)`;
+  const cycleLabel = (days: number) => days === 30 ? "شهرياً" : `لكل دورة (${days.toLocaleString("ar-SA")} يوم)`;
   const selectedRecurringReady = !!planQuote && planQuote.recurringPreview === true &&
     planQuote.recurringConfigured === true && planQuote.canSavePaymentMethod === true &&
     planQuote.nextChargeHalala != null && !!planQuote.nextBillingAt &&
@@ -1032,7 +1041,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                           {planQuoteLoading
                             ? "جارٍ تحميل عرض السعر قبل الموافقة."
                               : !planQuote
-                                ? payError ?? "تعذّر تحميل عرض الخادم؛ تحقق من رمز الخصم وحاول مجدداً."
+                                ? payError ? paymentErrorMessage(payError) : "تعذّر تحميل عرض الخادم؛ تحقق من رمز الخصم وحاول مجدداً."
                               : "التجديد الموحد أو حفظ وسيلة الدفع غير مهيأ حالياً. لن يبدأ الدفع قبل إعداد ذلك."}
                         </p>
                         {planQuote && <Button className="w-full" disabled>الدفع غير متاح حالياً</Button>}
@@ -1041,6 +1050,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                   )}
                   {selectedPlan.price > 0 && planQuote && !planQuoteLoading && planQuote.amountHalala > 0 && (() => {
                     const bal = wallet.data?.balanceHalalas;
+                    if (bal == null || !Number.isFinite(bal) || bal <= 0) return null;
                     const covers = bal != null && bal >= planQuote.amountHalala;
                     return (
                       <div className="rounded-xl border border-[#8C6246]/30 bg-[#8C6246]/5 p-3 space-y-2" data-testid="option-subscription-wallet">
@@ -1077,7 +1087,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               {payError && (
                 <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 rounded-xl p-3 mt-1">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
-                  {payError}
+                  {paymentErrorMessage(payError)}
                 </div>
               )}
             </div>
@@ -1085,101 +1095,146 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
         )}
 
         {/* ── Step: Payment Form ── */}
-        {step === "pay" && selectedPlan && (
+        {step === "pay" && selectedPlan && (() => {
+          const payMoney = (halala: number) => (halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const PayAmount = ({ halala, big }: { halala: number; big?: boolean }) => (
+            <bdi dir="rtl" className="inline-flex items-center gap-1.5 tabular-nums whitespace-nowrap">
+              {payMoney(halala)}<RiyalIcon className={big ? "h-6 w-6 sm:h-7 sm:w-7" : "h-4 w-4"} />
+            </bdi>
+          );
+          const payDays = initiateData?.days ?? selectedPlan.days;
+          const payDaysText = payDays.toLocaleString("ar-SA");
+          return (
           <>
-            <DialogHeader className="p-6 pb-2 bg-gradient-to-br from-primary/10 to-background shrink-0">
-              <DialogTitle className="text-xl font-bold flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-primary" />
+            <DialogHeader className="px-6 pt-6 pb-4 border-b border-border bg-primary/5 shrink-0 text-right">
+              <DialogTitle className="text-xl font-bold flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                </span>
                 إتمام الدفع
               </DialogTitle>
-              <DialogDescription>
-                <span className="font-semibold">{initiateData?.label ?? selectedPlan.label}</span>
-                {" — "}
-                <span className="font-black text-foreground">
-                  {initiateData ? `المستحق الآن: ${formatPrice(initiateData.amountHalala)}` : "جارٍ احتساب المبلغ"}
-                </span>
-                {initiateData && initiateData.discountHalala > 0 && (
-                  <span className="ms-2 text-xs text-muted-foreground line-through">
-                    {formatPrice(selectedPlan.price * 100)}
-                  </span>
-                )}
-                {" لمدة "}
-                <span>{initiateData?.days ?? selectedPlan.days} يوم</span>
+              <DialogDescription className="mt-2 text-sm leading-7">
+                <span className="font-semibold text-foreground">{initiateData?.label ?? selectedPlan.label}</span>
+                {" — مدة الفترة "}
+                <bdi>{payDaysText}</bdi> يوم
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-5 pb-6 space-y-4 overflow-y-auto overscroll-contain flex-1 min-h-0">
+            <div className="px-5 py-6 sm:px-6 space-y-5 overflow-y-auto overscroll-contain flex-1 min-h-0">
+              {!initiateData && (
+                <div role="status" className="flex items-center gap-3 rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-7">
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" /><span>جارٍ احتساب المبلغ</span>
+                </div>
+              )}
               {initiateData && (
-                <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm" data-testid="summary-subscription-checkout">
-                  <p className="font-bold">فاتورة الاشتراك الموحدة</p>
-                  {initiateData.lines?.length ? (
-                    <div className="mt-2 space-y-1">
-                      {initiateData.lines.map((line, index) => (
-                        <div key={`${line.label ?? line.description ?? "line"}-${index}`} className="flex justify-between gap-3">
-                          <span>{line.quantity && line.quantity > 1 ? `${line.quantity} × ` : ""}{line.label ?? line.description ?? "بند الاشتراك"}</span>
-                          <span>{line.amountHalala != null ? formatPrice(line.amountHalala) : line.amount != null ? `${line.amount.toLocaleString("ar-SA")} ⃁` : "—"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">لم يرسل الخادم تفاصيل بنود الفاتورة؛ مبلغ الدفع المؤكد أعلاه هو المرجع.</p>
-                  )}
-                  <p className="mt-2 font-semibold">المستحق الآن: {formatPrice(initiateData.amountHalala)}</p>
-                  {initiateData.recurring && initiateData.nextChargeHalala != null && (
-                    <p className="mt-1">إجمالي الفاتورة عند التجديد {cycleLabel(initiateData.days)}: {formatPrice(initiateData.nextChargeHalala)}</p>
-                  )}
-                  {initiateData.nextBillingAt && (
-                    <p className="mt-1 text-xs text-muted-foreground">موعد التجديد التالي: {formatDateWithHijri(initiateData.nextBillingAt)}</p>
-                  )}
-                  {initiateData.periodEnd && (
-                    <p className="mt-1 text-xs text-muted-foreground">نهاية الفترة الحالية: {formatDateWithHijri(initiateData.periodEnd)}</p>
-                  )}
-                  <p className="mt-2 text-xs text-muted-foreground">لن يُفعّل التجديد ما لم تُحفظ وسيلة الدفع وتُؤكد صلاحيتها من النظام.</p>
-                </div>
-              )}
-              {/* Moyasar form mount point */}
-              {initiateData?.amountHalala !== 0 && !scriptReady && (
-                <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm">جارٍ تحميل بوابة الدفع...</span>
-                </div>
-              )}
-              {initiateData?.amountHalala !== 0 && <div ref={formContainerRef} id="moyasar-form" />}
+                <section className="space-y-4" data-testid="summary-subscription-checkout">
+                  <div className="rounded-2xl border-2 border-primary/30 bg-primary/5 p-5 text-center sm:p-6">
+                    <p className="text-sm font-medium text-muted-foreground">المستحق الآن</p>
+                    <p className="mt-2 text-3xl font-extrabold text-primary sm:text-4xl" data-testid="text-subscription-checkout-total">
+                      <PayAmount halala={initiateData.amountHalala} big />
+                    </p>
+                    {initiateData.discountHalala > 0 && (
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        بدلاً من <span className="line-through"><PayAmount halala={selectedPlan.price * 100} /></span>
+                      </p>
+                    )}
+                  </div>
 
-              {initiateData && initiateData.discountHalala > 0 && (
-                <p className="text-sm text-green-700 bg-green-50 rounded-xl p-3" data-testid="text-promo-discount">
-                  وفّرت {formatPrice(initiateData.discountHalala)} باستخدام رمز الخصم.
-                </p>
+                  <div className="rounded-2xl border border-border text-sm">
+                    <p className="border-b border-border px-4 py-3 font-bold">فاتورة الاشتراك الموحدة</p>
+                    {initiateData.lines?.length ? (
+                      <dl className="divide-y divide-border">
+                        {initiateData.lines.map((line, index) => (
+                          <div key={`${line.label ?? line.description ?? "line"}-${index}`} className="flex flex-wrap items-center justify-between gap-2 p-4" data-testid={`row-invoice-line-${index}`}>
+                            <dt className="text-foreground/90 leading-7">
+                              {line.quantity && line.quantity > 1 ? <><bdi>{line.quantity.toLocaleString("ar-SA")}</bdi> × </> : null}
+                              {line.label ?? line.description ?? "بند الاشتراك"}
+                            </dt>
+                            <dd className="font-semibold">
+                              {line.amountHalala != null ? <PayAmount halala={line.amountHalala} /> : line.amount != null ? <PayAmount halala={line.amount * 100} /> : "—"}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : (
+                      <p className="p-4 text-sm leading-7 text-muted-foreground">لم يرسل الخادم تفاصيل بنود الفاتورة؛ المبلغ المستحق أعلاه هو المرجع.</p>
+                    )}
+                  </div>
+
+                  <dl className="divide-y divide-border rounded-2xl border border-border text-sm">
+                    {initiateData.recurring && initiateData.nextChargeHalala != null && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-4">
+                        <dt className="text-muted-foreground">إجمالي الفاتورة عند التجديد {cycleLabel(initiateData.days)}</dt>
+                        <dd className="font-semibold"><PayAmount halala={initiateData.nextChargeHalala} /></dd>
+                      </div>
+                    )}
+                    {initiateData.nextBillingAt && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-4">
+                        <dt className="flex items-center gap-2 text-muted-foreground"><Calendar className="h-4 w-4" /> موعد التجديد التالي</dt>
+                        <dd className="font-semibold"><bdi dir="rtl">{formatDateWithHijri(initiateData.nextBillingAt)}</bdi></dd>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-4">
+                      <dt className="text-muted-foreground">مدة الفترة</dt>
+                      <dd className="font-semibold"><bdi>{payDaysText}</bdi> يوم</dd>
+                    </div>
+                    {initiateData.periodEnd && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 p-4">
+                        <dt className="text-muted-foreground">نهاية الفترة الحالية</dt>
+                        <dd className="font-semibold"><bdi dir="rtl">{formatDateWithHijri(initiateData.periodEnd)}</bdi></dd>
+                      </div>
+                    )}
+                  </dl>
+
+                  {initiateData.discountHalala > 0 && (
+                    <p className="rounded-2xl bg-green-50 p-4 text-sm leading-7 text-green-700" data-testid="text-promo-discount">
+                      وفّرت <PayAmount halala={initiateData.discountHalala} /> باستخدام رمز الخصم.
+                    </p>
+                  )}
+
+                  <p className="rounded-2xl bg-muted/50 p-4 text-sm leading-7 text-muted-foreground">لن يُفعّل التجديد ما لم تُحفظ وسيلة الدفع وتُؤكد صلاحيتها من النظام.</p>
+                </section>
+              )}
+
+              {initiateData?.amountHalala !== 0 && (
+                <section aria-label="وسيلة الدفع" className="addon-checkout-gateway space-y-4 rounded-2xl border border-border p-4 sm:p-5">
+                  <h3 className="text-lg font-bold">وسيلة الدفع</h3>
+                  <p className="text-sm leading-7 text-foreground/80">أدخل بيانات وسيلة الدفع أدناه لإكمال الطلب بأمان.</p>
+                  {/* Moyasar form mount point */}
+                  {!scriptReady && (
+                    <div className="flex items-center justify-center py-10 gap-2 text-muted-foreground">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span className="text-sm">جارٍ تحميل بوابة الدفع...</span>
+                    </div>
+                  )}
+                  <div ref={formContainerRef} id="moyasar-form" />
+                </section>
               )}
 
               {paying && (
-                <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm">جارٍ تأكيد الدفع وتفعيل الاشتراك...</span>
+                <div role="status" className="flex items-center gap-3 rounded-2xl border border-border bg-muted/40 p-4 text-sm leading-7">
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin text-primary" />
+                  <span>جارٍ تأكيد الدفع وتفعيل الاشتراك...</span>
                 </div>
               )}
               {payError && (
-                <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 rounded-xl p-3">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  {payError}
+                <div role="alert" className="flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm leading-7 text-destructive">
+                  <AlertTriangle className="mt-1 h-5 w-5 shrink-0" />
+                  <div>{paymentErrorMessage(payError)}</div>
                 </div>
               )}
 
-              {/* Test card note */}
-              <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-xl p-3">
+              {initiateData?.publishableKey.startsWith("pk_test_") && <div className="flex items-start gap-2 text-sm leading-7 text-foreground/80 bg-muted/50 rounded-xl p-3">
                 <ShieldCheck className="w-4 h-4 shrink-0 text-green-500 mt-0.5" />
                 <div>
-                  <span className="font-semibold text-foreground">وضع الاختبار (Test Mode)</span>
-                  <br />
-                  استخدم رقم البطاقة: <span className="font-mono text-foreground">4111 1111 1111 1111</span> / أي تاريخ مستقبلي / أي CVC
-                  <br />
-                  لبطاقة mada: <span className="font-mono text-foreground">5588 4817 3519 6601</span>
+                  <span className="font-semibold text-foreground">بيئة اختبار</span>
+                  <p>لا تستخدم بيانات بطاقات حقيقية في هذه البيئة.</p>
                 </div>
-              </div>
+              </div>}
 
                 <Button
                 variant="outline"
-                className="w-full rounded-xl"
+                className="h-12 w-full rounded-xl text-base"
                 onClick={() => { setStep("plan"); setPayError(null); }}
                 disabled={paying}
               >
@@ -1187,7 +1242,8 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               </Button>
             </div>
           </>
-        )}
+          );
+        })()}
 
         {/* ── Step: Success ── */}
         {step === "success" && invoice && (
