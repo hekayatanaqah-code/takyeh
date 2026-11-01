@@ -42,7 +42,8 @@
 - [Admin permission compatibility](admin-permission-compatibility.md) — new delegated permissions inherit old grants only while unset; explicit choices must override the legacy grant.
 - [Platform financial totals boundary](platform-financial-totals-boundary.md) — staff may see nonfinancial overview counts, but all platform-wide monetary totals belong to the superadmin alone.
 - [Subscription plan identifiers](subscription-plan-identifiers.md) — generate identifiers on creation, but keep them stable when names change because subscriptions reference them.
-- [Subscription billing boundary](subscription-billing-boundary.md) — extra slots are one-time purchases; preserve quoted terms across admin edits and legacy trials across rollout.
+- [Subscription billing boundary](subscription-billing-boundary.md) — new slots renew with the base plan; preserve historical one-time entitlements, quoted prices and legacy trials.
+- [Subscription presentation](subscription-presentation.md) — subscription support uses Takyah’s configured official WhatsApp; visual changes must preserve billing and consent.
 - [Subscription reminder observability](subscription-reminder-observability.md) — report persisted in-app notifications and scheduler checks; never imply external message delivery.
 - [Subscription reminder previews](subscription-reminder-previews.md) — test reminders should be visibly simulated and time-limited without modifying real billing entitlements.
 - [Broadcast channel consent](broadcast-channel-consent.md) — campaigns honor independent owner channel preferences; queued external sends must recheck consent before delivery.

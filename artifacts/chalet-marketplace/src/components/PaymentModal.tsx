@@ -793,7 +793,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
       <DialogContent
         className="max-w-lg rounded-3xl p-0 flex flex-col overflow-hidden"
         dir="rtl"
-        style={{ fontFamily: "'Saudi Riyal Symbol', inherit", top: '50px', transform: 'translateX(-50%)', maxHeight: 'calc(100dvh - 70px)' }}
+        style={{ fontFamily: "inherit", maxHeight: "calc(100dvh - 2rem)" }}
       >
 
         {/* ── Step: Plan Selection ── */}
@@ -808,7 +808,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 اشتراك بدون عمولة — سعر ثابت فقط
               </DialogDescription>
             </DialogHeader>
-             <div className="p-5 grid gap-2 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
+             <div className="p-5 pb-6 grid gap-2 overflow-y-auto overscroll-contain flex-1 min-h-0">
               {walletPending && (
                 <div className="rounded-xl border border-[#8C6246]/40 bg-[#8C6246]/5 p-3 text-sm" data-testid="notice-wallet-pending">
                   <p className="font-semibold">عملية دفع اشتراك من المحفظة بانتظار التأكيد</p>
@@ -904,19 +904,21 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                           <span className="text-[10px] font-bold bg-primary/20 text-primary px-2 py-0.5 rounded-full">خطتك الحالية</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">{p.days} يوم</p>
+                      <p className="text-sm text-foreground/80 mt-0.5">{p.days.toLocaleString("ar-SA")} يوم</p>
                       {accessDescription && <p className="text-xs text-muted-foreground mt-1">{accessDescription}</p>}
                       {(p.chaletLimit != null || p.serviceLimit != null) && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          {p.chaletLimit != null ? `العقارات: ${p.chaletLimit === 999 ? "غير محدود" : p.chaletLimit}` : ""}
+                          {p.chaletLimit != null ? `العقارات: ${p.chaletLimit === 999 ? "غير محدود" : p.chaletLimit.toLocaleString("ar-SA")}` : ""}
                           {p.chaletLimit != null && p.serviceLimit != null ? " · " : ""}
-                          {p.serviceLimit != null ? `الخدمات: ${p.serviceLimit === 999 ? "غير محدود" : p.serviceLimit}` : ""}
+                          {p.serviceLimit != null ? `الخدمات: ${p.serviceLimit === 999 ? "غير محدود" : p.serviceLimit.toLocaleString("ar-SA")}` : ""}
                         </p>
                       )}
                     </div>
                     <div className="text-end shrink-0">
-                        <p className="font-black text-lg text-foreground">{p.price.toLocaleString("ar-SA")}</p>
-                      <p className="text-xs text-muted-foreground">⃁</p>
+                      <bdi dir="rtl" className="inline-flex items-center gap-1 whitespace-nowrap font-black text-lg text-foreground">
+                        <span>{p.price.toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="text-base" aria-label="ريال سعودي">⃁</span>
+                      </bdi>
                     </div>
                   </button>
                 );
@@ -1069,7 +1071,7 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
               </DialogDescription>
             </DialogHeader>
 
-            <div className="p-5 space-y-4 overflow-y-auto flex-1" style={{ paddingBottom: '100px' }}>
+            <div className="p-5 pb-6 space-y-4 overflow-y-auto overscroll-contain flex-1 min-h-0">
               {initiateData && (
                 <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm" data-testid="summary-subscription-checkout">
                   <p className="font-bold">فاتورة الاشتراك الموحدة</p>

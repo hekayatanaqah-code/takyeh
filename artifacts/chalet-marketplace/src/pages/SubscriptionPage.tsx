@@ -12,7 +12,9 @@ import { Navbar } from "@/components/layout/Navbar";
 import { useAuth } from "@workspace/replit-auth-web";
 import { PaymentModal } from "@/components/PaymentModal";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
+import { RiyalIcon } from "@/components/icons/RiyalIcon";
 import { formatDateWithHijri, formatDualDate } from "@/lib/hijri";
+import { subscriptionSupportLink } from "@/lib/subscription-support";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 async function apiFetch(path: string, options?: RequestInit) {
@@ -50,7 +52,7 @@ interface AccountDiscount {
 }
 
 function formatHalala(halala: number) {
-  return `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
+  return `${(halala / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}\u00A0\u20C1`;
 }
 
 function expiryInBothCalendars(iso: string): string {
@@ -116,6 +118,16 @@ export default function SubscriptionPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [showPayment, setShowPayment] = useState(false);
   const [addonType, setAddonType] = useState<"chalet" | "service" | null>(null);
+  const { data: platformSettings, isLoading: contactLoading } = useQuery<Record<string, string>>({
+    queryKey: ["page-content"],
+    queryFn: async () => {
+      const response = await apiFetch("/page-content");
+      if (!response.ok) throw new Error("تعذّر تحميل بيانات التواصل الرسمية");
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
+  const supportLink = subscriptionSupportLink(platformSettings?.platform_whatsapp);
 
   const { data: sub, isLoading: subLoading } = useQuery<{
     id: number | null; plan: string; status: string; expiresAt: string | null;
@@ -266,7 +278,7 @@ export default function SubscriptionPage() {
     ? sub!.billingCycleDays!
     : null;
   const billingCycleLabel = billingCycleDays === 30 ? "شهرياً"
-    : billingCycleDays != null ? `لكل دورة (${billingCycleDays} يوم)` : "لكل دورة";
+    : billingCycleDays != null ? `لكل دورة (${billingCycleDays.toLocaleString("ar-SA")} يوم)` : "لكل دورة";
   const addonPricePerCycle = (price: number | string) =>
     billingCycleDays == null ? "—" :
       (Math.round(Number(price) * 100 * billingCycleDays / 30) / 100).toLocaleString("ar-SA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -325,7 +337,7 @@ export default function SubscriptionPage() {
                 <p className="text-2xl font-bold opacity-90">{freeAccessEndsAt ? "محددة المدة" : "مفتوحة"}</p>
               ) : days !== null ? (
                 <>
-                  <p className={`text-5xl font-black ${days < 7 ? "text-red-200" : "text-white"}`}>{Math.max(0, days)}</p>
+                  <p className={`text-5xl font-black ${days < 7 ? "text-red-200" : "text-white"}`}>{Math.max(0, days).toLocaleString("ar-SA")}</p>
                   <p className="text-sm opacity-80 mt-0.5">يوم متبقي</p>
                 </>
               ) : (
@@ -412,15 +424,15 @@ export default function SubscriptionPage() {
           <SummaryCard
             icon={<Building2 className="w-5 h-5 text-indigo-500" />}
             label="الشاليهات"
-            value={`${chaletUsed} / ${chaletMax}`}
-            sub={`مستخدم / الحد الفعلي · أساس ${chaletBase} + إضافي ${chaletAddons}`}
+            value={`${chaletUsed.toLocaleString("ar-SA")} / ${typeof chaletMax === "number" ? chaletMax.toLocaleString("ar-SA") : chaletMax}`}
+            sub={`مستخدم / الحد الفعلي · أساس ${chaletBase.toLocaleString("ar-SA")} + إضافي ${chaletAddons.toLocaleString("ar-SA")}`}
             bg="bg-indigo-50 dark:bg-indigo-900/20"
           />
           <SummaryCard
             icon={<Star className="w-5 h-5 text-amber-500" />}
             label="الخدمات"
-            value={`${serviceUsed} / ${serviceMax}`}
-            sub={`الحد الفعلي · أساس ${serviceBase} + إضافي ${serviceAddons}`}
+            value={`${serviceUsed.toLocaleString("ar-SA")} / ${typeof serviceMax === "number" ? serviceMax.toLocaleString("ar-SA") : serviceMax}`}
+            sub={`الحد الفعلي · أساس ${serviceBase.toLocaleString("ar-SA")} + إضافي ${serviceAddons.toLocaleString("ar-SA")}`}
             bg="bg-amber-50 dark:bg-amber-900/20"
           />
           <SummaryCard
@@ -438,6 +450,9 @@ export default function SubscriptionPage() {
             <Package className="h-4 w-4 text-primary" />
             الإضافات وسجل السعة المدفوعة
           </h2>
+          <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+            هنا تجد العقارات والخدمات الإضافية التي اشتريتها. الإضافات الدورية تتجدد مع اشتراكك في فاتورة واحدة. الإضافات القديمة المدفوعة لمرة واحدة لا تُحصّل رسومها مجدداً، وتبقى متاحة ما دام الاشتراك الأساسي نشطاً.
+          </p>
           {hasFreeAccess && (
             <p className="mb-3 rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
               سجلات الإضافات المدفوعة السابقة محفوظة للرجوع إليها؛ لا توجد مشتريات أو رسوم دورية مطلوبة خلال صلاحيتك المجانية.
@@ -478,7 +493,7 @@ export default function SubscriptionPage() {
                               : "إضافة مدفوعة لمرة واحدة — محفوظة في السجل"
                             : addon.recurring
                             ? cycleAmount == null
-                              ? `سعر مرجعي ${formatHalala(addon.monthlyUnitPriceHalala)} لكل 30 يوماً؛ مبلغ الدورة غير متوفر`
+                              ? `سعر مرجعي ${formatHalala(addon.monthlyUnitPriceHalala)} لكل ٣٠ يوماً؛ مبلغ الدورة غير متوفر`
                               : `${formatHalala(cycleAmount)} ${billingCycleLabel} — ${addon.quantity.toLocaleString("ar-SA")} × ${formatHalala(Math.round(addon.monthlyUnitPriceHalala * (billingCycleDays ?? 30) / 30))} لكل وحدة`
                             : "إضافة تاريخية لمرة واحدة — محفوظة مدى الحياة ولا تدخل في الفواتير الدورية"}
                         </p>
@@ -520,6 +535,11 @@ export default function SubscriptionPage() {
           )}
         </section>
 
+        {planLimits?.active && !hasFreeAccess && (planLimits.extraChaletPrice != null || planLimits.extraServicePrice != null) && (
+          <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
+            تحتاج مساحة أكثر؟ اطلب عقارات أو خدمات إضافية دون تغيير خطتك. سترى المبلغ المطلوب الآن وموعد التجديد قبل أي دفع.
+          </p>
+        )}
         {planLimits?.active && !hasFreeAccess && (
           <div className="mb-6 grid gap-3 sm:grid-cols-2">
             {planLimits.extraChaletPrice != null && (
@@ -527,7 +547,7 @@ export default function SubscriptionPage() {
                 <p className="font-semibold">أضف عقارات إلى خطتك</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {addonRecurringReady
-                    ? `${addonPricePerCycle(planLimits.extraChaletPrice)} ر.س ${billingCycleLabel} لكل عقار إضافي؛ يُحتسب المبلغ الأولي نسبياً حتى نهاية الفترة، ثم يُضم التجديد إلى فاتورة الخطة.`
+                    ? <><bdi dir="rtl" className="inline-flex items-center gap-1 font-semibold text-foreground"><span>{addonPricePerCycle(planLimits.extraChaletPrice)}</span><RiyalIcon className="h-3.5 w-3.5" /></bdi>{` ${billingCycleLabel} لكل عقار إضافي؛ يُحتسب المبلغ الأولي نسبياً حتى نهاية الفترة، ثم يُضم التجديد إلى فاتورة الخطة.`}</>
                     : "الشراء والتجديد الدوري للإضافات غير مهيأ حالياً أو لا توجد وسيلة دفع قابلة للحفظ."}
                 </p>
                 <Button className="mt-3 w-full gap-2" variant="outline" disabled={!addonRecurringReady} onClick={() => setAddonType("chalet")}>
@@ -541,7 +561,7 @@ export default function SubscriptionPage() {
                 <p className="font-semibold">أضف خدمات إلى خطتك</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {addonRecurringReady
-                    ? `${addonPricePerCycle(planLimits.extraServicePrice)} ر.س ${billingCycleLabel} لكل خدمة إضافية؛ يُحتسب المبلغ الأولي نسبياً حتى نهاية الفترة، ثم يُضم التجديد إلى فاتورة الخطة.`
+                    ? <><bdi dir="rtl" className="inline-flex items-center gap-1 font-semibold text-foreground"><span>{addonPricePerCycle(planLimits.extraServicePrice)}</span><RiyalIcon className="h-3.5 w-3.5" /></bdi>{` ${billingCycleLabel} لكل خدمة إضافية؛ يُحتسب المبلغ الأولي نسبياً حتى نهاية الفترة، ثم يُضم التجديد إلى فاتورة الخطة.`}</>
                     : "الشراء والتجديد الدوري للإضافات غير مهيأ حالياً أو لا توجد وسيلة دفع قابلة للحفظ."}
                 </p>
                 <Button className="mt-3 w-full gap-2" variant="outline" disabled={!addonRecurringReady} onClick={() => setAddonType("service")}>
@@ -710,10 +730,12 @@ export default function SubscriptionPage() {
             size="lg"
             variant="outline"
             className="rounded-2xl font-bold w-full gap-2"
+            disabled={!supportLink}
+            title={supportLink ? undefined : contactLoading ? "جارٍ تحميل رقم واتساب الرسمي" : "رقم واتساب الرسمي غير متاح حالياً"}
             onClick={() => {
-              const msg = encodeURIComponent(`مرحباً، لدي استفسار حول اشتراكي في منصة حكاية أناقة.`);
+              if (!supportLink) return;
               const a = document.createElement("a");
-              a.href = `https://wa.me/966500000000?text=${msg}`;
+              a.href = supportLink;
               a.target = "_blank";
               a.rel = "noopener noreferrer";
               document.body.appendChild(a);
@@ -735,6 +757,11 @@ export default function SubscriptionPage() {
             العودة للوحة
           </Button>
         </motion.div>}
+        {!hasFreeAccess && !supportLink && (
+          <p role="status" className="mt-3 text-sm leading-7 text-foreground">
+            {contactLoading ? "جارٍ تحميل رقم واتساب الرسمي لمنصة تكيّة..." : "رقم واتساب الرسمي غير متاح حالياً. يرجى المحاولة لاحقاً."}
+          </p>
+        )}
 
       </div>
 
@@ -761,12 +788,12 @@ function SummaryCard({
 }) {
   return (
     <div className={`${bg} rounded-2xl p-4 flex flex-col gap-1`}>
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+      <div className="flex items-center gap-1.5 text-sm text-foreground/80 font-medium">
         {icon}
         {label}
       </div>
       <p className={`text-xl font-black ${valueCls ?? "text-foreground"}`}>{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground">{sub}</p>}
+      {sub && <p className="text-sm leading-6 text-foreground/80">{sub}</p>}
     </div>
   );
 }
