@@ -749,12 +749,12 @@ export default function SubscriptionPage() {
 
           <Button
             size="lg"
-            variant="ghost"
-            className="rounded-2xl font-bold w-full gap-2 text-muted-foreground"
+            variant="outline"
+            className="rounded-2xl font-bold w-full gap-2"
             onClick={() => navigate("/dashboard")}
           >
-            <RefreshCw className="w-4 h-4" />
-            العودة للوحة
+            <ArrowRight className="w-4 h-4" />
+            العودة للوحة التحكم
           </Button>
         </motion.div>}
         {!hasFreeAccess && !supportLink && (
