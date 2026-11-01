@@ -21,6 +21,11 @@ export default function ContactUs() {
     return val.replace(/[٠١٢٣٤٥٦٧٨٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)));
   }
 
+  function formatPhoneInput(val: string) {
+    return normalizePhone(val).replace(/[^0-9]/g, "").slice(0, 10)
+      .replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -33,7 +38,7 @@ export default function ContactUs() {
       return;
     }
     if (phone && !/^05[0-9]{8}$/.test(normalizePhone(phone))) {
-      setError("رقم الجوال يجب أن يتكون من 10 أرقام ويبدأ بـ 05");
+      setError("رقم الجوال يجب أن يتكون من ١٠ أرقام ويبدأ بـ ٠٥");
       return;
     }
     setLoading(true);
@@ -104,16 +109,16 @@ export default function ContactUs() {
                 <Input
                   type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(normalizePhone(e.target.value).replace(/[^0-9]/g, "").slice(0, 10))}
-                  placeholder="05xxxxxxxx"
+                  onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
+                  placeholder="٠٥xxxxxxxx"
                   dir="rtl"
+                  style={{ fontFamily: "inherit" }}
                   inputMode="numeric"
                   autoComplete="tel-national"
-                  pattern="05[0-9]{8}"
+                  pattern="٠٥[٠-٩]{8}"
                   minLength={10}
                   maxLength={10}
-                  title="رقم الجوال يجب أن يتكون من 10 أرقام ويبدأ بـ 05"
-                  data-no-arabic
+                  title="رقم الجوال يجب أن يتكون من ١٠ أرقام ويبدأ بـ ٠٥"
                   aria-describedby="contact-method-hint"
                 />
                 </div>
