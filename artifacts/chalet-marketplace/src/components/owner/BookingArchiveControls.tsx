@@ -85,13 +85,13 @@ export default function BookingArchiveControls({
     <section
       dir="rtl"
       aria-label="أدوات تصفية أرشيف الحجوزات"
-      className="rounded-xl border border-card-border bg-card p-3 sm:p-4 space-y-3"
+      className="rounded-xl border border-card-border bg-card p-3 sm:p-4 space-y-4 text-right"
       data-testid="section-archive-controls"
     >
       {/* Search + export row */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <div className="flex-1 space-y-1">
-          <label htmlFor={searchId} className="text-xs font-semibold text-foreground">
+          <label htmlFor={searchId} className="text-sm font-semibold text-foreground">
             البحث في الأرشيف
           </label>
           <div className="relative">
@@ -150,7 +150,7 @@ export default function BookingArchiveControls({
       </div>
 
       {/* Period quick options */}
-      <div role="radiogroup" aria-label="الفترة الزمنية" className="flex gap-1.5 overflow-x-auto scrollbar-hide -mx-1 px-1 pb-0.5">
+      <div dir="rtl" role="radiogroup" aria-label="الفترة الزمنية" className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
         {PERIODS.map((p) => {
           const active = filters.period === p.value;
           return (
@@ -161,7 +161,8 @@ export default function BookingArchiveControls({
               aria-checked={active}
               onClick={() => selectPeriod(p.value)}
               className={cn(
-                "shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                "min-h-11 min-w-0 rounded-lg border px-3 py-2.5 text-center text-sm font-semibold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                p.value === "custom" && "col-span-2 sm:col-span-1",
                 active
                   ? "border-primary bg-primary text-primary-foreground"
                   : "border-border bg-secondary text-secondary-foreground hover:border-primary/40",
@@ -175,13 +176,13 @@ export default function BookingArchiveControls({
       </div>
 
       {onCalendarModeChange && (
-        <div className="flex items-center gap-2 text-xs" aria-label="تقويم فلاتر الأرشيف">
-          <span className="text-muted-foreground">تقويم الفلترة</span>
-          <div className="inline-flex overflow-hidden rounded-lg border border-border">
+        <div dir="rtl" className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3" aria-label="تقويم فلاتر الأرشيف">
+          <span className="shrink-0 text-sm font-semibold text-foreground">تقويم الفلترة</span>
+          <div dir="rtl" role="group" aria-label="اختيار تقويم الفلترة" className="grid w-full max-w-xs grid-cols-2 overflow-hidden rounded-xl border border-border">
             {(["hijri", "gregorian"] as const).map(calendar => (
               <button key={calendar} type="button" aria-pressed={calendarMode === calendar}
                 onClick={() => onCalendarModeChange(calendar)}
-                className={cn("px-3 py-1.5 font-semibold transition-colors", calendarMode === calendar ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted")}>
+                className={cn("min-h-11 px-5 py-2.5 text-center text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring", calendarMode === calendar ? "bg-primary text-primary-foreground" : "bg-background text-foreground hover:bg-muted")}>
                 {calendar === "hijri" ? "هجري" : "ميلادي"}
               </button>
             ))}
@@ -190,7 +191,7 @@ export default function BookingArchiveControls({
       )}
       {filters.period === "year" && (
         <div className="space-y-1 sm:max-w-[14rem]">
-          <label htmlFor={yearId} className="text-xs font-semibold">
+          <label htmlFor={yearId} className="text-sm font-semibold">
             السنة ({calendarMode === "hijri" ? "هجري" : "ميلادي"})
           </label>
           <Select value={filters.year} onValueChange={(year) => set({ year })} dir="rtl">
@@ -241,7 +242,7 @@ export default function BookingArchiveControls({
             </div>
           </div>
           {dateError && (
-            <p id={errorId} role="alert" className="flex items-center gap-1.5 text-xs font-medium text-destructive" data-testid="text-archive-date-error">
+            <p id={errorId} role="alert" className="flex items-center gap-1.5 text-sm leading-6 font-medium text-destructive" data-testid="text-archive-date-error">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
               {dateError}
             </p>
@@ -251,12 +252,12 @@ export default function BookingArchiveControls({
 
       {/* Footer: count + reset + export note */}
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
-        <p className="text-xs text-muted-foreground" aria-live="polite" data-testid="text-archive-count">
+        <p className="text-sm leading-6 text-foreground/80" aria-live="polite" data-testid="text-archive-count">
           {loading ? (
             <span className="inline-block h-3 w-24 animate-pulse rounded bg-muted align-middle" />
           ) : (
             <>
-              النتائج المطابقة: <span className="font-bold text-foreground">{total}</span> حجز
+              عدد الحجوزات المطابقة: <span className="font-bold text-foreground">{total}</span>
             </>
           )}
         </p>
@@ -266,14 +267,14 @@ export default function BookingArchiveControls({
           size="sm"
           disabled={!isDirty}
           onClick={() => onChange({ ...DEFAULT_FILTERS })}
-          className="h-8 rounded-lg gap-1 text-xs text-primary"
+          className="min-h-10 rounded-lg gap-1.5 text-sm text-primary"
           data-testid="button-archive-reset"
         >
           <RotateCcw className="!size-3.5" />
           إعادة ضبط الفلاتر
         </Button>
-        <p className="basis-full text-[11px] leading-relaxed text-muted-foreground" data-testid="text-archive-export-note">
-          التصدير يشمل كل السجلات المطابقة للفلاتر الحالية، وليس الصفحة المعروضة فقط.
+        <p className="basis-full text-sm leading-6 text-foreground/80" data-testid="text-archive-export-note">
+          يشمل التصدير جميع النتائج المطابقة للفلاتر، وليس الصفحة الحالية فقط.
         </p>
       </div>
     </section>
