@@ -72,7 +72,36 @@ export function OwnerProfileTab() {
   /* ── page-level state ── */
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
+  const [savingCalendarPreference, setSavingCalendarPreference] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  async function saveCalendarPreference(key: "bookingsCalPref" | "reportsCalPref" | "salaryCalPref", value: "hijri" | "gregorian") {
+    if (savingCalendarPreference) return;
+    setSavingCalendarPreference(true);
+    try {
+      const response = await apiFetch("/owner/profile/calendar-prefs", {
+        method: "PATCH",
+        body: JSON.stringify({ [key]: value }),
+      });
+      if (!response.ok) throw new Error("calendar-preference-save-failed");
+      if (key === "bookingsCalPref") {
+        setBookingsCalPrefLocal(value);
+        localStorage.setItem("dashCalDefaultType", value);
+      } else if (key === "reportsCalPref") {
+        setReportsCalPrefLocal(value);
+        localStorage.setItem("revCalType", value);
+      } else {
+        setSalaryCalPrefLocal(value);
+        localStorage.setItem("staffCalDefault", value);
+        window.dispatchEvent(new CustomEvent("salaryCalPrefChanged", { detail: value }));
+      }
+      await profileQueryClient.invalidateQueries({ queryKey: ["owner", "profile-btype"] });
+    } catch {
+      toast({ title: "تعذّر حفظ تفضيل التقويم", description: "بقي اختيارك السابق محفوظاً. حاول مرة أخرى.", variant: "destructive" });
+    } finally {
+      setSavingCalendarPreference(false);
+    }
+  }
 
   useEffect(() => {
     setFetchError(null);
@@ -545,49 +574,41 @@ export function OwnerProfileTab() {
               <p className="text-sm font-bold text-foreground">تفضيلات التقويم</p>
             </div>
             <p className="text-sm leading-7 text-foreground/80">
-              تظهر الحجوزات والتقارير بالهجري، وبجانبه التاريخ الميلادي. تغيير العرض داخل أي قسم مؤقت، أما دورة الرواتب فتختارها بشكل مستقل أدناه.
+              اختر التقويم الأساسي لكل قسم بشكل مستقل. تُحفظ اختياراتك لتُستخدم عند فتح الأقسام، ويمكنك تغييرها في أي وقت.
             </p>
             {/* Calendar default: Booking grid */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">التقويم الأساسي للحجوزات</label>
-              <div dir="rtl" role="group" aria-label="التقويم الأساسي للحجوزات" className="grid grid-cols-1 w-full max-w-xs rounded-xl border border-border overflow-hidden text-sm">
-                {(["hijri"] as const).map(v => (
+              <div dir="rtl" role="group" aria-label="التقويم الأساسي للحجوزات" className="grid grid-cols-2 w-full max-w-xs rounded-xl border border-border overflow-hidden text-sm">
+                {(["hijri", "gregorian"] as const).map(v => (
                   <button
                     key={v}
                     type="button"
-                    onClick={() => {
-                      setBookingsCalPrefLocal(v);
-                      localStorage.setItem("dashCalDefaultType", v);
-                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ bookingsCalPref: v }) })
-                        .then(response => { if (response.ok) profileQueryClient.invalidateQueries({ queryKey: ["owner", "profile-btype"] }); });
-                    }}
+                    disabled={savingCalendarPreference}
+                    onClick={() => void saveCalendarPreference("bookingsCalPref", v)}
                     aria-pressed={bookingsCalPrefLocal === v}
                     className={`min-h-11 px-5 py-2.5 text-center font-semibold transition-colors ${bookingsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >{v === "hijri" ? "هجري" : "ميلادي"}</button>
                 ))}
               </div>
-              <p className="text-sm leading-6 text-foreground/80">التقويم المعتمد لعرض الحجوزات هو الهجري.</p>
+              <p className="text-sm leading-6 text-foreground/80">يحدد التقويم الذي تبدأ به عند فتح تقويم الحجوزات.</p>
             </div>
             {/* Calendar default: Financial reports */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold">التقويم الأساسي للتقارير المالية</label>
-              <div dir="rtl" role="group" aria-label="التقويم الأساسي للتقارير المالية" className="grid grid-cols-1 w-full max-w-xs rounded-xl border border-border overflow-hidden text-sm">
-                {(["hijri"] as const).map(v => (
+              <div dir="rtl" role="group" aria-label="التقويم الأساسي للتقارير المالية" className="grid grid-cols-2 w-full max-w-xs rounded-xl border border-border overflow-hidden text-sm">
+                {(["hijri", "gregorian"] as const).map(v => (
                   <button
                     key={v}
                     type="button"
-                    onClick={() => {
-                      setReportsCalPrefLocal(v);
-                      localStorage.setItem("revCalType", v);
-                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ reportsCalPref: v }) })
-                        .then(response => { if (response.ok) profileQueryClient.invalidateQueries({ queryKey: ["owner", "profile-btype"] }); });
-                    }}
+                    disabled={savingCalendarPreference}
+                    onClick={() => void saveCalendarPreference("reportsCalPref", v)}
                     aria-pressed={reportsCalPrefLocal === v}
                     className={`min-h-11 px-5 py-2.5 text-center font-semibold transition-colors ${reportsCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >{v === "hijri" ? "هجري" : "ميلادي"}</button>
                 ))}
               </div>
-              <p className="text-sm leading-6 text-foreground/80">تبدأ التقارير بالهجري، ويمكن تبديل العرض مؤقتاً داخل التقرير.</p>
+              <p className="text-sm leading-6 text-foreground/80">يحدد التقويم الذي تبدأ به عند فتح التقارير المالية.</p>
             </div>
             {/* Salary calendar preference */}
             <div className="space-y-1.5">
@@ -597,12 +618,8 @@ export function OwnerProfileTab() {
                   <button
                     key={v}
                     type="button"
-                    onClick={() => {
-                      setSalaryCalPrefLocal(v);
-                      localStorage.setItem("staffCalDefault", v);
-                      window.dispatchEvent(new CustomEvent("salaryCalPrefChanged", { detail: v }));
-                      apiFetch("/owner/profile/calendar-prefs", { method: "PATCH", body: JSON.stringify({ salaryCalPref: v }) });
-                    }}
+                    disabled={savingCalendarPreference}
+                    onClick={() => void saveCalendarPreference("salaryCalPref", v)}
                     aria-pressed={salaryCalPrefLocal === v}
                     className={`min-h-11 px-5 py-2.5 text-center font-semibold transition-colors ${salaryCalPrefLocal === v ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}
                   >{v === "hijri" ? "هجري" : "ميلادي"}</button>

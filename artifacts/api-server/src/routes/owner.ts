@@ -812,7 +812,7 @@ router.get("/profile", async (req, res) => {
       const businessType = normalizeOwnerBusinessType(oaRow.business_type)
         ?? await findLatestRegisteredBusinessType(oaRow.email, phone, userId)
         ?? "both";
-      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, hasPassword: Boolean(oaRow.password_hash), whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType, bookingsCalPref: "hijri", reportsCalPref: "hijri", salaryCalPref: oaRow.salary_cal_pref ?? "gregorian" });
+      return res.json({ fullName: oaRow.full_name, phone, email: oaRow.email, hasPassword: Boolean(oaRow.password_hash), whatsappNewsSubscribe: oaRow.whatsapp_news_subscribe ?? false, businessType, bookingsCalPref: oaRow.bookings_cal_pref ?? "hijri", reportsCalPref: oaRow.reports_cal_pref ?? "hijri", salaryCalPref: oaRow.salary_cal_pref ?? "gregorian" });
     }
 
     /* ── Path 2: Replit OIDC owner — look up via chalet_submissions ── */
@@ -1057,12 +1057,9 @@ router.patch("/profile/calendar-prefs", requireAuth, async (req, res) => {
     if (!ownerAccount) return res.status(404).json({ error: "لم يتم العثور على الحساب" });
     const { bookingsCalPref, reportsCalPref, salaryCalPref } = req.body as { bookingsCalPref?: string; reportsCalPref?: string; salaryCalPref?: string };
     const valid = ["hijri", "gregorian"];
-    if ((bookingsCalPref !== undefined && bookingsCalPref !== "hijri") || (reportsCalPref !== undefined && reportsCalPref !== "hijri")) {
-      return res.status(400).json({ error: "التقويم الأساسي المعتمد هجري، والميلادي ثانوي" });
-    }
-    if (bookingsCalPref && !valid.includes(bookingsCalPref)) return res.status(400).json({ error: "قيمة غير صالحة" });
-    if (reportsCalPref  && !valid.includes(reportsCalPref))  return res.status(400).json({ error: "قيمة غير صالحة" });
-    if (salaryCalPref   && !valid.includes(salaryCalPref))   return res.status(400).json({ error: "قيمة غير صالحة" });
+    if (bookingsCalPref !== undefined && !valid.includes(bookingsCalPref)) return res.status(400).json({ error: "قيمة غير صالحة" });
+    if (reportsCalPref !== undefined && !valid.includes(reportsCalPref)) return res.status(400).json({ error: "قيمة غير صالحة" });
+    if (salaryCalPref !== undefined && !valid.includes(salaryCalPref)) return res.status(400).json({ error: "قيمة غير صالحة" });
     if (bookingsCalPref !== undefined) {
       await db.execute(sql`UPDATE owner_applications SET bookings_cal_pref = ${bookingsCalPref} WHERE id = ${ownerAccount.id}`);
     }

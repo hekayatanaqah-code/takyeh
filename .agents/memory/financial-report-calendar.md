@@ -2,11 +2,11 @@
 name: Financial report calendar
 description: Saved financial calendar preference, temporary switching, explicit locale calendars and service period boundaries.
 ---
-The platform's authoritative initial calendar is now Hijri, including financial reports, month lists and annual views. Legacy saved Gregorian display preferences must not override it. A local calendar switch remains temporary. Exports use the currently displayed calendar, period and activity, and dates show the corresponding other calendar.
+The platform's initial calendar is Hijri when no explicit preference exists. Owners can choose either Hijri or Gregorian for reports in Personal Settings; preserve and reload that saved choice. A local calendar switch within a report remains temporary. Exports use the currently displayed calendar, period and activity, and dates show the corresponding other calendar.
 
-**Why:** The user's platform-wide calendar unification request supersedes the earlier choice of independent default report calendars. Temporary exploration of the other calendar remains separate from the authoritative default.
+**Why:** The user explicitly restored both selectable calendars in all three Personal Settings groups after the platform-wide Hijri-first presentation request. Hijri-first defaults must not remove the Gregorian choice or silently reject it.
 
-**How to apply:** Start in Hijri even with legacy Gregorian preferences, and share the active calendar across filters, custom-range grouping, print, PDF and sharing. Do not reinterpret stored ISO dates or change contractual payroll cycles merely to change date presentation.
+**How to apply:** Respect the saved report preference, defaulting to Hijri when absent, and share the active calendar across filters, custom-range grouping, print, PDF and sharing. Do not reinterpret stored ISO dates or change contractual payroll cycles merely to change date presentation.
 
 Always specify the calendar when formatting Gregorian Arabic dates; an Arabic Saudi locale can default to Umm al-Qura even when the underlying Date was constructed from a Gregorian month.
 
