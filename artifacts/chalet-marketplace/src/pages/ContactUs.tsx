@@ -32,6 +32,10 @@ export default function ContactUs() {
       setError("يرجى إدخال رقم الجوال أو البريد الإلكتروني حتى نتمكن من الرد عليك");
       return;
     }
+    if (phone && !/^05[0-9]{8}$/.test(normalizePhone(phone))) {
+      setError("رقم الجوال يجب أن يتكون من 10 أرقام ويبدأ بـ 05");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`${BASE}/api/contact`, {
@@ -98,11 +102,18 @@ export default function ContactUs() {
                   رقم الجوال
                 </label>
                 <Input
+                  type="tel"
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="05XXXXXXXX"
+                  onChange={(e) => setPhone(normalizePhone(e.target.value).replace(/[^0-9]/g, "").slice(0, 10))}
+                  placeholder="05xxxxxxxx"
                   dir="rtl"
-                  inputMode="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  pattern="05[0-9]{8}"
+                  minLength={10}
+                  maxLength={10}
+                  title="رقم الجوال يجب أن يتكون من 10 أرقام ويبدأ بـ 05"
+                  data-no-arabic
                   aria-describedby="contact-method-hint"
                 />
                 </div>
