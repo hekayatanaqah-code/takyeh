@@ -14,10 +14,11 @@ const props = {
   onStatusChange() {},
 };
 
-it("groups all nine service controls in one responsive RTL panel, with an accessible label and selection per group", () => {
+it("keeps operational scopes outside the independent archive in one responsive RTL panel", () => {
   const html = renderToStaticMarkup(React.createElement(ServiceBookingFilters, props));
   assert.equal((html.match(/data-testid="service-booking-filters"/g) ?? []).length, 1);
-  assert.equal((html.match(/<button/g) ?? []).length, 9);
+  assert.equal((html.match(/<button/g) ?? []).length, 8);
+  assert.ok(!html.includes("أرشيف المكتملة"));
   assert.equal((html.match(/aria-pressed="true"/g) ?? []).length, 3);
   assert.equal((html.match(/role="group"/g) ?? []).length, 3);
   assert.match(html, /dir="rtl"/);
@@ -27,7 +28,7 @@ it("groups all nine service controls in one responsive RTL panel, with an access
 
 it("hides the inapplicable confirmation filter for cancelled requests without hiding payment filters", () => {
   const html = renderToStaticMarkup(React.createElement(ServiceBookingFilters, { ...props, scope: "cancelled" }));
-  assert.equal((html.match(/<button/g) ?? []).length, 6);
+  assert.equal((html.match(/<button/g) ?? []).length, 5);
   assert.equal((html.match(/aria-pressed="true"/g) ?? []).length, 2);
   assert.ok(!html.includes("حالة الحجز"));
   assert.ok(html.includes("حالة الدفع"));
@@ -50,9 +51,9 @@ it("forwards clicks to their existing independent handlers, without changing ano
   walk(tree);
   assert.deepEqual(events, []);
   buttons[1]();
-  buttons[4]();
-  buttons[8]();
-  assert.deepEqual(events, ["scope:completed", "payment:unpaid", "status:pending"]);
+  buttons[3]();
+  buttons[7]();
+  assert.deepEqual(events, ["scope:cancelled", "payment:unpaid", "status:pending"]);
 });
 
 it("places the unified controls before the service list, preserving state and pagination callbacks", () => {
@@ -62,4 +63,6 @@ it("places the unified controls before the service list, preserving state and pa
   assert.ok(code.includes("onScopeChange={scope => { setServiceBookingScope(scope); setServiceListPage(1); }}"));
   assert.ok(code.includes("onPaymentChange={filter => { setServicePaymentFilter(filter); setServiceListPage(1); }}"));
   assert.ok(code.includes("onStatusChange={filter => { setListFilter(filter); setServiceListPage(1); }}"));
+  assert.ok(code.indexOf("<ServiceBookingArchive") > code.indexOf("pagedAppts.items.map"));
+  assert.ok(code.includes("key={providerId}"));
 });

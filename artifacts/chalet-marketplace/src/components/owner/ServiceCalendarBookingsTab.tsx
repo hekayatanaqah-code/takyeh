@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ServiceBookingScheduleFields } from "@/components/owner/ServiceBookingScheduleFields";
 import { ServiceBookingPaymentDialog } from "@/components/owner/ServiceBookingPaymentDialog";
 import { ServiceBookingFilters } from "@/components/owner/ServiceBookingFilters";
+import { ServiceBookingArchive } from "@/components/owner/ServiceBookingArchive";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
 import takyahLogoSrc from "@assets/image_1783707669452.png";
 import { BASE, apiFetch } from "@/components/owner/owner-api";
@@ -1103,6 +1104,39 @@ export function ServiceCalendarBookingsTab() {
     (blockedDate) => blockedDate.dateStr >= calendarStart && blockedDate.dateStr <= calendarEnd,
   ).length;
 
+  const renderServiceBooking = (a: any) => (
+    <ServiceBookingCard
+      key={a.id}
+      now={serviceClock}
+      onShowInCalendar={() => showServiceBookingInCalendar(a)}
+      appointment={a}
+      serviceName={provider?.businessName ?? "الخدمة"}
+      sourceLabel={SOURCE_LABELS[a.source] ?? a.source ?? "غير محدد"}
+      durationLabel={serviceDurationLabel(a.duration, a.durationUnit)}
+      requiresContract={!!provider?.requiresContract}
+      templates={serviceMessageTemplates(a)}
+      messageMenuOpen={openServiceMessageMenuId === a.id}
+      isUpdating={updatingAppointmentId === a.id}
+      isStatusBusy={cancellingId === a.id}
+      reviewSending={reviewSendingId === a.id}
+      reviewSent={reviewSentIds.has(a.id)}
+      onToggleMessageMenu={() => setOpenServiceMessageMenuId(openServiceMessageMenuId === a.id ? null : a.id)}
+      onSendTemplate={(body) => sendServiceCustomMessage(a, body)}
+      onReceipt={() => setReceiptAppointment(a)}
+      onAddPayment={() => openServicePaymentDialog(a)}
+      onConfirm={() => handleStatusChange(a.id, "confirmed")}
+      onCancel={() => setCancelAppointment(a)}
+      onPreviewContract={() => setContractPreviewAppointment(a)}
+      onSendContract={() => sendServiceContractWhatsApp(a)}
+      onToggleContractSigned={() => updateServiceAppointmentFlags(a, { contractSigned: !a.contractSigned })}
+      onToggleCashDeposited={() => updateServiceAppointmentFlags(a, { cashDeposited: !a.cashDeposited })}
+      onSendReview={() => sendServiceReviewRequest(a)}
+      onEdit={() => startEditingAppointment(a)}
+      isDeleting={deletingAppointmentId === a.id}
+      onDelete={() => handleDeleteAppointment(a.id)}
+    />
+  );
+
   return (
     <div ref={serviceCalendarRootRef} className="space-y-5">
       {apptError && (
@@ -1922,38 +1956,7 @@ export function ServiceCalendarBookingsTab() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {pagedAppts.items.map((a: any) => (
-                      <ServiceBookingCard
-                        key={a.id}
-                        now={serviceClock}
-                        onShowInCalendar={() => showServiceBookingInCalendar(a)}
-                        appointment={a}
-                        serviceName={provider?.businessName ?? "الخدمة"}
-                        sourceLabel={SOURCE_LABELS[a.source] ?? a.source ?? "غير محدد"}
-                        durationLabel={serviceDurationLabel(a.duration, a.durationUnit)}
-                        requiresContract={!!provider?.requiresContract}
-                        templates={serviceMessageTemplates(a)}
-                        messageMenuOpen={openServiceMessageMenuId === a.id}
-                        isUpdating={updatingAppointmentId === a.id}
-                        isStatusBusy={cancellingId === a.id}
-                        reviewSending={reviewSendingId === a.id}
-                        reviewSent={reviewSentIds.has(a.id)}
-                        onToggleMessageMenu={() => setOpenServiceMessageMenuId(openServiceMessageMenuId === a.id ? null : a.id)}
-                        onSendTemplate={(body) => sendServiceCustomMessage(a, body)}
-                        onReceipt={() => setReceiptAppointment(a)}
-                        onAddPayment={() => openServicePaymentDialog(a)}
-                        onConfirm={() => handleStatusChange(a.id, "confirmed")}
-                        onCancel={() => setCancelAppointment(a)}
-                        onPreviewContract={() => setContractPreviewAppointment(a)}
-                        onSendContract={() => sendServiceContractWhatsApp(a)}
-                        onToggleContractSigned={() => updateServiceAppointmentFlags(a, { contractSigned: !a.contractSigned })}
-                        onToggleCashDeposited={() => updateServiceAppointmentFlags(a, { cashDeposited: !a.cashDeposited })}
-                        onSendReview={() => sendServiceReviewRequest(a)}
-                        onEdit={() => startEditingAppointment(a)}
-                        isDeleting={deletingAppointmentId === a.id}
-                        onDelete={() => handleDeleteAppointment(a.id)}
-                      />
-            ))}
+            {pagedAppts.items.map(renderServiceBooking)}
           </div>
         )}
         {!apptLoading && filteredAppts.length > 0 && (
@@ -1970,6 +1973,18 @@ export function ServiceCalendarBookingsTab() {
           />
         )}
       </div>
+
+      {providerId && <ServiceBookingArchive
+        key={providerId}
+        providerId={providerId}
+        serviceName={provider?.businessName ?? "الخدمة"}
+        appointments={appointments}
+        now={serviceClock}
+        loading={apptLoading}
+        error={apptError}
+        onRetry={() => { void refetchAppointments(); }}
+        renderBooking={renderServiceBooking}
+      />}
 
       {/* Service receipt preview */}
       {receiptAppointment && (() => {

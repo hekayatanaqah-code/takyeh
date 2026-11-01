@@ -27,7 +27,7 @@ export function ServiceBookingFilters({ scope, payment, status, onScopeChange, o
       <fieldset className="min-w-0 max-w-full">
         <legend className="mb-2 px-1 text-xs font-semibold text-muted-foreground">نطاق السجل</legend>
         <div role="group" aria-label="نطاق سجل حجوزات الخدمات" className="flex flex-wrap gap-1 rounded-xl bg-muted/60 p-1">
-          {([["active", "الحجوزات النشطة"], ["completed", "أرشيف المكتملة"], ["cancelled", "الملغية"]] as const).map(([value, label]) => (
+          {([["active", "الحجوزات النشطة"], ["cancelled", "الملغية"]] as const).map(([value, label]) => (
             <button key={value} type="button" aria-pressed={scope === value}
               className={buttonClass(scope === value)} onClick={() => onScopeChange(value)}>
               {label}

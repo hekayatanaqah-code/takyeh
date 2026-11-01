@@ -3,6 +3,12 @@ name: Service booking cards
 description: User-required parity with property cards and safe boundaries for additive service collections.
 ---
 
+أرشيف حجوزات الخدمات قسم مستقل أسفل صفحة التقويم، بمظهر أرشيف العقارات وفلاتره الموحدة؛ لا يوضع تبويب «أرشيف المكتملة» ضمن نطاق السجل التشغيلي العلوي.
+
+**Why:** المستخدم طلب تطابق الواجهة مع إدارة العقارات وفصل الأرشيف، بما يشمل اختيار السنة والشهر والتقويم والبحث وتصدير Excel/PDF.
+
+**How to apply:** تقتصر البيانات على الخدمة الحالية، وتبقى فلاتر الأرشيف مستقلة عن فلاتر السجل النشط. يشمل التصدير جميع النتائج المطابقة، لا صفحة واحدة، وتظل مبالغ التأمين منفصلة عن أصل الخدمة.
+
 Service bookings use the property bookings' card presentation in both the booking register and day details: customer/contact/service details, a colored bottom financial strip, and horizontally arranged quick actions.
 
 **Why:** The user explicitly requested replacing the traditional service-booking text table with cards matching property bookings exactly.
