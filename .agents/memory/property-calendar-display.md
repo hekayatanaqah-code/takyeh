@@ -25,3 +25,9 @@ Arrival preparation badges mean the booking starts today or tomorrow in Saudi ti
 **Why:** The user specified “حجوزات اليوم أو الغد”; a precise-hour window could omit today's arrivals or include the day after tomorrow.
 
 **How to apply:** Distinguish the start day from continued occupancy in multi-day stays; the existing whole-day active/archive boundary remains unchanged.
+
+قائمة الحجوزات النشطة أسفل تقويم العقارات تكتفي بالبحث النصي وأزرار تصنيف الحالات؛ لا تضف إليها فلاتر هجري/ميلادي أو سنة أو شهر.
+
+**Why:** المستخدم طلب إزالة التكرار مع التقويم العلوي وتنظيف الواجهة.
+
+**How to apply:** لا تُبقِ قيود تواريخ مخفية على القائمة بعد إزالة أدواتها، ولا تُزل أدوات التقويم العلوي أو فلاتر الأرشيف المستقلة.

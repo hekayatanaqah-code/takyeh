@@ -30,7 +30,7 @@ import { BASE, apiFetch } from "@/components/owner/owner-api";
 import { fromArN, toArN } from "@/components/owner/owner-formatting";
 import { DEFAULT_MODIFICATION_TEMPLATE_BODY, DEFAULT_OWNER_MESSAGE_SETTINGS, OwnerMessageSettings, encodeWhatsAppText } from "@/components/owner/owner-message-templates";
 import { BufferExceptionDateFE, GregorianMiniCalendar, MiniCalendar } from "@/components/owner/PropertyMiniCalendars";
-import { GREGORIAN_MONTHS_AR, getBookingMonthKey, getBookingMonthLabel, getCalCorrespondenceHint, isCurrentPause } from "@/components/owner/owner-calendar";
+import { GREGORIAN_MONTHS_AR, getBookingMonthKey, getBookingMonthLabel, isCurrentPause } from "@/components/owner/owner-calendar";
 import { SectionGuideButton } from "@/components/owner/SectionGuideButton";
 import { AddBookingDialog, BlockDateDialog, ManageInsuranceDialog, ProofViewerDialog } from "@/components/owner/PropertyBookingDialogs";
 import { fromEasternArabic, toEasternArabic } from "@/components/owner/SubscriptionAccountBanner";
@@ -125,8 +125,6 @@ export function BookingCalendarTab({
   const [confirmInsuranceBookingId, setConfirmInsuranceBookingId] = useState<number | null>(null);
   const [reviewSentIds, setReviewSentIds] = useState<Set<number>>(new Set());
   const [reviewPendingId, setReviewPendingId] = useState<number | null>(null);
-  const [filterFrom, setFilterFrom] = useState("");
-  const [filterTo, setFilterTo] = useState("");
   const [deleteDialogBooking, setDeleteDialogBooking] = useState<OwnerBooking | null>(null);
   const [contractPreviewBooking, setContractPreviewBooking] = useState<OwnerBooking | null>(null);
   const [waCancelPreview, setWaCancelPreview] = useState<{ booking: OwnerBooking; phone: string; message: string } | null>(null);
@@ -143,9 +141,7 @@ export function BookingCalendarTab({
     return () => window.clearTimeout(timer);
   }, [archiveFilters.search]);
   const [bookingPage, setBookingPage] = useState(0);
-  const [bookingCalView, setBookingCalView] = useState<"hijri" | "gregorian">("hijri");
-  const [bookingMonthFilter, setBookingMonthFilter] = useState<string>("all");
-  const [bookingYearFilter, setBookingYearFilter] = useState<string>("");
+  const bookingCalView = "hijri" as const;
   const [bookingPaymentFilter, setBookingPaymentFilter] = useState<PropertyPaymentFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [calDepositSaving, setCalDepositSaving] = useState<number | null>(null);
@@ -791,8 +787,6 @@ export function BookingCalendarTab({
       // The active list retains every occupied date in full; settlement still uses actual check-out.
       if (b.cancelledAt || isBookingCalendarComplete(b, stayClock)) return false;
 
-      if (filterFrom && b.bookingDate < filterFrom) return false;
-      if (filterTo && b.bookingDate > filterTo) return false;
       if (q) {
         const nameMatch = b.clientName?.toLowerCase().includes(q);
         const phoneMatch = b.clientPhone?.toLowerCase().includes(q);
@@ -803,58 +797,23 @@ export function BookingCalendarTab({
       }
       return true;
     }).sort((a, b) => a.bookingDate.localeCompare(b.bookingDate));
-  }, [bookings, filterFrom, filterTo, searchQuery, ownerChalets, stayClock]);
+  }, [bookings, searchQuery, ownerChalets, stayClock]);
 
-  const bookingYearOptions = useMemo(() => {
-    const years = new Set<string>();
-    filteredBookings.forEach(b => {
-      const d = new Date(b.bookingDate + "T00:00:00");
-      years.add(bookingCalView === "hijri" ? String(toHijriComponents(d).year) : String(d.getFullYear()));
-    });
-    return Array.from(years).sort().reverse();
-  }, [filteredBookings, bookingCalView]);
+  const paymentFilteredBookings = useMemo(
+    () => filteredBookings.filter(booking => matchesPropertyPaymentFilter(booking, bookingPaymentFilter)),
+    [filteredBookings, bookingPaymentFilter],
+  );
 
-  const availableMonthKeys = useMemo(() => {
-    const seen = new Set<string>();
-    filteredBookings
-      .filter(b => {
-        if (!bookingYearFilter) return true;
-        const d = new Date(b.bookingDate + "T00:00:00");
-        const yr = bookingCalView === "hijri" ? String(toHijriComponents(d).year) : String(d.getFullYear());
-        return yr === bookingYearFilter;
-      })
-      .forEach(b => seen.add(getBookingMonthKey(b.bookingDate, bookingCalView)));
-    return Array.from(seen).sort();
-  }, [filteredBookings, bookingCalView, bookingYearFilter]);
-
-  const monthFilteredBookings = useMemo(() => {
-    let result = filteredBookings;
-    if (bookingYearFilter) {
-      result = result.filter(b => {
-        const d = new Date(b.bookingDate + "T00:00:00");
-        const yr = bookingCalView === "hijri" ? String(toHijriComponents(d).year) : String(d.getFullYear());
-        return yr === bookingYearFilter;
-      });
-    }
-    if (bookingMonthFilter !== "all") {
-      result = result.filter(b => getBookingMonthKey(b.bookingDate, bookingCalView) === bookingMonthFilter);
-    }
-    return result.filter(booking => matchesPropertyPaymentFilter(booking, bookingPaymentFilter));
-  }, [filteredBookings, bookingMonthFilter, bookingCalView, bookingYearFilter, bookingPaymentFilter]);
-
-  const totalBookingPages = Math.max(1, Math.ceil(monthFilteredBookings.length / BOOKINGS_PER_PAGE));
+  const totalBookingPages = Math.max(1, Math.ceil(paymentFilteredBookings.length / BOOKINGS_PER_PAGE));
   useEffect(() => {
     setBookingPage(current => Math.min(current, totalBookingPages - 1));
   }, [totalBookingPages]);
   const pagedBookings = useMemo(() => {
     const start = bookingPage * BOOKINGS_PER_PAGE;
-    return monthFilteredBookings.slice(start, start + BOOKINGS_PER_PAGE);
-  }, [monthFilteredBookings, bookingPage]);
+    return paymentFilteredBookings.slice(start, start + BOOKINGS_PER_PAGE);
+  }, [paymentFilteredBookings, bookingPage]);
 
-  useEffect(() => { setBookingPage(0); }, [searchQuery, filterFrom, filterTo, bookingPaymentFilter]);
-  useEffect(() => { setBookingPage(0); setBookingMonthFilter("all"); setBookingYearFilter(""); }, [bookingCalView]);
-  useEffect(() => { setBookingPage(0); }, [bookingMonthFilter]);
-  useEffect(() => { setBookingPage(0); setBookingMonthFilter("all"); }, [bookingYearFilter]);
+  useEffect(() => { setBookingPage(0); }, [searchQuery, bookingPaymentFilter]);
 
   const getManualWhatsAppTemplates = (booking: OwnerBooking) => messageSettings.waEnabled ? [
     { id: "confirmation", title: "تأكيد الحجز", body: messageSettings.bookingConfirmationTemplate },
@@ -2630,89 +2589,21 @@ export function BookingCalendarTab({
         </div>
         <div className="mb-4 space-y-2">
           <h3 className="font-bold text-foreground">قائمة الحجوزات
-            {(searchQuery || bookingYearFilter || bookingMonthFilter !== "all" || bookingPaymentFilter !== "all") && monthFilteredBookings.length > 0 && (
-              <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(monthFilteredBookings.length)} نتيجة)</span>
+            {(searchQuery || bookingPaymentFilter !== "all") && paymentFilteredBookings.length > 0 && (
+              <span className="text-xs font-normal text-muted-foreground mr-2">({toAr(paymentFilteredBookings.length)} نتيجة)</span>
             )}
           </h3>
-          <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
-            {/* Calendar type toggle */}
-            <div className="flex rounded-lg overflow-hidden border border-border shrink-0">
-              {(["hijri", "gregorian"] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => { setBookingCalView(mode); setBookingMonthFilter("all"); setBookingYearFilter(""); }}
-                  className={`text-xs px-3 py-1.5 h-9 font-medium transition-colors ${
-                    bookingCalView === mode
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:bg-muted"
-                  }`}
-                >
-                  {mode === "hijri" ? "هجري" : "ميلادي"}
-                </button>
-              ))}
-            </div>
-            {/* Year dropdown */}
-            <Select
-              value={bookingYearFilter || "__all__"}
-              onValueChange={yr => { setBookingYearFilter(yr === "__all__" ? "" : yr); setBookingMonthFilter("all"); setBookingPage(0); }}
-            >
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[7rem] shrink-0" dir="rtl">
-                {bookingYearFilter
-                  ? <span className="text-sm font-medium">{bookingCalView === "hijri" ? `${toArN(Number(bookingYearFilter))} هـ` : `${toArN(Number(bookingYearFilter))} م`}</span>
-                  : <span className="text-sm text-muted-foreground">كل السنوات</span>}
-              </SelectTrigger>
-              <SelectContent dir="rtl" align="end">
-                <SelectItem value="__all__"><span className="text-sm">كل السنوات</span></SelectItem>
-                {bookingYearOptions.map(yr => (
-                  <SelectItem key={yr} value={yr}>
-                    {bookingCalView === "hijri" ? `${toArN(Number(yr))} هـ` : `${toArN(Number(yr))} م`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {/* Month dropdown — cascades from year, disabled when كل السنوات */}
-            <Select
-              value={!bookingYearFilter ? "__all__" : bookingMonthFilter}
-              onValueChange={(v) => { if (bookingYearFilter) { setBookingMonthFilter(v); setBookingPage(0); } }}
-              disabled={!bookingYearFilter}
-            >
-              <SelectTrigger className="h-9 text-sm rounded-lg border-border w-[8rem] shrink-0" dir="rtl">
-                {bookingMonthFilter !== "all" && bookingYearFilter ? (() => {
-                  const [, ms] = bookingMonthFilter.split("-").map(Number);
-                  return bookingCalView === "hijri"
-                    ? <span className="font-medium">{HIJRI_MONTHS_AR[ms - 1]}</span>
-                    : <span className="font-medium">{GREGORIAN_MONTHS_AR[ms - 1]}</span>;
-                })() : <span className="text-muted-foreground">{bookingYearFilter ? "كل الحجوزات" : "كل الحجوزات"}</span>}
-              </SelectTrigger>
-              <SelectContent dir="rtl" align="end">
-                <SelectItem value="all"><span className="text-sm">كل الحجوزات</span></SelectItem>
-                {availableMonthKeys.map(key => {
-                  const [ys, ms] = key.split("-").map(Number);
-                  const primary = bookingCalView === "hijri" ? `${HIJRI_MONTHS_AR[ms-1]} ${toArN(ys)} هـ` : `${GREGORIAN_MONTHS_AR[ms-1]} ${toArN(ys)} م`;
-                  const corr = getCalCorrespondenceHint(key, bookingCalView);
-                  return (
-                    <SelectItem key={key} value={key} textValue={primary}>
-                      <div style={{width:"100%",direction:"rtl"}}>
-                        <div style={{fontWeight:"600",fontSize:"13px",textAlign:"right"}}>{primary}</div>
-                        {corr && <div style={{fontSize:"11px",color:"#888",textAlign:"right",marginTop:"1px"}}>{corr}</div>}
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
         {bookingsLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
           </div>
-        ) : monthFilteredBookings.length === 0 ? (
+        ) : paymentFilteredBookings.length === 0 ? (
           <div className="bg-card border border-dashed border-border rounded-2xl p-10 text-center">
             <BookOpen className="w-12 h-12 text-muted-foreground/40 mx-auto mb-4" />
-            <h3 className="text-base font-semibold mb-2">{bookingPaymentFilter !== "all" ? "لا توجد حجوزات تطابق حالة الدفع المحددة" : (bookingYearFilter || bookingMonthFilter !== "all") ? "لا توجد حجوزات في هذه الفترة" : "لا توجد حجوزات بعد"}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{bookingPaymentFilter !== "all" ? "اختر «الكل» أو غيّر حالة الدفع والفترة لعرض الحجوزات الأخرى" : (bookingYearFilter || bookingMonthFilter !== "all") ? "جرّب تغيير الفترة الزمنية" : "سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك"}</p>
-            {!bookingYearFilter && bookingMonthFilter === "all" && bookingPaymentFilter === "all" && (
+            <h3 className="text-base font-semibold mb-2">{bookingPaymentFilter !== "all" ? "لا توجد حجوزات تطابق حالة الدفع المحددة" : searchQuery ? "لا توجد حجوزات تطابق البحث" : "لا توجد حجوزات بعد"}</h3>
+            <p className="text-sm text-muted-foreground mb-4">{bookingPaymentFilter !== "all" ? "اختر «الكل» أو غيّر حالة الدفع لعرض الحجوزات الأخرى" : searchQuery ? "جرّب البحث باسم العميل أو رقم الجوال أو اسم العقار" : "سجّل حجوزاتك من واتساب وانستقرام لمتابعة تقويمك"}</p>
+            {!searchQuery && bookingPaymentFilter === "all" && (
               <Button size="sm" disabled={isReadOnly} onClick={() => { if (isReadOnly) { onBlockedEdit(); return; } setAddOpen(true); }}>
                 <Plus className="w-4 h-4 me-2" />
                 إضافة أول حجز
@@ -3314,7 +3205,7 @@ export function BookingCalendarTab({
               );
             }); })()}
           </div>
-          {monthFilteredBookings.length > BOOKINGS_PER_PAGE && (
+          {paymentFilteredBookings.length > BOOKINGS_PER_PAGE && (
             <div className="flex items-center justify-between pt-3 mt-1" dir="rtl">
               <button
                 onClick={() => setBookingPage(p => Math.max(0, p - 1))}
@@ -3325,7 +3216,7 @@ export function BookingCalendarTab({
               </button>
               <span className="text-xs font-medium text-muted-foreground" dir="rtl">
                 صفحة {toAr(bookingPage + 1)} من {toAr(totalBookingPages)}
-                <span className="text-muted-foreground/60 mr-1">({toAr(monthFilteredBookings.length)} حجز)</span>
+                <span className="text-muted-foreground/60 mr-1">({toAr(paymentFilteredBookings.length)} حجز)</span>
               </span>
               <button
                 onClick={() => setBookingPage(p => Math.min(totalBookingPages - 1, p + 1))}
