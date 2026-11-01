@@ -8,6 +8,7 @@ import { FinanceTab } from "./adminFinance";
 import { RefundAction } from "./refunds";
 import { FIN_STATUS_AR, PAY_METHOD_AR } from "./money";
 import { PhotographersTable } from "./PhotographersTable";
+import { PhotographerReviewDetails } from "./PhotographerReviewDetails";
 import { UpperTabs, TabPanel } from "./portalWidgets";
 import { ApprovalsEditor, TagInput, Chips, usePhOptions, OPTIONS_KEY } from "./approvals";
 import { AlertsList, CancellationHistory, PolicyCard, ReassignButton, type PhotoAlert, type PhotoCancellation, type PhotoPolicy } from "./operations";
@@ -178,6 +179,7 @@ function ReviewPanel({ p, onClose }: { p: Photographer; onClose: () => void }) {
   return (
     <div className="space-y-3" data-testid={`card-photographer-${p.id}`}>
       {p.bio && <p className="text-sm">{p.bio}</p>}
+      <PhotographerReviewDetails key={p.profileImagePath} p={p} />
       <div className="grid gap-2 rounded-xl border border-border p-3 text-sm sm:grid-cols-2" data-testid={`info-bank-${p.id}`}>
         <p>البنك: <span className="font-semibold">{p.bankName || "غير مسجل"}</span></p>
         <p>الآيبان: <span dir="ltr" className="font-mono">{p.iban ? formatIban(p.iban) : "غير مسجل"}</span></p>
