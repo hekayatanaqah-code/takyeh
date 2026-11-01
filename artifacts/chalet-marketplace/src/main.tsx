@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { installConnectionMonitor } from "./lib/connection-monitor";
+import { registerHomePwa } from "./lib/home-pwa";
 
 installConnectionMonitor();
 
@@ -35,7 +36,8 @@ async function clearLegacyFrontendCaches() {
   }
 }
 
-void clearLegacyFrontendCaches();
+// Finish one-time legacy cleanup before registering, so it cannot remove this worker.
+void clearLegacyFrontendCaches().then(registerHomePwa);
 
 /* ═══════════════════════════════════════════════════════════════════════════
    GLOBAL ARABIC-INDIC NUMERAL ENFORCER

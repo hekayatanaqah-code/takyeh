@@ -73,6 +73,7 @@
 - [Photography delivery integrity](photography-delivery-integrity.md) — actual artifacts, immutable private copies and single owner notice; current competencies stay separate from historical consent.
 - [Multi-role authentication](multi-role-authentication.md) — shared contacts discover roles, not permissions; retain password choice and independent owner/photographer login and logout.
 - [Connection recovery boundaries](connection-recovery-boundaries.md) — preserve mounted forms; recover data reads without replaying saves, payments or authentication actions.
+- [Homepage PWA scope](home-pwa-scope.md) — install opens home only; no offline private data, financial caching or automatic write retries.
 - [Property stay completion](property-stay-completion.md) — Saudi check-out controls insurance settlement, booking-linked reviews and automatic non-destructive archiving.
 - [Archive report exports](archive-report-export.md) — one complete booking per landscape table row; range-navigation rules and Excel calculation-metadata verification.
 - [Revenue cash custody](revenue-cash-custody.md) — outstanding cash must match its detail records; never derive it by subtracting cumulative bank balances from monthly collections.
