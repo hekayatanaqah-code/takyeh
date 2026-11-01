@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
+import { previewTransformFixture } from "./scripts/preview-transform-fixture-plugin";
 
 const rawPort = process.env.PORT;
 
@@ -51,6 +52,7 @@ const BOT_AGENTS = ["facebookexternalhit", "facebot", "twitterbot", "whatsapp", 
 export default defineConfig({
   base: basePath,
   plugins: [
+    previewTransformFixture(),
     react({ jsxImportSource: "@/lib/currency-jsx" }),
     tailwindcss(),
     runtimeErrorOverlay(),

@@ -8,6 +8,8 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check:preview-transform": "node scripts/check-preview-transform.mjs",
+    "test:preview-transform": "node --test scripts/check-preview-transform.test.mjs && tsc -p scripts/fixtures/preview-transform/tsconfig.json",
     "test:city-search": "tsx --test src/lib/city-name.test.ts",
     "test:inventory-filters": "tsx --test src/lib/inventory-filters.test.ts",
     "test": "NODE_ENV=production tsx --test src/lib/serviceReceipt.test.ts",
