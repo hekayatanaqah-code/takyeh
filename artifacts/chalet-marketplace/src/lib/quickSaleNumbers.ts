@@ -18,3 +18,8 @@ export function quickSalePhone(value: string): string {
   if (/^5\d{8}$/.test(digits)) digits = `0${digits}`;
   return digits;
 }
+
+/** Local customer mobile field: Arabic digits, at most ten characters, including pasted input. */
+export function quickSalePhoneInput(value: string): string {
+  return quickSaleNumericInput(value).slice(0, 10);
+}

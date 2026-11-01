@@ -23,9 +23,9 @@ import { cn, toAr, fromAr } from "@/lib/utils";
 import { formatDualDate } from "@/lib/hijri";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle, type RevenuePeriod } from "@/lib/revenuePeriod";
 import { quickSalesHistoryMonths, reconcileQuickSalesHistoryPeriod, switchQuickSalesHistoryCalendar } from "@/lib/quickSalesHistoryPeriod";
-import { QuickSalesHistoryFilters } from "./QuickSalesHistoryFilters";
+import { QuickSalesHistoryFilters, QuickSalesHistoryStatusFilters, type QuickSalesHistoryStatus } from "./QuickSalesHistoryFilters";
 import { qsErrText } from "./QuickSalesSettingsPanel";
-import { quickSaleNumericInput, quickSalePhone } from "@/lib/quickSaleNumbers";
+import { quickSaleNumericInput, quickSalePhone, quickSalePhoneInput } from "@/lib/quickSaleNumbers";
 
 const MAX_TOTAL = 9_999_999_999.99;
 const PAY_LABEL = { cash: "نقدًا", bank: "تحويل بنكي" } as const;
@@ -172,6 +172,8 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
   };
 
   /* history filter */
+  const [historyStatus, setHistoryStatus] = useState<QuickSalesHistoryStatus>("all");
+  useEffect(() => { setHistoryStatus("all"); }, [providerId]);
   const [period, setPeriod] = useState<RevenuePeriod>(() => {
     const month = revenueMonthKey(today(), "hijri");
     return { calendar: "hijri", year: month.slice(0, 4), month };
@@ -186,7 +188,8 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
       return next.year === previous.year && next.month === previous.month ? previous : next;
     });
   }, [historyMonths, salesQ.isLoading, salesQ.isError]);
-  const filtered = sales.filter(s => isInRevenuePeriod(s.dateStr, period));
+  const filtered = sales.filter(s => isInRevenuePeriod(s.dateStr, period)
+    && (historyStatus === "all" || s.status === historyStatus));
 
   const [toCancel, setToCancel] = useState<QuickSale | null>(null);
   const [reason, setReason] = useState("");
@@ -242,9 +245,9 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
               <div className="space-y-1.5 min-w-0">
                 <Label htmlFor="qs-phone" className="block">جوال العميل <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                <Input id="qs-phone" type="tel" inputMode="tel" dir="rtl" className="h-10 text-right" value={clientPhone} maxLength={16}
+                <Input id="qs-phone" type="tel" inputMode="numeric" dir="rtl" className="h-10 text-right" value={clientPhone} maxLength={10}
                   placeholder="٠٥xxxxxxxx" onChange={e => {
-                    const next = quickSaleNumericInput(e.target.value);
+                    const next = quickSalePhoneInput(e.target.value);
                     // Browsers may emit another change after controlled digit conversion.
                     // An unchanged phone must not invalidate its in-flight lookup.
                     if (next === clientPhone) return;
@@ -344,6 +347,8 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
         <div className="space-y-3">
           <div className="space-y-3">
             <h4 className="font-bold text-sm">سجل البيع السريع <span className="text-muted-foreground font-normal">· {revenueSalesTitle(period).replace("المبيعات", "").replace("مبيعات", "").trim() || "الكل"}</span></h4>
+            <QuickSalesHistoryStatusFilters value={historyStatus} onChange={setHistoryStatus}
+              disabled={salesQ.isLoading || salesQ.isError} />
             <QuickSalesHistoryFilters period={period} months={historyMonths} loading={salesQ.isLoading || salesQ.isError}
               onChange={setPeriod}
               onCalendarChange={calendar => setPeriod(previous => switchQuickSalesHistoryCalendar(previous, calendar, historyDates))} />
@@ -365,8 +370,10 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
               {filtered.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border bg-secondary/30 py-10 px-4 text-center flex flex-col items-center gap-2" data-testid="status-empty">
                   <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center"><Receipt className="w-6 h-6" /></div>
-                  <p className="font-semibold">{sales.length ? "لا مبيعات في هذه الفترة" : "لا مبيعات سريعة بعد"}</p>
-                  <p className="text-sm text-muted-foreground max-w-sm">كل بيعة تسجّلها هنا تظهر في هذا السجل مع تاريخها الهجري والميلادي، منفصلة عن الحجوزات.</p>
+                  <p className="font-semibold">{sales.length ? "لا توجد مبيعات مطابقة للفلاتر المحددة" : "لا مبيعات سريعة بعد"}</p>
+                  <p className="text-sm text-muted-foreground max-w-sm">{sales.length
+                    ? "جرّب حالة أخرى أو عدّل فترة السجل."
+                    : "كل بيعة تسجّلها هنا تظهر في هذا السجل مع تاريخها الهجري والميلادي، منفصلة عن الحجوزات."}</p>
                 </div>
               ) : (
                 <ul className="space-y-2">

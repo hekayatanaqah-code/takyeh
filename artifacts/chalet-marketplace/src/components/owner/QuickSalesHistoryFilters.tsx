@@ -1,8 +1,26 @@
+import React from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toAr } from "@/lib/utils";
 import type { RevenuePeriod } from "@/lib/revenuePeriod";
 import { revenueMonthLabel } from "@/lib/revenueMonthLabel";
 import { RevenueMonthItem } from "./RevenueMonthItem";
+
+export type QuickSalesHistoryStatus = "all" | "completed" | "cancelled";
+
+export function QuickSalesHistoryStatusFilters({ value, onChange, disabled = false }: {
+  value: QuickSalesHistoryStatus;
+  onChange: (value: QuickSalesHistoryStatus) => void;
+  disabled?: boolean;
+}) {
+  return <div dir="rtl" role="group" aria-label="حالة البيع السريع"
+    data-testid="quick-sales-status-filters" className="flex w-full gap-1 rounded-xl border border-border bg-secondary/40 p-1 sm:w-fit">
+    {([["all", "الكل"], ["completed", "المكتملة"], ["cancelled", "الملغاة"]] as const).map(([status, label]) =>
+      <button key={status} type="button" aria-pressed={value === status} disabled={disabled} onClick={() => onChange(status)}
+        data-testid={`quick-sales-status-${status}`}
+        className={`min-h-10 flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 sm:flex-none ${value === status
+          ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"}`}>{label}</button>)}
+  </div>;
+}
 
 export function QuickSalesHistoryFilters({ period, months, loading, onCalendarChange, onChange }: {
   period: RevenuePeriod;
