@@ -49,6 +49,12 @@ jobs:
       - name: Run isolated iPhone calendar release gate
         run: pnpm --filter @workspace/chalet-marketplace test:e2e:iphone-calendar
 
+      - name: Protect empty owner onboarding and navigation
+        run: |
+          pnpm --filter @workspace/chalet-marketplace typecheck:e2e
+          pnpm --filter @workspace/chalet-marketplace test:owner-navigation
+          pnpm --filter @workspace/chalet-marketplace test:e2e:owner-empty
+
       - name: Run owner dashboard calendar integration check
         run: >-
           pnpm --filter @workspace/chalet-marketplace exec playwright test

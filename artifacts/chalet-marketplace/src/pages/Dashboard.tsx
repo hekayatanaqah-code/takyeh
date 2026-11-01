@@ -25493,11 +25493,13 @@ export default function Dashboard() {
   const {
     data: ownerProfile,
     isLoading: ownerProfileLoading,
+    isError: ownerProfileError,
+    refetch: retryOwnerProfile,
   } = useQuery<OwnerProfile | null>({
     queryKey: ["owner", "profile-btype", isImpersonating ? impersonation.ownerId : user?.id ?? "self"],
     queryFn: async () => {
       const r = await apiFetch("/owner/profile");
-      if (!r.ok) return { businessType: "both" };
+      if (!r.ok) throw new Error("تعذّر تحميل حساب المالك");
       return r.json();
     },
     enabled: (isAuthenticated || isImpersonating) && !actAsStaff,
@@ -26025,7 +26027,7 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-background" dir="rtl">
         <Navbar />
-        <div className="container mx-auto px-4 py-12 max-w-4xl space-y-6">
+        <div className="container mx-auto px-4 py-12 max-w-4xl space-y-6" role="status" aria-label="جارٍ تحميل لوحة المالك" data-testid="owner-dashboard-loading">
           <Skeleton className="h-24 w-full rounded-2xl" />
           <Skeleton className="h-48 w-full rounded-2xl" />
         </div>
@@ -26034,6 +26036,25 @@ export default function Dashboard() {
   }
 
   if (!canAccess) return null;
+
+  // Initial failures are unknown inventory, not an empty account. Keep already
+  // loaded activity screens mounted on background failures so edits survive.
+  if (!actAsStaff && !isImpersonating && (
+    (ownerProfileError && !ownerProfile)
+    || (ownerInventoryFailed && !hasOwnerActivities(ownerChalets.length, submissions?.length ?? 0, myApprovedProviders.length, myServiceSubmissions.length))
+  )) {
+    return <div className="min-h-screen bg-background" dir="rtl">
+      <Navbar />
+      <div role="alert" className="mx-auto max-w-3xl px-4 py-16 text-center space-y-4">
+        <h1 className="text-xl font-bold">{ownerProfileError ? "تعذّر تحميل حساب المالك" : "تعذّر تحميل أنشطة المالك"}</h1>
+        <Button onClick={() => {
+          if (ownerProfileError) void retryOwnerProfile();
+          if (canSeeChalets) { void retryOwnerChalets(); void retrySubmissions(); }
+          if (canSeeServices) { void retryProviders(); void retryServiceSubmissions(); }
+        }}>إعادة المحاولة</Button>
+      </div>
+    </div>;
+  }
 
   if (!actAsStaff && !isImpersonating && requestedServiceRaw
     && (!requestedServiceId || providersError || !myApprovedProviders.some(p => p.id === requestedServiceId))) {

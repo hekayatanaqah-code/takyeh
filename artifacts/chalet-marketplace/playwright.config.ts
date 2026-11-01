@@ -11,7 +11,19 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "owner-onboarding",
+      testMatch: /owner-empty-state\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        browserName: "chromium",
+        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+          : undefined,
+      },
+    },
+    {
       name: "webkit-iphone",
+      testIgnore: /owner-empty-state\.spec\.ts/,
       use: {
         ...devices["iPhone 13"],
         browserName: "webkit",

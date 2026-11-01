@@ -14,3 +14,9 @@ Public search fixtures must also satisfy the real inventory's availability rules
 **Why:** A partial weekday-price grid can exclude an otherwise priced fixture from public search before discount calculation. Testing pricing with an unintentionally closed weekday produces misleading failures.
 
 **How to apply:** Make the tested weekday and period explicitly bookable unless closure itself is the scenario, and keep the subscription active. Assert fixture presence separately from its calculated discount.
+
+Dashboard-only regression tests should bootstrap an already-authenticated synthetic session rather than depend on the login form.
+
+**Why:** Coupling an empty-owner save journey to login prevented the test from reaching the screen it was meant to protect. Authentication is a separate boundary; these regressions must also avoid real sessions, messaging and financial side effects.
+
+**How to apply:** Scope API interception to a fresh browser context, reject unknown requests instead of forwarding them, and keep saved request state across page reloads within that context. Describe the coverage honestly as browser/UI verification, not backend persistence or authentication verification.

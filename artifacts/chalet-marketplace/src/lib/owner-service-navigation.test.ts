@@ -53,6 +53,22 @@ test("the onboarding empty state requires no properties, services or submissions
   assert.equal(hasOwnerActivities(0, 0, 0, 1), true);
 });
 
+test("every combination of persisted activities excludes the onboarding card", () => {
+  for (let mask = 0; mask < 16; mask++) {
+    const counts = [0, 1, 2, 3].map(bit => (mask >> bit) & 1) as [number, number, number, number];
+    assert.equal(hasOwnerActivities(...counts), mask !== 0, `counts: ${counts}`);
+  }
+});
+
+test("a saved draft or pending request counts before publication or activation", () => {
+  for (const status of ["draft", "pending", "rejected", "needs_revision"]) {
+    const request = { id: 81, status };
+    assert.equal(hasOwnerActivities(0, [request].length, 0, 0), true, `property ${status}`);
+    assert.equal(hasOwnerActivities(0, 0, 0, [request].length), true, `service ${status}`);
+    assert.equal(hasApprovedActiveProperty([request], [{ submissionId: 81, isActive: true }]), false);
+  }
+});
+
 test("direct entry prefers the first active service over an earlier inactive service", () => {
   assert.equal(selectOwnerService(services, null), 2);
 });
