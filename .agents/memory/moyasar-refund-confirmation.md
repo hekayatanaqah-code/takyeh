@@ -13,3 +13,9 @@ Persist the attempt before sending money. An uncertain POST must stay pending an
 **Why:** Releasing an ambiguous attempt on a verification error permits another card or wallet refund against money already returned externally.
 
 **How to apply:** Do not blindly resubmit a partial refund or mark success from a browser response. Keep uncertain amounts reserved and show an honest pending state until provider confirmation.
+
+For subscription reconciliation, a persisted idempotency key is evidence of a reserved attempt, not permission to submit it again. A legacy standalone success or failure is insufficient without payment-level evidence.
+
+**Why:** The current refund contract does not establish an independently queryable refund identity or guaranteed replay behavior. Releasing or replaying an unresolved attempt can return money twice.
+
+**How to apply:** Poll after the first reserved POST, retain its timestamp and key through read failures, and verify the exact full-charge cumulative total for subscription reconciliation. A pre-existing partial total requires review rather than another full-charge POST.

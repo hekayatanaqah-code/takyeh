@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   subscriptionPaymentReconciliationsTable,
 } from "@workspace/db/schema";
+import { logger } from "./logger";
 
 const RETRY_LIMIT = 25;
 const LOCK_LEASE_MS = 5 * 60 * 1000;
@@ -20,6 +21,7 @@ interface ProviderPayment {
   currency?: string;
   description?: string;
   status?: string;
+  refunded?: number;
   refunds?: ProviderRefund[];
 }
 
@@ -39,11 +41,29 @@ export function isPaymentForReconciliation(
   payment: ProviderPayment,
   reconciliation: Pick<ReconciliationRow, "paymentId" | "intentId" | "amountHalala">,
 ): boolean {
-  return payment.id === reconciliation.paymentId &&
+  return !!payment && Number.isSafeInteger(reconciliation.amountHalala) &&
+    reconciliation.amountHalala > 0 && reconciliation.intentId.length > 0 &&
+    payment.id === reconciliation.paymentId &&
     payment.amount === reconciliation.amountHalala &&
     payment.currency === "SAR" &&
     typeof payment.description === "string" &&
-    payment.description.includes(reconciliation.intentId);
+    payment.description.split(/[^A-Za-z0-9_-]+/).includes(reconciliation.intentId);
+}
+
+function legacyRefundSummary(refunds: ProviderRefund[] | undefined, paymentId: string) {
+  if (!Array.isArray(refunds)) return null;
+  const unique = new Map<string, ProviderRefund>();
+  for (const refund of refunds) {
+    if (!refund || typeof refund.id !== "string" || !refund.id.length ||
+        refund.id === paymentId || refund.payment_id !== paymentId ||
+        refund.status !== "refunded" || !Number.isSafeInteger(refund.amount) ||
+        (refund.amount ?? 0) <= 0) return null;
+    const previous = unique.get(refund.id);
+    if (previous && previous.amount !== refund.amount) return null;
+    unique.set(refund.id, refund);
+  }
+  const amount = [...unique.values()].reduce((sum, refund) => sum + refund.amount!, 0);
+  return Number.isSafeInteger(amount) ? { amount, ids: [...unique.keys()].join(",") } : null;
 }
 
 export function verifiedFullRefundId(
@@ -51,16 +71,26 @@ export function verifiedFullRefundId(
   paymentId: string,
   amountHalala: number,
 ): string | null {
-  const matching = (refunds ?? []).filter((refund) =>
-    typeof refund.id === "string" && refund.id.length > 0 &&
-    refund.payment_id === paymentId &&
-    refund.status === "refunded" &&
-    Number.isSafeInteger(refund.amount) && (refund.amount ?? 0) > 0,
-  );
-  const uniqueRefunds = [...new Map(matching.map((refund) => [refund.id!, refund])).values()];
-  const refundedAmount = uniqueRefunds.reduce((sum, refund) => sum + (refund.amount ?? 0), 0);
-  if (refundedAmount !== amountHalala) return null;
-  return uniqueRefunds.map((refund) => refund.id!).join(",");
+  const summary = legacyRefundSummary(refunds, paymentId);
+  return summary && summary.amount === amountHalala && summary.ids ? summary.ids : null;
+}
+
+// These reconciliations return the entire original subscription charge. A
+// partial provider refund is not completion, even when payment.amount is full.
+export function verifiedSubscriptionRefund(
+  payment: ProviderPayment,
+  reconciliation: Pick<ReconciliationRow, "paymentId" | "intentId" | "amountHalala">,
+): { refundId: string | null } | null {
+  if (!isPaymentForReconciliation(payment, reconciliation) ||
+      !["paid", "captured", "refunded"].includes(payment.status ?? "")) return null;
+  if (payment.refunded !== undefined) {
+    if (!Number.isSafeInteger(payment.refunded) ||
+        payment.refunded !== reconciliation.amountHalala) return null;
+    // Moyasar returns the original payment, not a separately identified refund.
+    return { refundId: null };
+  }
+  const refundId = verifiedFullRefundId(payment.refunds, reconciliation.paymentId, reconciliation.amountHalala);
+  return refundId ? { refundId } : null;
 }
 
 export function shouldSubmitRefundRequest(input: {
@@ -70,7 +100,7 @@ export function shouldSubmitRefundRequest(input: {
   paymentStatus: string | undefined;
 }): boolean {
   return input.refundEligible && input.paymentStatus === "paid" &&
-    (input.refundRequestedAt === null || !!input.refundAttemptKey);
+    input.refundRequestedAt === null && input.refundAttemptKey === null;
 }
 
 function retryDelay(attemptCount: number): number {
@@ -78,21 +108,18 @@ function retryDelay(attemptCount: number): number {
 }
 
 function logUnresolved(reconciliationId: number, paymentId: string, status: string, reason: string) {
-  console.error("Subscription payment refund reconciliation remains unresolved", {
+  logger.error({
     reconciliationId,
     paymentId,
     status,
     reason,
-  });
+  }, "Subscription payment refund reconciliation remains unresolved");
 }
 
 async function releaseClaim(input: {
   row: ReconciliationRow & { attemptCount: number };
   status: "required" | "refund_pending" | "manual_review";
   reason: string;
-  refundId?: string | null;
-  clearRefundRequest?: boolean;
-  clearRefundAttemptKey?: boolean;
 }): Promise<void> {
   const now = new Date();
   await db.update(subscriptionPaymentReconciliationsTable).set({
@@ -100,9 +127,6 @@ async function releaseClaim(input: {
     nextAttemptAt: new Date(now.getTime() + retryDelay(input.row.attemptCount)),
     lockedAt: null,
     lastError: input.reason,
-    ...(input.refundId !== undefined ? { refundId: input.refundId } : {}),
-    ...(input.clearRefundRequest ? { refundRequestedAt: null } : {}),
-    ...(input.clearRefundAttemptKey ? { refundAttemptKey: null } : {}),
     updatedAt: now,
   }).where(and(
     eq(subscriptionPaymentReconciliationsTable.id, input.row.id),
@@ -114,7 +138,7 @@ async function releaseClaim(input: {
 
 async function markRefunded(input: {
   row: ReconciliationRow & { attemptCount: number };
-  refundId: string;
+  refundId: string | null;
 }): Promise<void> {
   const now = new Date();
   await db.update(subscriptionPaymentReconciliationsTable).set({
@@ -216,14 +240,31 @@ export async function retrySubscriptionPaymentReconciliation(
     });
     return "manual_review";
   }
-  const verifiedRefundId = verifiedFullRefundId(
-    payment.refunds,
-    reconciliation.paymentId,
-    reconciliation.amountHalala,
-  );
-  if (verifiedRefundId) {
-    await markRefunded({ row: reconciliation, refundId: verifiedRefundId });
+  const verifiedRefund = verifiedSubscriptionRefund(payment, reconciliation);
+  if (verifiedRefund) {
+    await markRefunded({ row: reconciliation, refundId: verifiedRefund.refundId });
     return "refunded";
+  }
+  // An earlier POST can have succeeded even if a later GET is stale or fails.
+  // Keep its reservation and key; idempotency is not permission to POST again.
+  if (reconciliation.refundRequestedAt || reconciliation.refundAttemptKey) {
+    await releaseClaim({
+      row: reconciliation,
+      status: "refund_pending",
+      reason: "An earlier refund outcome is unconfirmed; polling provider state without resubmitting",
+    });
+    return "refund_pending";
+  }
+  const refundedAmount = payment.refunded !== undefined
+    ? payment.refunded
+    : legacyRefundSummary(payment.refunds, reconciliation.paymentId)?.amount;
+  if (refundedAmount !== 0) {
+    await releaseClaim({
+      row: reconciliation,
+      status: "manual_review",
+      reason: "Provider refund total is partial, invalid, or unknown; no full refund request was submitted",
+    });
+    return "manual_review";
   }
   if (payment.status !== "paid") {
     await releaseClaim({
@@ -253,7 +294,7 @@ export async function retrySubscriptionPaymentReconciliation(
     await releaseClaim({
       row: reconciliation,
       status: "refund_pending",
-      reason: "A legacy refund request has no persisted idempotency key; polling provider state without resubmitting",
+      reason: "A refund attempt is already reserved; polling provider state without resubmitting",
     });
     return "refund_pending";
   }
@@ -297,27 +338,32 @@ export async function retrySubscriptionPaymentReconciliation(
         body: JSON.stringify({ amount: reconciliation.amountHalala }),
       },
     );
-    const refund = await response.json().catch(() => null) as ProviderRefund | null;
-    if (response.ok && refund?.id && refund.payment_id === reconciliation.paymentId &&
-        refund.amount === reconciliation.amountHalala && refund.status === "refunded") {
-      await markRefunded({ row: reconciliation, refundId: refund.id });
+    const refund = await response.json().catch(() => null) as (ProviderPayment & ProviderRefund) | null;
+    const confirmation = response.ok && refund
+      ? verifiedSubscriptionRefund(refund, reconciliation) : null;
+    if (confirmation) {
+      await markRefunded({ row: reconciliation, refundId: confirmation.refundId });
       return "refunded";
     }
-    if (response.ok && refund?.id && refund.payment_id === reconciliation.paymentId &&
-        refund.amount === reconciliation.amountHalala && refund.status === "failed") {
-      await releaseClaim({
-        row: reconciliation,
-        status: "required",
-        reason: "Provider confirmed the refund request failed; a fresh idempotent attempt may be made",
-        clearRefundRequest: true,
-        clearRefundAttemptKey: true,
-      });
-      return "required";
+    // Legacy standalone refund objects lack currency, original amount and
+    // checkout linkage. Require a fresh authenticated payment read as evidence.
+    if (response.ok && refund?.id && refund.id !== reconciliation.paymentId &&
+        refund.payment_id === reconciliation.paymentId &&
+        refund.amount === reconciliation.amountHalala && refund.status === "refunded") {
+      const verification = await fetcher(
+        `https://api.moyasar.com/v1/payments/${encodeURIComponent(reconciliation.paymentId)}`,
+        { headers: { Authorization: providerAuthorization(secretKey) } },
+      );
+      const verified = verification.ok
+        ? verifiedSubscriptionRefund(await verification.json() as ProviderPayment, reconciliation) : null;
+      if (verified) {
+        await markRefunded({ row: reconciliation, refundId: verified.refundId });
+        return "refunded";
+      }
     }
     await releaseClaim({
       row: reconciliation,
       status: "refund_pending",
-      refundId: refund?.id ?? null,
       reason: response.ok
         ? "Provider response did not verify a full refund; retry will inspect payment state without resubmitting"
         : `Refund request returned HTTP ${response.status}; retry will inspect provider state without resubmitting`,

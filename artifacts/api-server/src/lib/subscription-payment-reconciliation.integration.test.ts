@@ -3,209 +3,219 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { eq } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { subscriptionPaymentReconciliationsTable } from "@workspace/db/schema";
+import { subscriptionPaymentReconciliationsTable as table } from "@workspace/db/schema";
 import { retrySubscriptionPaymentReconciliation } from "./subscription-payment-reconciliation";
 
-test("reconciliation verifies a mocked refund and polls legacy unknown requests without resubmitting", {
-  timeout: 30_000,
-}, async () => {
+// This process never uses a real provider credential or network request.
+process.env.MOYASAR_SECRET_KEY = "fake-subscription-refund-test-key";
+
+type Payment = {
+  id: string; amount: number; currency: string; description: string; status: string;
+  refunded?: number; refunds?: { id: string; payment_id: string; amount: number; status: string }[];
+};
+type Step = { method: "GET" | "POST"; body?: unknown; status?: number; error?: string; invalidJson?: boolean };
+
+async function fixture(run: (f: {
+  row: typeof table.$inferSelect;
+  payment: Payment;
+  fetcher: typeof fetch;
+  steps: Step[];
+  calls: { method: string; key: string | null }[];
+  retry: () => Promise<string>;
+  read: () => Promise<typeof table.$inferSelect>;
+}) => Promise<void>, pending = false) {
   const suffix = randomUUID();
-  const oldSecret = process.env.MOYASAR_SECRET_KEY;
-  const firstPaymentId = `reconcile_${suffix}`;
-  const secondPaymentId = `reconcile_pending_${suffix}`;
-  const firstIntentId = `checkout_${suffix}`;
-  const secondIntentId = `checkout_pending_${suffix}`;
-  process.env.MOYASAR_SECRET_KEY = "test-secret-not-for-provider";
-  let requestCount = 0;
-  const paymentFetch = async (paymentId: string, intentId: string, init?: RequestInit) => {
-    requestCount++;
-    assert.equal(new Headers(init?.headers).get("Authorization"),
-      `Basic ${Buffer.from(`${process.env.MOYASAR_SECRET_KEY}:`).toString("base64")}`);
-    if (init?.method === "POST") {
-      assert.equal(new Headers(init.headers).get("Idempotency-Key")?.startsWith("subscription-reconciliation-"), true);
-      return new Response(JSON.stringify({
-        id: `refund_${paymentId}`,
-        payment_id: paymentId,
-        amount: 2500,
-        status: "refunded",
-      }), { status: 200, headers: { "content-type": "application/json" } });
-    }
-    return new Response(JSON.stringify({
-      id: paymentId,
-      amount: 2500,
-      currency: "SAR",
-      description: `subscription checkout ${intentId}`,
-      status: "paid",
-      refunds: [],
-    }), { status: 200, headers: { "content-type": "application/json" } });
+  const ownerId = `refund_contract_test_${suffix}`;
+  const [row] = await db.insert(table).values({
+    ownerId, paymentId: `pay_${suffix}`, intentId: `checkout_${suffix}`, amountHalala: 2500,
+    reason: "fake provider contract test", status: pending ? "refund_pending" : "required",
+    refundRequestedAt: pending ? new Date() : null,
+    refundAttemptKey: pending ? `existing_${suffix}` : null,
+    refundAttemptNumber: pending ? 1 : 0,
+    nextAttemptAt: new Date(Date.now() + 86_400_000),
+  }).returning();
+  assert.ok(row);
+  const payment: Payment = {
+    id: row.paymentId, amount: 2500, currency: "SAR",
+    description: `Subscription checkout ${row.intentId}`, status: "paid", refunded: 0,
   };
-  const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
-    const match = String(input).match(/\/payments\/([^/]+)(\/refund)?$/);
-    assert.ok(match, "expected a Moyasar payment verification or refund URL");
-    const paymentId = decodeURIComponent(match![1]!);
-    if (match![2]) assert.equal(init?.method, "POST");
-    const intentId = paymentId === firstPaymentId ? firstIntentId : secondIntentId;
-    return paymentFetch(paymentId, intentId, init);
+  const steps: Step[] = [];
+  const calls: { method: string; key: string | null }[] = [];
+  const fetcher = (async (input, init) => {
+    const method = init?.method ?? "GET";
+    const step = steps.shift();
+    assert.ok(step, `unexpected ${method}; no real network requests are allowed`);
+    assert.equal(method, step.method);
+    assert.equal(String(input), `https://api.moyasar.com/v1/payments/${row.paymentId}${method === "POST" ? "/refund" : ""}`);
+    const key = new Headers(init?.headers).get("Idempotency-Key");
+    calls.push({ method, key });
+    if (method === "POST") {
+      assert.ok(key);
+      assert.deepEqual(JSON.parse(String(init?.body)), { amount: 2500 });
+      const reserved = await read();
+      assert.equal(reserved.refundAttemptKey, key);
+      assert.ok(reserved.refundRequestedAt, "reservation must precede sending money");
+    }
+    if (step.error) throw new Error(step.error);
+    return new Response(step.invalidJson ? "invalid-json" : JSON.stringify("body" in step ? step.body : payment),
+      { status: step.status ?? 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
-
+  async function read() {
+    const [current] = await db.select().from(table).where(eq(table.id, row!.id));
+    assert.ok(current);
+    return current;
+  }
+  async function retry() {
+    await db.update(table).set({ nextAttemptAt: new Date(Date.now() - 1000) }).where(eq(table.id, row!.id));
+    return retrySubscriptionPaymentReconciliation(row!.id, fetcher);
+  }
   try {
-    const [first] = await db.insert(subscriptionPaymentReconciliationsTable).values({
-      paymentId: firstPaymentId,
-      ownerId: `reconciliation_test_${suffix}`,
-      intentId: firstIntentId,
-      amountHalala: 2500,
-      reason: "integration test",
-      status: "required",
-      nextAttemptAt: new Date(Date.now() - 1000),
-    }).returning();
-    assert.ok(first);
-    assert.equal(await retrySubscriptionPaymentReconciliation(first.id, fetcher), "refunded");
-    const [verified] = await db.select().from(subscriptionPaymentReconciliationsTable)
-      .where(eq(subscriptionPaymentReconciliationsTable.id, first.id)).limit(1);
-    assert.equal(verified?.status, "refunded");
-    assert.equal(verified?.refundId, `refund_${firstPaymentId}`);
-    assert.equal(requestCount, 2, "one verification and one refund submission");
-
-    const [pending] = await db.insert(subscriptionPaymentReconciliationsTable).values({
-      paymentId: secondPaymentId,
-      ownerId: `reconciliation_test_${suffix}`,
-      intentId: secondIntentId,
-      amountHalala: 2500,
-      reason: "ambiguous earlier submission",
-      status: "refund_pending",
-      refundRequestedAt: new Date(Date.now() - 60_000),
-      nextAttemptAt: new Date(Date.now() - 1000),
-    }).returning();
-    assert.ok(pending);
-    requestCount = 0;
-    assert.equal(await retrySubscriptionPaymentReconciliation(pending.id, fetcher), "refund_pending");
-    const [stillPending] = await db.select().from(subscriptionPaymentReconciliationsTable)
-      .where(eq(subscriptionPaymentReconciliationsTable.id, pending.id)).limit(1);
-    assert.equal(stillPending?.status, "refund_pending");
-    assert.equal(requestCount, 1, "a legacy request without a persisted idempotency key is only polled");
+    await run({ row, payment, fetcher, steps, calls, retry, read });
+    assert.equal(steps.length, 0, "all expected fake provider requests were consumed");
   } finally {
-    if (oldSecret === undefined) delete process.env.MOYASAR_SECRET_KEY;
-    else process.env.MOYASAR_SECRET_KEY = oldSecret;
-    await db.delete(subscriptionPaymentReconciliationsTable).where(
-      eq(subscriptionPaymentReconciliationsTable.ownerId, `reconciliation_test_${suffix}`),
-    );
+    await db.delete(table).where(eq(table.ownerId, ownerId));
+  }
+}
+
+test("documented POST payment confirms a full refund, persists no false refund ID, and is not repeated", async () => {
+  await fixture(async ({ payment, steps, calls, retry, read }) => {
+    steps.push({ method: "GET" }, { method: "POST", body: { ...payment, refunded: 2500, status: "refunded" } });
+    assert.equal(await retry(), "refunded");
+    const result = await read();
+    assert.equal(result.refundId, null, "payment.id is not a refund ID");
+    assert.ok(result.refundAttemptKey);
+    assert.equal(result.refundAttemptNumber, 1);
+    assert.equal(await retry(), "refunded");
+    assert.equal(calls.length, 2);
+  });
+});
+
+test("concurrent workers can reserve and submit only one refund", async () => {
+  await fixture(async ({ row, payment, steps, calls, fetcher, read }) => {
+    steps.push({ method: "GET" }, { method: "POST", body: { ...payment, refunded: 2500 } });
+    await db.update(table).set({ nextAttemptAt: new Date(Date.now() - 1000) }).where(eq(table.id, row.id));
+    const results = await Promise.all([
+      retrySubscriptionPaymentReconciliation(row.id, fetcher),
+      retrySubscriptionPaymentReconciliation(row.id, fetcher),
+    ]);
+    assert.ok(results.includes("refunded"));
+    assert.equal((await read()).status, "refunded");
+    assert.equal((await read()).refundAttemptNumber, 1);
+    assert.equal(calls.filter(c => c.method === "POST").length, 1);
+  });
+});
+
+test("partial POST is not mistaken for full amount; polling cumulative completion never posts twice", async () => {
+  await fixture(async ({ payment, steps, calls, retry, read }) => {
+    steps.push({ method: "GET" }, { method: "POST", body: { ...payment, refunded: 1000 } });
+    assert.equal(await retry(), "refund_pending");
+    const reserved = await read();
+    steps.push({ method: "GET", body: { ...payment, refunded: 1000 } });
+    assert.equal(await retry(), "refund_pending");
+    steps.push({ method: "GET", body: { ...payment, refunded: 2500 } });
+    assert.equal(await retry(), "refunded");
+    assert.equal(calls.filter(c => c.method === "POST").length, 1);
+    assert.equal((await read()).refundAttemptKey, reserved.refundAttemptKey);
+  });
+});
+
+test("ambiguous POST and later failed, malformed or stale GETs preserve the attempt without another POST", async () => {
+  for (const outcome of [
+    { error: "simulated timeout after provider accepted money" },
+    { status: 502, body: { status: "processing" } },
+    { invalidJson: true },
+  ]) {
+    await fixture(async ({ payment, steps, calls, retry, read }) => {
+      steps.push({ method: "GET" }, { method: "POST", ...outcome });
+      assert.equal(await retry(), "refund_pending");
+      const reserved = await read();
+      for (const get of [{ status: 401 }, { error: "GET timeout" }, { invalidJson: true }, {}]) {
+        steps.push({ method: "GET", ...get });
+        assert.equal(await retry(), "refund_pending");
+        const current = await read();
+        assert.equal(current.refundAttemptKey, reserved.refundAttemptKey);
+        assert.equal(current.refundRequestedAt?.getTime(), reserved.refundRequestedAt?.getTime());
+        assert.equal(current.refundAttemptNumber, 1);
+      }
+      steps.push({ method: "GET", body: { ...payment, refunded: 2500 } });
+      assert.equal(await retry(), "refunded");
+      assert.equal(calls.filter(c => c.method === "POST").length, 1);
+    });
   }
 });
 
-test("terminal failures rotate refund keys while ambiguous retries reuse the persisted key", {
-  timeout: 30_000,
-}, async () => {
-  const suffix = randomUUID();
-  const ownerId = `reconciliation_key_test_${suffix}`;
-  const terminalPaymentId = `terminal_${suffix}`;
-  const terminalIntentId = `terminal_checkout_${suffix}`;
-  const ambiguousPaymentId = `ambiguous_${suffix}`;
-  const ambiguousIntentId = `ambiguous_checkout_${suffix}`;
-  const oldSecret = process.env.MOYASAR_SECRET_KEY;
-  process.env.MOYASAR_SECRET_KEY = "test-secret-not-for-provider";
-  const terminalKeys: string[] = [];
-  let terminalRefundCount = 0;
-  const terminalFetcher = (async (input: string | URL | Request, init?: RequestInit) => {
-    if (init?.method === "POST") {
-      terminalKeys.push(new Headers(init.headers).get("Idempotency-Key") ?? "");
-      terminalRefundCount++;
-      return new Response(JSON.stringify({
-        id: `terminal_refund_${terminalRefundCount}`,
-        payment_id: terminalPaymentId,
-        amount: 2500,
-        status: "failed",
-      }), { status: 200, headers: { "content-type": "application/json" } });
-    }
-    return new Response(JSON.stringify({
-      id: terminalPaymentId,
-      amount: 2500,
-      currency: "SAR",
-      description: terminalIntentId,
-      status: "paid",
-      refunds: [],
-    }), { status: 200, headers: { "content-type": "application/json" } });
-  }) as typeof fetch;
-  const ambiguousKeys: string[] = [];
-  let ambiguousRefundCount = 0;
-  const ambiguousFetcher = (async (_input: string | URL | Request, init?: RequestInit) => {
-    if (init?.method === "POST") {
-      ambiguousKeys.push(new Headers(init.headers).get("Idempotency-Key") ?? "");
-      ambiguousRefundCount++;
-      if (ambiguousRefundCount === 1) {
-        return new Response(JSON.stringify({ status: "processing" }), { status: 502 });
-      }
-      return new Response(JSON.stringify({
-        id: `ambiguous_refund_${suffix}`,
-        payment_id: ambiguousPaymentId,
-        amount: 2500,
-        status: "refunded",
-      }), { status: 200, headers: { "content-type": "application/json" } });
-    }
-    return new Response(JSON.stringify({
-      id: ambiguousPaymentId,
-      amount: 2500,
-      currency: "SAR",
-      description: ambiguousIntentId,
-      status: "paid",
-      refunds: [],
-    }), { status: 200, headers: { "content-type": "application/json" } });
-  }) as typeof fetch;
+test("legacy standalone success needs a complete linked payment read, including summed partial refund objects", async () => {
+  await fixture(async ({ payment, steps, retry, read }) => {
+    const first = { id: "refund_first", payment_id: payment.id, amount: 1000, status: "refunded" };
+    const second = { ...first, id: "refund_second", amount: 1500 };
+    steps.push({ method: "GET" },
+      { method: "POST", body: { ...first, amount: 2500 } },
+      { method: "GET", body: { ...payment, refunded: undefined, refunds: [first, second], status: "refunded" } });
+    assert.equal(await retry(), "refunded");
+    assert.equal((await read()).refundId, "refund_first,refund_second");
+  });
+});
 
-  try {
-    const [terminal] = await db.insert(subscriptionPaymentReconciliationsTable).values({
-      paymentId: terminalPaymentId,
-      ownerId,
-      intentId: terminalIntentId,
-      amountHalala: 2500,
-      reason: "terminal provider failures",
-      status: "required",
-      nextAttemptAt: new Date(Date.now() - 1000),
-    }).returning();
-    assert.ok(terminal);
-    assert.equal(await retrySubscriptionPaymentReconciliation(terminal.id, terminalFetcher), "required");
-    await db.update(subscriptionPaymentReconciliationsTable)
-      .set({ nextAttemptAt: new Date(Date.now() - 1000) })
-      .where(eq(subscriptionPaymentReconciliationsTable.id, terminal.id));
-    assert.equal(await retrySubscriptionPaymentReconciliation(terminal.id, terminalFetcher), "required");
-    assert.equal(terminalKeys.length, 2);
-    assert.ok(terminalKeys[0]);
-    assert.notEqual(terminalKeys[0], terminalKeys[1], "verified terminal failure advances the persisted attempt key");
-    const [terminalResult] = await db.select().from(subscriptionPaymentReconciliationsTable)
-      .where(eq(subscriptionPaymentReconciliationsTable.id, terminal.id)).limit(1);
-    assert.equal(terminalResult?.refundAttemptNumber, 2);
-    assert.equal(terminalResult?.refundAttemptKey, null);
+test("legacy POST with failed verification GET stays reserved and never creates another attempt", async () => {
+  await fixture(async ({ payment, steps, calls, retry, read }) => {
+    steps.push({ method: "GET" }, { method: "POST", body: {
+      id: "legacy_refund", payment_id: payment.id, amount: 2500, status: "refunded",
+    } }, { method: "GET", status: 403 });
+    assert.equal(await retry(), "refund_pending");
+    const reserved = await read();
+    assert.equal(reserved.refundId, null);
+    steps.push({ method: "GET" });
+    assert.equal(await retry(), "refund_pending");
+    assert.equal((await read()).refundAttemptKey, reserved.refundAttemptKey);
+    assert.equal(calls.filter(c => c.method === "POST").length, 1);
+  });
+});
 
-    const [ambiguous] = await db.insert(subscriptionPaymentReconciliationsTable).values({
-      paymentId: ambiguousPaymentId,
-      ownerId,
-      intentId: ambiguousIntentId,
-      amountHalala: 2500,
-      reason: "ambiguous provider response",
-      status: "required",
-      nextAttemptAt: new Date(Date.now() - 1000),
-    }).returning();
-    assert.ok(ambiguous);
-    assert.equal(await retrySubscriptionPaymentReconciliation(ambiguous.id, ambiguousFetcher), "refund_pending");
-    const [firstAmbiguousState] = await db.select().from(subscriptionPaymentReconciliationsTable)
-      .where(eq(subscriptionPaymentReconciliationsTable.id, ambiguous.id)).limit(1);
-    assert.ok(firstAmbiguousState?.refundAttemptKey);
-    await db.update(subscriptionPaymentReconciliationsTable)
-      .set({ nextAttemptAt: new Date(Date.now() - 1000) })
-      .where(eq(subscriptionPaymentReconciliationsTable.id, ambiguous.id));
-    assert.equal(await retrySubscriptionPaymentReconciliation(ambiguous.id, ambiguousFetcher), "refunded");
-    assert.equal(ambiguousKeys.length, 2);
-    assert.equal(ambiguousKeys[0], firstAmbiguousState?.refundAttemptKey);
-    assert.equal(ambiguousKeys[1], ambiguousKeys[0], "ambiguous retries reuse the exact persisted key");
-    const [ambiguousResult] = await db.select().from(subscriptionPaymentReconciliationsTable)
-      .where(eq(subscriptionPaymentReconciliationsTable.id, ambiguous.id)).limit(1);
-    assert.equal(ambiguousResult?.status, "refunded");
-    assert.equal(ambiguousResult?.refundAttemptNumber, 1);
-  } finally {
-    if (oldSecret === undefined) delete process.env.MOYASAR_SECRET_KEY;
-    else process.env.MOYASAR_SECRET_KEY = oldSecret;
-    await db.delete(subscriptionPaymentReconciliationsTable).where(eq(
-      subscriptionPaymentReconciliationsTable.ownerId,
-      ownerId,
-    ));
+test("mismatched POST confirmation or legacy failure cannot mark success or clear a reserved attempt", async () => {
+  for (const change of [
+    { id: "wrong" }, { amount: 1200 }, { currency: "USD" }, { description: "other_checkout" },
+    { refunded: 2501 }, { refunded: 1200 }, { status: "failed" },
+    { id: "legacy_failed_refund", payment_id: "filled-below", status: "failed" },
+  ]) {
+    await fixture(async ({ payment, steps, calls, retry, read }) => {
+      const body = { ...payment, refunded: 2500, ...change };
+      if ("payment_id" in body) body.payment_id = payment.id;
+      steps.push({ method: "GET" }, { method: "POST", body });
+      assert.equal(await retry(), "refund_pending");
+      const reserved = await read();
+      assert.equal(reserved.refundId, null);
+      steps.push({ method: "GET" });
+      assert.equal(await retry(), "refund_pending");
+      assert.equal((await read()).refundAttemptKey, reserved.refundAttemptKey);
+      assert.equal(calls.filter(c => c.method === "POST").length, 1);
+    });
   }
+});
+
+test("preexisting full refunds resolve by GET; partial or unverifiable totals never trigger a full POST", async () => {
+  for (const refunded of [0, 1200, 2500, 2501, -1, null, "2500"]) {
+    await fixture(async ({ payment, steps, calls, retry }) => {
+      steps.push({ method: "GET", body: { ...payment, refunded } });
+      assert.equal(await retry(), refunded === 2500 ? "refunded" : "refund_pending");
+      assert.equal(calls.length, 1);
+    }, true);
+  }
+  await fixture(async ({ payment, steps, calls, retry }) => {
+    steps.push({ method: "GET", body: { ...payment, refunded: 1200 } });
+    assert.equal(await retry(), "manual_review");
+    assert.equal(calls.length, 1);
+  });
+});
+
+test("legacy pending attempts without keys are polled only, and malformed payment bodies cannot release reservations", async () => {
+  await fixture(async ({ row, steps, calls, retry, read }) => {
+    await db.update(table).set({ refundAttemptKey: null }).where(eq(table.id, row.id));
+    steps.push({ method: "GET" });
+    assert.equal(await retry(), "refund_pending");
+    steps.push({ method: "GET", body: null });
+    assert.equal(await retry(), "manual_review");
+    assert.ok((await read()).refundRequestedAt);
+    assert.equal((await read()).refundAttemptKey, null);
+    assert.equal(calls.filter(c => c.method === "POST").length, 0);
+  }, true);
 });

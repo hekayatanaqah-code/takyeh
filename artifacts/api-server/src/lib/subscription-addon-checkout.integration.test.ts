@@ -215,15 +215,14 @@ test("add-on checkout grants exactly quoted, paid capacity", { timeout: 30_000 }
       if (String(input).endsWith("/refund")) {
         if (!providerReply) throw new Error("test attempted to refund without a captured payment");
         return new Response(JSON.stringify({
-          id: `fake_refund_${providerReply.id}`,
-          payment_id: providerReply.id,
-          amount: providerReply.amount,
+          ...providerReply,
+          refunded: providerReply.amount,
           status: "refunded",
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
       if (init?.method === "POST") providerChargePosts += 1;
       if (!providerReply) throw new Error("test attempted an unexpected provider request");
-      return new Response(JSON.stringify(providerReply), {
+      return new Response(JSON.stringify({ ...providerReply, refunded: 0 }), {
         status: 200,
         headers: { "content-type": "application/json" },
       });
