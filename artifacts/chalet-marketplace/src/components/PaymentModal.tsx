@@ -71,8 +71,10 @@ function clearPendingSubscriptionCheckout(checkoutId: string) {
     if (readPendingSubscriptionCheckout()?.checkoutId === checkoutId) {
       window.sessionStorage.removeItem(PENDING_SUBSCRIPTION_KEY);
     }
+    return window.sessionStorage.getItem(PENDING_SUBSCRIPTION_KEY) === null;
   } catch {
     // The server confirmation remains successful if browser storage is unavailable.
+    return false;
   }
 }
 
@@ -787,6 +789,29 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
     });
   };
 
+  const dismissPendingCheckout = () => {
+    if (!pendingCheckout || paying || confirmMutation.isPending || walletPayMutation.isPending) return;
+    if (!window.confirm(
+      "هل تريد مسح مرجع العملية المعلّقة من هذا المتصفح واختيار خطة جديدة؟\n\nهذا لا يلغي عملية الدفع لدى البنك ولا يسترد أي مبلغ مدفوع، ولا يغيّر اشتراكك الحالي. إذا دفعت سابقاً أو لم تعرف نتيجة الدفع، تحقّق من العملية أولاً؛ فقد يؤدي الدفع مجدداً إلى خصم إضافي.",
+    )) return;
+    if (!clearPendingSubscriptionCheckout(pendingCheckout.checkoutId)) {
+      setPayError("تعذّر مسح العملية المحفوظة من المتصفح. لم يبدأ دفع جديد؛ يرجى المحاولة مجدداً.");
+      return;
+    }
+    clearPaymentReturnParams();
+    setPendingCheckout(null);
+    setReturnPaymentId(null);
+    setReturnPaymentStatus(null);
+    setReturnNotice(null);
+    handledReturnRef.current = null;
+    setInitiateData(null);
+    setSelectedPlan(null);
+    setPlanQuote(null);
+    setConsentToRecurring(false);
+    setPayError(null);
+    setStep("plan");
+  };
+
   /* ─── UI ─── */
   return (
     <Dialog open={open || returnDialogOpen} onOpenChange={(o) => { if (!o) closeModal(); }}>
@@ -829,7 +854,10 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                 <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
                   <p className="font-semibold">توجد عملية اشتراك محفوظة قيد التأكيد</p>
                   <p className="mt-1">
-                    {returnNotice ?? `الخطة المرتبطة بالعملية: ${pendingCheckout.plan}. لن نبدأ دفعاً جديداً أو نحذفها قبل تأكيد الخادم.`}
+                    {returnNotice ?? `الخطة المرتبطة بالعملية: ${plans.find((plan) => plan.id === pendingCheckout.plan)?.label ?? pendingCheckout.plan}. يمكنك إعادة التحقق من الدفع أو مسح المرجع المحفوظ لاختيار خطة جديدة.`}
+                  </p>
+                  <p className="mt-2 leading-6">
+                    مسح المرجع لا يلغي الدفع لدى البنك ولا يسترد مبلغاً مدفوعاً ولا يغيّر اشتراكك الحالي. إذا سبق الدفع، تحقّق منه أولاً لتجنّب الخصم مرة أخرى.
                   </p>
                   {returnPaymentStatus && (
                     <p className="mt-1 text-xs">الحالة الواردة من بوابة الدفع: {returnPaymentStatus}</p>
@@ -844,6 +872,15 @@ export function PaymentModal({ open, onClose, currentPlan }: PaymentModalProps) 
                       إعادة التحقق من الدفع
                     </Button>
                   )}
+                  <Button
+                    className="mt-3 h-auto min-h-11 w-full whitespace-normal py-2 font-semibold"
+                    variant="outline"
+                    onClick={dismissPendingCheckout}
+                    disabled={paying || confirmMutation.isPending || walletPayMutation.isPending}
+                    data-testid="button-dismiss-pending-subscription"
+                  >
+                    مسح العملية واختيار خطة جديدة
+                  </Button>
                 </div>
               )}
               <label className="text-sm font-medium text-foreground" htmlFor="subscription-promo-code">

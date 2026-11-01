@@ -19,3 +19,9 @@ Moyasar form methods must be configured explicitly; do not hide the gateway's en
 **Why:** The external Moyasar form SDK defaults to Apple Pay, card and STC Pay. Its Apple Pay configuration validation can replace the entire form with technical diagnostics when merchant validation is not configured, even though card networks were supplied.
 
 **How to apply:** Treat payment methods and card networks as separate SDK options. Offer only configured methods, preserve card-only recurring consent, and show understandable Arabic failures without suppressing payment validation or implying success.
+
+Owners may explicitly clear a saved pending card-subscription reference and select a new plan without waiting for automatic server confirmation.
+
+**Why:** The user requested a visible manual escape from the pending-subscription notice. Clearing a browser reference is not cancellation of a bank payment or a refund.
+
+**How to apply:** Require explicit acknowledgement of possible duplicate payment, clear only the matching local card-checkout reference and stale return state, and leave existing subscriptions, payment records and uncertain wallet operations untouched. Do not unblock a fresh checkout if local removal fails.
