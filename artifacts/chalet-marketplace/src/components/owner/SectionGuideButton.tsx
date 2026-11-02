@@ -1,8 +1,12 @@
-import { useState } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, ChevronRight, X, Play } from "lucide-react";
 import { toAr } from "@/lib/utils";
 import { apiFetch } from "@/components/owner/owner-api";
+import { useAdminFinance, useServiceErp } from "./OwnerDashboardContexts";
+import { resolveGuideActivity, sectionGuideKey, sectionGuidesFor, type GuideActivityScope } from "@/lib/sectionGuideCatalog";
+
+export const SectionGuideActivityContext = createContext<GuideActivityScope | null>(null);
 
 
 /* ══ Section Guide helpers ════════════════════════════════════════ */
@@ -14,7 +18,20 @@ function getYouTubeEmbedUrl(url: string): string | null {
 
 type GuideVideo = { id: number; section_key: string; title: string; video_url: string };
 
-export function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
+export function SectionGuideButton({ sectionKey, activity }: { sectionKey: string; activity?: GuideActivityScope }) {
+  const context = useContext(SectionGuideActivityContext);
+  const { unit } = useAdminFinance();
+  const { providerId } = useServiceErp();
+  const scope = resolveGuideActivity({ activity, context, providerId, financeType: unit.type });
+  if (scope === "both") return <div className="flex flex-wrap items-center gap-2">
+    <SectionGuidePlayer key={`${sectionKey}-property`} sectionKey={sectionGuideKey(sectionKey, "property")} label="شروحات العقارات" />
+    <SectionGuidePlayer key={`${sectionKey}-service`} sectionKey={sectionGuideKey(sectionKey, "service")} label="شروحات الخدمات" />
+  </div>;
+  const key = sectionGuideKey(sectionKey, scope);
+  return <SectionGuidePlayer key={key} sectionKey={key} />;
+}
+
+function SectionGuidePlayer({ sectionKey, label = "شروحات القسم" }: { sectionKey: string; label?: string }) {
   const [open, setOpen] = useState(false);
   const [activeVideo, setActiveVideo] = useState<GuideVideo | null>(null);
 
@@ -28,7 +45,7 @@ export function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
     staleTime: 5 * 60_000,
   });
 
-  const sectionVideos = guides.filter(g => g.section_key === sectionKey);
+  const sectionVideos = sectionGuidesFor(guides, sectionKey);
   if (sectionVideos.length === 0) return null;
 
   function openModal() { setActiveVideo(null); setOpen(true); }
@@ -37,11 +54,12 @@ export function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
   return (
     <>
       <button
+        data-guide-section={sectionKey}
         onClick={openModal}
         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors"
       >
         <Play className="w-3 h-3 fill-primary" />
-        شروحات القسم
+        {label}
         {sectionVideos.length > 1 && (
           <span className="bg-primary/20 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none">
             {toAr(sectionVideos.length)}
@@ -70,7 +88,7 @@ export function SectionGuideButton({ sectionKey }: { sectionKey: string }) {
                 )}
                 <BookOpen className="w-4 h-4 text-primary shrink-0" />
                 <h3 className="font-bold text-foreground text-sm">
-                  {activeVideo ? activeVideo.title : "شروحات القسم"}
+                  {activeVideo ? activeVideo.title : label}
                 </h3>
               </div>
               <button onClick={closeModal} className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted">

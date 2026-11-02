@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { SectionGuideCatalogView } from "@/components/admin/SectionGuideCatalogView";
 import { toast, useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -1309,27 +1310,6 @@ interface OwnerSupportRequest {
   created_at: string;
 }
 
-const GUIDE_SECTIONS = [
-  { key: "dashboard",        label: "الصفحة الرئيسية" },
-  { key: "chalets",          label: "عقاراتي" },
-  { key: "seasons",          label: "المواسم والأعياد" },
-  { key: "reviews",          label: "التقييمات" },
-  { key: "calendar",         label: "التقويم والحجوزات" },
-  { key: "deposits",         label: "إدارة التأمينات" },
-  { key: "customers",        label: "قاعدة العملاء" },
-  { key: "services",         label: "إدارة الخدمات والمرافق" },
-  { key: "messageSettings",  label: "إعدادات الرسائل الآلية" },
-  { key: "digitalContracts", label: "العقود الرقمية" },
-  { key: "revenues",         label: "الإيرادات" },
-  { key: "ledger",           label: "سجل الحساب البنكي" },
-  { key: "expenses",         label: "المصروفات" },
-  { key: "employees",        label: "الموظفون" },
-  { key: "notifications",    label: "الإشعارات" },
-  { key: "reports",          label: "التقارير المالية" },
-  { key: "support",          label: "مركز الدعم" },
-  { key: "transactions",     label: "سجل المعاملات المالية" },
-] as const;
-
 function getYouTubeEmbedUrl(url: string): string | null {
   const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|shorts\/|embed\/))([A-Za-z0-9_-]{11})/);
   return match ? `https://www.youtube.com/embed/${match[1]}` : null;
@@ -1354,14 +1334,14 @@ const EMPTY_GUIDE_ENTRY: NewEntry = {
   saving: false,
 };
 
-function SectionGuidesAdminTab() {
+export function SectionGuidesAdminTab() {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { data: guides = [] } = useQuery<GuideRow[]>({
+  const { data: guides = [], isLoading, isError, refetch } = useQuery<GuideRow[]>({
     queryKey: ["admin", "section-guides"],
     queryFn: async () => {
       const r = await apiFetch("/admin/section-guides");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذر تحميل شروحات الأقسام");
       return r.json();
     },
   });
@@ -1389,6 +1369,7 @@ function SectionGuidesAdminTab() {
       });
       if (!r.ok) throw new Error();
       await qc.invalidateQueries({ queryKey: ["admin", "section-guides"] });
+      await qc.invalidateQueries({ queryKey: ["section-guides"] });
       setNewEntries(n => ({ ...n, [key]: { ...EMPTY_GUIDE_ENTRY } }));
       setShowAdd(s => ({ ...s, [key]: false }));
       toast({ title: "تمت الإضافة ", description: `تمت إضافة "${e.title.trim()}" بنجاح` });
@@ -1453,6 +1434,7 @@ function SectionGuidesAdminTab() {
       const r = await apiFetch(`/admin/section-guides/${id}`, { method: "DELETE" });
       if (!r.ok) throw new Error();
       await qc.invalidateQueries({ queryKey: ["admin", "section-guides"] });
+      await qc.invalidateQueries({ queryKey: ["section-guides"] });
       toast({ title: "تم الحذف" });
     } catch {
       toast({ title: "خطأ", description: "تعذّر الحذف", variant: "destructive" });
@@ -1479,8 +1461,12 @@ function SectionGuidesAdminTab() {
       </div>
 
       {/* Sections */}
-      <div className="space-y-3">
-        {GUIDE_SECTIONS.map(({ key, label }) => {
+      {isLoading ? <p className="p-6 text-center text-muted-foreground">جارٍ تحميل الشروحات...</p>
+        : isError ? <div role="alert" className="rounded-xl border border-destructive/30 p-5 space-y-3">
+          <p>تعذر تحميل الشروحات. لم تُحذف الشروحات المحفوظة.</p>
+          <button type="button" className="rounded-lg border px-4 py-2" onClick={() => { void refetch(); }}>إعادة المحاولة</button>
+        </div>
+        : <SectionGuideCatalogView renderSection={({ key, label }) => {
           const sectionGuides = guides.filter(g => g.sectionKey === key);
           const entry = newEntries[key] ?? EMPTY_GUIDE_ENTRY;
           const isOpen = !!showAdd[key];
@@ -1639,8 +1625,7 @@ function SectionGuidesAdminTab() {
 
             </div>
           );
-        })}
-      </div>
+        }} />}
     </div>
   );
 }

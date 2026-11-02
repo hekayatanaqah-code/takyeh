@@ -37,7 +37,7 @@ import { AdminFinanceCtx, FinanceUnit, ImpersonationCtx, ServiceErpCtx } from "@
 import { BASE, apiFetch } from "@/components/owner/owner-api";
 import { DashboardSubscription, OwnerPlanLimits, SubscriptionAccountBanner, isSubscriptionExpiryWarning, subscriptionDaysRemaining } from "@/components/owner/SubscriptionAccountBanner";
 import { toArN } from "@/components/owner/owner-formatting";
-import { SectionGuideButton } from "@/components/owner/SectionGuideButton";
+import { SectionGuideButton, SectionGuideActivityContext } from "@/components/owner/SectionGuideButton";
 import { UpgradePlanDialog } from "@/components/owner/PropertyRegistrationDialogs";
 import { OwnerProfileTab } from "@/components/owner/OwnerProfileTab";
 import { SERVICE_CATEGORY_LABELS, ServiceSubmissionsTab } from "@/components/owner/ServiceSubmissionsTab";
@@ -767,6 +767,9 @@ export default function Dashboard() {
   return (
     <ImpersonationCtx.Provider value={{ isReadOnly, onBlockedEdit }}>
     <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit, selectUnit: changeDashboardActivity }}>
+    <SectionGuideActivityContext.Provider value={selectedFinanceUnit.type === "service" ? "service"
+      : selectedFinanceUnit.type === "chalet" ? "property" : isCrossOwner ? "both"
+        : businessType === "service" || (myApprovedProviders.length > 0 && !ownerChalets?.length) ? "service" : "property"}>
     <div className="min-h-screen bg-background" dir="rtl">
       {/* ── Demo Preview Banner ── */}
       {isDemo && (
@@ -1428,6 +1431,7 @@ export default function Dashboard() {
               </div>
 
               {/* Tab bar */}
+              <SectionGuideButton sectionKey="adminFinance" />
               <OwnerSubnav highContrast label="تبويبات الشؤون الإدارية والمالية" className="gap-x-1 gap-y-3 pb-3 px-1 pt-1">
                 {afTabs.map(tab => (
                   <button
@@ -1632,6 +1636,7 @@ export default function Dashboard() {
         </>}
       </div>
     </div>
+    </SectionGuideActivityContext.Provider>
     </AdminFinanceCtx.Provider>
     </ImpersonationCtx.Provider>
   );

@@ -10,13 +10,25 @@ import { ServiceDigitalContractsTab } from "@/components/owner/ServiceDigitalCon
 import { ServiceReviewsTab } from "@/components/owner/ReviewsTabs";
 import { CustomersTab } from "@/components/owner/CustomersTab";
 import { OwnerMessageSettingsTab } from "@/components/owner/OwnerMessageSettingsTab";
+import { SectionGuideButton } from "./SectionGuideButton";
+import { SERVICE_TAB_GUIDE_KEYS } from "@/lib/sectionGuideCatalog";
 
-
-export function ServiceManagementContent({ provider, tab, calendarPreference }: {
+type Props = {
   provider: { id: number; businessName: string; requiresInsurance: boolean; insuranceAmount: string | null; requiresContract: boolean };
   tab: string;
   calendarPreference: "hijri" | "gregorian";
-}) {
+};
+
+export function ServiceManagementContent(props: Props) {
+  const guide = SERVICE_TAB_GUIDE_KEYS[props.tab];
+  const embeddedGuide = ["customers", "messages", "digitalContracts"].includes(props.tab);
+  return <div className="min-w-0 space-y-4">
+    {guide && !embeddedGuide && <SectionGuideButton sectionKey={guide} activity="service" />}
+    <SelectedServiceContent {...props} />
+  </div>;
+}
+
+function SelectedServiceContent({ provider, tab, calendarPreference }: Props) {
   const { isReadOnly } = useReadOnly();
   if (tab === "details") return <ServiceDetailsTab />;
   if (tab === "catalog") return <ServiceCatalogPanel providerId={provider.id} readOnly={isReadOnly} />;
