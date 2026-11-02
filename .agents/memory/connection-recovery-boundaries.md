@@ -25,3 +25,9 @@ In browser network tests, context offline mode does not by itself fail Playwrigh
 **Why:** Route fulfillment bypasses the browser's normal network transport; an apparently offline test can still return successful synthetic reads and health checks.
 
 **How to apply:** Combine real browser offline/online transitions with explicit transport failures or unavailable health responses in the synthetic network. Require a successful reachability probe before asserting recovery. Keep all writes intercepted so duplicate-attempt assertions cannot cause real saves or charges.
+
+Recreating a lazy component is not sufficient proof that a failed JavaScript download can recover. Verify an actual failed browser module request, not only a rejected mock importer.
+
+**Why:** Chromium retained a failed dynamic-import URL and made no second network request after the user retried, although React's rejected lazy instance had been replaced. A full-page reload would hide the problem while discarding unsaved work.
+
+**How to apply:** Keep module recovery local to the failing route, account for browser module caching, and check successful retry plus leaving/reopening that route. Named exports must retain their selection on the recovery path. Error messages can identify a failed shared dependency, not the intended page: never import that URL and treat its exports as the page. Recovery must also avoid the poisoned static graph while retaining the running application's React/auth/query singletons.

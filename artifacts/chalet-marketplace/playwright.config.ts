@@ -23,7 +23,7 @@ export default defineConfig({
     },
     {
       name: "webkit-iphone",
-      testIgnore: /(?:owner-empty-state|connection-recovery)\.spec\.ts/,
+      testIgnore: /(?:owner-empty-state|connection-recovery|route-loading)\.spec\.ts/,
       use: {
         ...devices["iPhone 13"],
         browserName: "webkit",
@@ -35,6 +35,22 @@ export default defineConfig({
     ].map(({ name, ...device }) => ({
       name,
       testMatch: /connection-recovery\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        ...device,
+        browserName: "chromium" as const,
+        serviceWorkers: "block" as const,
+        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+          : undefined,
+      },
+    })),
+    ...[
+      { name: "route-loading-desktop", viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false },
+      { name: "route-loading-mobile", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    ].map(({ name, ...device }) => ({
+      name,
+      testMatch: /route-loading\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         ...device,
