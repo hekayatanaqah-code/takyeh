@@ -9,6 +9,14 @@ Any dashboard tab opened for a selected service must use provider-linked data an
 
 **How to apply:** Reuse presentation patterns, but give service tabs provider-scoped endpoints and query keys. Include both service-only and mixed-owner scenarios when testing.
 
+## Service booking message names
+
+قوالب تأكيد وإلغاء وتعديل حجز الخدمات تعرض «اسم الخدمة» فقط في النص الافتراضي والمتغيرات، لا «اسم العقار».
+
+**Why:** المستخدم طلب هذا التخصيص حصرياً للخدمات. إعدادات الرسائل الحالية مشتركة على مستوى حساب المالك، لذلك حفظ متغير الخدمة مباشرةً قد يكسر الاستبدال في رسائل العقارات بالحساب المختلط.
+
+**How to apply:** حوّل متغير الاسم المحجوز عند عرض الخدمة والاستعادة وبعد الحفظ، مع إعادة تمثيله المتوافق في التخزين المشترك. لا تستبدل كلمات المالك أو قوالبه الإضافية، ولا تجعل تعديل أسماء المتغيرات يغيّر بقية نصوص العقارات.
+
 ## Provider dashboard: general versus individual services
 
 «الطلبات والتقديمات» قسم عام لجميع خدمات مقدم الخدمة، وليس تبويبًا لخدمة واحدة. اختيار خدمة مستقلة يحدد بياناتها وإعداداتها فقط، دون تداخل مع الخدمات الأخرى.

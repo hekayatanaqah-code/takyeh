@@ -10,6 +10,22 @@ export interface OwnerMessageSettings extends Required<Omit<OwnerWhatsAppSetting
 
 export const MESSAGE_VARIABLES = ["{اسم_العميل}", "{اسم_العقار}", "{اسم_الخدمة}", "{رقم_الحجز}", "{اسم_اليوم_من}", "{التاريخ}", "{التاريخ_م}", "{تاريخ_الخدمة}", "{من_التاريخ}", "{من_التاريخ_م}", "{إلى_التاريخ}", "{إلى_التاريخ_م}", "{اسم_اليوم_إلى}", "{المدة}", "{الفترة}", "{الفترة_الجديدة}", "{الفترة_القديمة}", "{طريقة_تقديم_الخدمة}", "{عنوان_الخدمة}", "{تفاصيل_الخدمة}", "{رابط_العقد_الرقمي}", "{سبب_الإلغاء}", "{المبلغ_المسترد}", "{سبب_التعديل}", "{الإيجار}", "{إجمالي_الخدمات}", "{تفاصيل_الخدمات}", "{الإجمالي_الكلي}", "{التأمين}", "{المدفوع}", "{المتبقي}"];
 
+export const SERVICE_MESSAGE_VARIABLES = MESSAGE_VARIABLES.filter(variable => variable !== "{اسم_العقار}");
+
+export function serviceMessageName(template: string): string {
+  return template.replace(/\{اسم_العقار\}/g, "{اسم_الخدمة}");
+}
+
+/** Settings are owner-wide: project names for service editors, retain the legacy storage token for properties. */
+export function bookingMessageActivityNames(settings: OwnerMessageSettings, activity: "service" | "shared"): OwnerMessageSettings {
+  const result = { ...settings };
+  for (const key of ["bookingConfirmationTemplate", "cancellationTemplate", "modificationTemplate"] as const) {
+    result[key] = activity === "service" ? serviceMessageName(settings[key])
+      : settings[key].replace(/\{اسم_الخدمة\}/g, "{اسم_العقار}");
+  }
+  return result;
+}
+
 export function stripEmoji(text: string): string {
   return text
     .replace(/\p{Extended_Pictographic}/gu, "")
@@ -27,7 +43,7 @@ export function encodeWhatsAppText(text: string): string {
 
 export function prepareServiceMessageTemplate(template: string): string {
   let durationLineAdded = template.includes("{المدة}");
-  return template
+  return serviceMessageName(template)
     .split(/\r?\n/)
     .flatMap((line) => {
       if (!/\{(?:الفترة|الفترة_الجديدة|الفترة_القديمة)\}/.test(line)) return [line];

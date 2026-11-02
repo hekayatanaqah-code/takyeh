@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { BASE, apiFetch } from "@/components/owner/owner-api";
-import { DEFAULT_OWNER_MESSAGE_SETTINGS, MESSAGE_VARIABLES, OwnerMessageSettings, PREVIEW_SAMPLE_DATA, prepareServiceMessageTemplate, stripEmoji } from "@/components/owner/owner-message-templates";
+import { DEFAULT_OWNER_MESSAGE_SETTINGS, MESSAGE_VARIABLES, SERVICE_MESSAGE_VARIABLES, OwnerMessageSettings, PREVIEW_SAMPLE_DATA, prepareServiceMessageTemplate, serviceMessageName, bookingMessageActivityNames, stripEmoji } from "@/components/owner/owner-message-templates";
 import { useReadOnly } from "@/components/owner/OwnerDashboardContexts";
 import { OwnerBooking } from "@/components/owner/owner-booking-types";
 import { serviceDurationLabel, toArN } from "@/components/owner/owner-formatting";
@@ -130,7 +130,9 @@ export function OwnerMessageSettingsTab({
   const qc = useQueryClient();
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
-  const [form, setForm] = useState<OwnerMessageSettings>(DEFAULT_OWNER_MESSAGE_SETTINGS);
+  const [form, setForm] = useState<OwnerMessageSettings>(() => providerId
+    ? bookingMessageActivityNames(DEFAULT_OWNER_MESSAGE_SETTINGS, "service")
+    : DEFAULT_OWNER_MESSAGE_SETTINGS);
   const { data: platformSettings = {} } = useQuery<Record<string, string>>({
     queryKey: ["siteSettings"],
     queryFn: async () => {
@@ -260,6 +262,8 @@ export function OwnerMessageSettingsTab({
       base.detailedReceiptTemplate = data.detailedReceiptTemplate ?? DEFAULT_DETAILED_RECEIPT_TEMPLATE;
       if (providerId) {
         base.bookingConfirmationTemplate = prepareServiceMessageTemplate(base.bookingConfirmationTemplate);
+        base.cancellationTemplate = serviceMessageName(base.cancellationTemplate);
+        base.modificationTemplate = serviceMessageName(base.modificationTemplate);
       }
       base.bookingConfirmationTemplate = base.bookingConfirmationTemplate.replace(
         /المتبقي للدفع عند الوصول:/g,
@@ -280,7 +284,7 @@ export function OwnerMessageSettingsTab({
     mutationFn: async () => {
       const r = await apiFetch("/owner/message-settings", {
         method: "PUT",
-        body: JSON.stringify(form),
+        body: JSON.stringify(providerId ? bookingMessageActivityNames(form, "shared") : form),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => null);
@@ -289,7 +293,8 @@ export function OwnerMessageSettingsTab({
       return r.json();
     },
     onSuccess: (saved) => {
-      setForm({ ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...saved, detailedReceiptTemplate: saved.detailedReceiptTemplate ?? DEFAULT_DETAILED_RECEIPT_TEMPLATE });
+      const next = { ...DEFAULT_OWNER_MESSAGE_SETTINGS, ...saved, detailedReceiptTemplate: saved.detailedReceiptTemplate ?? DEFAULT_DETAILED_RECEIPT_TEMPLATE };
+      setForm(providerId ? bookingMessageActivityNames(next, "service") : next);
       qc.invalidateQueries({ queryKey: ["owner", "message-settings"] });
       toast({ title: "تم حفظ إعدادات الرسائل", description: "يمكنك الآن اختيار القالب من بطاقة الحجز وفتحه في واتساب يدوياً." });
     },
@@ -308,7 +313,10 @@ export function OwnerMessageSettingsTab({
   }
 
   function resetToDefault(key: "bookingConfirmationTemplate" | "cancellationTemplate" | "modificationTemplate" | "detailedReceiptTemplate") {
-    setField(key, DEFAULT_OWNER_MESSAGE_SETTINGS[key] as string);
+    const template = DEFAULT_OWNER_MESSAGE_SETTINGS[key] as string;
+    setField(key, providerId && key !== "detailedReceiptTemplate"
+      ? key === "bookingConfirmationTemplate" ? prepareServiceMessageTemplate(template) : serviceMessageName(template)
+      : template);
   }
 
   function addCustomTemplate() {
@@ -386,7 +394,7 @@ export function OwnerMessageSettingsTab({
             label="نص رسالة تأكيد الحجز"
             value={form.bookingConfirmationTemplate}
             onChange={(value) => setField("bookingConfirmationTemplate", value)}
-            variables={MESSAGE_VARIABLES}
+            variables={providerId ? SERVICE_MESSAGE_VARIABLES : MESSAGE_VARIABLES}
             rows={10}
             disabled={isReadOnly}
           />
@@ -407,7 +415,7 @@ export function OwnerMessageSettingsTab({
             label="نص رسالة إلغاء الحجز"
             value={form.cancellationTemplate}
             onChange={(value) => setField("cancellationTemplate", value)}
-            variables={MESSAGE_VARIABLES}
+            variables={providerId ? SERVICE_MESSAGE_VARIABLES : MESSAGE_VARIABLES}
             rows={8}
             disabled={isReadOnly}
           />
@@ -430,7 +438,7 @@ export function OwnerMessageSettingsTab({
             label="نص رسالة تعديل الحجز"
             value={form.modificationTemplate}
             onChange={(value) => setField("modificationTemplate", value)}
-            variables={MESSAGE_VARIABLES}
+            variables={providerId ? SERVICE_MESSAGE_VARIABLES : MESSAGE_VARIABLES}
             rows={12}
             disabled={isReadOnly}
           />
