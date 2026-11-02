@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { defaultExpenseActivity, expenseTarget } from "@/lib/expenseTarget";
+import { createWithdrawalExpense } from "@/lib/withdrawalExpense";
 import { activityKey } from "@/lib/dashboardActivity";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -402,7 +403,7 @@ export function ExpensesTab() {
       </div>
 
       {/* ── Personal Withdrawals Quick Button ── */}
-      {unit.type !== "all" && (
+      {defaultActivity.type !== "all" && (
       <div className="rounded-2xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -424,26 +425,34 @@ export function ExpensesTab() {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
-              if (!wAmount || Number(wAmount) <= 0) return;
+              if (isReadOnly) { onBlockedEdit(); return; }
               setWSaving(true);
               try {
+                const payload = createWithdrawalExpense(defaultActivity, {
+                  amount: Number(wAmount),
+                  dateStr: wDate,
+                  notes: wNote,
+                });
                 const r = await apiFetch("/owner/expenses", {
                   method: "POST",
-                  body: JSON.stringify({
-                    category: "withdrawal",
-                    amount: Math.round(Number(wAmount)),
-                    dateStr: wDate,
-                    notes: wNote || undefined,
-                    submissionId: unit.type === "chalet" ? (unit as any).submissionId : undefined,
-                  }),
+                  body: JSON.stringify(payload),
                 });
-                if (r.ok) {
-                  toast({ title: "تم تسجيل المسحوبات", description: `${Math.round(Number(wAmount)).toLocaleString("ar-SA")} ر.س` });
-                  setWAmount(""); setWNote(""); setWDate(getLocalDateStr());
-                  setShowWithdrawal(false);
-                  qc.invalidateQueries({ queryKey: ["owner", "financial-summary-rev"] });
-                  qc.invalidateQueries({ queryKey: ["owner", "expenses"] });
+                if (!r.ok) {
+                  const error = await r.json().catch(() => null);
+                  throw new Error(error?.error || "تعذر تسجيل السحب. يرجى إعادة المحاولة.");
                 }
+                toast({ title: "تم تسجيل المسحوبات", description: `${payload.amount.toLocaleString("ar-SA")} ر.س` });
+                setWAmount(""); setWNote(""); setWDate(getLocalDateStr());
+                setShowWithdrawal(false);
+                for (const key of ["expenses", "financial-summary", "financial-summary-rev", "transaction-history", "reports", "report-years"]) {
+                  void qc.invalidateQueries({ queryKey: ["owner", key] });
+                }
+              } catch (error) {
+                toast({
+                  title: "تعذر تأكيد تسجيل السحب",
+                  description: error instanceof Error ? error.message : "راجع سجل المصروفات قبل إعادة المحاولة.",
+                  variant: "destructive",
+                });
               } finally { setWSaving(false); }
             }}
             className="expense-entry-form space-y-2.5 pt-1 border-t border-amber-200 dark:border-amber-800"
