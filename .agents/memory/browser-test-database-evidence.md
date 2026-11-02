@@ -31,3 +31,9 @@ A browser download event alone is not proof of a valid PDF. Capture and inspect 
 **Why:** A report export triggered a download, but its object was lost before retrieval, preventing honest certification of the PDF.
 
 **How to apply:** Save the actual download immediately, inspect its content/pages, and mark PDF verification blocked if no file was obtained. Never substitute a separately rendered template as evidence of the app's real export.
+
+Temporary PDF-verification tooling should not leave application deployment dependencies behind.
+
+**Why:** Installing a renderer added native Nix dependencies and rewrote Python lock metadata; removing the Python package alone did not restore either.
+
+**How to apply:** Compare the pre/post-install diffs and remove only audit-owned changes after verification. Use validated configuration replacement for `.replit`; do not reset whole files or overwrite concurrent work. Keep rendered evidence in the ignored generated-artifacts directory.

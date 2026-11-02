@@ -62,12 +62,54 @@ content_type = "text/html"
 id = "PeZqETBXA2gEcCD6wEjL5"
 uri = "file://generated-artifacts/launch-fix-audit/release-verification-report.html"
 type = "html"
-title = "تقرير الإصلاحات وإعادة الفحص قبل الإطلاق"
-description = "نتائج الاختبارات والمطابقة المالية وتنظيف البيانات، مع توضيح أن الاعتماد النهائي ما زال مشروطاً بفحص ملف PDF فعلي."
+title = "تقرير الاعتماد المحدث بعد فحص PDF"
+description = "نتائج الإصلاحات والاختبارات، وفحص ثلاثة ملفات PDF فعلية بجميع صفحاتها الست، وإثبات تنظيف بيانات التجربة وحدود الاعتماد."
 logical_id = "328ba3b9-3ca8-4848-8f13-f47bb91204a6"
-content_hash = "sha256:5bc7ef516bffd9a1cf3e6fd6ff2cbf9ed6f3104814dd968e24cad09d50a00abb"
-size = 13620
-mtime_ms = 1793619390070
-storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/328ba3b9-3ca8-4848-8f13-f47bb91204a6/4c60d4f9-7acd-4289-88f4-b3f52bf954d8"
-storage_version_token = "1793619482292367"
+content_hash = "sha256:74c85dc0e713bf4eaa378267dc871a4e0e83f41e6d924516c67b6dc620551703"
+size = 17268
+mtime_ms = 1793624287590
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/328ba3b9-3ca8-4848-8f13-f47bb91204a6/3846831e-cd02-4e4a-9c16-afd0666d37e5"
+storage_version_token = "1793624468816057"
 content_type = "text/html"
+
+[[outputs]]
+id = "WYx4EonFWm08D5AA68E5V"
+uri = "file://generated-artifacts/launch-fix-audit/%D9%86%D9%85%D9%88%D8%B0%D8%AC-%D8%A7%D9%84%D8%B9%D9%82%D8%A7%D8%B1%D8%A7%D8%AA-%D8%A7%D9%84%D9%85%D8%AE%D8%AA%D8%B5%D8%B1.pdf"
+type = "pdf"
+title = "نموذج العقارات المختصر — بيانات اختبار"
+description = "ملف فعلي من المنصة، صفحة A4 واحدة؛ إيراد وصافي ٥٥٠ ريالاً ومصروفات صفر."
+logical_id = "e24564fd-3592-4c98-9db9-446ba6f32be5"
+content_hash = "sha256:4088943d77fb7ac4d2f5e67a4495f7a38f558c34937c4228cd1fb1a16189efc1"
+size = 250730
+mtime_ms = 1793624374830
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/e24564fd-3592-4c98-9db9-446ba6f32be5/ef8aae46-9aaf-49a7-bb4e-c16c60784c2a"
+storage_version_token = "1793624470910965"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "hMH7wyGhA0iLNkIe7mYxy"
+uri = "file://generated-artifacts/launch-fix-audit/%D9%86%D9%85%D9%88%D8%B0%D8%AC-%D8%A7%D9%84%D8%AE%D8%AF%D9%85%D8%A7%D8%AA-%D8%A7%D9%84%D9%85%D8%AE%D8%AA%D8%B5%D8%B1.pdf"
+type = "pdf"
+title = "نموذج الخدمات المختصر — بيانات اختبار"
+description = "صفحة A4 واحدة؛ إيراد ٦٧٠، مصروف ١٥، صافي ٦٥٥، ومتبقٍ ٦٠ ريالاً."
+logical_id = "7517664a-e10a-4cf3-b4a3-d0baf2ea9708"
+content_hash = "sha256:5044a34bae250892784307376c666281ba49734e50d6c16343abf764a8ac8e24"
+size = 219106
+mtime_ms = 1793624374837
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/7517664a-e10a-4cf3-b4a3-d0baf2ea9708/647eeef6-20c2-4fc9-a383-2329d9342e0f"
+storage_version_token = "1793624472972113"
+content_type = "application/pdf"
+
+[[outputs]]
+id = "3ANOx8NHtGlwADiu1_bC7"
+uri = "file://generated-artifacts/launch-fix-audit/%D9%86%D9%85%D9%88%D8%B0%D8%AC-%D8%A7%D9%84%D8%AE%D8%AF%D9%85%D8%A7%D8%AA-%D8%A7%D9%84%D8%AA%D9%81%D8%B5%D9%8A%D9%84%D9%8A.pdf"
+type = "pdf"
+title = "نموذج الخدمات التفصيلي — بيانات اختبار"
+description = "٤ صفحات فعلية تضم ٤٢ حجزاً والبيع السريع والمصروفات والحسابات الختامية؛ جميع الصفحات فُحصت بصرياً."
+logical_id = "d011a10c-50c1-4779-8523-88b169ddfa9a"
+content_hash = "sha256:818a747797a561601a7720b914b85a5c4e4fa53b6a1d314213c2489f0cd41a4e"
+size = 933079
+mtime_ms = 1793624374924
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/d011a10c-50c1-4779-8523-88b169ddfa9a/0fd1dd1e-e32c-4441-b9aa-caac04e6f73e"
+storage_version_token = "1793624475800736"
+content_type = "application/pdf"
