@@ -11,6 +11,14 @@ The user requested a full prelaunch reset, including accounts, sessions, setting
 
 **How to apply:** Check emptiness after restarting and loading the public site, not just immediately after deletion. Background-job heartbeats also count as database writes. Suppress empty-initialization bookkeeping without preventing normal subscription processing once real subscriptions exist. This records initialization intent, not permission for another deletion.
 
+## Selective general-settings recovery
+
+The user subsequently authorized restoring general system settings, official contact details and the administrator profile from backup, while keeping bookings, orders and financial transactions empty. This is not permission to restore the whole database or old owner/staff accounts.
+
+**Why:** The operational data was deliberately erased, and a new working principal account/password was established separately afterward. Rolling its credentials or sessions back would undo that secure setup.
+
+**How to apply:** Restore only general configuration and its directly referenced branding/help files. Merge the original principal's non-credential profile into the current administrator while preserving its current identity, password and active superadmin access. Exclude stale task heartbeats, simulated reminders and old initialization markers. Validate after restarting: public contact settings match the backup, the current administrator still works, and operational/financial tables remain empty. A newly initialized, closed master-catalog card is not a restored customer transaction.
+
 ## Recovery privacy and environment boundaries
 
 Recovery archives containing account/session/financial data must remain private and outside both public-asset and private-upload serving prefixes. Keep secret environment values separate; do not put database archives in the public Library or a web-server-readable workspace path.
