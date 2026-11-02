@@ -12,6 +12,6 @@ export function transactionHistoryTotals(items: FinancialTransaction[]) {
     else if (item.type === "refund") refunds += amount;
     else if (item.type === "expense" || item.type === "withdrawal") expenses += amount;
   }
-  return { income: income / 100, expenses: expenses / 100, refunds: refunds / 100,
+  return { income: (income - refunds) / 100, expenses: expenses / 100, refunds: refunds / 100,
     receivables: receivables / 100, net: (income - expenses - refunds) / 100 };
 }

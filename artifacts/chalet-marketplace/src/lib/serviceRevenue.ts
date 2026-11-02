@@ -1,5 +1,6 @@
 import type { DashboardActivity } from "./dashboardActivity";
 import { isInRevenuePeriod, type RevenuePeriod } from "./revenuePeriod";
+import { servicePrincipal } from "./financialPrincipal";
 
 export interface ServiceRevenueAppointment {
   id: number;
@@ -8,6 +9,8 @@ export interface ServiceRevenueAppointment {
   status?: string | null;
   amount?: string | number | null;
   deposit?: string | number | null;
+  cancelledAt?: string | Date | null;
+  cancelRefundAmount?: string | number | null;
 }
 
 /** Scope first, then use the same calendar boundaries as property revenue. */
@@ -17,17 +20,16 @@ export function serviceRevenueBookings<T extends ServiceRevenueAppointment>(
   if (activity.type === "chalet") return [];
   return appointments.filter(a =>
     (activity.type === "all" || a.providerId === activity.id)
-    && a.status !== "cancelled"
-    && isInRevenuePeriod(a.dateStr, period));
+    && (a.status !== "cancelled" || servicePrincipal(a).collected > 0)
+    && isInRevenuePeriod(servicePrincipal(a).date, period));
 }
 
 export function serviceRevenueTotals(appointments: ServiceRevenueAppointment[]) {
   return appointments.reduce((totals, a) => {
-    const amount = Number(a.amount ?? 0);
-    const deposit = Number(a.deposit ?? 0);
-    totals.sales += amount;
-    totals.collected += deposit;
-    totals.pending += Math.max(0, amount - deposit);
+    const principal = servicePrincipal(a);
+    totals.sales += principal.contractual;
+    totals.collected += principal.collected;
+    totals.pending += principal.outstanding;
     return totals;
   }, { sales: 0, collected: 0, pending: 0 });
 }

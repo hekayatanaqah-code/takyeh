@@ -32,7 +32,7 @@ const appointments: ServiceReportBooking[] = [
   { id: 101, providerId: 10, dateStr: "2026-10-28", status: "confirmed", amount: "100.10", deposit: "25.05", insuranceAmount: "500" },
   { id: 102, providerId: 10, dateStr: "2026-10-28", status: "confirmed", amount: "80.20", deposit: "80.20", insuranceAmount: "1000" },
   { id: 103, providerId: 10, dateStr: "2026-10-28", status: "pending", amount: "60", deposit: "0", insuranceAmount: "700" },
-  { id: 104, providerId: 10, dateStr: "2026-10-28", status: "cancelled", amount: "500", deposit: "400", insuranceAmount: "300" },
+  { id: 104, providerId: 10, dateStr: "2026-10-28", status: "cancelled", amount: "500", deposit: "400", insuranceAmount: "300", cancelRefundAmount: "400" },
   { id: 105, providerId: 20, dateStr: "2026-10-28", status: "confirmed", amount: "900", deposit: "900" },
   { id: 106, providerId: 10, dateStr: "2026-12-28", status: "confirmed", amount: "900", deposit: "900" },
 ];

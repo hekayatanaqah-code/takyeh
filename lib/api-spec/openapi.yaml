@@ -1745,12 +1745,12 @@ components:
         unitPrice: { type: number, minimum: 0.01, maximum: 9999999 }
     CreateQuickSale:
       type: object
-      required: [providerId, dateStr, items, paymentMethod, idempotencyKey]
+      required: [providerId, dateStr, clientPhone, items, paymentMethod, idempotencyKey]
       properties:
         providerId: { type: integer, minimum: 1 }
         dateStr: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' }
         clientName: { type: string, maxLength: 150 }
-        clientPhone: { type: string, maxLength: 30 }
+        clientPhone: { type: string, minLength: 1, maxLength: 30 }
         items:
           type: array
           minItems: 1

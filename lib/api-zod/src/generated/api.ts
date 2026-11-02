@@ -151,7 +151,7 @@ export const CreateQuickSaleBody = zod.object({
   "providerId": zod.number().int().min(1),
   "dateStr": zod.string().regex(createQuickSaleBodyDateStrRegExp),
   "clientName": zod.string().max(createQuickSaleBodyClientNameMax).optional(),
-  "clientPhone": zod.string().max(createQuickSaleBodyClientPhoneMax).optional(),
+  "clientPhone": zod.string().min(1).max(createQuickSaleBodyClientPhoneMax),
   "items": zod.array(zod.object({
   "catalogItemId": zod.number().int().min(1).optional(),
   "name": zod.string().min(1).max(createQuickSaleBodyItemsItemNameMax),

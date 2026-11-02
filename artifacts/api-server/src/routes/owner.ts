@@ -142,13 +142,24 @@ function getHijriDay(dateStr: string): number {
 }
 
 /** Recognised revenue for one booking row (deposit + balance if collected; falls back to revenueAmount, then depositPaid). */
-function calcBookingRev(b: { totalPrice: string | null; depositPaid: string | null; balanceCollected: boolean | null; revenueAmount: string | null }): number {
+function calcBookingRev(b: { totalPrice: string | null; depositPaid: string | null; balanceCollected: boolean | null; revenueAmount: string | null; cancelledAt?: Date | null; cancelIncome?: string | null; cancelRefundAmount?: string | null }): number {
+  if (b.cancelledAt) {
+    const paid = b.totalPrice == null ? Number(b.revenueAmount ?? b.depositPaid ?? 0) : b.balanceCollected
+      ? Number(b.totalPrice ?? b.revenueAmount ?? b.depositPaid ?? 0)
+      : Number(b.depositPaid ?? b.revenueAmount ?? 0);
+    return Math.max(0, Number(b.cancelIncome ?? (paid - Number(b.cancelRefundAmount ?? 0))));
+  }
   if (b.totalPrice !== null) {
     const dep = Number(b.depositPaid ?? 0);
     return dep + (b.balanceCollected ? Number(b.totalPrice) - dep : 0);
   }
   if (b.revenueAmount) return Number(b.revenueAmount);
   return Number(b.depositPaid ?? 0);
+}
+function bookingFinancialDate(b: { bookingDate: string; cancelledAt?: Date | null }): string {
+  return b.cancelledAt
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(b.cancelledAt)
+    : b.bookingDate;
 }
 
 const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = "مرحباً {اسم_العميل}، تم تأكيد حجزك في {اسم_العقار} بتاريخ {التاريخ}. نسعد باستقبالك.\n\nتفاصيل المبالغ:\nقيمة الإيجار: {قيمة_الإيجار} ريال.\nقيمة الإضافات: {إجمالي_الخدمات} ريال.\nالإجمالي الكلي: {الإجمالي_الكلي} ريال.\nمبلغ التأمين: {التأمين} ريال.\nالمبلغ المدفوع: {المدفوع} ريال.\nالمتبقي: {المتبقي} ريال.";
@@ -3040,11 +3051,6 @@ router.get("/reports", async (req, res) => {
   const fetchConds: Parameters<typeof and>[0][] = [
     inArray(ownerBookingsTable.ownerId, allOwnerIds),
   ];
-  if (isHijriMode) {
-    const approxGYear = Math.floor(hijriYear! * 354.367 / 365.25 + 622);
-    fetchConds.push(gte(ownerBookingsTable.bookingDate, `${approxGYear - 1}-01-01`));
-    fetchConds.push(lte(ownerBookingsTable.bookingDate, `${approxGYear + 1}-12-31`));
-  }
   if (submissionId) fetchConds.push(eq(ownerBookingsTable.submissionId, submissionId));
 
   const allOwnerBookings = await db
@@ -3058,11 +3064,11 @@ router.get("/reports", async (req, res) => {
   const [gYear, gMon] = isHijriMode ? [0, 0] : month.split("-").map(Number);
   const monthBookings = isHijriMode
     ? allOwnerBookings.filter(b => {
-        const hym = getHijriYM(b.bookingDate);
+        const hym = getHijriYM(bookingFinancialDate(b));
         return hym.year === hijriYear && hym.month === hijriMonth;
       })
     : allOwnerBookings.filter(b => {
-        const d = new Date(b.bookingDate);
+        const d = new Date(`${bookingFinancialDate(b)}T12:00:00`);
         return d.getFullYear() === gYear && d.getMonth() === gMon - 1;
       });
 
@@ -3102,19 +3108,19 @@ router.get("/reports", async (req, res) => {
   const dailyRevenue = isHijriMode
     ? Array.from({ length: daysInMonth }, (_, i) => {
         const day = i + 1;
-        const revenue = activeMonthBookings
+        const revenue = monthBookings
           .filter(b =>
-            getHijriYM(b.bookingDate).year  === hijriYear  &&
-            getHijriYM(b.bookingDate).month === hijriMonth &&
-            getHijriDay(b.bookingDate) === day)
+            getHijriYM(bookingFinancialDate(b)).year  === hijriYear  &&
+            getHijriYM(bookingFinancialDate(b)).month === hijriMonth &&
+            getHijriDay(bookingFinancialDate(b)) === day)
           .reduce((s, b) => s + calcBookingRev(b), 0);
         return { day, revenue };
       })
     : Array.from({ length: daysInMonth }, (_, i) => {
         const day    = i + 1;
         const dayStr = `${month}-${String(day).padStart(2, "0")}`;
-        const revenue = activeMonthBookings
-          .filter(b => b.bookingDate === dayStr)
+        const revenue = monthBookings
+          .filter(b => bookingFinancialDate(b) === dayStr)
           .reduce((s, b) => s + calcBookingRev(b), 0);
         return { day, revenue };
       });
@@ -3929,20 +3935,16 @@ router.get("/financial-summary", async (req, res) => {
     const gStart = `${approxGYear - 1}-01-01`;
     const gEnd   = `${approxGYear + 1}-12-31`;
 
-    const bConds: Parameters<typeof and>[0][] = [
-      inArray(ownerBookingsTable.ownerId, allOwnerIds),
-      gte(ownerBookingsTable.bookingDate, gStart),
-      lte(ownerBookingsTable.bookingDate, gEnd),
-      isNull(ownerBookingsTable.cancelledAt),
-    ];
+    const bConds: Parameters<typeof and>[0][] = [inArray(ownerBookingsTable.ownerId, allOwnerIds)];
     if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
     const allWindowBookings = await db.select().from(ownerBookingsTable).where(and(...bConds));
     const monthBookings = allWindowBookings.filter(b => {
-      const hym = getHijriYM(b.bookingDate);
+      const hym = getHijriYM(bookingFinancialDate(b));
       return hym.year === hYear && hym.month === hMonth;
     });
 
     const calcRev = (b: typeof monthBookings[number]) => {
+      if (b.cancelledAt) return calcBookingRev(b);
       if (b.totalPrice !== null) {
         const dep = Number(b.depositPaid ?? 0);
         return dep + (b.balanceCollected ? Number(b.totalPrice) - dep : 0);
@@ -3951,13 +3953,14 @@ router.get("/financial-summary", async (req, res) => {
       return Number(b.depositPaid ?? 0);
     };
     const totalInsuranceDeducted = monthBookings.reduce((s, b) => s + (b.insuranceDeducted ? Number(b.insuranceDeducted) : 0), 0);
-    const totalRevenue  = Math.round(monthBookings.reduce((s, b) => s + calcRev(b), 0) + totalInsuranceDeducted);
+    const totalRevenue  = Math.round((monthBookings.reduce((s, b) => s + calcRev(b), 0) + totalInsuranceDeducted) * 100) / 100;
     const totalDeposits = Math.round(monthBookings.reduce((s, b) => s + Number(b.depositPaid ?? 0), 0));
-    const totalPendingBalance = Math.round(monthBookings.filter(b => !b.balanceCollected && b.totalPrice).reduce((s, b) => s + Math.max(0, Number(b.totalPrice) - Number(b.depositPaid ?? 0)), 0));
-    const totalInsuranceHeld  = monthBookings.reduce((s, b) => s + (!b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0), 0);
+    const totalPendingBalance = Math.round(monthBookings.filter(b => !b.cancelledAt && !b.balanceCollected && b.totalPrice).reduce((s, b) => s + Math.max(0, Number(b.totalPrice) - Number(b.depositPaid ?? 0)), 0));
+    const totalInsuranceHeld  = monthBookings.reduce((s, b) => s + (!b.cancelledAt && !b.insuranceRefunded && b.insuranceFee ? Number(b.insuranceFee) : 0), 0);
 
     const eConds: Parameters<typeof and>[0][] = [
       inArray(ownerExpensesTable.ownerId, allOwnerIds),
+      isNull(ownerExpensesTable.providerId),
       gte(ownerExpensesTable.dateStr, gStart),
       lte(ownerExpensesTable.dateStr, gEnd),
     ];
@@ -3981,7 +3984,7 @@ router.get("/financial-summary", async (req, res) => {
     for (const e of monthExpenses) categoryTotals[e.category] = (categoryTotals[e.category] ?? 0) + Number(e.amount);
     if (totalSalaries > 0) categoryTotals["salaries"] = (categoryTotals["salaries"] ?? 0) + totalSalaries;
 
-    const totalExpensesAll = Math.round(totalExpenses + totalSalaries);
+    const totalExpensesAll = Math.round((totalExpenses + totalSalaries) * 100) / 100;
     const netProfit = totalRevenue - totalExpensesAll;
     const insuranceRevenueTotals: Record<string, number> = totalInsuranceDeducted > 0 ? { insurance_damage: totalInsuranceDeducted } : {};
     const totalWithdrawals = Math.round(monthExpenses.filter(e => e.category === "withdrawal").reduce((s, e) => s + Number(e.amount), 0));
@@ -4029,7 +4032,7 @@ router.get("/financial-summary", async (req, res) => {
   // Insurance deductions → treated as revenue under "تلفيات" category
   const totalInsuranceDeducted = monthBookings.reduce((s, b) =>
     s + (b.insuranceDeducted ? Number(b.insuranceDeducted) : 0), 0);
-  const totalRevenue = monthBookings.reduce((s, b) => s + calcBookingRevenue(b), 0) + totalInsuranceDeducted;
+  let totalRevenue = monthBookings.reduce((s, b) => s + calcBookingRevenue(b), 0) + totalInsuranceDeducted;
   // Insurance held (refundable, NOT in revenue) — ONLY from active (non-cancelled) bookings.
   // Cancelled bookings auto-set insuranceRefunded=true, but we also filter by cancelledAt
   // here to correctly handle historical data from before that auto-flag was deployed.
@@ -4040,6 +4043,7 @@ router.get("/financial-summary", async (req, res) => {
   // Expenses: for this month
   const expenseConditions: SQL[] = [
     inArray(ownerExpensesTable.ownerId, allOwnerIds),
+    isNull(ownerExpensesTable.providerId),
     gte(ownerExpensesTable.dateStr, `${selectedMonth}-01`),
     lte(ownerExpensesTable.dateStr, `${selectedMonth}-31`),
   ];
@@ -4084,7 +4088,7 @@ router.get("/financial-summary", async (req, res) => {
     categoryTotals["salaries"] = (categoryTotals["salaries"] ?? 0) + totalSalaries;
   }
   const totalExpensesAll = totalExpenses + totalSalaries;
-  const netProfit = totalRevenue - totalExpensesAll;
+  let netProfit = totalRevenue - totalExpensesAll;
   const totalWithdrawals = Math.round(monthExpenses.filter(e => e.category === "withdrawal").reduce((s, e) => s + Number(e.amount), 0));
   // Insurance revenue category (deductions from insurance → تلفيات)
   const insuranceRevenueTotals: Record<string, number> = {};
@@ -4166,15 +4170,18 @@ router.get("/financial-summary", async (req, res) => {
   }
 
   // ── Cancellation income for this month (by cancelledAt date) ──────
-  const cancelledThisMonth = await db
-    .select({ cancelIncome: ownerBookingsTable.cancelIncome, cancelRefundAmount: ownerBookingsTable.cancelRefundAmount })
+  const cancelledForScope = await db
+    .select()
     .from(ownerBookingsTable)
     .where(and(
       inArray(ownerBookingsTable.ownerId, allOwnerIds),
-      gte(ownerBookingsTable.cancelledAt, new Date(`${selectedMonth}-01T00:00:00Z`)),
-      lte(ownerBookingsTable.cancelledAt, new Date(`${selectedMonth}-31T23:59:59Z`)),
+      submissionId ? eq(ownerBookingsTable.submissionId, submissionId) : undefined,
+      isNotNull(ownerBookingsTable.cancelledAt),
     ));
-  const totalCancellationIncome = Math.round(cancelledThisMonth.reduce((s, b) => s + Number(b.cancelIncome ?? 0), 0));
+  const cancelledThisMonth = cancelledForScope.filter(b => bookingFinancialDate(b).startsWith(selectedMonth));
+  const totalCancellationIncome = cancelledThisMonth.reduce((s, b) => s + calcBookingRev(b), 0);
+  totalRevenue += totalCancellationIncome;
+  netProfit += totalCancellationIncome;
   const totalRefundedToClients  = Math.round(cancelledThisMonth.reduce((s, b) => s + Number(b.cancelRefundAmount ?? 0), 0));
 
   // ── ALL-TIME three-layer liquidity model ──────────────────────
@@ -4560,14 +4567,13 @@ router.get("/service-revenue-summary", async (req, res) => {
       insuranceAmount: serviceAppointmentsTable.insuranceAmount,
       status: serviceAppointmentsTable.status,
       dateStr: serviceAppointmentsTable.dateStr,
+      cancelledAt: serviceAppointmentsTable.cancelledAt,
+      cancelRefundAmount: serviceAppointmentsTable.cancelRefundAmount,
     })
     .from(serviceAppointmentsTable)
     .where(
       and(
         inArray(serviceAppointmentsTable.providerId, providerIds),
-        gte(serviceAppointmentsTable.dateStr, fromDate),
-        lte(serviceAppointmentsTable.dateStr, toDate),
-        ne(serviceAppointmentsTable.status, "cancelled"),
       )
     );
 
@@ -4575,16 +4581,19 @@ router.get("/service-revenue-summary", async (req, res) => {
   for (const p of providers) byProvider[p.id] = { name: p.businessName ?? `خدمة #${p.id}`, revenue: 0, deposits: 0, insurance: 0, pending: 0 };
 
   for (const a of appts) {
+    const eventDate = bookingFinancialDate({ bookingDate: a.dateStr, cancelledAt: a.status === "cancelled" ? a.cancelledAt : null });
+    if (eventDate < fromDate || eventDate > toDate) continue;
     if (hasHijriPeriod) {
-      const date = getHijriYM(a.dateStr);
+      const date = getHijriYM(eventDate);
       if (date.year !== hijriYear || date.month !== hijriMonth) continue;
     }
     if (!byProvider[a.providerId]) continue;
-    const amt = Number(a.amount ?? 0);
-    const dep = Number(a.deposit ?? 0);
+    const cancelled = a.status === "cancelled";
+    const dep = cancelled ? Math.max(0, Number(a.deposit ?? 0) - Number(a.cancelRefundAmount ?? 0)) : Number(a.deposit ?? 0);
+    const amt = cancelled ? dep : Number(a.amount ?? 0);
     byProvider[a.providerId].revenue  += dep; // collected = deposit paid
     byProvider[a.providerId].deposits += dep;
-    byProvider[a.providerId].insurance += Number(a.insuranceAmount ?? 0);
+    if (!cancelled) byProvider[a.providerId].insurance += Number(a.insuranceAmount ?? 0);
     byProvider[a.providerId].pending  += Math.max(0, amt - dep);
   }
 
@@ -4910,37 +4919,22 @@ router.get("/yearly-summary", async (req, res) => {
   const staffMap = Object.fromEntries(staffRows.map((s) => [s.id, Number(s.baseSalary)]));
 
   const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
+  const yearlyBookings = await db.select().from(ownerBookingsTable).where(and(
+    inArray(ownerBookingsTable.ownerId, allOwnerIds),
+    submissionId ? eq(ownerBookingsTable.submissionId, submissionId) : undefined,
+  ));
 
   const monthly = await Promise.all(months.map(async (m) => {
-    const bConds: any[] = [
-      inArray(ownerBookingsTable.ownerId, allOwnerIds),
-      gte(ownerBookingsTable.bookingDate, `${m}-01`),
-      lte(ownerBookingsTable.bookingDate, `${m}-31`),
-    ];
-    if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
-    const bRows = await db
-      .select({ rev: ownerBookingsTable.revenueAmount, totalPrice: ownerBookingsTable.totalPrice, depositPaid: ownerBookingsTable.depositPaid, balanceCollected: ownerBookingsTable.balanceCollected, cancelledAt: ownerBookingsTable.cancelledAt, insuranceDeducted: ownerBookingsTable.insuranceDeducted })
-      .from(ownerBookingsTable).where(and(...bConds));
-    const activeRows = bRows.filter(r => r.cancelledAt === null);
-    const revenue = activeRows.reduce((s, r) => {
-      let rev = 0;
-      if (r.totalPrice !== null) {
-        const dep = Number(r.depositPaid ?? 0);
-        rev = dep + (r.balanceCollected ? Number(r.totalPrice) - dep : 0);
-      } else if (r.rev) {
-        rev = Number(r.rev);
-      } else {
-        rev = Number(r.depositPaid ?? 0);
-      }
-      return s + rev + (r.insuranceDeducted ? Number(r.insuranceDeducted) : 0);
-    }, 0);
+    const revenue = yearlyBookings.filter(b => bookingFinancialDate(b).startsWith(m))
+      .reduce((sum, b) => sum + calcBookingRev(b), 0);
 
     const eConds: any[] = [
       inArray(ownerExpensesTable.ownerId, allOwnerIds),
+      isNull(ownerExpensesTable.providerId),
       gte(ownerExpensesTable.dateStr, `${m}-01`),
       lte(ownerExpensesTable.dateStr, `${m}-31`),
     ];
-    if (submissionId) eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+    if (submissionId) eConds.push(or(eq(ownerExpensesTable.submissionId, submissionId), isNull(ownerExpensesTable.submissionId)));
     const eRows = await db.select({ amt: ownerExpensesTable.amount }).from(ownerExpensesTable).where(and(...eConds));
     const exp = eRows.reduce((s, r) => s + Number(r.amt), 0);
 
@@ -4977,6 +4971,7 @@ router.get("/yearly-summary-hijri", async (req, res) => {
 
   const submissionId = req.query.submissionId ? Number(req.query.submissionId) : undefined;
 
+  const allOwnerIds = await getOwnerIds(req);
   /* Gregorian window: a Hijri year spans ~354 days starting mid-Gregorian-year.
      Approximate: gYear ≈ (hijriYear − 1) × 354.367/365.25 + 622
      We search ±1 Gregorian year around that to ensure full coverage.          */
@@ -4990,30 +4985,31 @@ router.get("/yearly-summary-hijri", async (req, res) => {
     .from(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
   const staffMap = Object.fromEntries(staffRows.map(s => [s.id, Number(s.baseSalary)]));
 
-  /* Fetch non-cancelled bookings in the Gregorian window */
+  /* Include cancellations by their financial event date, including old stay dates. */
   const bConds: any[] = [
-    eq(ownerBookingsTable.ownerId, ownerId),
-    gte(ownerBookingsTable.bookingDate, `${gYearStart}-01-01`),
-    lte(ownerBookingsTable.bookingDate, `${gYearEnd}-12-31`),
-    isNull(ownerBookingsTable.cancelledAt),
+    inArray(ownerBookingsTable.ownerId, allOwnerIds),
   ];
   if (submissionId) bConds.push(eq(ownerBookingsTable.submissionId, submissionId));
   const bRows = await db.select({
     bookingDate: ownerBookingsTable.bookingDate,
-    rev:             ownerBookingsTable.revenueAmount,
+    revenueAmount:   ownerBookingsTable.revenueAmount,
     totalPrice:      ownerBookingsTable.totalPrice,
     depositPaid:     ownerBookingsTable.depositPaid,
     balanceCollected: ownerBookingsTable.balanceCollected,
     insuranceDeducted: ownerBookingsTable.insuranceDeducted,
+    cancelledAt: ownerBookingsTable.cancelledAt,
+    cancelIncome: ownerBookingsTable.cancelIncome,
+    cancelRefundAmount: ownerBookingsTable.cancelRefundAmount,
   }).from(ownerBookingsTable).where(and(...bConds));
 
   /* Fetch expenses in the Gregorian window */
   const eConds: any[] = [
-    eq(ownerExpensesTable.ownerId, ownerId),
+    inArray(ownerExpensesTable.ownerId, allOwnerIds),
+    isNull(ownerExpensesTable.providerId),
     gte(ownerExpensesTable.dateStr, `${gYearStart}-01-01`),
     lte(ownerExpensesTable.dateStr, `${gYearEnd}-12-31`),
   ];
-  if (submissionId) eConds.push(eq(ownerExpensesTable.submissionId, submissionId));
+  if (submissionId) eConds.push(or(eq(ownerExpensesTable.submissionId, submissionId), isNull(ownerExpensesTable.submissionId)));
   const eRows = await db.select({ dateStr: ownerExpensesTable.dateStr, amt: ownerExpensesTable.amount })
     .from(ownerExpensesTable).where(and(...eConds));
 
@@ -5036,18 +5032,9 @@ router.get("/yearly-summary-hijri", async (req, res) => {
   for (let m = 1; m <= 12; m++) { revByM[m] = 0; expByM[m] = 0; salByM[m] = 0; }
 
   for (const b of bRows) {
-    const hym = getHijriYM(b.bookingDate);
+    const hym = getHijriYM(bookingFinancialDate(b));
     if (hym.year !== hijriYear) continue;
-    let rev = 0;
-    if (b.totalPrice !== null) {
-      const dep = Number(b.depositPaid ?? 0);
-      rev = dep + (b.balanceCollected ? Number(b.totalPrice) - dep : 0);
-    } else if (b.rev) {
-      rev = Number(b.rev);
-    } else {
-      rev = Number(b.depositPaid ?? 0);
-    }
-    rev += (b.insuranceDeducted ? Number(b.insuranceDeducted) : 0);
+    const rev = calcBookingRev(b);
     revByM[hym.month] = (revByM[hym.month] ?? 0) + rev;
   }
 
@@ -5936,7 +5923,8 @@ router.get("/transaction-history", async (req, res) => {
   if (providerId && !providers.length) return res.status(404).json({ error: "الخدمة غير موجودة" });
 
   const bConds: Parameters<typeof and>[0][] = [inArray(ownerBookingsTable.ownerId, ownerIds)];
-  const eConds: Parameters<typeof and>[0][] = [inArray(ownerExpensesTable.ownerId, ownerIds)];
+  const eConds: Parameters<typeof and>[0][] = [inArray(ownerExpensesTable.ownerId, ownerIds),
+    submissionId ? isNull(ownerExpensesTable.providerId) : undefined];
   const pConds: Parameters<typeof and>[0][] = [
     inArray(bookingPaymentsTable.ownerId, ownerIds), inArray(ownerBookingsTable.ownerId, ownerIds),
   ];
@@ -6003,6 +5991,8 @@ router.get("/transaction-history", async (req, res) => {
   ]);
 
   const bookingIdsWithInstallments = new Set(instPayments.map(p => p.bookingId));
+  const cancellationDates = new Map(bookings.filter(b => b.cancelledAt)
+    .map(b => [b.id, ledgerDate(b.cancelledAt!)]));
 
   const items = [
     /* Booking entries — distinguish refund vs cancelled vs normal income */
@@ -6033,9 +6023,9 @@ router.get("/transaction-history", async (req, res) => {
           return [
             {
               id: `b-${b.id}-dep`,
-              date: b.bookingDate ?? "",
+              date: cancelDate,
               type: "income" as const,
-              label: `إيداع — ${b.clientName}`,
+              label: `تحصيل الحجز الملغى قبل الاسترداد — ${b.clientName}`,
               amount: (monetaryCents(dep) + monetaryCents(bal)) / 100,
               method: (b.paymentMethod ?? "transfer") as string,
               status: "collected" as string,
@@ -6062,9 +6052,9 @@ router.get("/transaction-history", async (req, res) => {
         /* Retained collections remain income even when cancellation involved no refund. */
         return [{
           id: `b-${b.id}`,
-          date: b.bookingDate ?? "",
+          date: cancelDate,
           type: "income" as const,
-          label: `إيداع — ${b.clientName}`,
+          label: `إيراد إلغاء محتفظ به — ${b.clientName}`,
           amount: (monetaryCents(dep) + monetaryCents(bal)) / 100,
           method: (b.paymentMethod ?? "transfer") as string,
           status: dep + bal > 0 ? "collected" : "cancelled",
@@ -6099,7 +6089,7 @@ router.get("/transaction-history", async (req, res) => {
       .filter(p => !submissionId || p.submissionId === submissionId)
       .map(p => ({
         id: `p-${p.id}`,
-        date: p.paymentDate,
+        date: cancellationDates.get(p.bookingId) ?? p.paymentDate,
         type: "income" as const,
         label: `دفعة — ${p.clientName}`,
         amount: Number(p.amount),

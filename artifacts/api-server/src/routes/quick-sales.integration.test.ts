@@ -14,7 +14,7 @@ let sid: string;
 let server: Server;
 let base: string;
 const payload = () => ({
-  providerId: providerIds[0], dateStr: "2026-10-28", clientName: "عميل اختباري",
+  providerId: providerIds[0], dateStr: "2026-10-28", clientName: "عميل اختباري", clientPhone: "0500000000",
   items: [{ name: "منتج اختباري", quantity: 3, unitPrice: 10.15 }],
   paymentMethod: "cash", idempotencyKey: randomUUID(),
 });
@@ -58,6 +58,12 @@ it("requires authentication, defaults off and persists account-wide opt-in", asy
   assert.equal((await request("", "POST", payload())).status, 403);
   assert.equal((await request("/settings", "PATCH", { enabled: "true" })).status, 400);
   assert.deepEqual((await request("/settings", "PATCH", { enabled: true })).json, { enabled: true });
+});
+it("requires a valid ten-digit Saudi mobile and rejects missing phones or letters", async () => {
+  for (const clientPhone of [undefined, "", "050123456", "05012345678", "0612345678", "abc0501234567"]) {
+    const sale = { ...payload(), clientPhone };
+    assert.equal((await request("", "POST", sale)).status, 400);
+  }
 });
 it("records exact cents, protects idempotent retries and provider isolation", async () => {
   const sale = payload();

@@ -95,12 +95,13 @@ export function WaCancelPreviewDialog({
 
 /* ── Delete / Cancel Booking Dialog ────────────────────────────────────── */
 export function DeleteConfirmDialog({
-  open, booking, onClose, onConfirm,
+  open, booking, onClose, onConfirm, insuranceSettlement,
 }: {
   open: boolean;
   booking: OwnerBooking | null;
   onClose: () => void;
   onConfirm: (id: number, reason: string, reasonCode?: string, refundAmount?: number) => void;
+  insuranceSettlement?: { status: "held" | "refunded" | "deducted"; deduction?: number };
 }) {
   const [reasonCode, setReasonCode]     = useState<string>("");
   const [customReason, setCustomReason] = useState("");
@@ -116,6 +117,9 @@ export function DeleteConfirmDialog({
   const totalPrice     = Math.round(Number(booking.totalPrice ?? 0));
   const isFullPayment  = totalPrice > 0 && depositPaid === totalPrice;
   const insuranceFee   = Math.round(Number(booking.insuranceFee ?? 0));
+  const insuranceReturned = insuranceSettlement
+    ? insuranceSettlement.status === "refunded" ? insuranceFee : 0
+    : insuranceFee;
   const refundExceedsDeposit = !!refundAmount && Number(refundAmount) > depositPaid;
   /* refundDisplay = exact typed value (shown in summary for real-time sync) */
   const refundDisplay  = Number(refundAmount) || 0;
@@ -203,7 +207,7 @@ export function DeleteConfirmDialog({
           )}
 
           {/* Financial summary */}
-          {depositPaid > 0 && (
+          {(depositPaid > 0 || insuranceFee > 0) && (
             <div className="bg-muted/50 rounded-xl p-3 space-y-2 text-sm border border-border">
               <p className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">ملخص مالي للإلغاء</p>
               <div className="flex justify-between">
@@ -216,8 +220,12 @@ export function DeleteConfirmDialog({
               </div>
               {insuranceFee > 0 && (
                 <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
-                  <span>🔒 مبلغ التأمين (مسترد بالكامل لعدم الدخول):</span>
-                  <span className="font-semibold">− {insuranceFee.toLocaleString("ar-SA")} ر.س</span>
+                  <span>{insuranceSettlement
+                    ? insuranceSettlement.status === "refunded" ? "التأمين: مسجل رده محاسبياً"
+                      : insuranceSettlement.status === "deducted" ? "التأمين: تسوية خصم مسجلة"
+                      : "التأمين محتجز — يسوى مستقلاً من إدارة التأمينات"
+                    : "🔒 مبلغ التأمين (مسترد بالكامل لعدم الدخول):"}</span>
+                  <span className="font-semibold">{insuranceFee.toLocaleString("ar-SA")} ر.س</span>
                 </div>
               )}
               {refundExceedsDeposit ? (
@@ -233,8 +241,8 @@ export function DeleteConfirmDialog({
                   </div>
                   {insuranceFee > 0 && (
                     <div className="flex justify-between border-t border-border pt-2 font-extrabold text-base text-foreground">
-                      <span>💰 إجمالي المُعاد للعميل:</span>
-                      <span>{(refundDisplay + insuranceFee).toLocaleString("ar-SA")} ر.س</span>
+                      <span>{insuranceSettlement ? "إجمالي الاسترداد:" : "💰 إجمالي المُعاد للعميل:"}</span>
+                      <span>{(refundDisplay + insuranceReturned).toLocaleString("ar-SA")} ر.س</span>
                     </div>
                   )}
                 </>

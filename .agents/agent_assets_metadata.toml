@@ -57,3 +57,17 @@ mtime_ms = 1793615529042
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/9ce399f5-59d4-4b42-bc90-8808f420bb1b/d09979bf-d06d-42b9-b7ea-268c5abe12d6"
 storage_version_token = "1793615595822496"
 content_type = "text/html"
+
+[[outputs]]
+id = "PeZqETBXA2gEcCD6wEjL5"
+uri = "file://generated-artifacts/launch-fix-audit/release-verification-report.html"
+type = "html"
+title = "تقرير الإصلاحات وإعادة الفحص قبل الإطلاق"
+description = "نتائج الاختبارات والمطابقة المالية وتنظيف البيانات، مع توضيح أن الاعتماد النهائي ما زال مشروطاً بفحص ملف PDF فعلي."
+logical_id = "328ba3b9-3ca8-4848-8f13-f47bb91204a6"
+content_hash = "sha256:5bc7ef516bffd9a1cf3e6fd6ff2cbf9ed6f3104814dd968e24cad09d50a00abb"
+size = 13620
+mtime_ms = 1793619390070
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/328ba3b9-3ca8-4848-8f13-f47bb91204a6/4c60d4f9-7acd-4289-88f4-b3f52bf954d8"
+storage_version_token = "1793619482292367"
+content_type = "text/html"

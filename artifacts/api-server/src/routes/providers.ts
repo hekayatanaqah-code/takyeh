@@ -1158,23 +1158,22 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   }
   if (parsed.data.editReason?.trim()) {
     updates.lastEditedAt = new Date();
-    updates.previousStartTime = parsed.data.startTime !== undefined && parsed.data.startTime !== row.startTime
-      ? row.startTime : null;
+    updates.previousStartTime = row.startTime;
     const dateChanged = targetDate !== row.dateStr;
-    updates.previousDateStr = dateChanged ? row.dateStr : null;
-    updates.editedDateStr = dateChanged ? targetDate : null;
+    updates.previousDateStr = row.dateStr;
+    updates.editedDateStr = targetDate;
 
     const targetAmount = parsed.data.amount ?? row.amount;
     const amountChanged = Number(targetAmount ?? 0) !== Number(row.amount ?? 0);
-    updates.previousAmount = amountChanged ? row.amount : null;
+    updates.previousAmount = row.amount;
 
     const targetDuration = parsed.data.duration ?? row.duration;
     const targetDurationUnit = parsed.data.durationUnit ?? row.durationUnit;
     const durationChanged =
       String(targetDuration ?? "") !== String(row.duration ?? "") ||
       targetDurationUnit !== row.durationUnit;
-    updates.previousDuration = durationChanged ? row.duration : null;
-    updates.previousDurationUnit = durationChanged ? row.durationUnit : null;
+    updates.previousDuration = row.duration;
+    updates.previousDurationUnit = row.durationUnit;
   }
   if (!provider.requiresInsurance) updates.clientIdNumber = null;
   if (parsed.data.status === "cancelled" && !row.cancelledAt) {

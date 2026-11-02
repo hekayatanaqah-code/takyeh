@@ -727,35 +727,43 @@ export function ServiceCalendarBookingsTab() {
   function buildServiceMessage(appointment: any, templateBody: string) {
     const effectiveDateStr = appointment.editedDateStr || appointment.dateStr;
     const dual = formatDualDate(effectiveDateStr);
-    const previousDual = appointment.previousDateStr
-      ? formatDualDate(appointment.previousDateStr)
+    const previousDate = appointment.previousDateStr || (appointment.editReason || appointment.lastEditedAt
+      || appointment.previousStartTime != null ? appointment.dateStr : null);
+    const previousDual = previousDate
+      ? formatDualDate(previousDate)
       : null;
     const total = Number(appointment.amount ?? 0);
     const deposit = Number(appointment.deposit ?? 0);
     const insurance = Number(appointment.insuranceAmount ?? 0);
     const refund = Number(appointment.cancelRefundAmount ?? 0);
-    const remaining = Math.max(0, total - deposit);
-    const amountText = (value: number) => value > 0 ? toArN(value.toLocaleString("en-US")) : "—";
+    const remaining = appointment.status === "cancelled" ? 0 : Math.max(0, total - deposit);
+    const amountText = (value: number) => toArN(value.toLocaleString("en-US"));
+    const insuranceRefund = appointment.insuranceStatus === "refunded" ? insurance : 0;
+    const insuranceState = appointment.insuranceStatus === "refunded" ? "مسجل رده محاسبياً"
+      : appointment.insuranceStatus === "deducted" ? "تمت تسوية الخصم محاسبياً" : "محتجز؛ تتم تسويته مستقلاً";
     const ar = (value: unknown) => toArN(String(value ?? ""));
     const durationText = serviceDurationLabel(appointment.duration, appointment.durationUnit)?.replace(/^المدة:\s*/, "") ?? "—";
     const messageDurationText =
       appointment.durationUnit === "days" && Number(appointment.duration) === 1
         ? "يوم واحد"
         : durationText;
+    const previousDurationText = serviceDurationLabel(appointment.previousDuration ?? appointment.duration,
+      appointment.previousDurationUnit ?? appointment.durationUnit)?.replace(/^المدة:\s*/, "") ?? "—";
     let preparedTemplate = templateBody.includes("{سبب_التعديل}")
       ? templateBody
           .split(/\r?\n/)
           .map((line) => {
             if (line.trim().startsWith("الحجز السابق:")) {
-              return `الحجز السابق: {اسم_اليوم_من}، {من_التاريخ} هـ ({من_التاريخ_م}) - فترة ${messageDurationText}.`;
+              return `الحجز السابق: {اسم_اليوم_من}، {من_التاريخ} هـ ({من_التاريخ_م})${appointment.previousStartTime ? ` — الساعة ${ar(appointment.previousStartTime)}` : ""}${previousDurationText === "—" ? "" : ` — ${previousDurationText}`}.`;
             }
             if (line.trim().startsWith("الحجز الجديد:")) {
-              return `الحجز الجديد: {اسم_اليوم_إلى}، {إلى_التاريخ} هـ ({إلى_التاريخ_م}) - فترة ${messageDurationText}.`;
+              return `الحجز الجديد: {اسم_اليوم_إلى}، {إلى_التاريخ} هـ ({إلى_التاريخ_م})${appointment.startTime ? ` — الساعة ${ar(appointment.startTime)}` : ""}${messageDurationText === "—" ? "" : ` — ${messageDurationText}`}.`;
             }
             return line;
           })
           .join("\n")
-          .replace(/\{الفترة_القديمة\}|\{الفترة_الجديدة\}|\{الفترة\}/g, messageDurationText)
+          .replace(/\{الفترة_القديمة\}/g, `${previousDurationText}${appointment.previousStartTime ? ` — ${ar(appointment.previousStartTime)}` : ""}`)
+          .replace(/\{الفترة_الجديدة\}|\{الفترة\}/g, `${messageDurationText}${appointment.startTime ? ` — ${ar(appointment.startTime)}` : ""}`)
           .replace(/(?:أمنياتنا|نتمنى) لكم بإقامة (?:ممتعة|مانعة)\.?/g, "سعداء بخدمتكم")
       : prepareServiceMessageTemplate(templateBody);
     preparedTemplate = preparedTemplate.replace(/فتره/g, "فترة");
@@ -771,9 +779,9 @@ export function ServiceCalendarBookingsTab() {
       .replace(/\{اسم_العقار\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{اسم_الخدمة\}/g, ar(provider?.businessName ?? "الخدمة"))
       .replace(/\{رقم_الحجز\}/g, toArN(appointment.id ?? ""))
-      .replace(/\{اسم_اليوم_من\}/g, appointment.previousDateStr
-        ? ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${appointment.previousDateStr}T12:00:00`)))
-        : "غير متوفر")
+      .replace(/\{اسم_اليوم_من\}/g, previousDate
+        ? ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${previousDate}T12:00:00`)))
+        : "لم تسجل بيانات موعد سابق")
       .replace(/\{اسم_اليوم_إلى\}/g, ar(new Intl.DateTimeFormat("ar-SA", { weekday: "long" }).format(new Date(`${effectiveDateStr}T12:00:00`))))
       .replace(/\{من_التاريخ\}/g, previousDual ? ar(previousDual.hijri.replace(/\s*هـ\s*$/, "")) : "غير متوفر في السجل السابق")
       .replace(/\{من_التاريخ_م\}/g, previousDual ? ar(previousDual.gregorian) : "غير متوفر")
@@ -786,14 +794,19 @@ export function ServiceCalendarBookingsTab() {
       .replace(/\{التأمين\}/g, amountText(insurance))
       .replace(/\{المدة\}/g, durationText)
       .replace(/\{سبب_الإلغاء\}/g, ar(appointment.cancelReason || "حسب الاتفاق"))
-      .replace(/\{المبلغ_المسترد\}/g, refund > 0 ? amountText(refund) : "٠")
+      .replace(/\{استرداد_العربون\}/g, amountText(refund))
+      .replace(/\{استرداد_التأمين\}/g, amountText(insuranceRefund))
+      .replace(/\{إجمالي_المسترد\}|\{المبلغ_المسترد\}/g, amountText(refund + insuranceRefund))
+      .replace(/\{حالة_التأمين\}/g, insuranceState)
       .replace(/\{سبب_التعديل\}/g, ar(appointment.editReason || "حسب الاتفاق"))
       .replace(/\{طريقة_تقديم_الخدمة\}/g, appointment.serviceDeliveryMethod === "customer_pickup" ? "استلام العميل من المقر" : appointment.serviceDeliveryMethod === "delivery_installation" ? "توصيل وتركيب بموقع العميل" : "—")
       .replace(/\{عنوان_الخدمة\}/g, ar(appointment.serviceAddress || "—"))
       .replace(/\{تفاصيل_الخدمة\}/g, ar(appointment.notes || "—"))
       .replace(/\{رابط_العقد_الرقمي\}/g, publicContractUrl(appointment.id, "service", BASE))
       .replace(/\{إجمالي_الخدمات\}|\{تفاصيل_الخدمات\}/g, "—")
-      .replace(/\{[^}]+\}/g, "—");
+      .replace(/قيمة الإيجار/g, "قيمة الخدمة")
+      .replace(/\{[^}]+\}/g, "—")
+      + (appointment.status === "cancelled" && insurance > 0 ? `\nحالة التأمين: ${insuranceState}.` : "");
   }
 
   function sendServiceCustomMessage(appointment: any, templateBody: string) {
@@ -1910,11 +1923,13 @@ export function ServiceCalendarBookingsTab() {
         booking={cancelAppointment ? {
           ...cancelAppointment,
           bookingDate: cancelAppointment.dateStr,
-          depositPaid: Number(cancelAppointment.amount ?? cancelAppointment.deposit ?? 0),
+          depositPaid: Number(cancelAppointment.deposit ?? 0),
           totalPrice: Number(cancelAppointment.amount ?? 0),
-          revenueAmount: Number(cancelAppointment.amount ?? cancelAppointment.deposit ?? 0),
+          revenueAmount: Number(cancelAppointment.deposit ?? 0),
           insuranceFee: Number(cancelAppointment.insuranceAmount ?? 0),
         } : null}
+        insuranceSettlement={cancelAppointment ? { status: cancelAppointment.insuranceStatus ?? "held",
+          deduction: Number(cancelAppointment.insuranceDeductAmount ?? 0) } : undefined}
         onClose={() => setCancelAppointment(null)}
         onConfirm={(id, reason, _reasonCode, refundAmount) => {
           void handleStatusChange(id, "cancelled", { reason, refundAmount });

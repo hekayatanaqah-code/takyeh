@@ -19,11 +19,16 @@ export type ServiceFinancialStrip = { tone: "slate" | "green" | "emerald" | "ora
 export function serviceFinancialState(a: any) {
   const total = Number(a.amount ?? 0);
   const paid = Number(a.deposit ?? 0);
-  const remaining = Math.max(0, total - paid);
+  const remaining = a.status === "cancelled" ? 0 : Math.max(0, total - paid);
   const method = a.paymentMethod || "cash";
   const cancelled = a.status === "cancelled";
   let strip: ServiceFinancialStrip;
-  if (cancelled) strip = { tone: "slate", label: "حجز ملغي — لا يوجد تحصيل" };
+  if (cancelled) {
+    const retained = Math.max(0, paid - Number(a.cancelRefundAmount ?? 0));
+    strip = { tone: "slate", label: retained > 0
+      ? `حجز ملغي — مبلغ محتفظ به ${retained.toLocaleString("ar-SA")} ريال`
+      : "حجز ملغي — لا يوجد مبلغ محتفظ به" };
+  }
   else if (paid <= 0) strip = { tone: "amber", label: "لا توجد دفعة مسجلة" };
   else if (method === "cash") strip = a.cashDeposited ? { tone: "emerald", label: "نقداً — أُودع في البنك" } : { tone: "orange", label: "نقداً — بحوزتك ولم يُودع" };
   else strip = { tone: "blue", label: `${servicePaymentMethodLabel(method)} — في الحساب البنكي` };

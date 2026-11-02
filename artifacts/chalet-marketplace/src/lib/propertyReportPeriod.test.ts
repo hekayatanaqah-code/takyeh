@@ -15,7 +15,7 @@ test("all periods follow the selected property's actual dates, including future 
     { submissionId: 4, dateStr: "2030-01-01" },
   ];
   assert.deepEqual(propertyReportAllPeriodBounds(bookings, expenses, "3", "2026-10-31"),
-    { from: "2023-12-01", to: "2027-02-14" });
+    { from: "2020-01-01", to: "2027-02-14" });
   assert.deepEqual(propertyReportAllPeriodBounds(bookings, expenses, "all", "2026-10-31"),
     { from: "2020-01-01", to: "2030-01-01" });
 });

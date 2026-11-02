@@ -129,8 +129,11 @@ export interface CreateQuickSale {
   dateStr: string;
   /** @maxLength 150 */
   clientName?: string;
-  /** @maxLength 30 */
-  clientPhone?: string;
+  /**
+     * @minLength 1
+     * @maxLength 30
+     */
+  clientPhone: string;
   /**
      * @minItems 1
      * @maxItems 50

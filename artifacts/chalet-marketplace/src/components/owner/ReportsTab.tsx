@@ -1,4 +1,5 @@
 import { FinancialReportActivitySelect, type ReportProperty, type ReportService } from "@/components/FinancialReportActivitySelect";
+import { propertyPrincipal, servicePrincipal, isPropertyExpense } from "@/lib/financialPrincipal";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState, useMemo, useCallback, type ReactElement } from "react";
 import { financialReportTitle, scopeServiceFinancialReport, defaultFinancialReportActivity, loneFinancialReportActivity, includeQuickSalesInReport } from "@/lib/financialReportActivity";
@@ -101,11 +102,12 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
   const [customFromInput, setCustomFrom] = useState("");
   const [customToInput, setCustomTo] = useState("");
   const propertyBookingsQuery = useQuery<OwnerBooking[]>({
-    queryKey: ["owner", "bookings-revenue"],
+    queryKey: ["owner", "report-bookings-with-cancellations"],
     queryFn: async () => {
-      const r = await apiFetch("/owner/bookings");
-      if (!r.ok) throw new Error("تعذّر تحميل حجوزات التقرير");
-      return r.json();
+      const responses = await Promise.all([apiFetch("/owner/bookings"), apiFetch("/owner/bookings/cancelled")]);
+      if (responses.some(r => !r.ok)) throw new Error("تعذّر تحميل حجوزات التقرير");
+      const lists = await Promise.all(responses.map(r => r.json() as Promise<OwnerBooking[]>));
+      return [...new Map(lists.flat().map(b => [b.id, b])).values()];
     },
     enabled: viewMode === "monthly" || viewMode === "custom",
   });
@@ -118,7 +120,7 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
     },
   });
   const repAllBookings = propertyBookingsQuery.data ?? [];
-  const repAllExpenses = propertyExpensesQuery.data ?? [];
+  const repAllExpenses = (propertyExpensesQuery.data ?? []).filter(isPropertyExpense);
   const allPropertyBounds = propertyReportAllPeriodBounds(repAllBookings, repAllExpenses, selectedSubmissionId, todayLocalDate);
   const customFrom = allPropertyPeriods ? allPropertyBounds.from : customFromInput;
   const customTo = allPropertyPeriods ? allPropertyBounds.to : customToInput;
@@ -343,9 +345,9 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
     ...(includesServiceBookings ? [{
       title: "تفاصيل حجوزات الخدمات الأساسية", headers: ["رقم الحجز", "التاريخ", "العميل", "الحالة", "قيمة الحجز", "المحصّل", "المتبقي دون التأمين"],
       rows: selectedServiceBookings.bookings.map(booking =>
-        [toAr(String(booking.id)), serviceDate(booking.dateStr), booking.clientName || "غير محدد",
-          serviceReportStatus(booking.status), serviceMoney(Number(booking.amount)),
-          serviceMoney(Number(booking.deposit ?? 0)), serviceMoney(Math.max(0, Number(booking.amount) - Number(booking.deposit ?? 0)))]),
+        [toAr(String(booking.id)), serviceDate(servicePrincipal(booking).date), booking.clientName || "غير محدد",
+          serviceReportStatus(booking.status), serviceMoney(servicePrincipal(booking).contractual),
+          serviceMoney(servicePrincipal(booking).collected), serviceMoney(servicePrincipal(booking).outstanding)]),
       emptyMessage: "لا توجد حجوزات غير ملغاة خلال الفترة المختارة.",
     }] : []),
     ...(includesServiceSales ? [{ ...quickSaleDetails, emptyMessage: "لا توجد مبيعات فردية مكتملة خلال الفترة المختارة." }] : []),
@@ -392,18 +394,24 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
     };
     const [selHY, selHM] = selectedHijriMonthVal ? selectedHijriMonthVal.split("-").map(Number) : [0, 0];
     const filtered = repAllBookings.filter(b => {
-      if (!b.bookingDate) return false;
+      const date = propertyPrincipal(b).date;
+      if (!date) return false;
       let monthMatch: boolean;
       if (isHijri && selHY) {
-        const { year, month } = getHijriYMClient(new Date(b.bookingDate + "T12:00:00"));
+        const { year, month } = getHijriYMClient(new Date(date + "T12:00:00"));
         monthMatch = year === selHY && month === selHM;
       } else {
-        monthMatch = b.bookingDate.startsWith(selectedMonth);
+        monthMatch = date.startsWith(selectedMonth);
       }
       const propMatch = selectedSubmissionId === "all" || String(b.submissionId) === selectedSubmissionId;
       return monthMatch && propMatch;
     });
     const rows = filtered.map(b => {
+      if (b.cancelledAt) {
+        const principal = propertyPrincipal(b);
+        return { id: b.id, name: `${b.clientName} — إيراد إلغاء محتفظ به`, date: principal.date,
+          base: principal.collected, svc: 0, total: principal.collected };
+      }
       const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
         : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
         : Number(b.depositPaid ?? 0);
@@ -421,7 +429,7 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
   const earliestTransactionDate = useMemo(() => {
     const dates: string[] = [];
     for (const b of repAllBookings) {
-      if (b.bookingDate && !b.cancelledAt) dates.push(b.bookingDate);
+      if (propertyPrincipal(b).date) dates.push(propertyPrincipal(b).date);
     }
     for (const e of repAllExpenses) {
       if (e.dateStr && Number(e.amount) > 0) dates.push(e.dateStr);
@@ -447,17 +455,18 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
     const monthMap = new Map<string, { revenue: number; expenses: number }>();
     const ensureMonth = (key: string) => { if (!monthMap.has(key)) monthMap.set(key, { revenue: 0, expenses: 0 }); return monthMap.get(key)!; };
     for (const b of repAllBookings) {
-      if (!b.bookingDate || b.cancelledAt || !propMatch(b.submissionId)) continue;
-      if (b.bookingDate < customFrom || b.bookingDate > customTo) continue;
-      const rev = Math.round(Number(b.totalPrice ?? b.revenueAmount ?? b.depositPaid ?? 0));
+      const principal = propertyPrincipal(b);
+      if (!principal.date || !propMatch(b.submissionId)) continue;
+      if (principal.date < customFrom || principal.date > customTo) continue;
+      const rev = principal.collected;
       if (rev <= 0) continue;
-      ensureMonth(groupByDay ? b.bookingDate : b.bookingDate.slice(0, 7)).revenue += rev;
+      ensureMonth(groupByDay ? principal.date : principal.date.slice(0, 7)).revenue += rev;
     }
     for (const e of repAllExpenses) {
       if (!e.dateStr || !(Number(e.amount) > 0)) continue;
       if (e.submissionId != null && !propMatch(e.submissionId)) continue;
       if (e.dateStr < customFrom || e.dateStr > customTo) continue;
-      ensureMonth(groupByDay ? e.dateStr : e.dateStr.slice(0, 7)).expenses += Math.round(Number(e.amount));
+      ensureMonth(groupByDay ? e.dateStr : e.dateStr.slice(0, 7)).expenses += Number(e.amount);
     }
     const monthly = Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
@@ -484,17 +493,18 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
       } catch { return groupByDay ? dateStr : dateStr.slice(0, 7); }
     };
     for (const b of repAllBookings) {
-      if (!b.bookingDate || b.cancelledAt || !propMatch(b.submissionId)) continue;
-      if (b.bookingDate < customFrom || b.bookingDate > customTo) continue;
-      const rev = Math.round(Number(b.totalPrice ?? b.revenueAmount ?? b.depositPaid ?? 0));
+      const principal = propertyPrincipal(b);
+      if (!principal.date || !propMatch(b.submissionId)) continue;
+      if (principal.date < customFrom || principal.date > customTo) continue;
+      const rev = principal.collected;
       if (rev <= 0) continue;
-      ensureMonth(toHijriKey(b.bookingDate)).revenue += rev;
+      ensureMonth(toHijriKey(principal.date)).revenue += rev;
     }
     for (const e of repAllExpenses) {
       if (!e.dateStr || !(Number(e.amount) > 0)) continue;
       if (e.submissionId != null && !propMatch(e.submissionId)) continue;
       if (e.dateStr < customFrom || e.dateStr > customTo) continue;
-      ensureMonth(toHijriKey(e.dateStr)).expenses += Math.round(Number(e.amount));
+      ensureMonth(toHijriKey(e.dateStr)).expenses += Number(e.amount);
     }
     const monthly = Array.from(monthMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))

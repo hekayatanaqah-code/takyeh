@@ -15,7 +15,7 @@ test("summary uses the displayed records, preserves halalas, and excludes cancel
     row({ id: "expense", type: "expense", amount: 50.15 }),
     row({ id: "withdrawal", type: "withdrawal", amount: 10.10 }),
     row({ id: "refund", type: "refund", amount: 20.25 }),
-  ]), { income: 325.75, expenses: 60.25, refunds: 20.25, receivables: 699.7, net: 245.25 });
+  ]), { income: 305.50, expenses: 60.25, refunds: 20.25, receivables: 699.7, net: 245.25 });
 });
 test("period filters and losses use the exact same arithmetic as cards", () => {
   const items = [row({ date: "2026-10-01", amount: 100 }), row({ date: "2026-11-01", type: "expense", amount: 30.50 })];

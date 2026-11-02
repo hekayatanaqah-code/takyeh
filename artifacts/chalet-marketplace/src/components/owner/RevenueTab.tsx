@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/revenuePeriod";
 import { serviceRevenueBookings, serviceRevenueTotals } from "@/lib/serviceRevenue";
+import { propertyPrincipal, servicePrincipal } from "@/lib/financialPrincipal";
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
 import { Clock, Trash2, RotateCcw, TrendingUp, Wallet, Receipt, Loader2, Banknote } from "lucide-react";
 import { RevenueFilterBar } from "@/components/owner/RevenueFilterBar";
@@ -141,6 +142,14 @@ export function RevenueTab() {
     },
   });
 
+  const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
+    queryKey: ["owner", "bookings", "cancelled"],
+    queryFn: async () => {
+      const r = await apiFetch("/owner/bookings/cancelled");
+      if (!r.ok) throw new Error("تعذر تحميل الحجوزات الملغاة");
+      return r.json();
+    },
+  });
   const { data: allBookings = [], isLoading: bkLoading, refetch: refetchBookings } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings-revenue"],
     queryFn: async () => {
@@ -190,9 +199,12 @@ export function RevenueTab() {
     || serviceRevenueQueries.some(query => query.isError);
   const serviceOnlyRevenue = unit.type === "service"
     || (unit.type === "all" && revOwnerChalets.length === 0 && revenueProviders.length > 0);
+  const revenueDatedBookings = useMemo(() => [...allBookings, ...cancelledBookings]
+    .filter(b => !b.cancelledAt || propertyPrincipal(b).collected > 0)
+    .map(b => ({ ...b, bookingDate: propertyPrincipal(b).date })), [allBookings, cancelledBookings]);
   const serviceRevenueDates = serviceAppts
-    .filter(a => a.status !== "cancelled" && a.dateStr)
-    .map(a => a.dateStr as string)
+    .filter(a => a.status !== "cancelled" || servicePrincipal(a).collected > 0)
+    .map(a => servicePrincipal(a).date)
     .concat(activityQuickSales.filter(sale => sale.status === "completed").map(sale => sale.dateStr));
 
   const { data: depositLogs = [], refetch: refetchDepositLogs } = useQuery<Array<{ id: number; ownerId: number; submissionId: number | null; amount: string; note: string | null; createdAt: string }>>({
@@ -250,20 +262,20 @@ export function RevenueTab() {
   const revGregYearOptions = useMemo(() => {
     const years = new Set<string>();
     years.add(String(new Date().getFullYear()));
-    allBookings.forEach(bk => { if (bk.bookingDate) years.add(bk.bookingDate.slice(0, 4)); });
+    revenueDatedBookings.forEach(bk => { if (bk.bookingDate) years.add(bk.bookingDate.slice(0, 4)); });
     serviceRevenueDates.forEach(date => years.add(date.slice(0, 4)));
     return Array.from(years).sort().reverse();
-  }, [allBookings, serviceRevenueDates]);
+  }, [revenueDatedBookings, serviceRevenueDates]);
 
   const revHijriYearOptions = useMemo(() => {
     const years = new Set<number>();
     years.add(toHijriComponents(new Date()).year);
-    allBookings.forEach(bk => {
+    revenueDatedBookings.forEach(bk => {
       if (bk.bookingDate) years.add(toHijriComponents(new Date(bk.bookingDate + "T00:00:00")).year);
     });
     serviceRevenueDates.forEach(date => years.add(toHijriComponents(new Date(`${date}T12:00:00`)).year));
     return Array.from(years).sort().reverse();
-  }, [allBookings, serviceRevenueDates]);
+  }, [revenueDatedBookings, serviceRevenueDates]);
 
   const revMonthsForYear = useMemo(() => {
     if (!revYear) return [];
@@ -271,7 +283,7 @@ export function RevenueTab() {
       const months = new Set<string>();
       const curYear = String(new Date().getFullYear());
       if (revYear === curYear) months.add(`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`);
-      allBookings.forEach(bk => {
+      revenueDatedBookings.forEach(bk => {
         if (bk.bookingDate?.startsWith(revYear + "-")) months.add(bk.bookingDate.slice(0, 7));
       });
       serviceRevenueDates.forEach(date => {
@@ -282,7 +294,7 @@ export function RevenueTab() {
       const months = new Map<string, Date>();
       const now = new Date();
       if (revYear === String(toHijriComponents(now).year)) months.set(getCurrentFinanceMonth("hijri"), now);
-      allBookings.forEach(bk => {
+      revenueDatedBookings.forEach(bk => {
         if (!bk.bookingDate) return;
         const d = new Date(bk.bookingDate + "T00:00:00");
         if (String(toHijriComponents(d).year) === revYear) {
@@ -299,7 +311,7 @@ export function RevenueTab() {
       });
       return Array.from(months.entries()).sort(([,a],[,b]) => b.getTime()-a.getTime()).map(([k]) => k);
     }
-  }, [allBookings, serviceRevenueDates, calType, revYear]);
+  }, [revenueDatedBookings, serviceRevenueDates, calType, revYear]);
 
   /* ── Receivables tab: cascading year/month options ── */
   const pendingAvailableMonths = useMemo(() => {
@@ -389,15 +401,6 @@ export function RevenueTab() {
     }
     return result;
   }, [allReceivables, pendingFilterMonth, pendingYear, pendingCalType]);
-
-  const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
-    queryKey: ["owner", "bookings", "cancelled"],
-    queryFn: async () => {
-      const r = await apiFetch("/owner/bookings/cancelled");
-      if (!r.ok) return [];
-      return r.json();
-    },
-  });
 
   const { data: ownerRefunds = [], refetch: refetchRefunds } = useQuery<Array<{
     id: number; bookingId: number; amount: string; type: string; reason: string | null; createdAt: string;
@@ -508,15 +511,17 @@ export function RevenueTab() {
 
   // Filter bookings to selected month + optional chalet unit filter
   const monthBookings = useMemo(() => {
-    if (unit.type !== "chalet" && revenueSource === "quick_sales") return [];
-    let filtered = allBookings.filter(b => isInRevenuePeriod(b.bookingDate, revenuePeriod));
+    if (unit.type === "service" || revenueSource === "quick_sales") return [];
+    const unique = [...new Map([...allBookings, ...cancelledBookings].map(b => [b.id, b])).values()];
+    let filtered = unique.filter(b => isInRevenuePeriod(propertyPrincipal(b).date, revenuePeriod)
+      && (!b.cancelledAt || propertyPrincipal(b).collected > 0));
     // FIX: ownerBookingsTable has submissionId, NOT chaletId
     if (unit.type === "chalet") {
       const subId = (unit as any).submissionId;
       if (subId) filtered = filtered.filter(b => b.submissionId === subId);
     }
     return filtered;
-  }, [allBookings, revenuePeriod, unit, revenueSource]);
+  }, [allBookings, cancelledBookings, revenuePeriod, unit, revenueSource]);
 
   // ── Monthly revenue breakdown: base rent + services for selected month ───
   // Computed directly from allBookings (not monthBookings) with correct submissionId filter
@@ -678,28 +683,18 @@ export function RevenueTab() {
 
   const big3 = useMemo(() => {
     const sales = monthBookings.reduce((s, b) => {
-      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice)
-        : b.revenueAmount != null && Number(b.revenueAmount) > 0 ? Number(b.revenueAmount)
-        : Number(b.depositPaid ?? 0);
-      return s + tp;
+      return s + propertyPrincipal(b).contractual;
     }, 0);
     const collected = monthBookings.reduce((s, b) => {
-      const dep = Number(b.depositPaid ?? 0);
-      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
-      const bal = b.balanceCollected ? Math.max(0, tp - dep) : 0;
-      return s + dep + bal;
+      return s + propertyPrincipal(b).collected;
     }, 0);
     const pending = monthBookings.reduce((s, b) => {
-      if (b.cancelledAt) return s;
-      const dep = Number(b.depositPaid ?? 0);
-      const tp = b.totalPrice != null && Number(b.totalPrice) > 0 ? Number(b.totalPrice) : dep;
-      const rem = b.balanceCollected ? 0 : Math.max(0, tp - dep);
-      return s + rem;
+      return s + propertyPrincipal(b).outstanding;
     }, 0);
     return {
-      sales: Math.round(sales + combinedServiceTotals.sales) + combinedQuickTotal,
-      collected: Math.round(collected + combinedServiceTotals.collected) + combinedQuickTotal,
-      pending: Math.round(pending + combinedServiceTotals.pending),
+      sales: Math.round((sales + combinedServiceTotals.sales + combinedQuickTotal) * 100) / 100,
+      collected: Math.round((collected + combinedServiceTotals.collected + combinedQuickTotal) * 100) / 100,
+      pending: Math.round((pending + combinedServiceTotals.pending) * 100) / 100,
     };
   }, [monthBookings, combinedServiceTotals.sales, combinedServiceTotals.collected, combinedServiceTotals.pending, combinedQuickTotal]);
 
@@ -855,21 +850,21 @@ export function RevenueTab() {
     interface SvcRow { apptId: number; clientName: string; dateStr: string; type: "deposit" | "balance" | "damage"; amount: number; note?: string; isFullPayment?: boolean; }
     const svcRows: SvcRow[] = [];
     for (const a of monthSvcAppts) {
-      const amt = Math.round(Number(a.amount ?? 0));
-      const dep = Math.round(Number(a.deposit ?? 0));
+      const principal = servicePrincipal(a);
+      const amt = principal.contractual;
+      const dep = principal.collected;
+      const date = principal.date;
       const insDeduct = Math.round(Number(a.insuranceDeductAmount ?? 0));
-      if (dep > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "deposit", amount: dep, isFullPayment: amt > 0 && dep === amt });
-      if (amt > dep && amt > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "balance", amount: amt - dep });
+      if (dep > 0) svcRows.push({ apptId: a.id, clientName: a.status === "cancelled" ? `${a.clientName} — إيراد إلغاء محتفظ به` : a.clientName, dateStr: date, type: "deposit", amount: dep, isFullPayment: amt > 0 && dep === amt });
+      if (principal.outstanding > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: date, type: "balance", amount: principal.outstanding });
       if (insDeduct > 0) svcRows.push({ apptId: a.id, clientName: a.clientName, dateStr: a.dateStr, type: "damage", amount: insDeduct, note: a.insuranceDeductNote ?? undefined });
     }
     const filteredSvcRows = svcFilter === "all" ? svcRows : svcRows.filter(r => r.type === svcFilter);
 
-    const svcSales = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.amount ?? 0)), 0) + serviceQuickTotal;
-    const svcCollected = monthSvcAppts.reduce((s, a) => s + Math.round(Number(a.deposit ?? 0)), 0) + serviceQuickTotal;
-    const svcPending   = monthSvcAppts.reduce((s, a) => {
-      const amt = Math.round(Number(a.amount ?? 0)); const dep = Math.round(Number(a.deposit ?? 0));
-      return s + Math.max(0, amt - dep);
-    }, 0);
+    const principalTotals = serviceRevenueTotals(monthSvcAppts);
+    const svcSales = principalTotals.sales + serviceQuickTotal;
+    const svcCollected = principalTotals.collected + serviceQuickTotal;
+    const svcPending = principalTotals.pending;
 
     const activeServiceMonth = selectedServicePeriod.month;
     const servicePeriod = selectedServicePeriod;

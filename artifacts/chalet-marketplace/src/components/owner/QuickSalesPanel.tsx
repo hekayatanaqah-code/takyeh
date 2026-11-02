@@ -135,7 +135,7 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
   const submit = () => {
     if (!canCreate || create.isPending) return;
     setFormErr(null);
-    if (clientPhone && !/^05\d{8}$/.test(normalizedPhone)) return setFormErr("أدخل رقم جوال سعودي صحيحًا");
+    if (!/^05\d{8}$/.test(normalizedPhone)) return setFormErr("جوال العميل مطلوب: أدخل ١٠ أرقام تبدأ بـ ٠٥");
     if (normalizedPhone && customerLookup === "loading") return setFormErr("انتظر اكتمال البحث عن العميل");
     if (normalizedPhone && !clientName.trim()) return setFormErr("اكتب اسم العميل الجديد");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return setFormErr("اختر تاريخ البيع");
@@ -151,7 +151,7 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
       providerId, dateStr, paymentMethod: pay,
       items: parsed.map(({ l, q, p }) => ({ ...(l.catalogItemId ? { catalogItemId: l.catalogItemId } : {}), name: l.name.trim(), quantity: q, unitPrice: r2(p) })),
       ...(clientName.trim() ? { clientName: clientName.trim() } : {}),
-      ...(normalizedPhone ? { clientPhone: normalizedPhone } : {}),
+      clientPhone: normalizedPhone,
       ...(notes.trim() ? { notes: notes.trim() } : {}),
     };
     const sig = JSON.stringify(body);
@@ -244,8 +244,8 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
           <form dir="rtl" className="rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-4 text-right min-w-0" onSubmit={e => { e.preventDefault(); submit(); }} data-testid="form-quick-sale">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-start">
               <div className="space-y-1.5 min-w-0">
-                <Label htmlFor="qs-phone" className="block">جوال العميل <span className="text-muted-foreground text-xs">(اختياري)</span></Label>
-                <Input id="qs-phone" type="tel" inputMode="numeric" dir="rtl" className="h-10 text-right" value={clientPhone} maxLength={10}
+                <Label htmlFor="qs-phone" className="block">جوال العميل <span className="text-destructive">*</span></Label>
+                <Input id="qs-phone" type="tel" inputMode="numeric" required aria-required="true" dir="rtl" className="h-10 text-right" value={clientPhone} maxLength={10}
                   placeholder="٠٥xxxxxxxx" onChange={e => {
                     const next = quickSalePhoneInput(e.target.value);
                     // Browsers may emit another change after controlled digit conversion.

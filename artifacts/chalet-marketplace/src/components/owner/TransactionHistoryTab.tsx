@@ -200,7 +200,7 @@ export function TransactionHistoryTab() {
       {/* Summary cards — 3 cards: إيرادات / مسترجع / مصروفات */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-900/10 p-3.5">
-          <div className="text-sm text-green-700 dark:text-green-400 font-semibold">الإيرادات المحصّلة</div>
+          <div className="text-sm text-green-700 dark:text-green-400 font-semibold">الإيرادات بعد الاستردادات</div>
           <div className="text-xl font-extrabold text-green-700 dark:text-green-300 tabular-nums mt-0.5">{showTotal(totalIn)} <span className="text-xs font-normal">ر.س</span></div>
         </div>
         <div className="rounded-xl border border-orange-200 bg-orange-50 dark:bg-orange-900/10 p-3.5">

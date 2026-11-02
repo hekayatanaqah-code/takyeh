@@ -3,6 +3,7 @@ import { includeQuickSalesInReport, type ServiceFinancialReport } from "./financ
 import { isInRevenuePeriod, type RevenuePeriod } from "./revenuePeriod";
 import type { RevenueSource } from "./quickSalesRevenue";
 import { matchesPropertyPaymentFilter, type PropertyPaymentFilter } from "./propertyBookingStatus";
+import { servicePrincipal } from "./financialPrincipal";
 
 export type ServiceReportMode = "compact" | "detailed";
 export type ServiceReportPeriodMode = "monthly" | "yearly" | "custom";
@@ -21,6 +22,7 @@ export type ServiceReportBooking = {
   amount?: string | number | null; deposit?: string | number | null;
   insuranceAmount?: string | number | null; clientName?: string;
   notes?: string | null; startTime?: string | null;
+  cancelledAt?: string | Date | null; cancelRefundAmount?: string | number | null;
 };
 export const serviceReportPaymentLabels: Record<PropertyPaymentFilter, string> = {
   all: "الكل", unpaid: "متبقي عليه مبالغ", paid: "مسدد بالكامل",
@@ -30,20 +32,24 @@ export const serviceReportPaymentLabels: Record<PropertyPaymentFilter, string> =
 export function serviceBookingReport<T extends ServiceReportBooking>(
   appointments: T[], providerId: number, period: RevenuePeriod, payment: PropertyPaymentFilter,
 ) {
-  const bookings = appointments.filter(booking => booking.providerId === providerId && booking.status !== "cancelled"
-    && isInRevenuePeriod(booking.dateStr, period)
-    && matchesPropertyPaymentFilter({ totalPrice: booking.amount, depositPaid: booking.deposit }, payment));
+  const bookings = appointments.filter(booking => {
+    const principal = servicePrincipal(booking);
+    return booking.providerId === providerId && (booking.status !== "cancelled" || principal.collected > 0)
+      && isInRevenuePeriod(principal.date, period)
+      && matchesPropertyPaymentFilter({ totalPrice: principal.contractual, depositPaid: principal.collected }, payment);
+  });
   const hasInvalidAmounts = bookings.some(booking => booking.amount == null || booking.amount === ""
     || !Number.isFinite(Number(booking.amount)) || Number(booking.amount) < 0
     || !Number.isFinite(Number(booking.deposit ?? 0)) || Number(booking.deposit ?? 0) < 0);
   let collected = 0, contractual = 0, outstanding = 0, insurance = 0;
   for (const booking of bookings) {
-    const amount = Math.round(Number(booking.amount ?? 0) * 100);
-    const paid = Math.round(Number(booking.deposit ?? 0) * 100);
+    const principal = servicePrincipal(booking);
+    const amount = Math.round(principal.contractual * 100);
+    const paid = Math.round(principal.collected * 100);
     collected += paid;
     contractual += amount;
     outstanding += Math.max(0, amount - paid);
-    insurance += Math.round(Number(booking.insuranceAmount ?? 0) * 100) || 0;
+    if (booking.status !== "cancelled") insurance += Math.round(Number(booking.insuranceAmount ?? 0) * 100) || 0;
   }
   return {
     bookings, hasInvalidAmounts,

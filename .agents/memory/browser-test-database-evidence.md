@@ -19,3 +19,15 @@ Template-editor examples are not evidence of the amounts in a real booking messa
 **Why:** A release audit mistook example refund and rental amounts in the editor for incorrect persisted booking calculations. The generated service cancellation text did expose a separate real omission, so treating all preview discrepancies as either real or harmless would both be wrong.
 
 **How to apply:** Capture the actual booking-specific WhatsApp URL/text locally, compare it with the saved payment and refund state, and prevent external navigation. A generated prefill proves message formatting, not successful delivery. Also verify the precise filter region rather than inferring its layout from the unrelated owner account toolbar.
+
+Matching aggregate totals does not prove that the intended lifecycle was tested. Confirm that a cancellation fixture is actually cancelled, rather than two active bookings coincidentally producing the expected sum.
+
+**Why:** A financial retest displayed the expected property total using active bookings, leaving retained property-cancellation revenue unverified until an independent API check covered cancellations of future-year stays and partial refunds.
+
+**How to apply:** Record lifecycle state and event dates alongside totals; use focused API checks for missing numerical cases instead of repeating a whole browser audit.
+
+A browser download event alone is not proof of a valid PDF. Capture and inspect the actual bytes before cleaning the fixture or closing the browser context. Remote Playwright does not support Download.path(); use saveAs while the Download object is still available.
+
+**Why:** A report export triggered a download, but its object was lost before retrieval, preventing honest certification of the PDF.
+
+**How to apply:** Save the actual download immediately, inspect its content/pages, and mark PDF verification blocked if no file was obtained. Never substitute a separately rendered template as evidence of the app's real export.

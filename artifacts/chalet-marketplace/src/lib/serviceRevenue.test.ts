@@ -11,7 +11,7 @@ const appointments = [
   { id: 3, providerId: 167, dateStr: "2026-10-25", amount: "150", deposit: "150" },
   { id: 4, providerId: 168, dateStr: "2026-10-25", amount: "200", deposit: "50" },
   { id: 5, providerId: 167, dateStr: "2026-09-20", amount: "500", deposit: "200" },
-  { id: 6, providerId: 167, dateStr: "2026-10-22", amount: "900", deposit: "900", status: "cancelled" },
+  { id: 6, providerId: 167, dateStr: "2026-10-22", amount: "900", deposit: "900", status: "cancelled", cancelRefundAmount: "900" },
 ];
 
 test("all activities includes service bookings; single-service scope excludes other providers", () => {
@@ -41,7 +41,7 @@ test("payment and cancellation changes immediately change computed revenue", () 
   const updated = appointments.map(a => a.id === 2 ? { ...a, deposit: "150" } : a);
   assert.deepEqual(serviceRevenueTotals(serviceRevenueBookings(updated, activity, period)),
     { sales: 400, collected: 400, pending: 0 });
-  const cancelled = updated.map(a => a.id === 2 ? { ...a, status: "cancelled" } : a);
+  const cancelled = updated.map(a => a.id === 2 ? { ...a, status: "cancelled", cancelRefundAmount: "150" } : a);
   assert.deepEqual(serviceRevenueTotals(serviceRevenueBookings(cancelled, activity, period)),
     { sales: 250, collected: 250, pending: 0 });
 });

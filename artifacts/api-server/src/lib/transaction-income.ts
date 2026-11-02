@@ -24,7 +24,7 @@ export function serviceTransactionEntries(appointments: Array<{
       appointmentId: appointment.id, bookingId: null, method: appointment.paymentMethod ?? "cash",
       paymentReceiptUrl: appointment.paymentReceiptUrl, cashDeposited: appointment.cashDeposited };
     const entries = [{
-      ...common, id: `s-${appointment.id}`, date: appointment.dateStr, type: "income",
+      ...common, id: `s-${appointment.id}`, date: cancelled && appointment.cancelledAt ? ledgerDate(appointment.cancelledAt) : appointment.dateStr, type: "income",
       label: `${!cancelled && collected === 0 && remaining > 0 ? "مستحق خدمة" : "إيراد خدمة"} — ${label}`,
       amount: collected / 100, status: cancelled && collected === 0 ? "cancelled" : collected === 0 ? "unpaid" : remaining > 0 && !cancelled ? "deposit_only" : "collected",
       remainingBalance: cancelled ? null : remaining / 100,
