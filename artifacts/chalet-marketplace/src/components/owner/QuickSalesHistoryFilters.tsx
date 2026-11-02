@@ -13,11 +13,11 @@ export function QuickSalesHistoryStatusFilters({ value, onChange, disabled = fal
   disabled?: boolean;
 }) {
   return <div dir="rtl" role="group" aria-label="حالة البيع السريع"
-    data-testid="quick-sales-status-filters" className="flex w-full gap-1 rounded-xl border border-border bg-secondary/40 p-1 sm:w-fit">
+    data-testid="quick-sales-status-filters" className="flex h-10 w-fit shrink-0 items-stretch gap-1 whitespace-nowrap rounded-lg border border-border bg-secondary/40 p-0.5">
     {([["all", "الكل"], ["completed", "المكتملة"], ["cancelled", "الملغاة"]] as const).map(([status, label]) =>
       <button key={status} type="button" aria-pressed={value === status} disabled={disabled} onClick={() => onChange(status)}
         data-testid={`quick-sales-status-${status}`}
-        className={`min-h-10 flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-50 sm:flex-none ${value === status
+        className={`h-full shrink-0 rounded-md px-4 text-sm font-semibold transition-colors disabled:opacity-50 ${value === status
           ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground hover:bg-background"}`}>{label}</button>)}
   </div>;
 }
@@ -32,14 +32,14 @@ export function QuickSalesHistoryFilters({ period, months, loading, onCalendarCh
   const years = [...new Set(months.map(month => month.slice(0, 4)))];
   const yearMonths = months.filter(month => month.startsWith(`${period.year}-`));
   return (
-    <div className="grid w-full min-w-0 grid-cols-[auto_minmax(0,0.8fr)_minmax(0,1.2fr)] items-center gap-1.5 sm:flex sm:flex-nowrap sm:gap-2"
+    <div className="flex w-fit shrink-0 flex-nowrap items-center gap-2"
       dir="rtl" data-testid="quick-sales-history-filters" aria-label="فلاتر سجل البيع السريع">
-      <div className="flex h-9 shrink-0 items-stretch overflow-hidden rounded-lg border border-border text-xs"
+      <div className="flex h-10 shrink-0 items-stretch overflow-hidden rounded-lg border border-border text-sm"
         role="group" aria-label="التقويم" data-testid="select-history-calendar">
-        {(["gregorian", "hijri"] as const).map(calendar => (
+        {(["hijri", "gregorian"] as const).map(calendar => (
           <button type="button" key={calendar} aria-pressed={period.calendar === calendar}
             disabled={loading} onClick={() => onCalendarChange(calendar)} data-testid={`button-history-calendar-${calendar}`}
-            className={`px-2 py-1.5 font-medium transition-colors disabled:opacity-50 sm:px-3 ${period.calendar === calendar ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>
+            className={`whitespace-nowrap px-3 py-1.5 font-medium transition-colors disabled:opacity-50 ${period.calendar === calendar ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"}`}>
             {calendar === "gregorian" ? "ميلادي" : "هجري"}
           </button>
         ))}
@@ -47,7 +47,7 @@ export function QuickSalesHistoryFilters({ period, months, loading, onCalendarCh
       <Select dir="rtl" value={period.year || "__all__"} disabled={loading}
         onValueChange={year => onChange({ ...period, year: year === "__all__" ? "" : year, month: "" })}>
         <SelectTrigger aria-label="السنة" data-testid="select-history-year" dir="rtl"
-          className="h-9 min-w-0 w-full gap-1 rounded-lg border-border px-2 text-right text-sm sm:w-[7.5rem] [&>svg]:shrink-0">
+          className="h-10 w-[7.5rem] shrink-0 gap-1 rounded-lg border-border bg-background px-2 text-right text-sm [&>svg]:shrink-0">
           <SelectValue placeholder="السنة" />
         </SelectTrigger>
         <SelectContent dir="rtl" align="start" className="text-right">
@@ -58,7 +58,7 @@ export function QuickSalesHistoryFilters({ period, months, loading, onCalendarCh
       <Select dir="rtl" value={period.month || "__all__"} disabled={loading || !period.year}
         onValueChange={month => onChange({ ...period, month: month === "__all__" ? "" : month })}>
         <SelectTrigger aria-label="الشهر" data-testid="select-history-month" dir="rtl"
-          className="h-9 min-w-0 w-full gap-1 rounded-lg border-border px-2 text-right text-sm sm:w-[11rem] [&>svg]:shrink-0">
+          className="h-10 w-[11rem] shrink-0 gap-1 rounded-lg border-border bg-background px-2 text-right text-sm [&>svg]:shrink-0">
           <span className="min-w-0 flex-1 truncate text-right text-sm font-medium">
             {period.month ? revenueMonthLabel(period.month, period.calendar).primary : "كل الأشهر"}
           </span>

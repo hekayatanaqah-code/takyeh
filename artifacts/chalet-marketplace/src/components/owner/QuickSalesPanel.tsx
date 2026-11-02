@@ -347,11 +347,17 @@ export function QuickSalesPanel({ providerId, readOnly = false }: { providerId: 
         <div className="space-y-3">
           <div className="space-y-3">
             <h4 className="font-bold text-sm">سجل البيع السريع <span className="text-muted-foreground font-normal">· {revenueSalesTitle(period).replace("المبيعات", "").replace("مبيعات", "").trim() || "الكل"}</span></h4>
-            <QuickSalesHistoryStatusFilters value={historyStatus} onChange={setHistoryStatus}
-              disabled={salesQ.isLoading || salesQ.isError} />
-            <QuickSalesHistoryFilters period={period} months={historyMonths} loading={salesQ.isLoading || salesQ.isError}
-              onChange={setPeriod}
-              onCalendarChange={calendar => setPeriod(previous => switchQuickSalesHistoryCalendar(previous, calendar, historyDates))} />
+            <div dir="rtl" role="region" aria-label="شريط فلاتر سجل البيع السريع" tabIndex={0}
+              data-testid="quick-sales-unified-history-filters"
+              className="w-full min-w-0 overflow-x-auto rounded-xl border border-border bg-secondary/20 p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <div className="flex w-max min-w-full flex-nowrap items-center gap-2">
+                <QuickSalesHistoryFilters period={period} months={historyMonths} loading={salesQ.isLoading || salesQ.isError}
+                  onChange={setPeriod}
+                  onCalendarChange={calendar => setPeriod(previous => switchQuickSalesHistoryCalendar(previous, calendar, historyDates))} />
+                <QuickSalesHistoryStatusFilters value={historyStatus} onChange={setHistoryStatus}
+                  disabled={salesQ.isLoading || salesQ.isError} />
+              </div>
+            </div>
           </div>
 
           {salesQ.isLoading ? (

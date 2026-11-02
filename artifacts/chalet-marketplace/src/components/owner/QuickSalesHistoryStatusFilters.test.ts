@@ -29,3 +29,17 @@ test("integrates status with the existing date filter and limits the actual phon
   assert.match(source, /const next = quickSalePhoneInput\(e.target.value\)/);
   assert.ok(source.indexOf("<QuickSalesHistoryStatusFilters") > source.indexOf("سجل البيع السريع"));
 });
+
+test("keeps calendar, year, month and statuses in a single scrollable RTL row at every width", () => {
+  const panel = readFileSync(new URL("./QuickSalesPanel.tsx", import.meta.url), "utf8");
+  const toolbar = panel.slice(panel.indexOf('aria-label="شريط فلاتر سجل البيع السريع"'), panel.indexOf("{salesQ.isLoading ? ("));
+  assert.match(toolbar, /overflow-x-auto/);
+  assert.match(toolbar, /flex-nowrap/);
+  assert.ok(toolbar.indexOf("<QuickSalesHistoryFilters ") < toolbar.indexOf("<QuickSalesHistoryStatusFilters "));
+  const controls = readFileSync(new URL("./QuickSalesHistoryFilters.tsx", import.meta.url), "utf8");
+  assert.match(controls, /\["hijri", "gregorian"\]/);
+  assert.ok(!controls.includes("grid-cols-"));
+  assert.ok(!controls.includes("flex-wrap "));
+  assert.ok(!controls.includes("sm:w-"));
+  assert.match(controls, /dir="rtl"/);
+});
