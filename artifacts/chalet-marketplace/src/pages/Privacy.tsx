@@ -7,17 +7,33 @@ import { InformationalContent } from "@/components/layout/InformationalContent";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function Privacy() {
-  const { data, isLoading } = useQuery<Record<string, string>>({
-    queryKey: ["page-content"],
-    queryFn: async () => {
-      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include", cache: "no-store" });
-      if (!r.ok) return {};
-      return r.json();
+  const { data: content = "", isLoading, isError, isFetching, refetch } = useQuery<string>({
+    // Keep this live reader independent of longer-lived shared layout queries.
+    // Admin invalidation of ["page-content"] still refreshes this child key.
+    queryKey: ["page-content", "privacy-live"],
+    queryFn: async ({ signal }) => {
+      const r = await fetch(`${BASE}/api/page-content`, {
+        credentials: "include",
+        cache: "no-store",
+        signal,
+      });
+      if (!r.ok) throw new Error("تعذر تحميل سياسة الخصوصية");
+      const settings: Record<string, unknown> = await r.json();
+      const text = settings.privacy_page_content;
+      if (text != null && typeof text !== "string") {
+        throw new Error("تعذر قراءة نص سياسة الخصوصية");
+      }
+      return typeof text === "string" ? text : "";
     },
     staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+    // Refresh an already-open preview too, not just after route navigation.
+    refetchInterval: 2_000,
+    refetchIntervalInBackground: false,
   });
-
-  const content = data?.privacy_page_content ?? "";
 
   return (
     <div className="min-h-screen flex flex-col bg-background" dir="rtl">
@@ -31,17 +47,31 @@ export default function Privacy() {
             <h1 className="text-3xl font-extrabold text-foreground">سياسة الخصوصية</h1>
           </div>
 
+          {isError && (
+            <div role="alert" className="mb-6 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-foreground">
+              <p>تعذّر تحميل أحدث نص لسياسة الخصوصية. يرجى إعادة المحاولة.</p>
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                disabled={isFetching}
+                className="mt-3 rounded-xl border border-border bg-background px-4 py-2 font-bold disabled:opacity-50"
+              >
+                إعادة المحاولة
+              </button>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="flex justify-center py-16">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
           ) : content ? (
             <InformationalContent content={content} />
-          ) : (
+          ) : !isError ? (
             <div className="bg-card border border-dashed border-border rounded-2xl p-12 text-center">
               <p className="text-muted-foreground">سيتم إضافة سياسة الخصوصية قريباً.</p>
             </div>
-          )}
+          ) : null}
         </div>
       </main>
       <Footer />
