@@ -3,6 +3,28 @@ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 
 export type PhotographyAvailability = { weekday: number; start: string; end: string }[];
+export const photographyReceiptUploadsTable = pgTable("photography_receipt_uploads", {
+  id: text("id").primaryKey(),
+  sourcePath: text("source_path").notNull().unique(),
+  preparedPath: text("prepared_path").notNull().unique(),
+  uploadedBy: text("uploaded_by").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  state: text("state").notNull().default("requested"),
+  receiptId: integer("receipt_id").unique(),
+  error: text("error"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+export type ReceiptCleanupEntry = { uploadId: string; paths: string[]; reason: string; candidate: boolean };
+export const photographyReceiptCleanupRunsTable = pgTable("photography_receipt_cleanup_runs", {
+  id: text("id").primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  retentionDays: integer("retention_days").notNull(),
+  report: jsonb("report").$type<ReceiptCleanupEntry[]>().notNull(),
+  approvedBy: text("approved_by"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  events: jsonb("events").$type<{ at: string; uploadId: string; result: string }[]>().notNull().default([]),
+});
 export const photographyReceiptsTable = pgTable("photography_receipts", {
   id: serial("id").primaryKey(),
   objectPath: text("object_path").notNull().unique(),

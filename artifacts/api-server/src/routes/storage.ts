@@ -241,6 +241,14 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
     const raw = req.params.path;
     const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
     const objectPath = `/objects/${wildcardPath}`;
+    // Financial receipts must only be served through /photography/receipts/:id,
+    // which authorizes the superadmin or the transfer's actual photographer.
+    // Deny both raw sources and prepared copies, before any storage lookup.
+    // Check the decoded wildcard too, so encoded slashes cannot bypass this.
+    if (objectPath === "/objects/photography-receipts" || objectPath.startsWith("/objects/photography-receipts/")) {
+      res.status(403).json({ error: "إيصالات التصوير متاحة من سجل الحوالات للمخولين فقط" });
+      return;
+    }
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
     if (!req.isAuthenticated()) {

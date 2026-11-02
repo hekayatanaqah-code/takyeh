@@ -15,6 +15,8 @@ import { lockPhotographyAllocation } from "../lib/photography-allocation";
 import { photographyCardEnabled } from "../lib/owner-services";
 import { publishPhotographyBooking } from "../lib/photography-events";
 import { deliverPhotographyMessage } from "../lib/photography-delivery";
+import { z } from "zod";
+import { previewPhotographyReceiptCleanup } from "../lib/photography-receipt-cleanup";
 
 export function financialMonth(value: unknown) {
   if (value === undefined) return new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 7);
@@ -88,6 +90,13 @@ photographyFinancialAdmin.post("/receipt/complete", async (req, res) => {
   const parsed = receiptCompleteSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "بيانات الإيصال غير صحيحة" });
   try { return res.json(await completePhotographyReceipt(adminActor(req), parsed.data)); } catch (e) { return financialError(res, e); }
+});
+// Superadmin financial router only. Produces a reviewable snapshot; cannot approve/delete.
+photographyFinancialAdmin.post("/receipt/cleanup-preview", async (req, res) => {
+  const parsed = z.object({ retentionDays: z.number().int().min(1).max(3650) }).strict().safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "حدد مدة احتفاظ من يوم إلى ٣٦٥٠ يوماً للفحص التجريبي فقط" });
+  try { return res.json(await previewPhotographyReceiptCleanup(parsed.data.retentionDays)); }
+  catch (e) { return financialError(res, e); }
 });
 photographyFinancialAdmin.post("/bookings/:id/refunds", async (req, res) => {
   const parsed = photographyRefundSchema.safeParse(req.body);

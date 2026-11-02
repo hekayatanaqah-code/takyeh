@@ -10,6 +10,7 @@ import { cleanContractHtml, currentPhotographyContract, photographyBalances } fr
 import { inventoryOwnerNames } from "../lib/inventory-owner-names";
 import { recentCancellationCounts, lockPhotographyAllocation } from "../lib/photography-allocation";
 import { photographyFinancialAdmin } from "./photography-financial";
+import { attachablePhotographyReceipt } from "../lib/photography-receipt-lock";
 import { photographyPolicy, qualityEligible, type PhotographyPolicy } from "../lib/photography-allocation-policy";
 import { getPhotographyPolicy, photographyPolicySchema } from "../lib/photography-policy-settings";
 import { photographyCancellationHistory, retryPhotographyAssignment } from "../lib/photography-operations";
@@ -78,8 +79,8 @@ router.post("/photographers/:id/transfers", async (req, res) => {
       if (!photographer) return { error: "المصور غير موجود", status: 404 };
       if (!photographer.iban || !photographer.bankName) return { error: "أكمل بيانات حساب المصور البنكي أولاً", status: 400 };
       const actor = req.adminStaff ? `admin-staff:${req.adminStaff.id}` : req.user!.id;
-      const [receipt] = await tx.select().from(photographyReceiptsTable).where(eq(photographyReceiptsTable.id, parsed.data.receiptId));
-      if (!receipt || receipt.uploadedBy !== actor) return { error: "ارفع إيصالاً خاصاً بهذا التحويل من حسابك", status: 400 };
+      const receipt = await attachablePhotographyReceipt(tx, parsed.data.receiptId, actor);
+      if (!receipt) return { error: "ارفع إيصالاً صالحاً خاصاً بهذا التحويل من حسابك؛ قد يكون الإيصال غير المستخدم قد انتهى", status: 400 };
       const [duplicate] = await tx.select().from(photographyTransfersTable).where(sql`lower(${photographyTransfersTable.reference}) = lower(${parsed.data.reference})`);
       if (duplicate) return { error: "مرجع التحويل مستخدم سابقاً", status: 409 };
       const balance = await photographyBalances(photographer.id, tx);

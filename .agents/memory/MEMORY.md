@@ -68,6 +68,7 @@
 - [JSX preview transform](jsx-preview-transform.md) — avoid explicit JSX type arguments; injected preview metadata can break them despite a passing typecheck.
 - [Photography allocation policy](photography-allocation-policy.md) — admin-editable intro, decline and rating limits; paid replacement failures need review, not refunds.
 - [Photography financial policy](photography-financial-policy.md) — partial/full admin refunds, a wallet shared with subscriptions, and delivered-only fees; preserve settled transfer history.
+- [Photography receipt retention](photography-receipt-retention.md) — no real deletion before dry-run review and retention approval; saved transfers protect receipts regardless of later cancellation/refund.
 - [Moyasar refund confirmation](moyasar-refund-confirmation.md) — current responses report cumulative refunds on the payment; unknown POST outcomes stay reserved and are polled.
 - [Financial browser fixture cleanup](financial-browser-fixture-cleanup.md) — cancelling a browser helper does not clean its database rows or private files; record fixture provenance outside the helper.
 - [Generated API export boundaries](generated-api-export-boundaries.md) — resolve model/schema collisions with value exports; library-only typechecks can miss lost runtime validators.

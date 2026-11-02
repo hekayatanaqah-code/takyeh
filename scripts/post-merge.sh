@@ -13,6 +13,7 @@ pnpm run typecheck:libs
 
 # Reviewed, additive and idempotent; never changes an existing feature toggle.
 pnpm --filter @workspace/scripts exec tsx src/migrate-photography.ts
+pnpm --filter @workspace/scripts exec tsx src/migrate-photography-receipt-uploads.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-owner-services.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-photography-service-targets.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-property-offers.ts
