@@ -8,7 +8,7 @@ import { runSubscriptionExpiryJob } from "./lib/subscription-expiry";
 import { runSubscriptionRenewalJob } from "./lib/subscription-renewals";
 import { runSubscriptionPaymentReconciliationJob } from "./lib/subscription-payment-reconciliation";
 import { db } from "@workspace/db";
-import { ownerBookingsTable, ownerNotificationsTable } from "@workspace/db/schema";
+import { ownerBookingsTable, ownerNotificationsTable, ownerSubscriptionsTable } from "@workspace/db/schema";
 import { eq, and, isNull, like } from "drizzle-orm";
 
 const rawPort = process.env["PORT"];
@@ -83,12 +83,18 @@ app.listen(port, async (err) => {
 
   logger.info({ port }, "Server listening");
 
-  try {
-    await seedCatalogIfEmpty();
-    await seedSubscriptionPlansOnce();
-    logger.info("Catalog seeded");
-  } catch (e) {
-    logger.error({ err: e }, "Failed to seed catalog");
+  // An intentional full reset must stay empty across restarts until the
+  // operator explicitly chooses to initialize catalogs and subscription plans.
+  if (process.env.DISABLE_STARTUP_SEEDING === "true") {
+    logger.info("Automatic catalog and subscription-plan initialization disabled");
+  } else {
+    try {
+      await seedCatalogIfEmpty();
+      await seedSubscriptionPlansOnce();
+      logger.info("Catalog seeded");
+    } catch (e) {
+      logger.error({ err: e }, "Failed to seed catalog");
+    }
   }
 
   // Run booking reminder check on startup and every 30 minutes
@@ -97,8 +103,19 @@ app.listen(port, async (err) => {
 
   // Check on startup and hourly; reminders precede the expiry transition.
   const checkSubscriptions = async () => {
-    await runSubscriptionExpiryReminders();
-    await runSubscriptionExpiryJob();
+    try {
+      if (process.env.DISABLE_STARTUP_SEEDING === "true") {
+        // The reminder heartbeat is stored in site_settings. Do not recreate
+        // operational rows in an intentionally empty, not-yet-initialized DB.
+        const [subscription] = await db.select({ ownerId: ownerSubscriptionsTable.ownerId })
+          .from(ownerSubscriptionsTable).limit(1);
+        if (!subscription) return;
+      }
+      await runSubscriptionExpiryReminders();
+      await runSubscriptionExpiryJob();
+    } catch (error) {
+      logger.error({ err: error }, "Subscription expiry check failed");
+    }
   };
   void checkSubscriptions();
   setInterval(() => { void checkSubscriptions(); }, 60 * 60 * 1000);

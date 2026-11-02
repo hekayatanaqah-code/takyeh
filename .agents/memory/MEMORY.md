@@ -90,3 +90,4 @@
 - [Service quick sales](service-quick-sales-boundary.md) — merchant-only optional account feature; separate from bookings, with unified revenue and no implied electronic payment.
 - [General activity expenses](general-activity-expenses.md) — no mandatory second selection; automatically link a lone activity even when the dashboard scope remains all.
 - [Property calendar display](property-calendar-display.md) — preserve each booking across properties and periods; availability mirrors must never suppress actual bookings.
+- [Clean launch and backups](clean-launch-backups.md) — intentional empty initialization must survive restarts; private recovery archives stay outside application serving paths.
