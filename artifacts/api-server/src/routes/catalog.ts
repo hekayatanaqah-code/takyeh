@@ -145,6 +145,10 @@ router.get("/expense-categories", async (_req, res) => {
 
 /* ── Public page content + contact settings ── */
 router.get("/page-content", async (_req, res) => {
+  // Administrative edits must not be hidden by browser or intermediary caches.
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   const PUBLIC_KEYS = [
     "about_page_content",
     "faq_page_content",

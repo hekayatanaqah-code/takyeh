@@ -9,6 +9,17 @@ export const queryClient = new QueryClient({
   },
 });
 
+// Public settings can change in another admin tab. Always refresh when their
+// screen opens or regains focus, even if a consumer specifies a stale time.
+for (const key of ["page-content", "siteSettings"]) {
+  queryClient.setQueryDefaults([key], {
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
+    refetchOnReconnect: "always",
+  });
+}
+
 export const CATALOG_NAMES = [
   "categories", "service-categories", "regions", "cities", "districts",
   "service-regions", "service-cities", "amenities",

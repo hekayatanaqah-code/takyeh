@@ -10,11 +10,11 @@ export default function Privacy() {
   const { data, isLoading } = useQuery<Record<string, string>>({
     queryKey: ["page-content"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
+      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include", cache: "no-store" });
       if (!r.ok) return {};
       return r.json();
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
   });
 
   const content = data?.privacy_page_content ?? "";
