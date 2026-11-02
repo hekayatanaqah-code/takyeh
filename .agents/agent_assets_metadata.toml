@@ -43,3 +43,17 @@ mtime_ms = 1788555119260
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/023ec75a-f637-42de-b61a-e6a4ba443abc/66237263-bb9f-4189-9dd6-6c1dd106d9bc"
 storage_version_token = "1788555130134056"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "TkB7VObkq1CpoKCIcUhVM"
+uri = "file://generated-artifacts/launch-audit/report.html"
+type = "html"
+title = "تقرير فحص تكيّة قبل الإطلاق"
+description = "نتائج المسارات التجريبية، المطابقة المالية بالأرقام، الأخطاء المؤكدة، وحدود التحقق وتنظيف البيانات. قابل للفتح والطباعة."
+logical_id = "9ce399f5-59d4-4b42-bc90-8808f420bb1b"
+content_hash = "sha256:7d306ddd67fe10d78a7983f5a10e59458e8ef274dad5215aa61bb7750582ea72"
+size = 27925
+mtime_ms = 1793615529042
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/9ce399f5-59d4-4b42-bc90-8808f420bb1b/d09979bf-d06d-42b9-b7ea-268c5abe12d6"
+storage_version_token = "1793615595822496"
+content_type = "text/html"
