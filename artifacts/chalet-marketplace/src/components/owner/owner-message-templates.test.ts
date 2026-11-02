@@ -43,9 +43,20 @@ test("service preview and actual sending preparation resolve legacy and new name
 test("load, save response and reset retain service-only labels without rewriting the shared property defaults", () => {
   const source = readFileSync(new URL("./OwnerMessageSettingsTab.tsx", import.meta.url), "utf8");
   assert.equal((source.match(/variables=\{providerId \? SERVICE_MESSAGE_VARIABLES : MESSAGE_VARIABLES\}/g) ?? []).length, 3);
-  assert.ok(source.includes('bookingMessageActivityNames(form, "shared")'));
+  assert.ok(source.includes('bookingMessageActivityNames(form, "shared", data)'));
   assert.ok(source.includes('bookingMessageActivityNames(next, "service")'));
   assert.ok(source.includes("serviceMessageName(base.cancellationTemplate)"));
   assert.ok(source.includes("serviceMessageName(base.modificationTemplate)"));
   assert.ok(source.includes("serviceMessageName(template)"));
+});
+
+test("the service confirmation uses the service greeting while preserving the stored property wording", () => {
+  const original = { ...DEFAULT_OWNER_MESSAGE_SETTINGS, bookingConfirmationTemplate: "تم تأكيد حجزك في {اسم_العقار}. نسعد باستقبالك." };
+  const service = bookingMessageActivityNames(original, "service");
+  assert.equal(service.bookingConfirmationTemplate, "تم تأكيد حجزك في {اسم_الخدمة}. نسعد بخدمتك.");
+  assert.equal(prepareServiceMessageTemplate(original.bookingConfirmationTemplate), service.bookingConfirmationTemplate);
+  assert.deepEqual(bookingMessageActivityNames(service, "shared", original), original);
+  assert.ok(original.bookingConfirmationTemplate.includes("نسعد باستقبالك."));
+  const custom = { ...original, bookingConfirmationTemplate: "صياغة المالك الخاصة. نسعد بخدمتك." };
+  assert.equal(bookingMessageActivityNames(custom, "shared", custom).bookingConfirmationTemplate, custom.bookingConfirmationTemplate);
 });

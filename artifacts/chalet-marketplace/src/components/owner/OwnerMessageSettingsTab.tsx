@@ -284,7 +284,7 @@ export function OwnerMessageSettingsTab({
     mutationFn: async () => {
       const r = await apiFetch("/owner/message-settings", {
         method: "PUT",
-        body: JSON.stringify(providerId ? bookingMessageActivityNames(form, "shared") : form),
+        body: JSON.stringify(providerId ? bookingMessageActivityNames(form, "shared", data) : form),
       });
       if (!r.ok) {
         const err = await r.json().catch(() => null);

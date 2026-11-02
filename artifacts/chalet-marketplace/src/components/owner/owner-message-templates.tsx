@@ -17,11 +17,17 @@ export function serviceMessageName(template: string): string {
 }
 
 /** Settings are owner-wide: project names for service editors, retain the legacy storage token for properties. */
-export function bookingMessageActivityNames(settings: OwnerMessageSettings, activity: "service" | "shared"): OwnerMessageSettings {
+export function bookingMessageActivityNames(settings: OwnerMessageSettings, activity: "service" | "shared", original?: OwnerMessageSettings): OwnerMessageSettings {
   const result = { ...settings };
   for (const key of ["bookingConfirmationTemplate", "cancellationTemplate", "modificationTemplate"] as const) {
     result[key] = activity === "service" ? serviceMessageName(settings[key])
       : settings[key].replace(/\{اسم_الخدمة\}/g, "{اسم_العقار}");
+  }
+  if (activity === "service") {
+    result.bookingConfirmationTemplate = result.bookingConfirmationTemplate.replace(/نسعد باستقبالك\./g, "نسعد بخدمتك.");
+  } else if (original?.bookingConfirmationTemplate.includes("نسعد باستقبالك.")) {
+    // Preserve the property's existing greeting in owner-wide storage.
+    result.bookingConfirmationTemplate = result.bookingConfirmationTemplate.replace(/نسعد بخدمتك\./g, "نسعد باستقبالك.");
   }
   return result;
 }
@@ -52,6 +58,7 @@ export function prepareServiceMessageTemplate(template: string): string {
       return ["المدة: {المدة}"];
     })
     .join("\n")
+    .replace(/نسعد باستقبالك\./g, "نسعد بخدمتك.")
     .replace(/(?:أمنياتنا|نتمنى) لكم بإقامة (?:ممتعة|مانعة)\.?/g, "سعداء بخدمتكم")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
