@@ -7,7 +7,7 @@ import { staffMobileSchema, staffNationalIdSchema } from "../lib/staff-contact-v
 import { paySalaryWithExpense } from "../lib/salary-expenses";
 import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
 import { SaveOwnerWhatsAppSettingsBody } from "@workspace/api-zod";
-import { propertyStayComplete } from "../lib/booking-completion";
+import { capturePropertyCheckout, propertyStayComplete } from "../lib/booking-completion";
 import { sendCrmHistory, sendCrmProfile } from "../lib/customer-history";
 import { sendCrmCustomers } from "../lib/customer-directory";
 import { resolveAddonQuantities } from "../lib/chalet-addon-quantity";
@@ -1657,7 +1657,10 @@ router.post("/bookings", async (req, res) => {
       (v) => (typeof v === "string" ? v.trim() : v),
       z.string().min(1, "رقم الجوال مطلوب")
     ),
-    bookingDate: z.string().min(1, "تاريخ الحجز مطلوب"),
+    bookingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+      const date = new Date(`${value}T00:00:00Z`);
+      return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    }, "تاريخ الحجز غير صالح"),
     durationDays: z.number().int().min(1).default(1),
     period: z.enum(["morning", "evening", "full_day"], {
       errorMap: () => ({ message: "الفترة الزمنية مطلوبة (صباحي/مسائي/يوم كامل)" }),
@@ -1756,6 +1759,7 @@ router.post("/bookings", async (req, res) => {
   const customerName = restBooking.clientName?.trim() || "عميل مؤقت";
   const phoneNormalized = normalizeCustomerPhone(restBooking.clientPhone);
   const booking = await db.transaction(async (tx) => {
+    const checkoutAt = await capturePropertyCheckout(restBooking, tx);
     await tx.insert(ownerCustomersTable).values({
       ownerId,
       phoneNormalized,
@@ -1774,6 +1778,7 @@ router.post("/bookings", async (req, res) => {
       .insert(ownerBookingsTable)
       .values({
         ...restBooking,
+        checkoutAt,
         clientName: customerName,
         clientPhone: phoneNormalized,
         ownerId,
@@ -1865,7 +1870,10 @@ router.patch("/bookings/:id", async (req, res) => {
     insurancePaymentMethod: z.enum(["cash", "transfer"]).optional(),
     paymentReceiptUrl: z.string().nullable().optional(),
     // Reschedule fields
-    bookingDate: z.string().min(1).optional(),
+    bookingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
+      const date = new Date(`${value}T00:00:00Z`);
+      return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    }, "تاريخ الحجز غير صالح").optional(),
     durationDays: z.number().int().min(1).optional(),
     period: z.enum(["morning", "evening", "full_day"]).nullable().optional(),
     rescheduleReason: z.string().optional(),
@@ -1886,7 +1894,7 @@ router.patch("/bookings/:id", async (req, res) => {
   // If rescheduling, fetch the old booking first to record a log entry
   const isReschedule = bookingDate !== undefined || durationDays !== undefined || period !== undefined;
   let oldBooking: typeof ownerBookingsTable.$inferSelect | null = null;
-  if (isReschedule && !restore) {
+  if (isReschedule) {
     const [existing] = await db
       .select()
       .from(ownerBookingsTable)
@@ -1895,7 +1903,7 @@ router.patch("/bookings/:id", async (req, res) => {
   }
 
   // ── Conflict check for reschedule ──────────────────────────────────
-  if (isReschedule && !restore && oldBooking) {
+  if (isReschedule && oldBooking) {
     const newDate2   = bookingDate  ?? oldBooking.bookingDate;
     const newDur2    = durationDays ?? oldBooking.durationDays;
     const newPeriod2 = period !== undefined ? period : oldBooking.period;
@@ -1944,12 +1952,25 @@ router.patch("/bookings/:id", async (req, res) => {
   // ───────────────────────────────────────────────────────────────────
 
   const updateResult = await db.transaction(async tx => {
+    // Every update serializes with settlement/rescheduling. Never repin a note,
+    // payment, restore, or a form that merely sends unchanged schedule fields.
+    const [existing] = await tx.select().from(ownerBookingsTable)
+      .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
+      .limit(1).for("update");
+    if (!existing) return { error: "الحجز غير موجود", status: 404 };
+    if (oldBooking && (oldBooking.bookingDate !== existing.bookingDate
+      || oldBooking.durationDays !== existing.durationDays || oldBooking.period !== existing.period))
+      return { error: "تغيّر موعد الحجز في جلسة أخرى. حدّث البيانات ثم أعد المحاولة", status: 409 };
+    const nextStay = {
+      ...existing,
+      bookingDate: bookingDate ?? existing.bookingDate,
+      durationDays: durationDays ?? existing.durationDays,
+      period: period !== undefined ? period : existing.period,
+    };
+    const scheduleChanged = nextStay.bookingDate !== existing.bookingDate
+      || nextStay.durationDays !== existing.durationDays || nextStay.period !== existing.period;
+    const checkoutAt = scheduleChanged ? await capturePropertyCheckout(nextStay, tx) : undefined;
     if (settlesInsurance) {
-      // Lock against concurrent rescheduling while checking and settling.
-      const [existing] = await tx.select().from(ownerBookingsTable)
-        .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
-        .limit(1).for("update");
-      if (!existing) return { error: "الحجز غير موجود", status: 404 };
       if (!await propertyStayComplete(existing))
         return { error: INSURANCE_NOT_READY_MESSAGE, status: 409 };
       const deduction = insuranceDeducted ?? Number(existing.insuranceDeducted ?? 0);
@@ -1962,6 +1983,7 @@ router.patch("/bookings/:id", async (req, res) => {
     .update(ownerBookingsTable)
     .set({
       ...rest,
+      checkoutAt,
       ...(bookingDate !== undefined ? { bookingDate } : {}),
       ...(durationDays !== undefined ? { durationDays } : {}),
       ...(period !== undefined ? { period } : {}),
@@ -5328,6 +5350,7 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
       durationDays: ownerBookingsTable.durationDays,
       period: ownerBookingsTable.period,
       insuranceFee: ownerBookingsTable.insuranceFee,
+      checkoutAt: ownerBookingsTable.checkoutAt,
       insuranceRefunded: ownerBookingsTable.insuranceRefunded,
       insuranceReceived: ownerBookingsTable.insuranceReceived,
       insuranceDeducted: ownerBookingsTable.insuranceDeducted,
@@ -5350,16 +5373,8 @@ router.get("/deposits", requireAuth, async (req: Request, res: Response) => {
     )
     .orderBy(desc(ownerBookingsTable.bookingDate));
 
-  const propertyIds = [...new Set(bookings.flatMap(booking => booking.submissionId ? [booking.submissionId] : []))];
-  const [liveProperties, submittedProperties] = propertyIds.length ? await Promise.all([
-    db.select().from(chaletsTable).where(inArray(chaletsTable.submissionId, propertyIds)),
-    db.select().from(chaletSubmissionsTable).where(inArray(chaletSubmissionsTable.id, propertyIds)),
-  ]) : [[], []];
-  const liveById = new Map(liveProperties.map(property => [property.submissionId, property]));
-  const submittedById = new Map(submittedProperties.map(property => [property.id, property]));
   return res.json(bookings.map(booking => {
-    const times = booking.submissionId ? liveById.get(booking.submissionId) ?? submittedById.get(booking.submissionId) : undefined;
-    const checkoutAt = bookingCheckoutAt(booking, times);
+    const checkoutAt = bookingCheckoutAt(booking);
     return { ...booking, checkoutAt: Number.isFinite(checkoutAt) ? new Date(checkoutAt).toISOString() : null };
   }));
 });

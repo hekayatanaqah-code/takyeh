@@ -8,6 +8,22 @@
 import * as zod from 'zod';
 
 
+/**
+ * @summary Owner property bookings with immutable departure instants
+ */
+
+
+
+export const ListOwnerPropertyBookingsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "bookingDate": zod.date(),
+  "durationDays": zod.number().int().min(1),
+  "period": zod.string().nullish(),
+  "checkoutAt": zod.date().nullable().describe('Immutable departure captured on creation or actual rescheduling. Legacy null uses midnight after the last occupied Saudi day, never current property settings.')
+})
+export const ListOwnerPropertyBookingsResponse = zod.array(ListOwnerPropertyBookingsResponseItem)
+
+
 
 
 
@@ -1605,8 +1621,17 @@ export const GetOwnerBookingArchiveQueryParams = zod.object({
   "export": zod.enum(['1']).optional().describe('Return all matching records for an explicitly requested export')
 })
 
+
+
+
 export const GetOwnerBookingArchiveResponse = zod.object({
-  "bookings": zod.array(zod.record(zod.string(), zod.unknown())),
+  "bookings": zod.array(zod.object({
+  "id": zod.number().int(),
+  "bookingDate": zod.date(),
+  "durationDays": zod.number().int().min(1),
+  "period": zod.string().nullish(),
+  "checkoutAt": zod.date().nullable().describe('Immutable departure captured on creation or actual rescheduling. Legacy null uses midnight after the last occupied Saudi day, never current property settings.')
+})),
   "rescheduleLog": zod.array(zod.record(zod.string(), zod.unknown())),
   "total": zod.number().int(),
   "page": zod.number().int(),

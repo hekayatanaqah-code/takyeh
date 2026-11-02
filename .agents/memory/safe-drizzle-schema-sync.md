@@ -13,7 +13,7 @@ Automatic post-merge setup must not run generic Drizzle schema pushes, including
 
 **Why:** Even dependency-only merges can trigger interactive truncation prompts against populated legacy tables; adding force flags converts a setup failure into a data-loss risk.
 
-**How to apply:** Keep automatic setup limited to dependency reconciliation and rebuilding shared declarations. The schema-owning task must apply its reviewed migrations explicitly.
+**How to apply:** Automatic setup may reconcile dependencies, rebuild shared declarations and run explicitly reviewed, additive, idempotent migrations registered by the schema-owning task. Never infer migrations through a generic schema push.
 
 A full-table Drizzle `select()` requests every schema-declared column, so one absent development column can surface as an endpoint 500 and masquerade in the UI as an empty dataset. Check the API response and real table columns before changing an empty-state condition.
 

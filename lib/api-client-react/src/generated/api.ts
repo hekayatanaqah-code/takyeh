@@ -102,6 +102,7 @@ import type {
   OwnerLedgerTransaction,
   OwnerNotificationHistoryItem,
   OwnerNotificationScopeInput,
+  OwnerPropertyBooking,
   OwnerService,
   OwnerServiceAdministration,
   OwnerServiceCatalog,
@@ -217,6 +218,107 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getListOwnerPropertyBookingsUrl = () => {
+
+
+
+
+  return `/api/owner/bookings`
+}
+
+/**
+ * @summary Owner property bookings with immutable departure instants
+ */
+export const listOwnerPropertyBookings = async ( options?: Parameters<typeof customFetch>[1]): Promise<OwnerPropertyBooking[]> => {
+
+  return customFetch<OwnerPropertyBooking[]>(getListOwnerPropertyBookingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOwnerPropertyBookingsQueryKey = () => {
+    return [
+    `/api/owner/bookings`
+    ] as const;
+    }
+
+
+export const getListOwnerPropertyBookingsQueryOptions = <TData = Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOwnerPropertyBookingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOwnerPropertyBookings>>> = ({ signal }) => listOwnerPropertyBookings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListOwnerPropertyBookingsQueryResult = NonNullable<Awaited<ReturnType<typeof listOwnerPropertyBookings>>>
+export type ListOwnerPropertyBookingsQueryError = ErrorType<void>
+
+
+export function useListOwnerPropertyBookings<TData = Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listOwnerPropertyBookings>>,
+          TError,
+          Awaited<ReturnType<typeof listOwnerPropertyBookings>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListOwnerPropertyBookings<TData = Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listOwnerPropertyBookings>>,
+          TError,
+          Awaited<ReturnType<typeof listOwnerPropertyBookings>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListOwnerPropertyBookings<TData = Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Owner property bookings with immutable departure instants
+ */
+
+export function useListOwnerPropertyBookings<TData = Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listOwnerPropertyBookings>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListOwnerPropertyBookingsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListOwnerLedgerTransactionsUrl = (params?: ListOwnerLedgerTransactionsParams,) => {
   const normalizedParams = new URLSearchParams();

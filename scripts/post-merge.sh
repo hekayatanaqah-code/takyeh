@@ -20,3 +20,4 @@ pnpm --filter @workspace/scripts exec tsx src/migrate-property-offers.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-provider-catalog.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-quick-sales.ts
 pnpm --filter @workspace/scripts exec tsx src/migrate-support-messages.ts
+pnpm --filter @workspace/scripts exec tsx src/migrate-booking-checkout.ts

@@ -786,6 +786,9 @@ importers:
 
   scripts:
     dependencies:
+      '@workspace/booking-time':
+        specifier: workspace:*
+        version: link:../lib/booking-time
       '@workspace/db':
         specifier: workspace:*
         version: link:../lib/db

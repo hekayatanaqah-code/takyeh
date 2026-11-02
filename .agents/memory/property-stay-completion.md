@@ -9,6 +9,12 @@ Property insurance settlement and booking-linked reviews depend on the actual de
 
 **How to apply:** Use Saudi time regardless of the server or visitor timezone. Insurance and review restrictions must be enforced by the server as well as the interface. Retain insurance and review actions in the completed archive; archiving does not waive the actual-departure restrictions.
 
+Departure eligibility must remain tied to the booking's captured departure, not mutable property settings. Only an actual date, duration or period change adopts the current property schedule; no-op saves, restoration and financial edits retain the historical departure.
+
+**Why:** Changing property hours must not reopen or close insurance/review eligibility on existing bookings. Historical schedules before the first capture cannot be reconstructed reliably.
+
+**How to apply:** Use the persisted departure across server, browser and customer-history queries. Legacy bookings are initially captured from available schedules; missing schedules use the final occupied day's end. Later null legacy records never consult live schedules, and malformed dates remain locked until deliberately corrected.
+
 The active booking list and completed archive use the end of the last occupied Saudi calendar day, independently of scheduled departure hours. Count the start date as the first occupied day; retain a multi-day booking through its last day in full and archive it only at the following midnight.
 
 **Why:** The user's later clarification explicitly requires yesterday's single-day bookings to leave today's active list and multi-day bookings to remain until their final day has fully elapsed. This supersedes the earlier shared list/archive/check-out boundary.

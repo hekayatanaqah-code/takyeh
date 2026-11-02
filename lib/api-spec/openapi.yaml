@@ -21,6 +21,20 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/bookings:
+    get:
+      operationId: listOwnerPropertyBookings
+      tags: [owner]
+      summary: Owner property bookings with immutable departure instants
+      responses:
+        "200":
+          description: Non-cancelled property bookings; checkoutAt is server-owned and only repinned on an actual schedule change
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OwnerPropertyBooking" }
+        "401": { description: Authentication required }
   /owner/transaction-history:
     get:
       operationId: listOwnerLedgerTransactions
@@ -836,7 +850,7 @@ paths:
                 type: object
                 required: [bookings, rescheduleLog, total, page, pageSize, years]
                 properties:
-                  bookings: { type: array, items: { type: object, additionalProperties: true } }
+                  bookings: { type: array, items: { $ref: "#/components/schemas/OwnerPropertyBooking" } }
                   rescheduleLog: { type: array, items: { type: object, additionalProperties: true } }
                   total: { type: integer }
                   page: { type: integer }
@@ -1676,6 +1690,20 @@ components:
       schema:
         type: string
   schemas:
+    OwnerPropertyBooking:
+      type: object
+      additionalProperties: true
+      required: [id, bookingDate, durationDays, checkoutAt]
+      properties:
+        id: { type: integer }
+        bookingDate: { type: string, format: date }
+        durationDays: { type: integer, minimum: 1 }
+        period: { type: [string, "null"] }
+        checkoutAt:
+          type: [string, "null"]
+          format: date-time
+          readOnly: true
+          description: Immutable departure captured on creation or actual rescheduling. Legacy null uses midnight after the last occupied Saudi day, never current property settings.
     OwnerLedgerTransaction:
       type: object
       required: [id, date, type, label, amount, method, status, cashDeposited]

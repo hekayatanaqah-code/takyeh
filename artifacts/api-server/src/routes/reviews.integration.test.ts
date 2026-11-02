@@ -11,12 +11,17 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import app from "../app";
 import { INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
+import { bookingCheckoutAt, isStayComplete } from "@workspace/booking-time";
 import { createSession } from "../lib/auth";
 import {
   chaletSubmissionsTable,
   chaletsTable,
   db,
   ownerBookingsTable,
+  ownerSubscriptionsTable,
+  ownerCustomersTable,
+  ownerRescheduleLogsTable,
+  chaletAvailabilityTable,
   ownerNotificationsTable,
   pool,
   reviewInvitationsTable,
@@ -243,6 +248,11 @@ before(async () => {
 });
 
 afterEach(async () => {
+  if (ownerIds.length > 0) {
+    await db.delete(ownerRescheduleLogsTable).where(inArray(ownerRescheduleLogsTable.ownerId, ownerIds));
+    await db.delete(ownerCustomersTable).where(inArray(ownerCustomersTable.ownerId, ownerIds));
+    await db.delete(ownerSubscriptionsTable).where(inArray(ownerSubscriptionsTable.ownerId, ownerIds));
+  }
   if (reviewIds.length > 0) {
     await db.delete(reviewsTable).where(inArray(reviewsTable.id, reviewIds));
   }
@@ -262,6 +272,7 @@ afterEach(async () => {
     await db.delete(ownerBookingsTable).where(inArray(ownerBookingsTable.id, bookingIds));
   }
   if (chaletIds.length > 0) {
+    await db.delete(chaletAvailabilityTable).where(inArray(chaletAvailabilityTable.chaletId, chaletIds));
     await db.delete(chaletsTable).where(inArray(chaletsTable.id, chaletIds));
   }
   if (submissionIds.length > 0) {
@@ -362,6 +373,84 @@ it("requires a reason, scopes objections to their owner, and lets administration
 });
 
 describe("owner product isolation for service-only and mixed accounts", () => {
+  it("pins creation, preserves pins across property edits and no-op saves, and deliberately repins rescheduling", async () => {
+    const { ownerId, sessionId } = await createOwner();
+    await db.insert(ownerSubscriptionsTable).values({
+      ownerId, status: "active", expiresAt: new Date("2099-01-01"),
+    });
+    const chaletId = await createChalet(ownerId);
+    const submissionId = submissionIds[0];
+    const originalTimes = { morningCheckIn: "٦ ص", morningCheckOut: "٤ م" };
+    const changedTimes = { morningCheckIn: "٦ ص", morningCheckOut: "٨ ص" };
+    await db.update(chaletsTable).set(originalTimes).where(eq(chaletsTable.id, chaletId));
+    const create = async (bookingDate: string) => {
+      const result = await request("/owner/bookings", sessionId, {
+        method: "POST",
+        body: JSON.stringify({ submissionId, bookingDate, period: "morning", durationDays: 1,
+          clientName: "ضيف الموعد المثبت", clientPhone: "0508888888", insuranceFee: 300,
+          checkoutAt: "1900-01-01T00:00:00Z" }),
+      });
+      assert.equal(result.response.status, 201, JSON.stringify(result.json));
+      bookingIds.push(result.json.id);
+      return result.json;
+    };
+    const first = await create("2030-06-15");
+    assert.equal(Date.parse(first.checkoutAt), bookingCheckoutAt({
+      bookingDate: first.bookingDate, period: first.period, durationDays: first.durationDays,
+    }, originalTimes));
+    await db.update(chaletsTable).set(changedTimes).where(eq(chaletsTable.id, chaletId));
+    await db.update(chaletSubmissionsTable).set(changedTimes).where(eq(chaletSubmissionsTable.id, submissionId));
+    const listed = (await request("/owner/bookings", sessionId)).json.find((b: any) => b.id === first.id);
+    assert.equal(listed.checkoutAt, first.checkoutAt);
+    const boundary = Date.parse("2030-06-15T12:00:00+03:00");
+    assert.equal(isStayComplete(listed, changedTimes, boundary), false);
+    const insurance = await request("/owner/deposits", sessionId);
+    assert.equal(insurance.response.status, 200);
+    assert.equal(insurance.json.find((b: any) => b.id === first.id).checkoutAt, first.checkoutAt);
+    const patch = (body: object) => request(`/owner/bookings/${first.id}`, sessionId, { method: "PATCH", body: JSON.stringify(body) });
+    const noop = await patch({ bookingDate: first.bookingDate, durationDays: 1, period: "morning", notes: "ملاحظة" });
+    assert.equal(noop.response.status, 200);
+    assert.equal(noop.json.checkoutAt, first.checkoutAt);
+    assert.equal((await patch({ insuranceRefunded: true })).response.status, 409);
+    assert.equal((await request("/owner/review-invite", sessionId, {
+      method: "POST", body: JSON.stringify({ chaletId, bookingId: first.id }),
+    })).response.status, 409);
+    const second = await create("2030-06-16");
+    assert.equal(second.checkoutAt, new Date("2030-06-16T08:00:00+03:00").toISOString());
+    const periodChange = await patch({ period: "evening" });
+    assert.equal(periodChange.response.status, 200);
+    assert.equal(periodChange.json.checkoutAt, new Date("2030-06-16T00:00:00+03:00").toISOString());
+    const durationChange = await patch({ durationDays: 2 });
+    assert.equal(durationChange.json.checkoutAt, new Date("2030-06-17T00:00:00+03:00").toISOString());
+    const past = await patch({ bookingDate: "2020-06-15", durationDays: 1, period: "morning" });
+    assert.equal(past.json.checkoutAt, new Date("2020-06-15T08:00:00+03:00").toISOString());
+    const archivedBefore = await request("/owner/bookings/archive?tab=completed", sessionId);
+    assert(archivedBefore.json.bookings.some((b: any) => b.id === first.id));
+    // Opposite direction: even a future-looking live schedule cannot close a pinned past stay.
+    await db.update(chaletsTable).set({ morningCheckOut: "١١ م" }).where(eq(chaletsTable.id, chaletId));
+    const archivedAfter = await request("/owner/bookings/archive?tab=completed", sessionId);
+    assert.deepEqual(archivedAfter.json.bookings, archivedBefore.json.bookings);
+    await db.update(ownerBookingsTable).set({ cancelledAt: new Date() }).where(eq(ownerBookingsTable.id, first.id));
+    const restored = await patch({ restore: true });
+    assert.equal(restored.response.status, 200);
+    assert.equal(restored.json.checkoutAt, past.json.checkoutAt);
+    assert.equal((await patch({ insuranceRefunded: true })).response.status, 200);
+    const invite = await request("/owner/review-invite", sessionId, {
+      method: "POST", body: JSON.stringify({ chaletId, bookingId: first.id }),
+    });
+    assert.equal(invite.response.status, 200);
+    const [invitation] = await db.select().from(reviewInvitationsTable)
+      .where(eq(reviewInvitationsTable.token, invite.json.token));
+    reviewInvitationIds.push(invitation.id);
+    const future = await patch({ bookingDate: "2099-06-15" });
+    assert.equal(future.response.status, 200);
+    assert.equal((await request(`/reviews/${invite.json.token}`, "")).response.status, 409);
+    assert.equal((await request(`/reviews/${invite.json.token}`, "", {
+      method: "POST", body: JSON.stringify({ rating: 5 }),
+    })).response.status, 409);
+    assert.equal((await patch({ bookingDate: "2026-02-30" })).response.status, 400);
+  });
+
   it("blocks early insurance settlement and review creation/open/submission while allowing receipt", async () => {
     const { ownerId, sessionId } = await createOwner();
     const chaletId = await createChalet(ownerId);

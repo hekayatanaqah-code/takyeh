@@ -1,4 +1,5 @@
 import { Clock, CheckCircle, XCircle, RotateCcw } from "lucide-react";
+import type { OwnerPropertyBooking } from "@workspace/api-client-react";
 
 
 export const statusConfig = {
@@ -9,6 +10,7 @@ export const statusConfig = {
 };
 
 export interface OwnerBooking {
+  checkoutAt: OwnerPropertyBooking["checkoutAt"];
   id: number;
   submissionId?: number | null;
   clientName: string;

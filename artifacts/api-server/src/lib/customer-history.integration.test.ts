@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
 import { eq, inArray, sql } from "drizzle-orm";
 import { db, pool, ownerBookingsTable, serviceAppointmentsTable, serviceProvidersTable } from "@workspace/db";
-import { timeMinutes, bookingCheckoutAt } from "@workspace/booking-time";
+import { timeMinutes, bookingCheckoutAt, bookingCalendarEndAt } from "@workspace/booking-time";
 import { GetOwnerCrmHistoryResponse, GetOwnerCrmProfileResponse, GetOwnerCrmCustomersResponse } from "@workspace/api-zod";
 import { crmTimeMinutes, crmPropertyCheckout, sendCrmHistory, sendCrmProfile } from "./customer-history";
 import { sendCrmCustomers } from "./customer-directory";
@@ -229,7 +229,7 @@ test("SQL stored-time parsing agrees with the authoritative JavaScript parser", 
     assert.equal(result.rows[0].minutes, timeMinutes(value), value);
   }
 });
-test("SQL pinning uses the same checkout boundary as the existing completion rules", async () => {
+test("SQL uses pinned checkout or calendar-end fallback, never current property timings", async () => {
   const cases = [
     { period: "morning", durationDays: 1, times: { morningCheckIn: "٦ ص", morningCheckOut: "٤ م" } },
     { period: "evening", durationDays: 2, times: { eveningCheckIn: "٤ م", eveningCheckOut: "٦ ص" } },
@@ -244,9 +244,54 @@ test("SQL pinning uses the same checkout boundary as the existing completion rul
       ${fixture.times.checkInTime ?? null}::text AS check_in_time, ${fixture.times.checkOutTime ?? null}::text AS check_out_time`;
     const now = new Date("2026-10-17T12:00:00Z");
     const result = await db.execute(sql`WITH b AS (SELECT '2026-10-17'::text AS booking_date, 1 AS submission_id,
+      ${fixture.period === "morning" ? "2026-10-17T16:00:00+03:00" : null}::timestamptz AS checkout_at,
       ${fixture.period}::text AS period, ${fixture.durationDays}::int AS duration_days),
       chalets AS (${columns(true)}), chalet_submissions AS (${columns(false)})
       SELECT extract(epoch FROM stay.checkout_at)::float8 * 1000 AS checkout FROM b ${crmPropertyCheckout(now)}`);
-    assert.equal(result.rows[0].checkout, bookingCheckoutAt({ bookingDate: "2026-10-17", ...fixture }, fixture.times));
+    assert.equal(result.rows[0].checkout, bookingCheckoutAt({
+      bookingDate: "2026-10-17", ...fixture,
+      checkoutAt: fixture.period === "morning" ? "2026-10-17T16:00:00+03:00" : null,
+    }, fixture.times));
+  }
+});
+
+test("SQL legacy calendar fallback rejects malformed dates without raising or completing", async () => {
+  for (const bookingDate of ["invalid", "", "2026-02-30", "2026-02-29", "2026-00-15", "2026-13-01",
+    "2026-04-31", "2026-01-00", "2026-01-32", "2026-2-01", "2024-02-29", "2026-02-28"]) {
+    const result = await db.execute(sql`WITH b AS (
+      SELECT ${bookingDate}::text AS booking_date, NULL::int AS submission_id,
+        NULL::timestamptz AS checkout_at, 2 AS duration_days)
+      SELECT extract(epoch FROM stay.checkout_at)::float8 * 1000 AS checkout FROM b
+      ${crmPropertyCheckout(new Date("2026-10-17T12:00:00Z"))}`);
+    assert.equal(result.rows[0].checkout, bookingCalendarEndAt({ bookingDate, durationDays: 2 }), bookingDate);
+  }
+});
+
+test("malformed legacy bookings left null by migration keep customer directory and history readable", async () => {
+  const legacyOwner = `${ownerId}-malformed`;
+  const dates = ["not-a-date", "2026-02-30", "2026-13-01", "2026-01-00"];
+  try {
+    // Exact persisted state asserted by migrate-booking-checkout.test.ts:
+    // malformed dates survive migration, with no fabricated departure instant.
+    const migratedRows = await db.insert(ownerBookingsTable).values(dates.map((bookingDate, index) => ({
+      ownerId: legacyOwner, clientName: `عميل تاريخ قديم ${index}`, clientPhone: phone,
+      bookingDate, checkoutAt: null, durationDays: 1, totalPrice: "100",
+      insuranceFee: "50", insuranceReceived: true,
+    }))).returning();
+    assert(migratedRows.every(row => row.checkoutAt === null));
+    const customers = await directory({ scope: "chalet" }, legacyOwner);
+    assert.equal(customers.status, 200);
+    assert.equal(GetOwnerCrmCustomersResponse.safeParse(customers.body).success, true);
+    assert.equal(customers.body.total, 1);
+    assert.equal(customers.body.items[0].has_active, true);
+    const history = await request(sendCrmHistory, {}, legacyOwner);
+    assert.equal(history.status, 200);
+    assert.equal(GetOwnerCrmHistoryResponse.safeParse(history.body).success, true);
+    assert.equal(history.body.total, dates.length);
+    assert(history.body.items.every((row: any) => row.is_active === true));
+    assert.equal((await request(sendCrmHistory, { status: "completed" }, legacyOwner)).body.total, 0);
+    assert.equal((await request(sendCrmProfile, {}, legacyOwner)).status, 200);
+  } finally {
+    await db.delete(ownerBookingsTable).where(eq(ownerBookingsTable.ownerId, legacyOwner));
   }
 });

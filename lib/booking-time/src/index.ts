@@ -2,6 +2,8 @@ export interface StayBooking {
   bookingDate: string;
   durationDays?: number | null;
   period?: string | null;
+  /** Persisted Saudi departure instant. Null legacy records use calendar-end fallback. */
+  checkoutAt?: string | Date | null;
 }
 
 export interface StayTimes {
@@ -36,9 +38,16 @@ export function timeMinutes(value?: string | null): number | null {
  * Duration counts occupied dates. A check-out at/before check-in is next morning.
  * Missing times conservatively keep the final occupied date active until midnight. */
 export function bookingCheckoutAt(booking: StayBooking, times?: StayTimes | null): number {
+  if (booking.checkoutAt != null) {
+    const pinned = booking.checkoutAt instanceof Date ? booking.checkoutAt.getTime() : Date.parse(booking.checkoutAt);
+    return Number.isFinite(pinned) ? pinned : Number.POSITIVE_INFINITY;
+  }
+  // A persisted legacy record must never start following today's property schedule.
+  if ("checkoutAt" in booking) return bookingCalendarEndAt(booking);
   const day = Date.parse(`${booking.bookingDate.slice(0, 10)}T00:00:00+03:00`);
   if (!Number.isFinite(day)) return Number.POSITIVE_INFINITY;
-  const duration = Math.max(1, booking.durationDays ?? 1);
+  const duration = Math.max(1, Math.trunc(booking.durationDays ?? 1));
+  if (!Number.isFinite(duration)) return Number.POSITIVE_INFINITY;
   const prefix = booking.period === "morning" ? "morning"
     : booking.period === "evening" ? "evening" : "fullDay";
   const checkIn = timeMinutes(times?.[`${prefix}CheckIn`] || times?.checkInTime);

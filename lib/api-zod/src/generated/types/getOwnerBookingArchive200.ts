@@ -5,11 +5,11 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { GetOwnerBookingArchive200BookingsItem } from './getOwnerBookingArchive200BookingsItem';
 import type { GetOwnerBookingArchive200RescheduleLogItem } from './getOwnerBookingArchive200RescheduleLogItem';
+import type { OwnerPropertyBooking } from './ownerPropertyBooking';
 
 export type GetOwnerBookingArchive200 = {
-  bookings: GetOwnerBookingArchive200BookingsItem[];
+  bookings: OwnerPropertyBooking[];
   rescheduleLog: GetOwnerBookingArchive200RescheduleLogItem[];
   total: number;
   page: number;

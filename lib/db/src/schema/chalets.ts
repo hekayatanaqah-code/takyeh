@@ -258,6 +258,7 @@ export const ownerBookingsTable = pgTable("owner_bookings", {
   clientName: text("client_name").notNull(),
   clientPhone: text("client_phone"),
   bookingDate: text("booking_date").notNull(),
+  checkoutAt: timestamp("checkout_at", { withTimezone: true }),
   durationDays: integer("duration_days").notNull().default(1),
   period: text("period"),
   source: bookingSourceEnum("source").notNull().default("platform"),

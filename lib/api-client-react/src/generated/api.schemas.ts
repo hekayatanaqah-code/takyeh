@@ -5,6 +5,21 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface OwnerPropertyBooking {
+  id: number;
+  bookingDate: string;
+  /** @minimum 1 */
+  durationDays: number;
+  /** @nullable */
+  period?: string | null;
+  /**
+     * Immutable departure captured on creation or actual rescheduling. Legacy null uses midnight after the last occupied Saudi day, never current property settings.
+     * @nullable
+     */
+  readonly checkoutAt: string | null;
+  [key: string]: unknown;
+ }
+
 export type OwnerLedgerTransactionType = typeof OwnerLedgerTransactionType[keyof typeof OwnerLedgerTransactionType];
 
 
@@ -2093,12 +2108,10 @@ export const GetOwnerBookingArchiveExport = {
   NUMBER_1: '1',
 } as const;
 
-export type GetOwnerBookingArchive200BookingsItem = { [key: string]: unknown };
-
 export type GetOwnerBookingArchive200RescheduleLogItem = { [key: string]: unknown };
 
 export type GetOwnerBookingArchive200 = {
-  bookings: GetOwnerBookingArchive200BookingsItem[];
+  bookings: OwnerPropertyBooking[];
   rescheduleLog: GetOwnerBookingArchive200RescheduleLogItem[];
   total: number;
   page: number;

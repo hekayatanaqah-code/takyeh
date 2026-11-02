@@ -32,25 +32,21 @@ export function crmTimeMinutes(value: SQL): SQL {
 }
 
 export function crmPropertyCheckout(now: Date): SQL {
-  // Live property times win as a whole, matching propertyStayComplete().
-  const time = (suffix: "in" | "out") => {
-    const column = (name: string) => sql.raw(`CASE WHEN c.id IS NOT NULL THEN c.${name} ELSE s.${name} END`);
-    return crmTimeMinutes(sql`coalesce(nullif(CASE b.period
-      WHEN 'morning' THEN ${column(`morning_check_${suffix}`)}
-      WHEN 'evening' THEN ${column(`evening_check_${suffix}`)}
-      ELSE ${column(`full_day_check_${suffix}`)} END, ''), ${column(`check_${suffix}_time`)})`);
-  };
+  // Pinned departure; unpinned legacy rows use the conservative calendar end.
+  // Build only from validated numeric parts, then reject Gregorian rollover
+  // (e.g. February 30). Never cast untrusted legacy booking_date text to date.
   return sql`
     LEFT JOIN chalet_submissions s ON s.id = b.submission_id
-    LEFT JOIN LATERAL (SELECT * FROM chalets WHERE submission_id = b.submission_id ORDER BY id LIMIT 1) c ON true
-    CROSS JOIN LATERAL (SELECT ${time("in")} AS arrival, ${time("out")} AS departure) timing
+    CROSS JOIN LATERAL (SELECT regexp_match(b.booking_date,
+      '^([0-9]{4})-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$') AS parts) date_parts
+    CROSS JOIN LATERAL (SELECT CASE WHEN (parts[1])::int > 0
+      THEN make_date((parts[1])::int, (parts[2])::int, 1) + (parts[3])::int - 1
+      END AS candidate_day) calendar
     CROSS JOIN LATERAL (SELECT
-      (b.booking_date::date::timestamp AT TIME ZONE 'Asia/Riyadh') +
-      CASE WHEN timing.departure IS NULL THEN greatest(1, coalesce(b.duration_days, 1)) * interval '1 day'
-      ELSE (greatest(1, coalesce(b.duration_days, 1)) - 1 +
-        CASE WHEN timing.arrival IS NOT NULL THEN (timing.departure <= timing.arrival)::int
-          ELSE (b.period IS DISTINCT FROM 'morning' AND timing.departure < 720)::int END) * interval '1 day'
-        + timing.departure * interval '1 minute' END AS checkout_at,
+      coalesce(b.checkout_at, CASE WHEN to_char(candidate_day, 'YYYY-MM-DD') = b.booking_date
+        THEN (candidate_day::timestamp AT TIME ZONE 'Asia/Riyadh') +
+          greatest(1, coalesce(b.duration_days, 1)) * interval '1 day'
+        ELSE 'infinity'::timestamptz END) AS checkout_at,
       ${now.toISOString()}::timestamptz AS observed_at) stay`;
 }
 

@@ -80,7 +80,7 @@ export function BookingCalendarTab({
     return () => { window.clearInterval(timer); clearTimeout(midnightTimer); window.removeEventListener("focus", tick); };
   }, []);
   const bookingIsComplete = (booking: OwnerBooking) => isStayComplete(
-    booking, ownerChalets.find((chalet: any) => chalet.submissionId === booking.submissionId), stayClock,
+    { ...booking, checkoutAt: booking.checkoutAt ?? null }, undefined, stayClock,
   );
   const [prefilledDate, setPrefilledDate] = useState<string | null>(null);
   const [prefilledPeriod, setPrefilledPeriod] = useState<string | null>(null);

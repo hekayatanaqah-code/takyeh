@@ -2,6 +2,28 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { bookingCheckoutAt, isStayComplete, timeMinutes, bookingCalendarEndAt, isBookingCalendarComplete } from "@workspace/booking-time";
 
+test("pinned departure ignores later property edits in both eligibility directions", () => {
+  const booking = { bookingDate: "2026-10-16", period: "morning", checkoutAt: "2026-10-16T16:00:00+03:00" };
+  for (const times of [
+    { morningCheckIn: "٦ ص", morningCheckOut: "٨ ص" },
+    { morningCheckIn: "٦ ص", morningCheckOut: "١١ م" },
+    {},
+  ]) {
+    assert.equal(bookingCheckoutAt(booking, times), Date.parse(booking.checkoutAt));
+    assert.equal(isStayComplete(booking, times, Date.parse("2026-10-16T15:00:00+03:00")), false);
+    assert.equal(isStayComplete(booking, times, Date.parse("2026-10-16T17:00:00+03:00")), true);
+    assert.equal(isBookingCalendarComplete(booking, Date.parse("2026-10-16T17:00:00+03:00")), false);
+  }
+  assert.equal(bookingCheckoutAt({ ...booking, checkoutAt: new Date(booking.checkoutAt) }), Date.parse(booking.checkoutAt));
+});
+
+test("null legacy pins never adopt live times; invalid pins fail closed", () => {
+  const booking = { bookingDate: "2026-10-16", durationDays: 2, checkoutAt: null };
+  assert.equal(bookingCheckoutAt(booking, { checkOutTime: "٨ ص" }), Date.parse("2026-10-18T00:00:00+03:00"));
+  assert.equal(isStayComplete({ ...booking, checkoutAt: "broken" }), false);
+  assert.equal(isStayComplete({ ...booking, bookingDate: "2026-02-30" }), false);
+});
+
 test("active list archives only after the final Saudi calendar day ends", () => {
   const booking = { bookingDate: "2026-10-30", durationDays: 1, period: "morning" };
   const end = Date.parse("2026-10-31T00:00:00+03:00");
