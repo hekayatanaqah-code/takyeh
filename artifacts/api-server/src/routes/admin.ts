@@ -2173,15 +2173,39 @@ router.patch("/settings", requirePlatformSettingsAdmin, async (req, res) => {
   const body = z.record(z.string(), z.string()).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
   if ("photography_enabled" in body.data) {
-    return res.status(400).json({ error: "غيّر حالة التصوير من قسم خدمات الملاك لضمان مزامنة البطاقة والحجز" });
+    // Older clients echo the full GET response, including this read-only flag.
+    // Accept an unchanged echo, but never change its dedicated lifecycle here.
+    const [current] = await db.select({ value: siteSettingsTable.value })
+      .from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled"));
+    if (body.data.photography_enabled !== (current?.value ?? "false")) {
+      return res.status(400).json({ error: "غيّر حالة التصوير من قسم خدمات الملاك لضمان مزامنة البطاقة والحجز" });
+    }
   }
-  for (const [key, value] of Object.entries(body.data)) {
-    await db
-      .insert(siteSettingsTable)
-      .values({ key, value, updatedAt: new Date() })
-      .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value, updatedAt: new Date() } });
+  const entries = Object.entries(body.data).filter(([key]) => key !== "photography_enabled");
+  if (!entries.length) return res.json({ ok: true, settings: {} });
+  try {
+    const saved = await db.transaction(async (tx) => {
+      const updatedAt = new Date();
+      await tx.insert(siteSettingsTable)
+        .values(entries.map(([key, value]) => ({ key, value, updatedAt })))
+        .onConflictDoUpdate({
+          target: siteSettingsTable.key,
+          set: { value: sql`excluded.value`, updatedAt: sql`excluded.updated_at` },
+        });
+      const rows = await tx.select({ key: siteSettingsTable.key, value: siteSettingsTable.value })
+        .from(siteSettingsTable)
+        .where(inArray(siteSettingsTable.key, entries.map(([key]) => key)));
+      const settings = Object.fromEntries(rows.map(({ key, value }) => [key, value]));
+      if (entries.some(([key, value]) => settings[key] !== value)) {
+        throw new Error("Settings read-back verification failed");
+      }
+      return settings;
+    });
+    return res.json({ ok: true, settings: saved });
+  } catch (err) {
+    logger.error({ errorName: err instanceof Error ? err.name : "unknown" }, "Failed to save general settings transaction");
+    return res.status(500).json({ error: "تعذر حفظ الإعدادات؛ لم تُحفظ أي تغييرات. يرجى إعادة المحاولة." });
   }
-  return res.json({ ok: true });
 });
 
 /* ── Smart admin dashboard ───────────────────────────────────

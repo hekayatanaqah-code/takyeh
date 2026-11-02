@@ -79,6 +79,24 @@ function apiFetch(path: string, opts?: RequestInit) {
   }); 
 } 
 
+async function persistGeneralSettings(data: Record<string, string>): Promise<Record<string, string>> {
+  // Photography status belongs to its dedicated owner-services workflow.
+  const editable = Object.fromEntries(Object.entries(data).filter(([key]) => key !== "photography_enabled"));
+  const response = await apiFetch("/admin/settings", { method: "PATCH", body: JSON.stringify(editable) });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || result?.ok !== true) {
+    throw new Error(typeof result?.error === "string" ? result.error : "تعذر حفظ الإعدادات. يرجى إعادة المحاولة.");
+  }
+  if (!result.settings || Object.entries(editable).some(([key, value]) => result.settings[key] !== value)) {
+    throw new Error("لم يؤكد الخادم حفظ القيم المطلوبة. يرجى التحقق وإعادة المحاولة.");
+  }
+  return result.settings;
+}
+
+function notifySettingsSaveError(error: Error) {
+  toast({ title: "لم يتم تأكيد الحفظ", description: error.message, variant: "destructive" });
+}
+
 export const PRESET_COLORS = ["#d97706", "#16a34a", "#2563eb", "#9333ea", "#dc2626", "#0891b2", "#c2410c", "#0f766e"];
 
 async function uploadSettingImage(file: File): Promise<string | null> {
@@ -190,16 +208,19 @@ function SettingsTab() {
 
   const saveSettings = useMutation({
     mutationFn: async (data: Record<string, string>) => {
-      const r = await apiFetch("/admin/settings", { method: "PATCH", body: JSON.stringify(data) });
-      if (!r.ok) throw new Error("فشل الحفظ");
+      setSaved(false);
+      const changed = Object.fromEntries(Object.entries(data).filter(([key, value]) => value !== settings?.[key]));
+      return persistGeneralSettings(changed);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "settings"] });
       qc.invalidateQueries({ queryKey: ["siteSettings"] });
       qc.invalidateQueries({ queryKey: ["page-content"] });
       setSaved(true);
+      toast({ title: "تم الحفظ بنجاح", description: "تم تأكيد حفظ الإعدادات في قاعدة البيانات." });
       setTimeout(() => setSaved(false), 2500);
     },
+    onError: notifySettingsSaveError,
   });
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -867,18 +888,17 @@ function TermsManagementTab() {
 
   const saveMutation = useMutation({
     mutationFn: async (text: string) => {
-      const r = await apiFetch("/admin/settings", {
-        method: "PATCH",
-        body: JSON.stringify({ terms_page_content: text }),
-      });
-      if (!r.ok) throw new Error("فشل الحفظ");
+      setSaved(false);
+      return persistGeneralSettings({ terms_page_content: text });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "settings"] });
       qc.invalidateQueries({ queryKey: ["page-content"] });
       setSaved(true);
+      toast({ title: "تم الحفظ بنجاح", description: "تم تأكيد حفظ النص في قاعدة البيانات." });
       setTimeout(() => setSaved(false), 3000);
     },
+    onError: notifySettingsSaveError,
   });
 
   if (isLoading) {
@@ -1062,12 +1082,17 @@ function CommunicationSettingsTab() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: Record<string, string>) => {
-      const r = await apiFetch("/admin/settings", { method: "PATCH", body: JSON.stringify(data) });
-      if (!r.ok) throw new Error("فشل الحفظ");
+      setSaved(null);
+      const changed = Object.fromEntries(Object.entries(data).filter(([key, value]) => value !== settings?.[key]));
+      return persistGeneralSettings(changed);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "settings"] });
+      qc.invalidateQueries({ queryKey: ["siteSettings"] });
+      qc.invalidateQueries({ queryKey: ["page-content"] });
+      toast({ title: "تم الحفظ بنجاح", description: "تم تأكيد حفظ إعدادات التواصل في قاعدة البيانات." });
     },
+    onError: notifySettingsSaveError,
   });
 
   function saveSection(keys: string[], label: string) {
