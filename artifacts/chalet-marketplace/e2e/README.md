@@ -33,3 +33,35 @@ The service save test exercises the actual form and navigation from an already
 authenticated synthetic owner session with a stateful mock API, not login,
 backend persistence or approval. It deliberately stops before any payment,
 messaging or administrative write.
+
+## Connection recovery regression tests
+
+```sh
+pnpm --filter @workspace/chalet-marketplace typecheck:e2e
+pnpm --filter @workspace/chalet-marketplace test:e2e:connection
+```
+
+Both Chromium projects run the same six cases at desktop (1440×900) and
+touch/mobile (390×844) sizes. This is viewport/touch coverage, not a claim of
+Safari/WebKit coverage. The existing release-gate workflow runs both projects.
+
+The Vite-only `e2e/fixtures/connection.html` entry mounts the **real AppStatus,
+installed connection monitor and React Query** with a controlled synthetic form.
+It loads the production status stylesheet and logo. It is not a production app
+route or a production build entry. This suite tests the shared connection
+behavior, not a specific business form, authentication or a real payment gateway.
+
+Browser-context offline/online changes are combined with network-route failures:
+Playwright-fulfilled routes can otherwise succeed even while the context is
+offline. The strict fixture blocks unknown APIs and external traffic; only
+synthetic reads, health probes and synthetic save/payment POSTs are handled.
+Write failures model a received request whose response was lost. Assertions
+cover the brand/message, full viewport overlay, inert background, unchanged
+controlled values, no reload, restored focus and continued typing, reachability
+before recovery, one read retry, cancellation both during slow reads and while
+waiting offline, and no duplicate writes after a full probe interval.
+
+No database rows, storage objects, real payment operations, user settings or
+photography configuration are used. Teardown releases delayed handlers, resets
+offline mode, clears cookies and closes the context, discarding all synthetic
+form/query/mutation state even after failed assertions.

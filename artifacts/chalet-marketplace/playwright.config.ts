@@ -23,12 +23,28 @@ export default defineConfig({
     },
     {
       name: "webkit-iphone",
-      testIgnore: /owner-empty-state\.spec\.ts/,
+      testIgnore: /(?:owner-empty-state|connection-recovery)\.spec\.ts/,
       use: {
         ...devices["iPhone 13"],
         browserName: "webkit",
       },
     },
+    ...[
+      { name: "connection-desktop", viewport: { width: 1440, height: 900 }, isMobile: false, hasTouch: false },
+      { name: "connection-mobile", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    ].map(({ name, ...device }) => ({
+      name,
+      testMatch: /connection-recovery\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        ...device,
+        browserName: "chromium" as const,
+        serviceWorkers: "block" as const,
+        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+          : undefined,
+      },
+    })),
   ],
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined

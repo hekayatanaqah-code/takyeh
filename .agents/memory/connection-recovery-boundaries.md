@@ -19,3 +19,9 @@ Edit-service forms must hydrate once per request identity, after the saved regio
 **Why:** Reinitializing from changing query dependencies caused an infinite update loop with an unloaded city catalog and could overwrite unsaved edits when the region changed.
 
 **How to apply:** Use stable empty query fallbacks, a per-request initialization guard, and load dependent location data before the initial form fill. Do not remove necessary effect dependencies to suppress the loop.
+
+In browser network tests, context offline mode does not by itself fail Playwright-intercepted requests that are fulfilled by the test.
+
+**Why:** Route fulfillment bypasses the browser's normal network transport; an apparently offline test can still return successful synthetic reads and health checks.
+
+**How to apply:** Combine real browser offline/online transitions with explicit transport failures or unavailable health responses in the synthetic network. Require a successful reachability probe before asserting recovery. Keep all writes intercepted so duplicate-attempt assertions cannot cause real saves or charges.
