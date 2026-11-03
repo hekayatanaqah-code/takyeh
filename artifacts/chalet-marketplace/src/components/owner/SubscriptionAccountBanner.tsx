@@ -14,6 +14,7 @@ export type DashboardSubscription = {
   plan: string;
   status: string;
   expiresAt: string | null;
+  trialStartedAt?: string | null;
   paymentStatus: string;
   reminderPreviewMilestone?: 3 | 0;
   freeAccess?: {
@@ -41,6 +42,7 @@ export function isSubscriptionExpiryWarning(subscription: DashboardSubscription 
 }
 
 export type OwnerPlanLimits = {
+  canSubmitActivities?: boolean;
   plan: string;
   active?: boolean;
   scope?: "full" | "property";
@@ -100,7 +102,7 @@ export function SubscriptionAccountBanner({
       }`}>
         {subscription.freeAccess?.active
           ? "مجاني بالكامل ✓"
-          : ({ active: "نشط ✓", trial: "تجريبي", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status)}
+          : ({ active: "نشط ✓", trial: "تجريبي", pending_activation: "بانتظار تفعيل أول نشاط", expired: "منتهي", suspended: "موقوف" }[subscription.status] ?? subscription.status)}
       </span>
       {subscription.freeAccess?.active ? (
         <span className="text-xs font-medium text-emerald-800 dark:text-emerald-200">
@@ -108,6 +110,8 @@ export function SubscriptionAccountBanner({
             ? `الصلاحية حتى ${formatDateWithHijri(subscription.freeAccess.expiresAt)}`
             : "الصلاحية مفتوحة"}
         </span>
+      ) : subscription.status === "pending_activation" ? (
+        <span className="text-sm font-medium text-foreground">تبدأ التجربة المجانية لمدة ٣٠ يوماً عند قبول الإدارة وتفعيل أول عقار أو خدمة.</span>
       ) : days !== null && (
         <span className={`text-xs font-medium ${days < 7 ? "text-red-600" : "text-muted-foreground"}`}>
           {subscription.status === "expired" ? "جدّد الآن لمواصلة استقبال الحجوزات" : `${toArN(Math.max(0, days))} يوم متبقي`}

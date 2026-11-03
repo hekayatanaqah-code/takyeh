@@ -280,7 +280,7 @@ router.post("/", async (req, res) => {
 
   const ownerAccess = ownerId ? await ownerPlanAccess(ownerId) : null;
   if (ownerAccess) {
-    if (!ownerAccess.active) {
+    if (!ownerAccess.canSubmitActivities) {
       return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة عقار جديد.", upgradeRequired: true });
     }
     if (ownerAccess.chaletCount >= ownerAccess.chaletLimit) {

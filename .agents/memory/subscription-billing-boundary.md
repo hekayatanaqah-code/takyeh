@@ -3,6 +3,12 @@ name: Subscription billing boundary
 description: Billing boundary for recurring extra slots, legacy purchases, and trial continuity.
 ---
 
+The free trial must wait indefinitely before the first activity is accepted and activated by administration. Its month starts at that approval instant, not account creation, login, a settings/catalog lookup, or a background scheduler. Property and service approvals share one account-level trial; later approvals must not restart it or replace paid history.
+
+**Why:** The user explicitly requires the free month to be available for actual operation rather than consumed while an owner awaits approval.
+
+**How to apply:** Preserve first-submission access while awaiting activation. Activate atomically with publication, distinguish waiting from expired in owner/subscription views, and show the activation date rather than account creation as the trial's start.
+
 New additional property or service slots are recurring, prorated through the current base period, and charged alongside the base plan on renewal. Historical one-time purchases keep their original nonrecurring entitlement. Both remain usable only while the base subscription is active. Plan and add-on prices remain editable; a checkout and agreed recurring price keep their quoted terms.
 
 **Why:** The user replaced separate one-time add-on billing with unified renewals, but explicitly kept old one-time purchases grandfathered. Repricing after consent must not silently change an agreed future charge or strip purchased capacity.

@@ -75,6 +75,7 @@ export default function AddServiceProvider() {
 
   const { data: planLimits, isLoading: planLimitsLoading, refetch: refetchPlanLimits } = useQuery<{
     active: boolean;
+    canSubmitActivities?: boolean;
     serviceLimit: number;
     serviceCount: number;
     extraServicePrice: number | string | null;
@@ -89,6 +90,7 @@ export default function AddServiceProvider() {
     staleTime: 0,
     refetchOnMount: "always",
   });
+  const canRegisterService = planLimits?.active === true || planLimits?.canSubmitActivities === true;
   const serviceLimitReached = !!planLimits &&
     planLimits.serviceCount >= planLimits.serviceLimit;
 
@@ -443,7 +445,7 @@ export default function AddServiceProvider() {
     // Existing service submissions remain editable; entitlement is checked
     // only when creating another service.
     if (!editSubmissionId && isAuthenticated && !planLimitsLoading && planLimits) {
-      if (!planLimits.active) {
+      if (!canRegisterService) {
         setSubmitError("انتهى اشتراكك. جدّد الاشتراك قبل إضافة خدمة جديدة.");
         setShowQuotaAction(true);
         return;
@@ -642,13 +644,13 @@ export default function AddServiceProvider() {
              <p className="text-muted-foreground">{editSubmissionId ? "حدّث بيانات الطلب ثم أعد إرساله للمراجعة" : "أضف خدمتك وابدأ الوصول لعملاء جدد"}</p>
           </motion.div>
 
-          {!editSubmissionId && planLimits && (serviceLimitReached || !planLimits.active) && (
+          {!editSubmissionId && planLimits && (serviceLimitReached || !canRegisterService) && (
             <div role="status" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
               <p className="font-semibold">
-                {!planLimits.active ? "انتهى اشتراكك" : "وصلت إلى الحد الأقصى للخدمات في باقتك"}
+                {!canRegisterService ? "انتهى اشتراكك" : "وصلت إلى الحد الأقصى للخدمات في باقتك"}
               </p>
               <p className="mt-1">
-                {!planLimits.active
+                {!canRegisterService
                   ? "جدّد الاشتراك لاستعادة صلاحية إضافة الخدمات."
                   : planLimits.extraServicePrice != null
                     ? `يمكنك شراء مساحة خدمة إضافية لمرة واحدة مقابل ${toAr(Number(planLimits.extraServicePrice))} ⃁`
@@ -659,11 +661,11 @@ export default function AddServiceProvider() {
                 size="sm"
                 className="mt-3"
                 onClick={() => {
-                  if (!planLimits.active) navigate("/subscription");
+                  if (!canRegisterService) navigate("/subscription");
                   else setShowAddonPayment(true);
                 }}
               >
-                {!planLimits.active
+                {!canRegisterService
                   ? "تجديد الاشتراك"
                   : "إضافة عقار أو خدمة"}
               </Button>
@@ -1362,11 +1364,11 @@ export default function AddServiceProvider() {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  if (planLimits?.active === false) navigate("/subscription");
+                  if (planLimits?.active === false && !planLimits.canSubmitActivities) navigate("/subscription");
                   else setShowAddonPayment(true);
                 }}
               >
-                {planLimits?.active === false
+                {planLimits?.active === false && !planLimits.canSubmitActivities
                   ? "تجديد الاشتراك"
                   : "إضافة عقار أو خدمة"}
               </Button>

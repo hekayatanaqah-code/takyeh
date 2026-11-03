@@ -8,19 +8,17 @@ import {
   chaletSubmissionsTable,
   serviceProviderSubmissionsTable,
 } from "@workspace/db/schema";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 const DEFAULT_TRIAL_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function initialTrialSubscriptionState(
-  enabled: boolean,
-  trialDays = DEFAULT_TRIAL_DAYS,
-  now = new Date(),
+  _enabled: boolean,
+  _trialDays = DEFAULT_TRIAL_DAYS,
+  _now = new Date(),
 ) {
-  return enabled
-    ? { status: "active", expiresAt: new Date(now.getTime() + trialDays * DAY_MS) }
-    : { status: "expired", expiresAt: now };
+  return { status: "pending_activation", expiresAt: null as Date | null };
 }
 
 const LEGACY_LIMITS: Record<string, { chalets: number; services: number; scope: "property" | "full" }> = {
@@ -158,37 +156,55 @@ export function preferredOwnerSubscription<T extends {
   })[0];
 }
 
-export async function getOrStartOwnerSubscription(ownerId: string) {
-  const keys = await subscriptionOwnerKeys(ownerId);
-  const existing = await db.select().from(ownerSubscriptionsTable)
+type SubscriptionWriter = Pick<typeof db, "select" | "insert" | "update" | "execute">;
+
+async function pendingOwnerSubscription(tx: SubscriptionWriter, keys: string[]) {
+  const existing = await tx.select().from(ownerSubscriptionsTable)
     .where(inArray(ownerSubscriptionsTable.ownerId, keys));
   // Paid/manual history must take precedence over a trial on another alias,
   // including when the paid subscription has expired.
   const sub = preferredOwnerSubscription(existing);
   if (sub) return sub;
 
-  // Older owner accounts without a subscription receive one persisted trial, not a new
-  // 30-day trial on each page load. New accounts begin on their first authenticated visit.
-  const [trialPlan] = await db.select({
-    trialDays: subscriptionPlansTable.trialDays,
-    isActive: subscriptionPlansTable.isActive,
-  })
-    .from(subscriptionPlansTable).where(eq(subscriptionPlansTable.slug, "trial")).limit(1);
-  const trialDays = trialPlan?.trialDays ?? DEFAULT_TRIAL_DAYS;
-  const trialState = initialTrialSubscriptionState(trialPlan?.isActive ?? false, trialDays);
-  const [created] = await db.insert(ownerSubscriptionsTable).values({
-    ownerId: keys.at(-1)!,
+  const trialState = initialTrialSubscriptionState(true);
+  const [created] = await tx.insert(ownerSubscriptionsTable).values({
+    ownerId: [...keys].sort()[0],
     plan: "trial",
     status: trialState.status,
     paymentStatus: "free",
     expiresAt: trialState.expiresAt,
-    billingCycleDays: trialDays,
+    billingCycleDays: DEFAULT_TRIAL_DAYS,
   }).onConflictDoNothing().returning();
   if (created) return created;
-  const [concurrent] = await db.select().from(ownerSubscriptionsTable)
+  const [concurrent] = await tx.select().from(ownerSubscriptionsTable)
     .where(inArray(ownerSubscriptionsTable.ownerId, keys)).limit(1);
   if (!concurrent) throw new Error("Failed to initialize owner subscription");
   return concurrent;
+}
+
+/** Reading/registering an account never starts its free-trial clock. */
+export async function getOrStartOwnerSubscription(ownerId: string) {
+  const keys = await subscriptionOwnerKeys(ownerId);
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${[...keys].sort()[0]}))`);
+    return pendingOwnerSubscription(tx, keys);
+  });
+}
+
+/** Called in the same transaction that approves and publishes the first activity. */
+export async function activateOwnerTrial(ownerId: string, tx: SubscriptionWriter, now?: Date) {
+  const keys = await subscriptionOwnerKeys(ownerId);
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${[...keys].sort()[0]}))`);
+  const sub = await pendingOwnerSubscription(tx, keys);
+  if (sub.plan !== "trial" || sub.status !== "pending_activation" || sub.trialStartedAt) return sub;
+  const activatedAt = now ?? new Date();
+  const [activated] = await tx.update(ownerSubscriptionsTable).set({
+    status: "active",
+    trialStartedAt: activatedAt,
+    expiresAt: new Date(activatedAt.getTime() + DEFAULT_TRIAL_DAYS * DAY_MS),
+    billingCycleDays: DEFAULT_TRIAL_DAYS,
+  }).where(and(eq(ownerSubscriptionsTable.id, sub.id), eq(ownerSubscriptionsTable.status, "pending_activation"))).returning();
+  return activated ?? sub;
 }
 
 export function isSubscriptionActive(sub: { status: string; expiresAt: Date | null }, now = new Date()) {
@@ -228,6 +244,7 @@ export async function ownerPlanAccess(ownerId: string) {
   return {
     subscription: sub,
     active: !!freeAccess?.active || isSubscriptionActive(sub),
+    canSubmitActivities: !!freeAccess?.active || isSubscriptionActive(sub) || sub.status === "pending_activation",
     freeAccess,
     scope: freeAccess?.active ? "full" as const : sub.plan === "trial" ? "full" as const : (terms?.scope ?? legacy.scope),
     chaletLimit: baseChaletLimit + purchasedChaletSlots,

@@ -341,7 +341,7 @@ router.post("/submit", requireAuth, async (req: any, res) => {
 
   const data = parsed.data;
   const access = await ownerPlanAccess(req.user.id);
-  if (!access.active) {
+  if (!access.canSubmitActivities) {
     return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة خدمة جديدة.", upgradeRequired: true });
   }
   if (access.serviceCount >= access.serviceLimit) {

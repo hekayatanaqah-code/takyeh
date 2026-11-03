@@ -7,15 +7,15 @@ import {
   latestOwnerFreeAccessForKeys,
 } from "./subscription-access";
 
-test("new owners receive a 30-day trial only while the trial plan is enabled", () => {
+test("account creation never starts or expires a trial, even without an enabled catalog plan", () => {
   const now = new Date("2025-01-01T00:00:00.000Z");
   const enabled = initialTrialSubscriptionState(true, 30, now);
-  assert.equal(enabled.status, "active");
-  assert.equal(enabled.expiresAt.toISOString(), "2025-01-31T00:00:00.000Z");
+  assert.equal(enabled.status, "pending_activation");
+  assert.equal(enabled.expiresAt, null);
 
   const disabled = initialTrialSubscriptionState(false, 30, now);
-  assert.equal(disabled.status, "expired");
-  assert.equal(disabled.expiresAt, now);
+  assert.equal(disabled.status, "pending_activation");
+  assert.equal(disabled.expiresAt, null);
 });
 
 test("the latest free-access grant supersedes an earlier indefinite grant, including by insertion id", () => {

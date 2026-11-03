@@ -275,8 +275,7 @@ export default function Dashboard() {
       return r.json();
     },
     enabled: isAuthenticated || isImpersonating,
-    refetchInterval: (query) =>
-      (query.state.data as DashboardSubscription | null)?.reminderPreviewMilestone !== undefined ? 30_000 : false,
+    refetchInterval: 15000,
   });
   const freeAccess = subscription?.freeAccess?.active
     ? subscription.freeAccess
@@ -337,10 +336,10 @@ export default function Dashboard() {
   /* Cross-owner logic: user has BOTH chalets AND service providers */
   const isCrossOwner = (ownerChalets?.length ?? 0) > 0 && myApprovedProviders.length > 0;
   const headerAtChaletLimit = planLimits
-    ? planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit
+    ? (planLimits.active === false && !planLimits.canSubmitActivities) || planLimits.chaletCount >= planLimits.chaletLimit
     : false;
   const atServiceLimit = planLimits
-    ? planLimits.active === false || (planLimits.serviceCount ?? myServiceSubmissions.length + myApprovedProviders.length) >= planLimits.serviceLimit
+    ? (planLimits.active === false && !planLimits.canSubmitActivities) || (planLimits.serviceCount ?? myServiceSubmissions.length + myApprovedProviders.length) >= planLimits.serviceLimit
     : false;
 
   useEffect(() => {
@@ -398,7 +397,7 @@ export default function Dashboard() {
       if (planLimitsError) void retryPlanLimits();
       return;
     }
-    if (planLimits.active === false) { navigate("/subscription"); return; }
+    if (planLimits.active === false && !planLimits.canSubmitActivities) { navigate("/subscription"); return; }
     if (kind === "chalet" ? headerAtChaletLimit : atServiceLimit) { setShowHeaderAddon(kind); return; }
     navigate(kind === "chalet" ? "/add-chalet" : "/add-service-provider");
   }
@@ -1019,7 +1018,7 @@ export default function Dashboard() {
                       <DropdownMenuItem
                         data-testid="menu-add-chalet"
                         className="cursor-pointer"
-                        onSelect={() => planLimits?.active === false
+                        onSelect={() => planLimits?.active === false && !planLimits.canSubmitActivities
                           ? navigate("/subscription")
                           : headerAtChaletLimit ? setShowHeaderAddon("chalet") : navigate("/add-chalet")}
                       >
@@ -1030,7 +1029,7 @@ export default function Dashboard() {
                       <DropdownMenuItem
                         data-testid="menu-add-service"
                         className="cursor-pointer"
-                        onSelect={() => planLimits?.active === false
+                        onSelect={() => planLimits?.active === false && !planLimits.canSubmitActivities
                           ? navigate("/subscription")
                           : atServiceLimit ? setShowHeaderAddon("service") : navigate("/add-service-provider")}
                       >

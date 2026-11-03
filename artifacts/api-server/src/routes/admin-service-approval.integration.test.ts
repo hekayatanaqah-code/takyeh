@@ -5,11 +5,15 @@ import { after, before, describe, it } from "node:test";
 import { eq } from "drizzle-orm";
 import app from "../app";
 import { createSession } from "../lib/auth";
+import { getOrStartOwnerSubscription } from "../lib/subscription-access";
 import {
   db,
   pool,
   serviceProviderSubmissionsTable,
   serviceProvidersTable,
+  ownerSubscriptionsTable,
+  chaletSubmissionsTable,
+  chaletsTable,
   sessionsTable,
 } from "@workspace/db";
 
@@ -18,6 +22,8 @@ let baseUrl: string;
 let sessionId: string;
 const submissionIds: number[] = [];
 const providerIds: number[] = [];
+const trialOwnerIds: string[] = [];
+const propertySubmissionIds: number[] = [];
 const originalAdminUserId = process.env.ADMIN_USER_ID;
 const testAdminId = `service-approval-admin-${randomUUID()}`;
 
@@ -44,6 +50,7 @@ async function createSubmission() {
     })
     .returning();
   submissionIds.push(submission.id);
+  trialOwnerIds.push(submission.ownerId!);
   return submission;
 }
 
@@ -78,11 +85,66 @@ before(async () => {
   baseUrl = await listen(server);
 });
 
+it("property approval starts the shared clock and subsequent service approval preserves it", async () => {
+  const ownerId = `property-approval-owner-${randomUUID()}`;
+  trialOwnerIds.push(ownerId);
+  const [property] = await db.insert(chaletSubmissionsTable).values({
+    ownerId, nameAr: "عقار تحقق مؤقت", whatsappNumber: "0500000000",
+    location: "بريدة", descriptionAr: "تحقق معزول من تفعيل التجربة", pricePerNight: "100",
+  }).returning();
+  propertySubmissionIds.push(property.id);
+  const pending = await getOrStartOwnerSubscription(ownerId);
+  assert.equal(pending.status, "pending_activation");
+  assert.equal(pending.expiresAt, null);
+  const response = await fetch(`${baseUrl}/api/admin/submissions/${property.id}/status`, {
+    method: "PATCH",
+    headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+    body: JSON.stringify({ status: "approved" }),
+  });
+  assert.equal(response.status, 200);
+  const [trial] = await db.select().from(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+  assert.equal(trial.status, "active");
+  assert.ok(trial.trialStartedAt);
+  assert.equal(trial.expiresAt!.getTime() - trial.trialStartedAt.getTime(), 30 * 86_400_000);
+  const service = await createSubmission();
+  await db.update(serviceProviderSubmissionsTable).set({ ownerId }).where(eq(serviceProviderSubmissionsTable.id, service.id));
+  assert.equal((await approve(service.id)).status, 200);
+  const [afterService] = await db.select().from(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+  assert.equal(afterService.trialStartedAt!.getTime(), trial.trialStartedAt.getTime());
+  assert.equal(afterService.expiresAt!.getTime(), trial.expiresAt!.getTime());
+});
+
+it("starts the trial on the actual service approval endpoint and never restarts it", async () => {
+  const submission = await createSubmission();
+  const earliest = Date.now();
+  const response = await approve(submission.id);
+  assert.equal(response.status, 200);
+  const [trial] = await db.select().from(ownerSubscriptionsTable)
+    .where(eq(ownerSubscriptionsTable.ownerId, submission.ownerId!));
+  assert.equal(trial.status, "active");
+  assert.ok(trial.trialStartedAt);
+  assert.ok(trial.trialStartedAt.getTime() >= earliest && trial.trialStartedAt.getTime() <= Date.now());
+  assert.equal(trial.expiresAt!.getTime() - trial.trialStartedAt.getTime(), 30 * 86_400_000);
+  assert.equal((await approve(submission.id)).status, 200);
+  const [again] = await db.select().from(ownerSubscriptionsTable)
+    .where(eq(ownerSubscriptionsTable.ownerId, submission.ownerId!));
+  assert.equal(again.expiresAt!.getTime(), trial.expiresAt!.getTime());
+  assert.equal(again.trialStartedAt!.getTime(), trial.trialStartedAt.getTime());
+});
+
 after(async () => {
+  for (const id of propertySubmissionIds) {
+    await db.delete(chaletsTable).where(eq(chaletsTable.submissionId, id));
+    await db.delete(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, id));
+  }
+  for (const ownerId of trialOwnerIds) {
+    await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+  }
   for (const providerId of providerIds) {
     await db.delete(serviceProvidersTable).where(eq(serviceProvidersTable.id, providerId));
   }
   for (const submissionId of submissionIds) {
+    await db.delete(serviceProvidersTable).where(eq(serviceProvidersTable.submissionId, submissionId));
     await db
       .delete(serviceProviderSubmissionsTable)
       .where(eq(serviceProviderSubmissionsTable.id, submissionId));

@@ -469,6 +469,7 @@ export const ownerSubscriptionsTable = pgTable("owner_subscriptions", {
   renewalPriceHalala: integer("renewal_price_halala"),
   autoRenewEnabled: boolean("auto_renew_enabled").notNull().default(false),
   paymentStatus: text("payment_status").notNull().default("paid"),
+  trialStartedAt: timestamp("trial_started_at", { withTimezone: true }),
   termsSnapshot: jsonb("terms_snapshot").$type<SubscriptionTerms>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => ({

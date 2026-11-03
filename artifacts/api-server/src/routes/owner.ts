@@ -3028,6 +3028,7 @@ router.get("/plan-limits", async (req, res) => {
   return res.json({
     plan: access.subscription.plan,
     active: access.active,
+    canSubmitActivities: access.canSubmitActivities,
     freeAccess: access.freeAccess,
     scope: access.scope,
     chaletLimit: access.chaletLimit,
@@ -3507,14 +3508,14 @@ router.get("/subscription", async (req, res) => {
   return res.json({
     ...sub,
     planDetails: sub.termsSnapshot ?? planDetails ?? null,
-    status: preview || freeAccess?.active ? "active" : isSubscriptionActive(sub) ? sub.status : "expired",
+    status: preview || freeAccess?.active ? "active" : sub.status === "pending_activation" ? sub.status : isSubscriptionActive(sub) ? sub.status : "expired",
     expiresAt: preview ? preview.expiresAt : freeAccess?.active ? freeAccess.expiresAt : sub.expiresAt,
     paidExpiresAt: sub.expiresAt,
     daysLeft: preview
       ? preview.milestone
       : freeAccess?.active
         ? freeAccess.expiresAt ? calcDaysLeft(freeAccess.expiresAt) : null
-        : calcDaysLeft(sub.expiresAt),
+        : sub.status === "pending_activation" ? null : calcDaysLeft(sub.expiresAt),
     freeAccess,
     accountDiscount,
     ...billing,

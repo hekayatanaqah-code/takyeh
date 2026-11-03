@@ -100,6 +100,7 @@ const UNKNOWN_PLAN_META: PlanMeta = {
 };
 
 const STATUS_MAP: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+  pending_activation: { label: "بانتظار تفعيل أول نشاط", cls: "bg-blue-100 text-blue-800", icon: <Clock className="w-3.5 h-3.5" /> },
   active:    { label: "نشط",    cls: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300", icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
   trial:     { label: "تجريبي", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",    icon: <Clock className="w-3.5 h-3.5" /> },
   expired:   { label: "منتهي", cls: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",         icon: <AlertTriangle className="w-3.5 h-3.5" /> },
@@ -131,7 +132,7 @@ export default function SubscriptionPage() {
 
   const { data: sub, isLoading: subLoading } = useQuery<{
     id: number | null; plan: string; status: string; expiresAt: string | null;
-    paymentStatus: string; createdAt: string;
+    paymentStatus: string; createdAt: string; trialStartedAt?: string | null;
     planDetails?: { nameAr: string; features: string[]; scope: string | null } | null;
     recurring?: boolean;
     savedPaymentMethodAvailable?: boolean;
@@ -144,6 +145,7 @@ export default function SubscriptionPage() {
     accountDiscount?: AccountDiscount | null;
   } | null>({
     queryKey: ["owner", "subscription"],
+    refetchInterval: 15000,
     queryFn: async () => {
       const r = await apiFetch("/owner/subscription");
       if (!r.ok) return null;
@@ -259,6 +261,8 @@ export default function SubscriptionPage() {
     ? { label: "مجاني بالكامل", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200", icon: <CheckCircle2 className="w-3.5 h-3.5" /> }
     : STATUS_MAP[sub?.status ?? "active"] ?? STATUS_MAP.active;
   const days = daysUntil(sub?.expiresAt ?? null);
+  const pendingTrial = plan === "trial" && sub?.status === "pending_activation" && !hasFreeAccess;
+  const subscriptionStartedAt = plan === "trial" ? sub?.trialStartedAt : sub?.createdAt;
   const freeAccessEndsAt = freeAccess?.endDate
     ? new Date(`${freeAccess.endDate}T23:59:59+03:00`).toISOString()
     : freeAccess?.expiresAt ?? null;
@@ -326,6 +330,7 @@ export default function SubscriptionPage() {
                 <span className="text-sm font-medium">{hasFreeAccess ? "الاستحقاق الحالي" : "الخطة الحالية"}</span>
               </div>
               <p className="text-3xl font-bold">{hasFreeAccess ? "حساب مجاني شامل" : meta.label}</p>
+              {pendingTrial && <p className="mt-2 text-base font-medium text-white">لم تبدأ تجربتك بعد. تبدأ مدة ٣٠ يوماً من تاريخ ووقت قبول الإدارة وتفعيل أول عقار أو خدمة، وليس من إنشاء الحساب.</p>}
               {hasFreeAccess && <p className="mt-1 text-sm font-medium text-white/90">كامل الصلاحيات دون أي رسوم أو دفع</p>}
               <div className={`inline-flex items-center gap-1.5 mt-3 text-xs font-semibold px-3 py-1 rounded-full bg-white/20`}>
                 {statusInfo.icon}
@@ -333,7 +338,9 @@ export default function SubscriptionPage() {
               </div>
             </div>
             <div className="text-end">
-              {hasFreeAccess ? (
+              {pendingTrial ? (
+                <p className="text-xl font-bold">لم تبدأ بعد</p>
+              ) : hasFreeAccess ? (
                 <p className="text-2xl font-bold opacity-90">{freeAccessEndsAt ? "محددة المدة" : "مفتوحة"}</p>
               ) : days !== null ? (
                 <>
@@ -347,11 +354,11 @@ export default function SubscriptionPage() {
           </div>
 
           {/* Progress bar */}
-          {((hasFreeAccess && entitlementDays !== null && freeAccessStartsAt) || (!hasFreeAccess && days !== null && sub?.createdAt)) && (
+          {((hasFreeAccess && entitlementDays !== null && freeAccessStartsAt) || (!hasFreeAccess && days !== null && subscriptionStartedAt)) && (
             <div className="mt-5">
               {(() => {
                 const expiresAt = hasFreeAccess ? freeAccessEndsAt : sub?.expiresAt;
-                const createdAt = hasFreeAccess ? freeAccessStartsAt : sub?.createdAt;
+                const createdAt = hasFreeAccess ? freeAccessStartsAt : subscriptionStartedAt;
                 if (!expiresAt || !createdAt) return null;
                 const totalMs = new Date(expiresAt).getTime() - new Date(createdAt).getTime();
                 const elapsedMs = Date.now() - new Date(createdAt).getTime();
@@ -366,7 +373,7 @@ export default function SubscriptionPage() {
                 );
               })()}
               <div className="flex justify-between text-xs opacity-70 mt-1">
-                <span>بدأ: {formatDateWithHijri((hasFreeAccess ? freeAccessStartsAt : sub?.createdAt)!)}</span>
+                <span>بدأ: {formatDateWithHijri((hasFreeAccess ? freeAccessStartsAt : subscriptionStartedAt)!)}</span>
                 <span>{hasFreeAccess ? "تنتهي الصلاحية" : "ينتهي الاشتراك"}: {expiryInBothCalendars((hasFreeAccess ? freeAccessEndsAt : sub?.expiresAt)!)}</span>
               </div>
             </div>
@@ -621,14 +628,14 @@ export default function SubscriptionPage() {
             <dd className="font-semibold text-foreground text-end">
               {hasFreeAccess
                 ? freeAccess?.expiresAt ? expiryInBothCalendars(freeAccess.expiresAt) : "مفتوحة"
-                : sub?.expiresAt ? expiryInBothCalendars(sub.expiresAt) : "غير محدد"}
+                : pendingTrial ? "يُحدد عند تفعيل أول نشاط" : sub?.expiresAt ? expiryInBothCalendars(sub.expiresAt) : "غير محدد"}
             </dd>
 
             <dt className="text-muted-foreground">الأيام المتبقية</dt>
             <dd className={`font-bold text-end ${(days ?? 99) < 7 ? "text-red-600" : "text-foreground"}`}>
               {hasFreeAccess
                 ? entitlementDays !== null ? `${Math.max(0, entitlementDays)} يوم` : "مفتوحة"
-                : days !== null ? `${Math.max(0, days)} يوم` : "—"}
+                : pendingTrial ? "لم يبدأ احتسابها بعد" : days !== null ? `${Math.max(0, days)} يوم` : "—"}
             </dd>
 
             <dt className="text-muted-foreground">حالة الدفع</dt>

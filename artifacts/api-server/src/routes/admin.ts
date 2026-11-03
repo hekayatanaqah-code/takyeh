@@ -58,7 +58,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { extractCoordsFromMapsUrl } from "../lib/extractMapCoords";
 import { logger } from "../lib/logger";
-import { getOrStartOwnerSubscription, latestOwnerFreeAccess, subscriptionOwnerKeys } from "../lib/subscription-access";
+import { activateOwnerTrial, getOrStartOwnerSubscription, latestOwnerFreeAccess, subscriptionOwnerKeys } from "../lib/subscription-access";
 import { isArchivedSubscriptionPlan } from "../lib/subscription-defaults";
 import { accountDiscountView, latestDiscountForDisplay, saudiCalendarDate } from "../lib/subscription-discounts";
 import { REMINDER_PREVIEW_PREFIX, getReminderPreview, parseReminderPreview } from "../lib/subscription-reminder-preview";
@@ -922,12 +922,12 @@ router.patch("/submissions/:id/status", requireChaletApprovalsAdmin, async (req,
     }
     if (body.data.status === "approved") {
 
-      updateData.trialEndsAt = subscription?.plan === "trial" ? subscription.expiresAt : null;
-
       /* Extract real GPS coordinates from the owner's Google Maps link */
       const coords = submission.mapsUrl
         ? await extractCoordsFromMapsUrl(submission.mapsUrl)
         : null;
+      const activated = submission.ownerId ? await activateOwnerTrial(submission.ownerId, tx) : null;
+      updateData.trialEndsAt = activated?.plan === "trial" ? activated.expiresAt : null;
 
       const publishedValues = {
         submissionId: submission.id,
@@ -2146,6 +2146,11 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
       }
     }
 
+    if (body.data.status === "approved") {
+      const [approved] = await tx.select({ ownerId: serviceProviderSubmissionsTable.ownerId })
+        .from(serviceProviderSubmissionsTable).where(eq(serviceProviderSubmissionsTable.id, id)).limit(1);
+      if (approved?.ownerId) await activateOwnerTrial(approved.ownerId, tx);
+    }
     await tx
       .update(serviceProviderSubmissionsTable)
       .set(updateData)
@@ -3356,6 +3361,10 @@ router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req
     res.status(400).json({ error: "اختر باقة موجودة في إعدادات الاشتراكات" });
     return;
   }
+  if (plan === "trial") {
+    res.status(400).json({ error: "تبدأ التجربة المجانية تلقائياً عند قبول وتفعيل أول عقار أو خدمة، ولا يمكن بدء مدتها أو تمديدها كمنحة يدوية. استخدم الصلاحية المجانية المستقلة عند الحاجة." });
+    return;
+  }
   const ownerResult = await db.execute<{ owner_id: string }>(sql`
     SELECT owner_id FROM (
       SELECT COALESCE(oal.user_id, 'owner_' || oa.id::text) AS owner_id
@@ -4063,14 +4072,16 @@ router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
     fullDayCheckOut: data.fullDayCheckOut || null,
   };
 
+  const submission = await db.transaction(async (tx) => {
   /* Create submission (already approved) */
-  const [submission] = await db
+  const activated = effectiveOwnerId ? await activateOwnerTrial(effectiveOwnerId, tx) : null;
+  const [submission] = await tx
     .insert(chaletSubmissionsTable)
-    .values(vals)
+    .values({ ...vals, trialEndsAt: activated?.plan === "trial" ? activated.expiresAt : null })
     .returning({ id: chaletSubmissionsTable.id });
 
   /* Auto-create active chalet record */
-  await db.insert(chaletsTable).values({
+  await tx.insert(chaletsTable).values({
     submissionId: submission.id,
     ownerId: effectiveOwnerId,
     nameAr: vals.nameAr,
@@ -4107,6 +4118,8 @@ router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
     isVerified: false,
   }).onConflictDoNothing();
 
+  return submission;
+  });
   return res.status(201).json({ ok: true, submissionId: submission.id });
 });
 
@@ -4199,6 +4212,7 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
       isActive: true,
     });
 
+    if (svcVals.ownerId) await activateOwnerTrial(svcVals.ownerId, tx);
     return createdSubmission;
   });
 
