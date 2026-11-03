@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { adminServiceCityRequestsRouter } from "./admin-service-city-requests";
 import photographyAdminRouter from "./photography-admin";
 import partnerAccountsRouter from "./admin-partner-accounts";
 import ownerServicesAdminRouter from "./owner-services-admin";
@@ -301,7 +302,7 @@ const adminRoutePermissions: Array<[RegExp, AdminPermKey]> = [
   [/^\/(?:owners|applications|partner-accounts)(?:\/|$)/, "userManagement"],
   [/^\/(?:regions|cities|districts|amenities|categories)(?:\/|$)/, "platformSettings"],
   [/^\/(?:services)(?:\/|$)/, "serviceListings"],
-  [/^\/(?:service-categories|service-regions|service-cities|service-districts)(?:\/|$)/, "serviceCatalog"],
+  [/^\/(?:service-categories|service-regions|service-cities|service-districts|service-city-requests)(?:\/|$)/, "serviceCatalog"],
   [/^\/(?:expense-categories|plans)(?:\/|$)/, "financeSettings"],
   [/^\/wa-subscribers(?:\/|$)/, "subscriberManagement"],
 ];
@@ -721,6 +722,7 @@ router.use("/broadcast", requireSuperAdmin, broadcastRouter);
 router.use("/photography", requireSuperAdmin, photographyAdminRouter);
 router.use("/partner-accounts", partnerAccountsRouter);
 router.use("/owner-services", requireSuperAdmin, ownerServicesAdminRouter);
+router.use("/service-city-requests", adminServiceCityRequestsRouter);
 
 router.get("/access-check", (req, res) => {
   if (req.isSuperAdmin) {

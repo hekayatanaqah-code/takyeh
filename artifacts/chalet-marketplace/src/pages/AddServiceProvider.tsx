@@ -138,6 +138,8 @@ export default function AddServiceProvider() {
   const [showCityRequest, setShowCityRequest] = useState(false);
   const [cityRequestInput, setCityRequestInput] = useState("");
   const [cityRequestSent, setCityRequestSent] = useState(false);
+  const [cityRequestPending, setCityRequestPending] = useState(false);
+  const [cityRequestError, setCityRequestError] = useState("");
 
   const [customFeatureTags, setCustomFeatureTags] = useState<string[]>([]);
   const [customFeatureInput, setCustomFeatureInput] = useState("");
@@ -323,19 +325,28 @@ export default function AddServiceProvider() {
 
   const submitCityRequest = async () => {
     const city = cityRequestInput.trim();
-    if (!city) return;
+    if (!city || cityRequestPending) return;
+    setCityRequestPending(true);
+    setCityRequestError("");
     try {
-      await fetch(`${BASE}/api/providers/city-request`, {
+      const response = await fetch(`${BASE}/api/providers/city-request`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ city }),
+        body: JSON.stringify({ city, regionId: regionSelectVal ? Number(regionSelectVal) : undefined }),
         credentials: "include",
       });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || "تعذّر إرسال طلب المدينة؛ حاول مجدداً");
+      }
       setCityRequestSent(true);
       setCityRequestInput("");
       setShowCityRequest(false);
-    } catch {
-      // silent
+    } catch (error) {
+      setCityRequestError(error instanceof Error && /[\u0600-\u06ff]/.test(error.message)
+        ? error.message : "تعذّر إرسال طلب المدينة؛ تحقق من الاتصال وحاول مجدداً");
+    } finally {
+      setCityRequestPending(false);
     }
   };
 
@@ -1078,6 +1089,8 @@ export default function AddServiceProvider() {
                       type="text"
                       placeholder="اسم المدينة المطلوبة"
                       value={cityRequestInput}
+                      maxLength={100}
+                      disabled={cityRequestPending}
                       onChange={(e) => setCityRequestInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submitCityRequest(); } }}
                       className="h-9 text-sm flex-1"
@@ -1086,20 +1099,22 @@ export default function AddServiceProvider() {
                     <button
                       type="button"
                       onClick={submitCityRequest}
-                      disabled={!cityRequestInput.trim()}
+                      disabled={cityRequestInput.trim().length < 2 || cityRequestPending}
                       className="h-9 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
                     >
-                      إرسال
+                      {cityRequestPending ? "جارٍ الإرسال…" : "إرسال"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowCityRequest(false); setCityRequestInput(""); }}
+                      disabled={cityRequestPending}
+                      onClick={() => { setShowCityRequest(false); setCityRequestInput(""); setCityRequestError(""); }}
                       className="h-9 w-9 rounded-xl border border-border flex items-center justify-center hover:bg-muted transition-colors shrink-0"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
                 )}
+                {cityRequestError && <p role="alert" className="mt-2 text-sm font-medium text-red-600 dark:text-red-400">{cityRequestError}</p>}
               </div>
             </motion.div>
 

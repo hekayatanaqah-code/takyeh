@@ -172,6 +172,9 @@ import type {
   ServiceAppointmentPaymentInput,
   ServiceAppointmentRecord,
   ServiceAppointmentUpdate,
+  ServiceCityDecisionInput,
+  ServiceCityRequestInput,
+  ServiceCityRequestRecord,
   ServiceGlobalSeason,
   ServiceSeason,
   SettleStaffHoldingBody,
@@ -218,6 +221,278 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getCreateServiceCityRequestUrl = () => {
+
+
+
+
+  return `/api/providers/city-request`
+}
+
+/**
+ * @summary Request approval of a new service city
+ */
+export const createServiceCityRequest = async (serviceCityRequestInput: ServiceCityRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<ServiceCityRequestRecord> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ServiceCityRequestRecord>(getCreateServiceCityRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(serviceCityRequestInput)
+  }
+);}
+
+
+
+
+
+export const getCreateServiceCityRequestMutationKey = () => ['createServiceCityRequest'] as const;
+
+export const getCreateServiceCityRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createServiceCityRequest>>, TError,CreateServiceCityRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createServiceCityRequest>>, TError,CreateServiceCityRequestMutationVariables, TContext> => {
+
+const mutationKey = getCreateServiceCityRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createServiceCityRequest>>, CreateServiceCityRequestMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createServiceCityRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateServiceCityRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createServiceCityRequest>>>
+    export type CreateServiceCityRequestMutationBody = BodyType<ServiceCityRequestInput>
+    export type CreateServiceCityRequestMutationError = ErrorType<unknown>
+    export type CreateServiceCityRequestMutationVariables = {data: BodyType<ServiceCityRequestInput>}
+
+    /**
+ * @summary Request approval of a new service city
+ */
+export const useCreateServiceCityRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createServiceCityRequest>>, TError,CreateServiceCityRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createServiceCityRequest>>,
+        TError,
+        CreateServiceCityRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateServiceCityRequestMutationOptions(options), queryClient);
+    }
+
+export const getListServiceCityRequestsUrl = () => {
+
+
+
+
+  return `/api/admin/service-city-requests`
+}
+
+/**
+ * @summary Review service city requests
+ */
+export const listServiceCityRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<ServiceCityRequestRecord[]> => {
+
+  return customFetch<ServiceCityRequestRecord[]>(getListServiceCityRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListServiceCityRequestsQueryKey = () => {
+    return [
+    `/api/admin/service-city-requests`
+    ] as const;
+    }
+
+
+export const getListServiceCityRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listServiceCityRequests>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceCityRequests>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListServiceCityRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listServiceCityRequests>>> = ({ signal }) => listServiceCityRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listServiceCityRequests>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListServiceCityRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listServiceCityRequests>>>
+export type ListServiceCityRequestsQueryError = ErrorType<unknown>
+
+
+export function useListServiceCityRequests<TData = Awaited<ReturnType<typeof listServiceCityRequests>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceCityRequests>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listServiceCityRequests>>,
+          TError,
+          Awaited<ReturnType<typeof listServiceCityRequests>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListServiceCityRequests<TData = Awaited<ReturnType<typeof listServiceCityRequests>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceCityRequests>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listServiceCityRequests>>,
+          TError,
+          Awaited<ReturnType<typeof listServiceCityRequests>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListServiceCityRequests<TData = Awaited<ReturnType<typeof listServiceCityRequests>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceCityRequests>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Review service city requests
+ */
+
+export function useListServiceCityRequests<TData = Awaited<ReturnType<typeof listServiceCityRequests>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listServiceCityRequests>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListServiceCityRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewServiceCityRequestUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/service-city-requests/${id}/decision`
+}
+
+export const reviewServiceCityRequest = async (id: number,
+    serviceCityDecisionInput: ServiceCityDecisionInput, options?: Parameters<typeof customFetch>[1]): Promise<ServiceCityRequestRecord> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ServiceCityRequestRecord>(getReviewServiceCityRequestUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(serviceCityDecisionInput)
+  }
+);}
+
+
+
+
+
+export const getReviewServiceCityRequestMutationKey = () => ['reviewServiceCityRequest'] as const;
+
+export const getReviewServiceCityRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewServiceCityRequest>>, TError,ReviewServiceCityRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewServiceCityRequest>>, TError,ReviewServiceCityRequestMutationVariables, TContext> => {
+
+const mutationKey = getReviewServiceCityRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewServiceCityRequest>>, ReviewServiceCityRequestMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reviewServiceCityRequest(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewServiceCityRequestMutationResult = NonNullable<Awaited<ReturnType<typeof reviewServiceCityRequest>>>
+    export type ReviewServiceCityRequestMutationBody = BodyType<ServiceCityDecisionInput>
+    export type ReviewServiceCityRequestMutationError = ErrorType<unknown>
+    export type ReviewServiceCityRequestMutationVariables = {id: number;data: BodyType<ServiceCityDecisionInput>}
+
+    export const useReviewServiceCityRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewServiceCityRequest>>, TError,ReviewServiceCityRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof reviewServiceCityRequest>>,
+        TError,
+        ReviewServiceCityRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReviewServiceCityRequestMutationOptions(options), queryClient);
+    }
 
 export const getListOwnerPropertyBookingsUrl = () => {
 

@@ -9,6 +9,84 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Request approval of a new service city
+ */
+export const createServiceCityRequestBodyCityMin = 2;
+export const createServiceCityRequestBodyCityMax = 100;
+
+
+
+
+export const CreateServiceCityRequestBody = zod.object({
+  "city": zod.string().min(createServiceCityRequestBodyCityMin).max(createServiceCityRequestBodyCityMax),
+  "regionId": zod.number().int().min(1).optional()
+})
+
+export const CreateServiceCityRequestResponse = zod.object({
+  "id": zod.number().int(),
+  "city": zod.string(),
+  "regionId": zod.number().int().nullable(),
+  "regionName": zod.string().nullable(),
+  "requesterName": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reason": zod.string().nullable(),
+  "createdAt": zod.date(),
+  "reviewedAt": zod.date().nullable(),
+  "approvedCityId": zod.number().int().nullable()
+})
+
+
+/**
+ * @summary Review service city requests
+ */
+export const ListServiceCityRequestsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "city": zod.string(),
+  "regionId": zod.number().int().nullable(),
+  "regionName": zod.string().nullable(),
+  "requesterName": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reason": zod.string().nullable(),
+  "createdAt": zod.date(),
+  "reviewedAt": zod.date().nullable(),
+  "approvedCityId": zod.number().int().nullable()
+})
+export const ListServiceCityRequestsResponse = zod.array(ListServiceCityRequestsResponseItem)
+
+
+
+
+
+export const ReviewServiceCityRequestParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+
+export const reviewServiceCityRequestBodyReasonMax = 500;
+
+
+
+export const ReviewServiceCityRequestBody = zod.object({
+  "decision": zod.enum(['approve', 'reject']),
+  "regionId": zod.number().int().min(1).optional(),
+  "reason": zod.string().max(reviewServiceCityRequestBodyReasonMax).optional()
+})
+
+export const ReviewServiceCityRequestResponse = zod.object({
+  "id": zod.number().int(),
+  "city": zod.string(),
+  "regionId": zod.number().int().nullable(),
+  "regionName": zod.string().nullable(),
+  "requesterName": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected']),
+  "reason": zod.string().nullable(),
+  "createdAt": zod.date(),
+  "reviewedAt": zod.date().nullable(),
+  "approvedCityId": zod.number().int().nullable()
+})
+
+
+/**
  * @summary Owner property bookings with immutable departure instants
  */
 

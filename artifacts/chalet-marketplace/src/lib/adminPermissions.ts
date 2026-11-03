@@ -38,6 +38,7 @@ export const ADMIN_TAB_PERMISSION: Record<string, AdminPermKey | "__superadmin__
   expenseCategories:     "financeSettings",
   locations:             "platformSettings",
   serviceLocations:      "serviceCatalog",
+  serviceCityRequests:   "serviceCatalog",
   amenities:             "platformSettings",
   categories:            "platformSettings",
   owners:                "userManagement",

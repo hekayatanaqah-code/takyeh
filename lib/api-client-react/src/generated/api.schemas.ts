@@ -5,6 +5,59 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ServiceCityRequestInput {
+  /**
+     * @minLength 2
+     * @maxLength 100
+     */
+  city: string;
+  /** @minimum 1 */
+  regionId?: number;
+}
+
+export type ServiceCityDecisionInputDecision = typeof ServiceCityDecisionInputDecision[keyof typeof ServiceCityDecisionInputDecision];
+
+
+export const ServiceCityDecisionInputDecision = {
+  approve: 'approve',
+  reject: 'reject',
+} as const;
+
+export interface ServiceCityDecisionInput {
+  decision: ServiceCityDecisionInputDecision;
+  /** @minimum 1 */
+  regionId?: number;
+  /** @maxLength 500 */
+  reason?: string;
+}
+
+export type ServiceCityRequestRecordStatus = typeof ServiceCityRequestRecordStatus[keyof typeof ServiceCityRequestRecordStatus];
+
+
+export const ServiceCityRequestRecordStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface ServiceCityRequestRecord {
+  id: number;
+  city: string;
+  /** @nullable */
+  regionId: number | null;
+  /** @nullable */
+  regionName: string | null;
+  requesterName: string;
+  status: ServiceCityRequestRecordStatus;
+  /** @nullable */
+  reason: string | null;
+  createdAt: string;
+  /** @nullable */
+  reviewedAt: string | null;
+  /** @nullable */
+  approvedCityId: number | null;
+}
+
 export interface OwnerPropertyBooking {
   id: number;
   bookingDate: string;

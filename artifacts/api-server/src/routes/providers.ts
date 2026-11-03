@@ -1,5 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { normalizeCityName } from "../lib/city-name";
+import { CreateServiceCityRequestBody } from "@workspace/api-zod";
+import { CityRequestError, createCityRequest } from "../lib/service-city-requests";
 import { includeOwnerActivityKind } from "../lib/owner-activity-registration";
 import { db } from "@workspace/db";
 import {
@@ -641,19 +643,17 @@ router.delete("/my/approved/:id", requireAuth, async (req: any, res) => {
 
 /* ── Public: request new city from admin ──────────── */
 router.post("/city-request", requireAuth, async (req: any, res) => {
-  const city = typeof req.body.city === "string" ? req.body.city.trim() : "";
-  if (!city || city.length < 2) {
-    return res.status(400).json({ error: "اسم المدينة مطلوب" });
-  }
-  // Store as an admin site setting so admin can see it
+  const parsed = CreateServiceCityRequestBody.safeParse({
+    ...req.body, city: typeof req.body.city === "string" ? req.body.city.trim() : "",
+  });
+  if (!parsed.success) return res.status(400).json({ error: "اسم المدينة مطلوب ويجب أن يكون بين حرفين و١٠٠ حرف" });
   try {
-    const { siteSettingsTable } = await import("@workspace/db/schema");
-    const key = `city_request_${Date.now()}`;
-    await db.insert(siteSettingsTable).values({ key, value: `${city} (طلب من: ${req.user.id})` });
-  } catch {
-    // non-critical — just acknowledge
+    const name = [req.user.firstName, req.user.lastName].filter(Boolean).join(" ") || req.user.nameAr || "مقدم خدمة";
+    return res.status(201).json(await createCityRequest(parsed.data, req.user.id, name));
+  } catch (error) {
+    if (error instanceof CityRequestError) return res.status(error.status).json({ error: error.message });
+    throw error;
   }
-  return res.json({ ok: true, message: `تم إرسال طلب إضافة مدينة "${city}" للإدارة` });
 });
 
 /* ── Owner: update approved provider details ────────── */

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { ServiceCityRequestsTab } from "@/pages/admin/ServiceCityRequestsTab";
 import { refreshCatalogsAfterWrite } from "@/lib/query-client";
 import { matchesOwnerDirectoryTab, ownerWhatsAppUrl, type OwnerDirectoryTab } from "@/lib/owner-directory";
 import { PartnerAccountActions, PhotographerAccounts } from "@/components/admin/PartnerAccounts";
@@ -8893,6 +8894,7 @@ const ALL_TABS = [
   { id: "expenseCategories",       label: "فئات المصروفات",        icon: Tag },
   { id: "locations",               label: "المناطق والمدن والأحياء", icon: Building2 },
   { id: "serviceLocations",        label: "المناطق والمدن",         icon: MapPin },
+  { id: "serviceCityRequests",     label: "طلبات المدن الجديدة",   icon: MapPin },
   { id: "amenities",               label: "مرافق وتصنيفات العقارات", icon: Tag },
   { id: "categories",              label: "فئات العقارات",         icon: Tag },
   { id: "owners",                  label: "الملاك",                 icon: Users },
@@ -8920,7 +8922,7 @@ const ADMIN_NAV_GROUPS: Array<{
   { id: "dashboard", label: "الإحصائيات", icon: BarChart3, tabs: ["overview"] },
   { id: "properties", label: "إدارة العقارات", icon: Home, tabs: ["chalets", "submissions", "categories", "amenities", "locations"] },
   { id: "ownerServices", label: "خدمات الملاك", icon: ClipboardList, tabs: ["ownerServices"] },
-  { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories", "serviceLocations"] },
+  { id: "services", label: "إدارة الخدمات", icon: Wrench, tabs: ["services", "serviceSubmissions", "serviceCategories", "serviceLocations", "serviceCityRequests"] },
   { id: "users", label: "إدارة المستخدمين", icon: Users, tabs: ["owners", "ownerInbox"] },
   { id: "staff", label: "طاقم العمل", icon: Shield, tabs: ["adminStaff"] },
   { id: "operations", label: "العمليات", icon: Calendar, tabs: ["reviews", "waSubscribers", "globalSeasons", "broadcast", "broadcastSettings"] },
@@ -10219,6 +10221,7 @@ export default function Admin() {
         {activeTab === "expenseCategories"   && <ExpenseCategoriesTab />}
         {activeTab === "locations"           && <LocationsTab />}
         {activeTab === "serviceLocations"    && <ServiceLocationsTab />}
+        {activeTab === "serviceCityRequests" && <ServiceCityRequestsTab apiFetch={apiFetch} />}
         {activeTab === "amenities"           && <AmenitiesTab />}
         {activeTab === "categories"          && <CategoriesTab />}
         {activeTab === "owners"              && <OwnersTab isSuperAdmin={isSuperAdmin} />}

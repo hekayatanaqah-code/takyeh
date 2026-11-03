@@ -21,6 +21,60 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /providers/city-request:
+    post:
+      operationId: createServiceCityRequest
+      tags: [providers]
+      summary: Request approval of a new service city
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceCityRequestInput"
+      responses:
+        "201":
+          description: Saved pending request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceCityRequestRecord"
+  /admin/service-city-requests:
+    get:
+      operationId: listServiceCityRequests
+      tags: [admin]
+      summary: Review service city requests
+      responses:
+        "200":
+          description: City requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceCityRequestRecord"
+  /admin/service-city-requests/{id}/decision:
+    post:
+      operationId: reviewServiceCityRequest
+      tags: [admin]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceCityDecisionInput"
+      responses:
+        "200":
+          description: Reviewed city request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceCityRequestRecord"
   /owner/bookings:
     get:
       operationId: listOwnerPropertyBookings
@@ -1690,6 +1744,33 @@ components:
       schema:
         type: string
   schemas:
+    ServiceCityRequestInput:
+      type: object
+      required: [city]
+      properties:
+        city: { type: string, minLength: 2, maxLength: 100 }
+        regionId: { type: integer, minimum: 1 }
+    ServiceCityDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        regionId: { type: integer, minimum: 1 }
+        reason: { type: string, maxLength: 500 }
+    ServiceCityRequestRecord:
+      type: object
+      required: [id, city, regionId, regionName, requesterName, status, reason, createdAt, reviewedAt, approvedCityId]
+      properties:
+        id: { type: integer }
+        city: { type: string }
+        regionId: { type: [integer, "null"] }
+        regionName: { type: [string, "null"] }
+        requesterName: { type: string }
+        status: { type: string, enum: [pending, approved, rejected] }
+        reason: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        approvedCityId: { type: [integer, "null"] }
     OwnerPropertyBooking:
       type: object
       additionalProperties: true

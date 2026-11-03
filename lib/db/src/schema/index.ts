@@ -7,3 +7,4 @@ export * from "./property-offers";
 export * from "./provider-catalog";
 export * from "./quick-sales";
 export * from "./support-messages";
+export * from "./service-city-requests";
