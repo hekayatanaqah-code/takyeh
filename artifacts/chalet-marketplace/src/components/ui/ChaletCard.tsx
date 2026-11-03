@@ -196,10 +196,12 @@ export function ChaletCard({ chalet, amenitiesCatalog, selectedPeriod, searchDat
           )}
 
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
-              <Bed className="w-4 h-4 text-primary" />
-              <span>{chalet.bedrooms} غرف</span>
-            </div>
+            {chalet.bedrooms != null && chalet.bedrooms > 0 && (
+              <div className="flex items-center gap-1.5 bg-secondary/50 px-2 py-1 rounded-md">
+                <Bed className="w-4 h-4 text-primary" />
+                <span>{chalet.bedrooms} غرف</span>
+              </div>
+            )}
             {propertyType && (
               <span className="bg-primary/8 text-primary border border-primary/20 px-2 py-1 rounded-md text-xs font-medium">
                 {propertyType}

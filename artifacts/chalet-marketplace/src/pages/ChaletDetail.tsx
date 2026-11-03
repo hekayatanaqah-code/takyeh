@@ -8,6 +8,7 @@ import type { DiamondData } from "@/components/chalet/ChaletDiamondContent";
 import { toAr } from "@/lib/utils";
 import { formatDateWithHijri, toHijri } from "@/lib/hijri";
 import { resolveAmenity } from "@/lib/amenityUtils";
+import { normalizePropertyBookingPeriod, propertyBookingPeriodName } from "@/lib/propertyBookingPeriod";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { MapContainer, TileLayer, Marker } from "react-leaflet";
@@ -154,7 +155,8 @@ export default function ChaletDetail() {
 
   /* Booking context passed as URL query params from the search/listing page */
   const selectedDate   = qp.get("date")   ?? "";
-  const selectedPeriod = qp.get("period") ?? "";
+  const selectedPeriod = normalizePropertyBookingPeriod(qp.get("period")) ?? "";
+  const [periodRequired, setPeriodRequired] = useState(false);
 
   const [mainPhoto,      setMainPhoto]      = useState(0);
   const [termsOpen,      setTermsOpen]      = useState(false);
@@ -289,8 +291,9 @@ export default function ChaletDetail() {
   }) as { key: string; label: string; emoji: string; price: string | null; hasDayPrice: boolean; ci?: string | null; co?: string | null }[];
 
   /* active period = what was selected on the search/listing page */
-  const activePeriod = slots.find(s => s.key === selectedPeriod);
-  const activePeriodConf = selectedPeriod ? SLOT_CONF[selectedPeriod as keyof typeof SLOT_CONF] : null;
+  const activePeriod = slots.find(s => s.key === selectedPeriod)
+    ?? (!selectedPeriod && slots.length === 1 ? slots[0] : undefined);
+  const activePeriodConf = activePeriod ? SLOT_CONF[activePeriod.key as keyof typeof SLOT_CONF] : null;
 
   /* price to display in sidebar: period price if selected, else weekday/per-night */
   const displayPrice = activePeriod?.price ?? fmt(chalet.priceWeekday ?? chalet.pricePerNight);
@@ -332,15 +335,10 @@ export default function ChaletDetail() {
     }
 
     /* Period variable */
-    let periodLabel = "";
-    if (activePeriod) {
-      const timeRange = (activePeriod.ci && activePeriod.co)
-        ? ` (${toAr(activePeriod.ci)} - ${toAr(activePeriod.co)})`
-        : "";
-      periodLabel = `${activePeriod.emoji ? activePeriod.emoji + " " : ""}${activePeriod.label}${timeRange}`;
-    } else if (selectedPeriod) {
-      periodLabel = selectedPeriod;
-    }
+    const timeRange = (activePeriod?.ci && activePeriod.co)
+      ? ` (${toAr(activePeriod.ci)} - ${toAr(activePeriod.co)})`
+      : "";
+    const periodLabel = `${activePeriod?.emoji ? activePeriod.emoji + " " : ""}${propertyBookingPeriodName(activePeriod?.key ?? selectedPeriod)}${timeRange}`;
 
     /* Price variable — already formatted with currency via fmt() */
     const priceVar = displayPrice ?? "";
@@ -358,8 +356,15 @@ export default function ChaletDetail() {
   };
 
   /* Step 1 — click button → show terms modal (if terms exist, else open directly) */
+  const ensurePeriodSelected = () => {
+    if (slots.length === 0 || activePeriod) return true;
+    setPeriodRequired(true);
+    document.getElementById("booking-periods")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return false;
+  };
+
   const handleBook = () => {
-    if (!phone) return;
+    if (!phone || !ensurePeriodSelected()) return;
     if (terms.length > 0) {
       setTermsModalOpen(true);
     } else {
@@ -370,6 +375,7 @@ export default function ChaletDetail() {
   /* Step 2 — user agreed in modal → open WhatsApp */
   const confirmBook = () => {
     setTermsModalOpen(false);
+    if (!phone || !ensurePeriodSelected()) return;
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(buildWaMessage())}`, "_blank");
   };
 
@@ -610,17 +616,34 @@ export default function ChaletDetail() {
               </div>
             )}
 
-            {/* ── Available Periods (info-only, not selection) ── */}
+            {/* ── Choose the period included in the WhatsApp booking request ── */}
             {slots.length > 0 && (
-              <div style={CARD}>
+              <div id="booking-periods" style={CARD}>
                 <h2 style={SEC}>الفترات المتاحة</h2>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 14 }}>
+                <p style={{ margin: "0 0 16px", fontSize: 14, color: "#475569", lineHeight: 1.8 }}>اختر الفترة المناسبة لتظهر في رسالة طلب الحجز.</p>
+                {periodRequired && !activePeriod && (
+                  <p role="alert" style={{ color: "#b91c1c", fontSize: 14, margin: "0 0 14px" }}>يرجى اختيار فترة الحجز قبل التواصل عبر واتساب.</p>
+                )}
+                <div role="group" aria-label="اختيار فترة الحجز" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(175px, 1fr))", gap: 14 }}>
                   {slots.map(s => {
                     const c = SLOT_CONF[s.key as keyof typeof SLOT_CONF];
+                    const isSelected = activePeriod?.key === s.key;
                     return (
-                      <div key={s.key} style={{ borderRadius: 14, border: `1.5px solid ${c.border}`, background: c.bg, padding: "18px 18px" }}>
+                      <button
+                        key={s.key}
+                        type="button"
+                        aria-pressed={isSelected}
+                        className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        onClick={() => {
+                          const params = new URLSearchParams(search);
+                          params.set("period", s.key === "fullday" ? "full_day" : s.key);
+                          setPeriodRequired(false);
+                          setLocation(`/chalets/${id}?${params.toString()}`, { replace: true });
+                        }}
+                        style={{ borderRadius: 14, border: `1.5px solid ${isSelected ? c.text : c.border}`, background: c.bg, padding: "18px 18px", cursor: "pointer", textAlign: "right", boxShadow: isSelected ? `0 0 0 2px ${c.border}` : undefined }}
+                      >
                         <p style={{ fontSize: 26, margin: "0 0 8px" }}>{s.emoji}</p>
-                        <p style={{ margin: "0 0 6px", fontWeight: 800, color: c.text, fontSize: 14 }}>{s.label}</p>
+                        <p style={{ margin: "0 0 6px", fontWeight: 800, color: c.text, fontSize: 14 }}>{s.label}{isSelected && <span style={{ marginInlineStart: 8, fontSize: 12 }}>✓ مختارة</span>}</p>
                         {s.price && (
                           <>
                             <p style={{ margin: "0 0 2px", fontSize: 12, color: c.text, opacity: 0.9, fontWeight: 700 }}>
@@ -634,7 +657,7 @@ export default function ChaletDetail() {
                             {s.ci && `دخول ${toAr(s.ci)}`}{s.ci && s.co && <br />}{s.co && `خروج ${toAr(s.co)}`}
                           </p>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>

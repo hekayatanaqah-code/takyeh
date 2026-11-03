@@ -1,5 +1,6 @@
 - [Logo pipeline gap pattern](logo-pipeline-gap.md) — admin approval flows that copy submission→chaletsTable must explicitly list every field; omissions silently store NULL.
 - [Arabic time storage format](arabic-time-format.md) — property check-in/out retain Arabic text; individual service appointments use optional Saudi-local HH:mm.
+- [Public property booking context](public-property-booking-context.md) — omit unset room counts; WhatsApp enquiries carry a real selected period without rewriting stored identifiers.
 - [Financial report calendar](financial-report-calendar.md) — saved preference sets the default; local switches stay temporary and reports/exports use explicit calendars and matching period boundaries.
 - [Owner calendar choices](owner-calendar-preferences.md) — all three settings groups retain Hijri on the right and Gregorian on the left, with independently saved choices.
 - [Hijri/Gregorian dual display pattern](hijri-gregorian-dual.md) — toggle drives which calendar is bold/primary; secondary shows overlap months with correct era suffix (هـ / م).
