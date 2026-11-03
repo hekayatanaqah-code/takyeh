@@ -177,7 +177,7 @@ export default function Home() {
   const handleServiceSearch = () => {
     const missingFields = [
       !svcCategory ? "نوع الخدمة" : "",
-      !svcCity ? "المدينة" : "",
+      !svcCity || svcCity === "all" ? "المدينة" : "",
       !svcDate ? "تاريخ الخدمة" : "",
     ].filter(Boolean);
     if (missingFields.length > 0) {
@@ -187,7 +187,7 @@ export default function Home() {
     setSvcSearchError("");
     const params = new URLSearchParams();
     if (svcCategory && svcCategory !== "all") params.append("category", svcCategory);
-    if (svcCity && svcCity !== "all")         params.append("city", svcCity);
+    params.append("city", svcCity);
     if (svcDate)                               params.append("date", svcDate);
     setLocation(`/services${params.toString() ? `?${params.toString()}` : ""}`);
   };
@@ -329,12 +329,12 @@ export default function Home() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
 
                   {/* City */}
-                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  <div className="min-h-16 min-w-0 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
                     <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
-                      <Select value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistricts([]); }}>
-                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-right text-foreground font-medium text-sm" dir="rtl">
+                      <Select dir="rtl" value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistricts([]); }}>
+                        <SelectTrigger aria-label="المدينة" className="w-full min-w-0 border-0 p-0 h-5 focus:ring-0 shadow-none text-right text-foreground font-medium text-sm [&>span]:truncate [&>svg]:shrink-0" dir="rtl">
                           <SelectValue placeholder="اختر المدينة" />
                         </SelectTrigger>
                         <SelectContent dir="rtl" className="text-right">
@@ -349,7 +349,7 @@ export default function Home() {
                   </div>
 
                   {/* District */}
-                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  <div className="min-h-16 min-w-0 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
                     <MapPin className="w-4 h-4 text-primary/70 shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الحي</p>
@@ -408,7 +408,7 @@ export default function Home() {
                   </div>
 
                   {/* Category */}
-                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  <div className="min-h-16 min-w-0 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
                     <Tag className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفئة</p>
@@ -427,7 +427,7 @@ export default function Home() {
                   </div>
 
                   {/* Period */}
-                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  <div className="min-h-16 min-w-0 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
                     <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفترة</p>
@@ -564,7 +564,7 @@ export default function Home() {
                   <div className="bg-white/10 backdrop-blur-md border border-white/20 p-2 md:p-3 rounded-2xl shadow-2xl flex flex-col md:flex-row flex-wrap gap-3">
 
                     {/* Service type */}
-                    <div className="flex-1 min-w-[160px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                    <div className="flex-1 min-w-[160px] min-h-16 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
                       <span className="text-xl shrink-0">🛎️</span>
                       <div className="w-full">
                         <p className="text-xs font-semibold text-muted-foreground text-right mb-1">نوع الخدمة</p>
@@ -588,19 +588,18 @@ export default function Home() {
                     </div>
 
                     {/* City */}
-                    <div className="flex-1 min-w-[140px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                    <div className="flex-1 min-w-[160px] min-h-16 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
                       <MapPin className="w-5 h-5 text-muted-foreground shrink-0" />
-                      <div className="w-full">
+                      <div className="w-full min-w-0">
                         <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
-                        <Select value={svcCity} onValueChange={(value) => {
+                        <Select dir="rtl" value={svcCity === "all" ? "" : svcCity} onValueChange={(value) => {
                           setSvcCity(value);
                           setSvcSearchError("");
                         }}>
-                          <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium">
+                          <SelectTrigger aria-label="المدينة" className="w-full min-w-0 border-0 p-0 h-5 focus:ring-0 shadow-none text-right text-foreground font-medium text-sm [&>span]:truncate [&>svg]:shrink-0">
                             <SelectValue placeholder="اختر المدينة" />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">جميع المدن</SelectItem>
+                          <SelectContent dir="rtl" align="start">
                             {serviceCities.map((city) => (
                               <SelectItem key={city.id} value={city.name}>{city.name}</SelectItem>
                             ))}
@@ -610,7 +609,7 @@ export default function Home() {
                     </div>
 
                     {/* Date */}
-                    <div className="flex-1 min-w-[160px] bg-white dark:bg-card rounded-xl px-4 py-2 flex items-center gap-3">
+                    <div className="flex-1 min-w-[160px] min-h-16 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
                       <Calendar className="w-5 h-5 text-muted-foreground shrink-0" />
                       <div className="flex-1 min-w-0">
                         <DualCalendarPicker
@@ -654,12 +653,12 @@ export default function Home() {
                           </span>
                         </>
                       )}
-                      {svcCity && (
+                      {svcCity && svcCity !== "all" && (
                         <>
                           {svcCategory && " · "}
                           المدينة{" "}
                           <span className="font-bold text-[#D4A96A]">
-                            {svcCity === "all" ? "جميع المدن" : svcCity}
+                            {svcCity}
                           </span>
                         </>
                       )}

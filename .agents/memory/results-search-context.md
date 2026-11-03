@@ -3,6 +3,12 @@ name: Results search context
 description: Interaction rule for preserving and editing the active chalet city and date from the results page.
 ---
 
+Homepage search must not offer “جميع المدن” in either property or service city selection.
+
+**Why:** The user explicitly removed the all-cities choice from the homepage search bar.
+
+**How to apply:** Keep actual catalog city choices and a clear city placeholder, with a city required before submitting the homepage search. Do not remove broader city filters from other pages as an incidental consequence.
+
 Keep the active city and booking date visible and directly editable together in the sticky results toolbar. Synchronize both values with the results URL.
 
 **Why:** Customers must be able to adjust the original search without returning to the home page, and refreshing or sharing the page must preserve the revised search context.
