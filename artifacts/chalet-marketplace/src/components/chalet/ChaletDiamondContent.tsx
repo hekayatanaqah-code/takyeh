@@ -13,7 +13,7 @@ import {
   CheckCircle2, ChevronDown, ChevronUp, ExternalLink,
   DollarSign, Sofa, LogIn, LogOut, Home, Tag, Clock,
 } from "lucide-react";
-import { resolveAmenity } from "@/lib/amenityUtils";
+import { resolveAmenity, type AmenityInfo } from "@/lib/amenityUtils";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
 import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
@@ -359,12 +359,13 @@ function BookingPanel({ data }: { data: DiamondData }) {
 /* ─── Main exported component ─── */
 interface Props {
   data: DiamondData;
+  amenityResolver?: (key: string) => AmenityInfo;
   /** "page" = full two-column layout with booking panel (used in ChaletMasterView)
    *  "modal" = single-column compact layout without booking panel (used in admin modal) */
   mode?: "page" | "modal";
 }
 
-export function ChaletDiamondContent({ data, mode = "page" }: Props) {
+export function ChaletDiamondContent({ data, mode = "page", amenityResolver }: Props) {
   const photos: string[] = Array.isArray(data.photos) ? data.photos : [];
   const amenities: string[] = Array.isArray(data.amenities) ? data.amenities : [];
   const terms = (data.termsAndConditions ?? "").split("\n").map(t => t.trim()).filter(Boolean);
@@ -623,7 +624,7 @@ export function ChaletDiamondContent({ data, mode = "page" }: Props) {
               </h3>
               <div className="grid grid-cols-4 gap-2.5">
                 {amenities.map(key => {
-                  const { ar, icon, color } = resolveAmenity(key);
+                  const { ar, icon, color } = amenityResolver ? amenityResolver(key) : resolveAmenity(key);
                   return (
                     <div key={key} className={`flex flex-col items-center justify-center gap-1.5 border rounded-2xl p-3 text-center ${color}`}>
                       <span className="text-2xl leading-none">{icon}</span>

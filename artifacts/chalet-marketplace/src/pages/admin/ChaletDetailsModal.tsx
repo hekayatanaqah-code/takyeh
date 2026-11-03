@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, ShieldCheck, ShieldOff } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { resolveAmenity } from "@/lib/amenityUtils";
+import { resolveAdminAmenity, type AdminAmenityEntry } from "@/lib/adminAmenityUtils";
 import { toAr } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -39,7 +39,7 @@ const statusLabels = {
 
 export function ChaletDetailsModal({ chalet, onClose }: { chalet: ChaletDetails | null; onClose: () => void }) {
   const [photoIndex, setPhotoIndex] = useState(0);
-  const { data: amenitiesCatalog, isError: amenitiesError } = useQuery<Array<{ key: string; labelAr: string }>>({
+  const { data: amenitiesCatalog, isError: amenitiesError } = useQuery<AdminAmenityEntry[]>({
     queryKey: ["admin", "amenities"],
     queryFn: async () => {
       const response = await fetch(`${BASE}/api/admin/amenities`, { credentials: "include" });
@@ -131,10 +131,10 @@ export function ChaletDetailsModal({ chalet, onClose }: { chalet: ChaletDetails 
           {chalet.amenities?.length ? (
             <div className="flex flex-wrap gap-2">
               {chalet.amenities.map((amenity, index) => {
-                const label = resolveAmenity(amenity, amenitiesCatalog).ar;
+                const label = resolveAdminAmenity(amenity, amenitiesCatalog).ar;
                 return (
                   <span key={`${amenity}-${index}`} className="rounded-full bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300">
-                    {/[a-z]/i.test(label) ? "مرفق إضافي" : label}
+                    {label}
                   </span>
                 );
               })}

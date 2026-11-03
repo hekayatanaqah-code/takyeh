@@ -78,6 +78,7 @@ import { AuditLogsTab } from "./admin/AuditLogsTab";
 import { BroadcastTab } from "./admin/BroadcastTab";
 import { BroadcastSettingsTab } from "./admin/BroadcastSettingsTab";
 import { ChaletDetailsModal, type ChaletDetails } from "./admin/ChaletDetailsModal";
+import { resolveAdminAmenity, type AdminAmenityEntry } from "@/lib/adminAmenityUtils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const API = `${BASE}/api`;
@@ -460,6 +461,15 @@ function SubmissionReviewModal({
   const [pendingAction, setPendingAction] = useState<"approved" | "rejected" | "needs_revision" | null>(null);
   const [reason, setReason] = useState("");
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const { data: reviewAmenitiesCatalog, isError: reviewAmenitiesError } = useQuery<AdminAmenityEntry[]>({
+    queryKey: ["admin", "amenities"],
+    queryFn: async () => {
+      const response = await apiFetch("/admin/amenities");
+      if (!response.ok) throw new Error("تعذّر تحميل أسماء المرافق");
+      return response.json();
+    },
+    enabled: open && !!submission?.amenities?.length,
+  });
 
   /* ── Category approval state ── */
   const [showCatApprove, setShowCatApprove] = useState(false);
@@ -635,8 +645,14 @@ function SubmissionReviewModal({
                 </div>
               )}
 
+              {reviewAmenitiesError && !!s.amenities?.length && (
+                <p role="status" className="px-6 py-3 text-sm text-amber-300">
+                  تعذّر تحميل أسماء بعض المرافق؛ تُعرض الأسماء العربية المتاحة.
+                </p>
+              )}
               <ChaletDiamondContent
                 mode="modal"
+                amenityResolver={(key) => resolveAdminAmenity(key, reviewAmenitiesCatalog)}
                 data={{
                   nameAr: s.nameAr,
                   descriptionAr: s.descriptionAr,

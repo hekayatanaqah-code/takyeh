@@ -311,7 +311,7 @@ router.use((req, res, next) => {
     return res.status(403).json({ error: "المشرف العام فقط يملك هذه الصلاحية" });
   }
   // Other permitted tabs need catalog names for filters; catalog writes remain restricted.
-  if (req.method === "GET" && /^\/(?:regions|cities|districts|categories|service-regions|service-cities|service-districts|service-categories)(?:\/|$)/.test(req.path)
+  if (req.method === "GET" && /^\/(?:regions|cities|districts|amenities|categories|service-regions|service-cities|service-districts|service-categories)(?:\/|$)/.test(req.path)
     && (["userManagement", "chaletApprovals", "serviceListings", "platformSettings", "serviceCatalog"] as const)
       .some((key) => staffHasPermission(req.adminStaff?.permissions, key))) return next();
   const match = adminRoutePermissions.find(([pattern]) => pattern.test(req.path));
