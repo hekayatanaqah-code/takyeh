@@ -423,6 +423,7 @@ export default function AddChalet() {
 
   const { data: planLimits, refetch: refetchPlanLimits } = useQuery<{
     active: boolean;
+    canSubmitActivities?: boolean;
     scope: "full" | "property";
     chaletLimit: number;
     chaletCount: number;
@@ -803,9 +804,9 @@ export default function AddChalet() {
       return;
     }
     if (!isEditMode && planLimits && (
-      planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit
+      (planLimits.active === false && !planLimits.canSubmitActivities) || planLimits.chaletCount >= planLimits.chaletLimit
     )) {
-      if (planLimits.active === false) navigate("/subscription");
+      if (planLimits.active === false && !planLimits.canSubmitActivities) navigate("/subscription");
       else setShowAddonPayment(true);
       return;
     }
@@ -890,6 +891,7 @@ export default function AddChalet() {
       {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+          qc.invalidateQueries({ queryKey: ["owner", "profile-btype"] });
           qc.invalidateQueries({ queryKey: ["/api/submissions"] });
           setSubmitted(true);
         },
@@ -900,7 +902,7 @@ export default function AddChalet() {
             if (apiErr?.data?.upgradeRequired) {
               const refreshed = await refetchPlanLimits();
               const currentLimits = refreshed.data ?? planLimits;
-              if (currentLimits?.active === false) navigate("/subscription");
+              if (currentLimits?.active === false && !currentLimits.canSubmitActivities) navigate("/subscription");
               else setShowAddonPayment(true);
             }
           } catch {
@@ -942,7 +944,7 @@ export default function AddChalet() {
   const allUploaded = photos.every((p) => p.url !== "") && !isUploadingVideo && !isUploadingLogo && (video ? video.url !== "" : true);
 
   const planBlocksNewChalet = !isEditMode && !!planLimits
-    && (planLimits.active === false || planLimits.chaletCount >= planLimits.chaletLimit);
+    && ((planLimits.active === false && !planLimits.canSubmitActivities) || planLimits.chaletCount >= planLimits.chaletLimit);
   if (isEditMode && editSub?.status === "rejected") {
     return (
       <div dir="rtl" className="max-w-lg mx-auto py-16 px-5 text-center space-y-5">
@@ -955,7 +957,7 @@ export default function AddChalet() {
     );
   }
   if (planBlocksNewChalet && !submitted) {
-    const subscriptionExpired = planLimits?.active === false;
+    const subscriptionExpired = planLimits?.active === false && !planLimits.canSubmitActivities;
     return (
       <div className="min-h-screen bg-background" dir="rtl">
         <Navbar />

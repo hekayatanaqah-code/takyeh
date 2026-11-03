@@ -6,6 +6,7 @@ import { eq, and, ne, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
 import { ownerPlanAccess } from "../lib/subscription-access";
+import { includeOwnerActivityKind } from "../lib/owner-activity-registration";
 import { checkPropertyIdentity } from "../lib/property-identity";
 import { normalizeCustomerPhone } from "../lib/customerPhone";
 import { hasPropertySocialConflict, socialAccountIdentity } from "../lib/property-social-account";
@@ -325,8 +326,9 @@ router.post("/", async (req, res) => {
   const [submission] = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${ownerAccess!.subscription.ownerId}))`);
     const currentAccess = await ownerPlanAccess(ownerId!);
-    if (!currentAccess.active ||
+    if (!currentAccess.canSubmitActivities ||
         currentAccess.chaletCount >= currentAccess.chaletLimit) return [null];
+    if (ownerId) await includeOwnerActivityKind(tx, ownerId, "chalet");
     return tx.insert(chaletSubmissionsTable)
     .values({
       ownerId,
@@ -375,7 +377,7 @@ router.post("/", async (req, res) => {
     .returning({ id: chaletSubmissionsTable.id });
   });
   if (!submission) {
-    return res.status(403).json({ error: "انتهى اشتراكك أو وصلت إلى حد العقارات المتاح. جدّد أو اشترِ سعة إضافية.", upgradeRequired: true });
+    return res.status(403).json({ error: "تعذر إضافة العقار ضمن السعة الحالية. راجع حدود الباقة وحالة الاشتراك.", upgradeRequired: true });
   }
 
   sendAdminNewSubmissionEmail({

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, test } from "node:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db, pool, ownerSubscriptionsTable } from "@workspace/db";
-import { activateOwnerTrial, getOrStartOwnerSubscription, initialTrialSubscriptionState } from "./subscription-access";
+import { activateOwnerTrial, getOrStartOwnerSubscription, initialTrialSubscriptionState, ownerPlanAccess } from "./subscription-access";
 
 const prefix = `__trial_verification_${randomUUID()}`;
 const instant = new Date("2026-11-03T09:40:20.123Z");
@@ -82,6 +82,31 @@ test("simultaneous property/service approvals and repeated reads share one immut
     const read = await getOrStartOwnerSubscription(ownerId);
     assert.equal(read.expiresAt?.getTime(), a.expiresAt?.getTime());
   } finally {
+    await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+  }
+});
+
+test("pending owners retain first-submission access while holding the registration lock", async () => {
+  const ownerId = `${prefix}_registration_lock`;
+  let read: ReturnType<typeof ownerPlanAccess> | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await getOrStartOwnerSubscription(ownerId);
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${ownerId}))`);
+      read = ownerPlanAccess(ownerId);
+      const access = await Promise.race([
+        read,
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("registration entitlement read deadlocked")), 2000); }),
+      ]);
+      assert.equal(access.canSubmitActivities, true);
+      assert.equal(access.active, false);
+      assert.equal(access.subscription.expiresAt, null);
+      assert.equal(access.subscription.trialStartedAt, null);
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+    await read?.catch(() => undefined);
     await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
   }
 });

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { fromAr, toAr } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Navbar } from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
@@ -66,6 +66,7 @@ async function uploadCompressed(file: File, type: "image" | "video"): Promise<st
 }
 
 export default function AddServiceProvider() {
+  const qc = useQueryClient();
   const { isAuthenticated, login, isLoading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   const editSubmissionId = Number(new URLSearchParams(window.location.search).get("editSubmission") || 0) || null;
@@ -564,6 +565,9 @@ export default function AddServiceProvider() {
         }
         return;
       }
+      void qc.invalidateQueries({ queryKey: ["owner", "profile-btype"] });
+      void qc.invalidateQueries({ queryKey: ["owner", "plan-limits"] });
+      void qc.invalidateQueries({ queryKey: ["my-service-submissions"] });
       setSubmitted(true);
     } catch (err: unknown) {
       setSubmitError(err instanceof Error ? err.message : "حدث خطأ. يرجى المحاولة مرة أخرى.");

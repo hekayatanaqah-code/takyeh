@@ -3,6 +3,12 @@ name: Owner navigation
 description: Direct owner dashboard entry and account-wide toolbar controls.
 ---
 
+Every owner-dashboard add-activity entry point must open the same property/service chooser, including the first-activity empty state. A prior property-only or service-only profile must not disable the other registration choice.
+
+**Why:** The user explicitly wants partners to register properties, services, or both freely instead of being forced into property registration.
+
+**How to apply:** Keep account classification separate from registration entitlement; promote classification to both only after successful cross-kind registration and refresh the owner profile. Pending first-activation trials permit initial submissions but do not start their clock or bypass activity quotas.
+
 There must be no independent intermediate Hub page. A service owner enters the active service's dashboard directly. The greeting with the owner's name and the controls for adding an activity/service, subscriptions/plans, personal settings, and registration requests belong at the top of the real dashboard as a flexible toolbar.
 
 **Why:** The user explicitly replaced the earlier separate-Hub requirement with direct service-dashboard entry and an integrated toolbar.

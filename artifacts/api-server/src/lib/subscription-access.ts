@@ -185,6 +185,11 @@ async function pendingOwnerSubscription(tx: SubscriptionWriter, keys: string[]) 
 /** Reading/registering an account never starts its free-trial clock. */
 export async function getOrStartOwnerSubscription(ownerId: string) {
   const keys = await subscriptionOwnerKeys(ownerId);
+  // Ordinary entitlement reads may run while their caller holds an inventory
+  // registration lock. Only initialization needs a separate locking transaction.
+  const existing = preferredOwnerSubscription(await db.select().from(ownerSubscriptionsTable)
+    .where(inArray(ownerSubscriptionsTable.ownerId, keys)));
+  if (existing) return existing;
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${[...keys].sort()[0]}))`);
     return pendingOwnerSubscription(tx, keys);

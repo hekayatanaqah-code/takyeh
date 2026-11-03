@@ -78,7 +78,7 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
         <DialogContent dir="rtl" className="max-w-md">
           <DialogHeader className="text-start">
             <DialogTitle>ماذا تريد أن تضيف؟</DialogTitle>
-            <DialogDescription>اختر نوع النشاط الجديد.</DialogDescription>
+            <DialogDescription>اختر عقاراً أو خدمة مساندة. يمكنك إضافة النوعين إلى حسابك، كلّاً على حدة.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <button

@@ -870,8 +870,8 @@ export default function Dashboard() {
         <div className="container mx-auto max-w-6xl px-4 pt-6">
           <OwnerToolbar
             ownerName={ownerProfile?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "حساب المالك"}
-            canAddChalet={canSeeChalets}
-            canAddService={canSeeServices}
+            canAddChalet={!!ownerProfile}
+            canAddService={!!ownerProfile}
             onAddActivity={addOwnerActivity}
             activityChoiceOpen={activityChoiceOpen}
             onActivityChoiceOpenChange={setActivityChoiceOpen}
@@ -1005,39 +1005,11 @@ export default function Dashboard() {
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {!actAsStaff && !isImpersonating && (
               (canSeeChalets || canSeeServices) && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button data-testid="button-add-property-or-service-capacity" className="rounded-xl font-semibold text-sm">
+                    <Button onClick={() => setActivityChoiceOpen(true)} data-testid="button-add-property-or-service-capacity" className="rounded-xl font-semibold text-sm">
                       <Plus className="w-4 h-4 me-1.5" />
                       إضافة عقار أو خدمة
                       <ChevronDown className="w-4 h-4 ms-1.5" />
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-52" style={{ direction: "rtl" }}>
-                    {canSeeChalets && (
-                      <DropdownMenuItem
-                        data-testid="menu-add-chalet"
-                        className="cursor-pointer"
-                        onSelect={() => planLimits?.active === false && !planLimits.canSubmitActivities
-                          ? navigate("/subscription")
-                          : headerAtChaletLimit ? setShowHeaderAddon("chalet") : navigate("/add-chalet")}
-                      >
-                        {headerAtChaletLimit && planLimits?.active !== false && !freeAccess ? "طلب سعة لعقار إضافي" : "إضافة عقار"}
-                      </DropdownMenuItem>
-                    )}
-                    {canSeeServices && (
-                      <DropdownMenuItem
-                        data-testid="menu-add-service"
-                        className="cursor-pointer"
-                        onSelect={() => planLimits?.active === false && !planLimits.canSubmitActivities
-                          ? navigate("/subscription")
-                          : atServiceLimit ? setShowHeaderAddon("service") : navigate("/add-service-provider")}
-                      >
-                        {atServiceLimit && planLimits?.active !== false && !freeAccess ? "طلب سعة لخدمة إضافية" : "إضافة خدمة"}
-                      </DropdownMenuItem>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
               )
             )}
             {!actAsStaff && !isImpersonating ? (
@@ -1130,8 +1102,7 @@ export default function Dashboard() {
         {showOwnerEmptyState && activeDashMode !== "owner-services" && <OwnerEmptyState
           requestsOpen={ownerView === "requests"}
           onAdd={() => {
-            if (canSeeChalets && canSeeServices) setActivityChoiceOpen(true);
-            else addOwnerActivity(canSeeServices ? "service" : "chalet");
+            setActivityChoiceOpen(true);
           }}
         />}
 

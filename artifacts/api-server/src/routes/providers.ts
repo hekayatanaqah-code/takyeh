@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { normalizeCityName } from "../lib/city-name";
+import { includeOwnerActivityKind } from "../lib/owner-activity-registration";
 import { db } from "@workspace/db";
 import {
   serviceProviderSubmissionsTable,
@@ -429,12 +430,13 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   const [row] = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(731206, hashtext(${access.subscription.ownerId}))`);
     const currentAccess = await ownerPlanAccess(req.user.id);
-    if (!currentAccess.active ||
+    if (!currentAccess.canSubmitActivities ||
         currentAccess.serviceCount >= currentAccess.serviceLimit) return [null];
+    await includeOwnerActivityKind(tx, req.user!.id, "service");
     return tx.insert(serviceProviderSubmissionsTable).values(values).returning();
   });
   if (!row) {
-    return res.status(403).json({ error: "انتهى اشتراكك أو وصلت إلى حد الخدمات المتاح. جدّد أو اشترِ سعة إضافية.", upgradeRequired: true });
+    return res.status(403).json({ error: "تعذر إضافة الخدمة ضمن السعة الحالية. راجع حدود الباقة وحالة الاشتراك.", upgradeRequired: true });
   }
 
   return res.status(201).json(row);
