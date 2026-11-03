@@ -469,8 +469,8 @@ export default function Home() {
                 {/* ── Row 3: date + days (equal width) + search button (remaining) ── */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-stretch">
 
-                  {/* Booking date — 1 col */}
-                  <div className="md:col-span-1 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  {/* Allow longer Hijri dates extra room on medium-width screens. */}
+                  <div className="min-w-0 md:col-span-2 xl:col-span-1 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
                       <DualCalendarPicker
@@ -478,6 +478,7 @@ export default function Home() {
                         onChange={setBookingDate}
                         placeholder="يوم الحجز"
                         label="يوم الحجز"
+                        className="min-w-0 [&>div>p]:whitespace-nowrap [&>div>p:first-child]:text-xs"
                         minDate={todayStr}
                         seasons={globalSeasons}
                       />
@@ -513,8 +514,8 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Search button — spans remaining 2 cols */}
-                  <div className="col-span-1 md:col-span-2 flex flex-col gap-1">
+                  {/* Search button uses the remaining columns at each breakpoint. */}
+                  <div className="min-w-0 col-span-1 xl:col-span-2 flex flex-col gap-1">
                     <Button
                       onClick={handleSearch}
                       className="w-full h-full py-3.5 px-8 rounded-xl text-base font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
@@ -620,6 +621,7 @@ export default function Home() {
                           }}
                           placeholder="تاريخ الخدمة"
                           label="التاريخ"
+                          className="min-w-0 [&>div>p]:whitespace-nowrap [&>div>p:first-child]:text-xs"
                           minDate={todayStr}
                         />
                       </div>

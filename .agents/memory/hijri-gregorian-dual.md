@@ -1,7 +1,13 @@
 ---
 name: Hijri and Gregorian date controls
-description: How subscription and admin dates should combine dual calendar selection with local time.
+description: Dual-calendar selection, era labels and responsive date presentation.
 ---
+
+Homepage booking-date fields must keep the complete Hijri date, including compound month names and «هـ», on one unbroken line.
+
+**Why:** The user reported the era suffix wrapping below «جمادى الأولى / جمادى الآخرة» and explicitly requested a single-line presentation across screen sizes.
+
+**How to apply:** Adjust the homepage field's font, padding and responsive width without truncating the date, dropping the era suffix, or changing calendar conversion and selection behavior. Preserve the secondary Gregorian date.
 
 The calendar toggle changes the selected and emphasized calendar, but both Hijri and Gregorian dates remain visible with their own era labels. Preserve the exact time of day separately whenever an expiry previously had a time component.
 
