@@ -571,10 +571,10 @@ export default function Chalets() {
           <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
             <p className="text-amber-200 font-semibold mb-3 tracking-wide drop-shadow-md">أماكن مختارة بعناية</p>
             <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight drop-shadow-lg">
-              الشاليهات المتاحة
+              الأماكن المتاحة
             </h1>
             <p className="text-white/90 text-lg max-w-xl mx-auto leading-relaxed drop-shadow-md">
-              استعرض أجمل الشاليهات واحجز ما يناسبك
+              استعرض أجمل الأماكن واحجز ما يناسبك
             </p>
           </motion.div>
         </div>
