@@ -562,18 +562,27 @@ export default function Chalets() {
       <Navbar />
 
       <section
-        className="relative isolate min-h-[360px] md:min-h-[400px] bg-cover bg-center px-5 py-14 md:py-16 flex items-center overflow-hidden"
+        className="relative isolate min-h-[360px] md:min-h-[420px] bg-cover bg-center px-5 py-14 md:py-20 flex items-center overflow-hidden"
         style={{ backgroundImage: `url(${import.meta.env.BASE_URL}images/hero-bg.png)` }}
         data-testid="banner-chalets-hero"
       >
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/60 via-black/55 to-black/75" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-black/20 via-black/15 to-black/40" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{ backgroundImage: "radial-gradient(ellipse 55% 75% at 50% 50%, rgba(18,12,9,0.50) 0%, rgba(18,12,9,0.24) 55%, rgba(18,12,9,0) 100%)" }}
+        />
         <div className="container mx-auto text-center">
-          <motion.div className="mx-auto flex max-w-3xl flex-col items-center gap-6 text-center md:gap-8" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-            <p className="m-0 text-sm md:text-base leading-relaxed text-amber-200 font-semibold drop-shadow-md">أماكن مختارة بعناية</p>
-            <h1 className="m-0 text-3xl sm:text-4xl md:text-5xl font-extrabold text-white leading-tight text-balance drop-shadow-lg">
+          <motion.div className="mx-auto flex max-w-3xl flex-col items-center text-center" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
+            <p className="m-0 mb-6 md:mb-7 inline-flex items-center justify-center gap-3 text-xs sm:text-sm leading-relaxed text-[#EFD1A0] font-semibold tracking-[0.08em] [word-spacing:0.12em] drop-shadow-md">
+              <span aria-hidden="true" className="h-px w-6 sm:w-8 bg-gradient-to-l from-transparent to-[#EFD1A0]/65" />
+              <span>أماكن مختارة بعناية</span>
+              <span aria-hidden="true" className="h-px w-6 sm:w-8 bg-gradient-to-r from-transparent to-[#EFD1A0]/65" />
+            </p>
+            <h1 className="m-0 mb-5 md:mb-6 text-4xl sm:text-5xl md:text-[3.5rem] font-bold text-white leading-[1.25] text-balance drop-shadow-lg">
               الأماكن المتاحة
             </h1>
-            <p className="m-0 text-white/95 text-base md:text-lg max-w-xl leading-relaxed text-balance drop-shadow-md">
+            <p className="m-0 max-w-xl px-1 text-base md:text-lg font-normal leading-[1.9] text-white/90 text-balance drop-shadow-md">
               استعرض أجمل الأماكن واحجز ما يناسبك
             </p>
           </motion.div>
