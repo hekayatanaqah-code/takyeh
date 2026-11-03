@@ -3,13 +3,14 @@ import { MapPin, Bed, Star, ShieldCheck } from "lucide-react";
 import { Chalet } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { resolveAmenity } from "@/lib/amenityUtils";
+import { resolveArabicAmenity, type AmenityCatalogEntry } from "@/lib/amenityUtils";
 import { OfferPrice } from "@/components/chalet/PropertyOfferPrice";
 
 type Period = "morning" | "evening" | "full_day";
 
 interface ChaletCardProps {
   chalet: Chalet;
+  amenitiesCatalog?: AmenityCatalogEntry[];
   selectedPeriod?: Period;
   searchDate?: string;
 }
@@ -24,7 +25,8 @@ function fmt(v: string | number | null | undefined): string | null {
   return v && Number(v) > 0 ? Number(v).toLocaleString("ar-SA") : null;
 }
 
-export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardProps) {
+export function ChaletCard({ chalet, amenitiesCatalog, selectedPeriod, searchDate }: ChaletCardProps) {
+  const amenities = Array.isArray(chalet.amenities) ? chalet.amenities : [];
   const searchPrice = chalet.searchPrice && chalet.searchPrice.date === searchDate
     && (!selectedPeriod || chalet.searchPrice.period === selectedPeriod) ? chalet.searchPrice : null;
   const mainPhoto = chalet.photos && chalet.photos.length > 0
@@ -211,17 +213,17 @@ export function ChaletCard({ chalet, selectedPeriod, searchDate }: ChaletCardPro
           </div>
 
           <div className="mt-4 pt-4 border-t border-border/50 flex flex-wrap gap-2">
-            {chalet.amenities.slice(0, 3).map((amenity: string, idx: number) => {
-              const { ar, icon } = resolveAmenity(amenity);
+            {amenities.slice(0, 3).map((amenity: string, idx: number) => {
+              const { ar, icon } = resolveArabicAmenity(amenity, amenitiesCatalog);
               return (
-                <span key={idx} className="text-xs text-muted-foreground bg-background border px-2 py-1 rounded-full">
+                <span key={idx} title={ar} className="max-w-full break-words text-xs text-muted-foreground bg-background border px-2 py-1 rounded-full">
                   {icon} {ar}
                 </span>
               );
             })}
-            {chalet.amenities.length > 3 && (
+            {amenities.length > 3 && (
               <span className="text-xs text-muted-foreground bg-background border px-2 py-1 rounded-full">
-                +{chalet.amenities.length - 3}
+                +{amenities.length - 3}
               </span>
             )}
           </div>

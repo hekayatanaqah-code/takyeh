@@ -148,11 +148,12 @@ export default function Chalets() {
   const { data: amenitiesCatalog = [] } = useQuery<{ id: number; key: string; labelAr: string }[]>({
     queryKey: ["catalog", "amenities"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}/api/amenities`, { credentials: "include" });
-      if (!r.ok) return [];
+      const r = await fetch(`${BASE}/api/amenities`, { credentials: "include", cache: "no-store" });
+      if (!r.ok) throw new Error("تعذّر تحميل أسماء المرافق");
       return r.json();
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 30_000,
+    refetchOnMount: "always",
   });
 
   const showSectionFilter = filterCategory === "all" || !!categories.find(cat => normalizeCategory(cat.nameAr) === normalizeCategory(filterCategory))?.showSectionFilter;
@@ -833,6 +834,7 @@ export default function Chalets() {
                               <ChaletCard
                                 key={chalet.id}
                                 chalet={chalet}
+                                amenitiesCatalog={amenitiesCatalog}
                                 selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
                               />
                             ))}
@@ -883,6 +885,7 @@ export default function Chalets() {
                                   <ChaletCard
                                     key={chalet.id}
                                     chalet={chalet}
+                                    amenitiesCatalog={amenitiesCatalog}
                                     selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
                                     searchDate={date}
                                   />
@@ -929,6 +932,7 @@ export default function Chalets() {
                       <ChaletCard
                         key={chalet.id}
                         chalet={chalet}
+                        amenitiesCatalog={amenitiesCatalog}
                         selectedPeriod={filterPeriod !== "all" ? (filterPeriod as "morning" | "evening" | "full_day") : undefined}
                         searchDate={filterDate || undefined}
                       />
