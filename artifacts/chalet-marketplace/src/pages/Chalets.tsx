@@ -562,18 +562,18 @@ export default function Chalets() {
       <Navbar />
 
       <section
-        className="relative isolate min-h-[320px] bg-cover bg-center px-4 pt-24 pb-12 flex items-center overflow-hidden"
+        className="relative isolate min-h-[360px] md:min-h-[400px] bg-cover bg-center px-5 py-14 md:py-16 flex items-center overflow-hidden"
         style={{ backgroundImage: `url(${import.meta.env.BASE_URL}images/hero-bg.png)` }}
         data-testid="banner-chalets-hero"
       >
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/55 via-black/45 to-black/70" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/60 via-black/55 to-black/75" />
         <div className="container mx-auto text-center">
-          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-            <p className="text-amber-200 font-semibold mb-3 tracking-wide drop-shadow-md">أماكن مختارة بعناية</p>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight drop-shadow-lg">
+          <motion.div className="mx-auto flex max-w-3xl flex-col items-center gap-6 text-center md:gap-8" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
+            <p className="m-0 text-sm md:text-base leading-relaxed text-amber-200 font-semibold drop-shadow-md">أماكن مختارة بعناية</p>
+            <h1 className="m-0 text-3xl sm:text-4xl md:text-5xl font-extrabold text-white leading-tight text-balance drop-shadow-lg">
               الأماكن المتاحة
             </h1>
-            <p className="text-white/90 text-lg max-w-xl mx-auto leading-relaxed drop-shadow-md">
+            <p className="m-0 text-white/95 text-base md:text-lg max-w-xl leading-relaxed text-balance drop-shadow-md">
               استعرض أجمل الأماكن واحجز ما يناسبك
             </p>
           </motion.div>
