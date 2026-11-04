@@ -1,5 +1,37 @@
 # Owner onboarding regression tests
 
+## Stay completion and departure regression tests
+
+```sh
+pnpm --filter @workspace/chalet-marketplace test:e2e:stay-completion
+```
+
+The Chromium `stay-completion` project uses a controlled Playwright clock in
+`America/Los_Angeles`, deliberately different from Saudi time. Its Vite-only
+HTML entry mounts the real `BookingCalendarTab` used by `Dashboard.tsx` and its
+nested `ManageInsuranceDialog` (now extracted into `PropertyBookingDialogs.tsx`).
+No duplicated booking UI, test-only clock or production login bypass is used.
+React Query notifications use microtasks so paused timers do not stall responses.
+
+The owner's confirmed rule is **archive at the end of the final occupied Saudi
+date**, not at check-out. Insurance settlement and booking-linked review
+eligibility separately wait for the captured `checkoutAt`, including overnight
+stays already in the archive. Tests cross exact midnight/departure boundaries
+with the page/dialog open, keep multi-day stays active through their final day,
+and simulate timer suspension followed by both focus and visibility restoration.
+They assert no navigation/reload, both settlement choices, and review button
+eligibility, without clicking a settlement confirmation or sending a review.
+
+All records exist only in a new browser context and the per-test route fixture.
+The raw bookings response never changes with the clock: the actual component
+must filter it. Only the simulated archive API applies an independent explicit
+midnight oracle; this is UI regression coverage, **not backend/API coverage**.
+Unknown APIs, all writes, service workers, external traffic and popups are
+blocked; optional Google fonts are blocked without being treated as failures.
+Teardown clears cookies, closes the context and discards fixture records even
+when assertions fail. No accounts, database rows, storage files, WhatsApp
+messages or money are created/sent. The release-gate workflow runs this suite.
+
 Run from the repository root:
 
 ```sh

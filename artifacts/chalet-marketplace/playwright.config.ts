@@ -11,6 +11,20 @@ export default defineConfig({
   },
   projects: [
     {
+      name: "stay-completion",
+      testMatch: /stay-completion\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        browserName: "chromium",
+        // Deliberately not Saudi: all boundaries must use +03, not browser time.
+        timezoneId: "America/Los_Angeles",
+        serviceWorkers: "block",
+        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+          : undefined,
+      },
+    },
+    {
       name: "owner-onboarding",
       testMatch: /owner-empty-state\.spec\.ts/,
       use: {
@@ -23,7 +37,7 @@ export default defineConfig({
     },
     {
       name: "webkit-iphone",
-      testIgnore: /(?:owner-empty-state|connection-recovery|route-loading)\.spec\.ts/,
+      testIgnore: /(?:owner-empty-state|connection-recovery|route-loading|stay-completion)\.spec\.ts/,
       use: {
         ...devices["iPhone 13"],
         browserName: "webkit",

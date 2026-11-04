@@ -65,6 +65,9 @@ jobs:
       - name: Protect drafts and prevent write replay during connection recovery
         run: pnpm --filter @workspace/chalet-marketplace test:e2e:connection
 
+      - name: Protect automatic stay completion and departure eligibility
+        run: pnpm --filter @workspace/chalet-marketplace test:e2e:stay-completion
+
       - name: Upload Playwright failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

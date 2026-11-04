@@ -6,6 +6,7 @@ import { formatDateWithHijri, formatDualDate, getHijriMonthDays, toGregorianStr,
 import BookingArchiveControls, { type ArchiveFilters } from "@/components/owner/BookingArchiveControls";
 import { matchesPropertyPaymentFilter, type PropertyPaymentFilter } from "@/lib/propertyBookingStatus";
 import { useToast } from "@/hooks/use-toast";
+import { useSaudiDayClock } from "@/hooks/useSaudiDayClock";
 import { toAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
 import takyahLogoSrc from "@assets/image_1783707669452.png";
@@ -66,19 +67,7 @@ export function BookingCalendarTab({
     setArchivePage(1);
   }, [preferredReportCalendar]);
   const [addOpen, setAddOpen] = useState(false);
-  const [stayClock, setStayClock] = useState(Date.now);
-  useEffect(() => {
-    const tick = () => setStayClock(Date.now());
-    const timer = window.setInterval(tick, 30_000);
-    let midnightTimer: ReturnType<typeof setTimeout>;
-    const scheduleMidnight = () => {
-      const nextMidnight = 86400000 - ((Date.now() + 3 * 60 * 60 * 1000) % 86400000);
-      midnightTimer = setTimeout(() => { tick(); scheduleMidnight(); }, nextMidnight);
-    };
-    scheduleMidnight();
-    window.addEventListener("focus", tick);
-    return () => { window.clearInterval(timer); clearTimeout(midnightTimer); window.removeEventListener("focus", tick); };
-  }, []);
+  const stayClock = useSaudiDayClock();
   const bookingIsComplete = (booking: OwnerBooking) => isStayComplete(
     { ...booking, checkoutAt: booking.checkoutAt ?? null }, undefined, stayClock,
   );
@@ -3582,7 +3571,8 @@ export function BookingCalendarTab({
                           )}
                           {b.ratedAt ? <span className="text-xs text-emerald-700">تم التقييم</span> : (
                             <Button type="button" size="sm" variant="outline"
-                              disabled={reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                              disabled={!bookingIsComplete(b) || reviewSentIds.has(b.id) || reviewPendingId === b.id}
+                              title={!bookingIsComplete(b) ? REVIEW_NOT_READY_MESSAGE : undefined}
                               onClick={() => sendReviewRequest(b)}>
                               {reviewPendingId === b.id ? "جارٍ الإنشاء..." : reviewSentIds.has(b.id) ? "تم الإرسال ✓" : "إرسال رابط التقييم"}
                             </Button>

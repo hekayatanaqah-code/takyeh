@@ -17,7 +17,7 @@ Departure eligibility must remain tied to the booking's captured departure, not 
 
 The active booking list and completed archive use the end of the last occupied Saudi calendar day, independently of scheduled departure hours. Count the start date as the first occupied day; retain a multi-day booking through its last day in full and archive it only at the following midnight.
 
-**Why:** The user's later clarification explicitly requires yesterday's single-day bookings to leave today's active list and multi-day bookings to remain until their final day has fully elapsed. This supersedes the earlier shared list/archive/check-out boundary.
+**Why:** The user's later clarification explicitly requires yesterday's single-day bookings to leave today's active list and multi-day bookings to remain until their final day has fully elapsed. When explicitly asked to choose between departure and calendar-end archiving, the user reconfirmed «نهاية آخر يوم محجوز». This supersedes the earlier shared list/archive/check-out boundary.
 
 **How to apply:** Use the same whole-day rule on the list, archive API and exports, with automatic day rollover. Archiving is classification only, never deletion, and must not alter the separate insurance/review timing rules.
 
