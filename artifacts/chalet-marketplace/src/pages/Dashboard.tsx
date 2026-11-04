@@ -18,6 +18,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { DashboardActivitySelector } from "@/components/owner/DashboardActivitySelector";
+import { FinancialActivityMultiSelect } from "@/components/owner/FinancialActivityMultiSelect";
+import type { FinancialSelection } from "@/lib/financialSelection";
 import OwnerToolbar from "@/components/owner/OwnerToolbar";
 import { motion } from "framer-motion";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
@@ -74,6 +76,7 @@ export default function Dashboard() {
       ? Number(requestedServiceRaw) : null;
   const [dashMode, setDashMode] = useState<"chalets" | "services" | "admin-finance" | "owner-services" | null>(routeParams.has("photographyBooking") || routeParams.get("mode") === "owner-services" ? "owner-services" : null);
   const [adminFinanceTab, setAdminFinanceTab] = useState<"revenue" | "expenses" | "staff" | "customers" | "notifications" | "reports" | "support" | "history" | "ledger">("revenue");
+  const [financialSelectionOverride, setFinancialSelectionOverride] = useState<FinancialSelection | undefined>(undefined);
   const [selectedFinanceUnit, setSelectedFinanceUnit] = useState<FinanceUnit>(() => {
     const key = routeParams.get("activity");
     const match = key?.match(/^(chalet|service)-(\d+)$/);
@@ -506,6 +509,7 @@ export default function Dashboard() {
   }, [ownerChalets, myApprovedProviders, ownerChaletsLoading, providersLoading, ownerChaletsError, providersError, selectedFinanceUnit]);
 
   function changeDashboardActivity(unit: FinanceUnit) {
+    setFinancialSelectionOverride(undefined);
     setSelectedFinanceUnit(unit);
     if (unit.type === "service") setSelectedServiceId(unit.id);
     const mode = activeDashMode === "admin-finance" ? "admin-finance"
@@ -1369,6 +1373,18 @@ export default function Dashboard() {
 
         {/* ══ ADMIN FINANCE MODE ══════════════════════════════════════ */}
         {activeDashMode === "admin-finance" && !actAsStaff && (() => {
+          const financialActivities: NonNullable<FinancialSelection> = [
+            ...ownerChalets.filter((property: any) => property.submissionId != null).map((property: any) => ({
+              type: "chalet" as const, id: property.id, submissionId: property.submissionId, name: property.nameAr || "عقار",
+            })),
+            ...myApprovedProviders.map(provider => ({ type: "service" as const, id: provider.id, name: provider.businessName })),
+          ];
+          const requestedSelection = financialSelectionOverride === undefined
+            ? selectedFinanceUnit.type === "all" ? null : [selectedFinanceUnit] : financialSelectionOverride;
+          const financeSelection = financialActivities.length === 1 && !ownerChaletsLoading && !providersLoading && !ownerChaletsError && !providersError
+            ? financialActivities : requestedSelection?.map(activity =>
+              financialActivities.find(item => activityKey(item) === activityKey(activity)) ?? activity) ?? null;
+          const financeUnit: FinanceUnit = financeSelection?.length === 1 ? financeSelection[0] : { type: "all" };
           const afTabs = [
             { id: "revenue",       label: "الإيرادات",             icon: <TrendingUp className="w-4 h-4" />,   color: "text-green-600" },
             { id: "ledger",        label: "سجل الحساب البنكي",   icon: <span className="text-base leading-none">🏦</span>, color: "text-blue-600" },
@@ -1431,7 +1447,7 @@ export default function Dashboard() {
               </OwnerSubnav>
 
               {/* Consolidated banner (shown for "all" view only) */}
-              {selectedFinanceUnit.type === "all" && isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports") && (
+              {selectedFinanceUnit.type === "all" && (financialSelectionOverride === undefined || financialSelectionOverride === null) && isCrossOwner && (adminFinanceTab === "revenue" || adminFinanceTab === "expenses" || adminFinanceTab === "staff" || adminFinanceTab === "reports") && (
                 <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 text-xs text-primary font-semibold flex items-center gap-2">
                   <Zap className="w-3.5 h-3.5" />
                   {adminFinanceTab === "revenue"  && "الإيرادات الموحّدة — تشمل حجوزات العقارات وإيرادات الخدمات"}
@@ -1442,7 +1458,15 @@ export default function Dashboard() {
               )}
 
               {/* Tab content */}
-              <AdminFinanceCtx.Provider value={{ unit: selectedFinanceUnit, selectUnit: changeDashboardActivity, expenseActivities: [
+              {(["revenue", "expenses", "reports", "history"] as string[]).includes(adminFinanceTab) && <FinancialActivityMultiSelect
+                activities={financialActivities}
+                value={financeSelection}
+                onChange={setFinancialSelectionOverride} disabled={ownerChaletsLoading || providersLoading || ownerChaletsError || providersError} />}
+              <AdminFinanceCtx.Provider value={{ unit: (["revenue", "expenses", "reports", "history"] as string[]).includes(adminFinanceTab)
+                ? financeUnit : selectedFinanceUnit,
+                financialSelection: financeSelection,
+                selectFinancialActivities: setFinancialSelectionOverride,
+                selectUnit: changeDashboardActivity, expenseActivities: [
                 ...ownerChalets.map((property: any): FinanceUnit => ({ type: "chalet", id: property.id, submissionId: property.submissionId, name: property.nameAr || "عقار" })),
                 ...myApprovedProviders.map((provider): FinanceUnit => ({ type: "service", id: provider.id, name: provider.businessName })),
               ] }}>

@@ -35,9 +35,19 @@ import { GREGORIAN_MONTHS_AR } from "@/components/owner/owner-calendar";
 import { REPORT_CSS, buildMonthlyReportHtml, buildYearlyReportHtml, generateAndUploadReportPdf, generateReportQrDataUrl, getLogoDataUrl, htmlToPdfBlob, printMonthlyReport, printYearlyReport } from "@/components/owner/financial-report-export";
 import { encodeWhatsAppText } from "@/components/owner/owner-message-templates";
 import { SectionGuideButton } from "@/components/owner/SectionGuideButton";
+import { GroupedFinancialReport } from "./GroupedFinancialReport";
 
 
-export function ReportsTab({ calendarPreference, properties, services, activitiesLoading, activitiesError }: {
+export function ReportsTab(props: Parameters<typeof SingleActivityReportsTab>[0]) {
+  const { unit, financialSelection, selectFinancialActivities } = useAdminFinance();
+  const selection = financialSelection === undefined ? unit.type === "all" ? null : [unit] : financialSelection;
+  if (selectFinancialActivities && (selection === null ? props.properties.length + props.services.length > 1 : selection.length > 1)) {
+    return <GroupedFinancialReport selection={selection} calendarPreference={props.calendarPreference} />;
+  }
+  return <SingleActivityReportsTab {...props} />;
+}
+
+function SingleActivityReportsTab({ calendarPreference, properties, services, activitiesLoading, activitiesError }: {
   calendarPreference?: "hijri" | "gregorian";
   properties: ReportProperty[];
   services: ReportService[];
@@ -47,7 +57,7 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
   const { toast } = useToast();
   const { isReadOnly, onBlockedEdit } = useReadOnly();
   // This is a report-local filter: it never changes the owner's dashboard activity.
-  const { unit: currentActivity } = useAdminFinance();
+  const { unit: currentActivity, selectFinancialActivities } = useAdminFinance();
   const [reportActivityOverride, setReportUnit] = useState<FinanceUnit | null>(null);
   const loneReportActivity = loneFinancialReportActivity(properties, services);
   const repUnit = loneReportActivity ?? (reportActivityOverride ?? defaultFinancialReportActivity(currentActivity, properties, services));
@@ -966,10 +976,11 @@ export function ReportsTab({ calendarPreference, properties, services, activitie
           <h2 className="text-lg font-bold text-foreground" data-testid="financial-report-title">{reportHeading}</h2>
           <p className="mt-1 text-base font-medium leading-8 text-foreground">{loneReportActivity
             ? "يُعرض التقرير المالي لنشاطك مباشرة."
+            : selectFinancialActivities ? "يُعرض التقرير للنشاط المحدد. يمكنك تغيير الأنشطة من فلتر «النشاط المالي» أعلاه."
             : "اختر جميع الأنشطة أو نشاطًا محددًا لاستخراج تقريره المالي فقط."}</p>
         </div>
-        <FinancialReportActivitySelect value={repUnit} properties={properties} services={services}
-          onChange={selectReportActivity} loading={activitiesLoading || !!quickAction} error={activitiesError} />
+        {!selectFinancialActivities && <FinancialReportActivitySelect value={repUnit} properties={properties} services={services}
+          onChange={selectReportActivity} loading={activitiesLoading || !!quickAction} error={activitiesError} />}
       </div>
 
       {!isActivitySummary && <label className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 cursor-pointer">

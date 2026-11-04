@@ -38,3 +38,11 @@ Any dashboard tab opened for a selected service must use provider-linked data an
 **Why:** Real service bookings were visible in the calendar but revenue showed zero because the all-activity financial view counted only property bookings. Its service summary also used Gregorian periods under Hijri filters.
 
 **How to apply:** Include services in all-activity totals, available financial periods and visible booking details. Share selected-calendar boundaries across both product types. Reuse booking-cache freshness after writes, and never silently turn a failed service read into a valid zero total.
+
+## Explicit financial multi-selection
+
+Financial filters may explicitly combine several properties and services (the user’s example is «تحديد شاليهين وخدمة واحدة معاً»). This is an opt-in financial reporting scope, not a change to the operational activity at the top of the dashboard.
+
+**Why:** The user requested mixed multi-selection in revenue, expenses, financial reports and transaction history while retaining all-activity and individual views.
+
+**How to apply:** Keep product-qualified identities and existing owner authorization. Deduplicate shared/general expenses by their persistent transaction identity before summing. Never add refundable insurance to principal income. Preserve single-activity write attribution; a financial group must not silently trigger an unscoped cash-deposit mutation.

@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import { type DashboardActivity } from "@/lib/dashboardActivity";
+import type { FinancialSelection } from "@/lib/financialSelection";
 
 
 /* ─── Read-Only mode context (admin impersonation) ──────── */
@@ -15,5 +16,9 @@ export const ServiceErpCtx = createContext<{ providerId: number | null }>({ prov
 export function useServiceErp() { return useContext(ServiceErpCtx); }
 
 export type FinanceUnit = DashboardActivity;
-export const AdminFinanceCtx = createContext<{ unit: FinanceUnit; selectUnit?: (unit: FinanceUnit) => void; expenseActivities?: FinanceUnit[] }>({ unit: { type: "all" } });
+export const AdminFinanceCtx = createContext<{
+  unit: FinanceUnit; selectUnit?: (unit: FinanceUnit) => void; expenseActivities?: FinanceUnit[];
+  financialSelection?: FinancialSelection;
+  selectFinancialActivities?: (selection: FinancialSelection) => void;
+}>({ unit: { type: "all" } });
 export function useAdminFinance() { return useContext(AdminFinanceCtx); }

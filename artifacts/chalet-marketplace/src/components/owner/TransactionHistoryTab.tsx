@@ -1,7 +1,7 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useMemo } from "react";
-import { transactionHistoryTotals, type FinancialTransaction } from "@/lib/transactionHistory";
+import { transactionHistoryTotals } from "@/lib/transactionHistory";
 import { XCircle, ListChecks } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { formatDualDate, HIJRI_MONTHS_AR } from "@/lib/hijri";
@@ -14,10 +14,12 @@ import { apiFetch } from "@/components/owner/owner-api";
 import { PaginationBar, useListPagination } from "@/components/owner/finance-shared";
 import { SectionGuideButton } from "@/components/owner/SectionGuideButton";
 import { toArN } from "@/components/owner/owner-formatting";
+import { useFinancialTransactions } from "./useFinancialTransactions";
+import { financialSelectionKey } from "@/lib/financialSelection";
 
 
 export function TransactionHistoryTab() {
-  const { unit } = useAdminFinance();
+  const { unit, financialSelection } = useAdminFinance();
   const qcHist = useQueryClient();
   const { toast } = useToast();
   const [histCalType, setHistCalType] = useState<"hijri" | "gregorian">("hijri");
@@ -25,8 +27,6 @@ export function TransactionHistoryTab() {
   const [histYear, setHistYear] = useState<string>(() => initialHistMonth.split("-")[0]);
   const [histMonth, setHistMonth] = useState<string>(() => initialHistMonth);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-
-  const submissionId = unit.type === "chalet" ? unit.submissionId : undefined;
 
   const markDeposited = async (itemId: string) => {
     const bookingId = itemId.startsWith("b-") ? Number(itemId.slice(2)) : null;
@@ -48,19 +48,8 @@ export function TransactionHistoryTab() {
 
   const [receiptLightboxTx, setReceiptLightboxTx] = useState<string | null>(null);
 
-  const { data: allItems = [], isLoading, isError, refetch } = useQuery<FinancialTransaction[]>({
-    queryKey: ["owner", "transaction-history", unit],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (unit.type === "chalet" && !submissionId) throw new Error("تعذّر تحديد العقار");
-      if (submissionId) params.set("submissionId", String(submissionId));
-      if (unit.type === "service") params.set("providerId", String(unit.id));
-      const r = await apiFetch(`/owner/transaction-history?${params}`);
-      if (!r.ok) throw new Error("تعذّر تحميل سجل المعاملات");
-      return r.json();
-    },
-    staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000,
-  });
+  const { data: allItems = [], isLoading, isError, refetch } = useFinancialTransactions(
+    financialSelection === undefined ? unit.type === "all" ? null : [unit] : financialSelection);
 
   /* Build year/month option lists from fetched data (client-side dual calendar) */
   const histYearOptions = useMemo(() => {
@@ -93,7 +82,7 @@ export function TransactionHistoryTab() {
     if (histYear) return key.startsWith(histYear);
     return true;
   }), [allItems, histCalType, histYear, histMonth]);
-  const historyPagination = useListPagination(items, `${histCalType}|${histYear}|${histMonth}`);
+  const historyPagination = useListPagination(items, `${histCalType}|${histYear}|${histMonth}|${financialSelectionKey(financialSelection ?? null)}`);
 
   const typeLabel = (t: string, method: string) => {
     if (t === "income") {

@@ -32,16 +32,20 @@ import { SectionGuideButton } from "@/components/owner/SectionGuideButton";
 import { PaginatedItems, PaginationBar } from "@/components/owner/finance-shared";
 import { fromEasternArabic, toEasternArabic } from "@/components/owner/SubscriptionAccountBanner";
 import { ProofViewerDialog } from "@/components/owner/PropertyBookingDialogs";
+import { inFinancialSelection } from "@/lib/financialSelection";
+import { ServiceCollectionChannels } from "./ServiceCollectionChannels";
 
 
 export function RevenueTab() {
-  const { unit } = useAdminFinance();
+  const { unit, financialSelection } = useAdminFinance();
+  const selection = financialSelection === undefined ? unit.type === "all" ? null : [unit] : financialSelection;
+  const canDepositCash = selection === null || selection.length === 1;
   const [selectedRevenueSource, setRevenueSource] = useState<RevenueSource>("all");
   const quickSalesQuery = useListQuickSales(undefined, { query: {
     enabled: unit.type !== "chalet", staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000,
   } });
   const activityQuickSales = (quickSalesQuery.data ?? []).filter(sale =>
-    unit.type === "all" || (unit.type === "service" && sale.providerId === unit.id));
+    inFinancialSelection(sale, selection));
   const _nowRev = new Date();
   const currentMonth = `${_nowRev.getFullYear()}-${String(_nowRev.getMonth() + 1).padStart(2, "0")}`;
   const [selectedMonth, setSelectedMonth]     = useState(currentMonth);
@@ -73,6 +77,7 @@ export function RevenueTab() {
       return r.json();
     },
     staleTime: 60_000,
+    select: rows => rows.filter(row => inFinancialSelection(row, selection)),
   });
 
   const { data: siteSettingsCache = {} } = useQuery<Record<string, string>>({
@@ -116,7 +121,7 @@ export function RevenueTab() {
   [revenueMode, calType, revYear, selectedHijriMonth, selectedMonth, revenueFrom, revenueTo]);
   const salesTitle = revenueSalesTitle(revenuePeriod);
 
-  const { data: financial, isLoading: finLoading, refetch: refetchFinancial } = useQuery<{
+  const { data: rawFinancial, isLoading: finLoading, isError: financialError, refetch: refetchFinancial } = useQuery<{
     totalRevenue: number; totalDeposits: number; totalPendingBalance: number;
     totalInsuranceHeld: number; totalInsuranceDeducted: number;
     totalExpenses?: number; netProfit?: number;
@@ -142,22 +147,28 @@ export function RevenueTab() {
     },
   });
 
-  const { data: cancelledBookings = [] } = useQuery<OwnerBooking[]>({
+  const { data: cancelledBookings = [], isError: cancelledError } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings", "cancelled"],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings/cancelled");
       if (!r.ok) throw new Error("تعذر تحميل الحجوزات الملغاة");
       return r.json();
     },
+    select: rows => rows.filter(row => inFinancialSelection(row, selection)),
   });
-  const { data: allBookings = [], isLoading: bkLoading, refetch: refetchBookings } = useQuery<OwnerBooking[]>({
+  const { data: allBookings = [], isLoading: bkLoading, isError: bookingsError, refetch: refetchBookings } = useQuery<OwnerBooking[]>({
     queryKey: ["owner", "bookings-revenue"],
     queryFn: async () => {
       const r = await apiFetch("/owner/bookings");
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذّر تحميل حجوزات العقارات");
       return r.json();
     },
+    select: rows => rows.filter(row => inFinancialSelection(row, selection)),
   });
+  // The legacy summary's installment rows can span multiple properties. Apply
+  // the same booking identity scope as the visible cash detail records.
+  const financial = rawFinancial ? { ...rawFinancial, cashBreakdown: (rawFinancial.cashBreakdown ?? [])
+    .filter(row => selection === null || allBookings.some(booking => booking.id === row.bookingId)) } : undefined;
 
   const revenueProvidersQ = useQuery<{ id: number; businessName: string }[]>({
     queryKey: ["owner", "revenue-service-providers"],
@@ -167,6 +178,7 @@ export function RevenueTab() {
       return r.json();
     },
     enabled: unit.type === "all",
+    select: rows => rows.filter(row => inFinancialSelection({ providerId: row.id }, selection)),
     refetchInterval: 30_000,
   });
   const revenueProviders = revenueProvidersQ.data ?? [];
@@ -214,6 +226,7 @@ export function RevenueTab() {
       if (!r.ok) return [];
       return r.json();
     },
+    select: rows => rows.filter(row => inFinancialSelection(row, selection)),
   });
 
   // ── All-time revenue breakdown (kept for reference) ──────────────────────
@@ -823,13 +836,15 @@ export function RevenueTab() {
       onSourceChange={revenueSourceScopeReady ? setRevenueSource : undefined} />}
   </div>;
 
-  if (svcError || (unit.type !== "chalet" && quickSalesQuery.isError)) {
+  if (svcError || (unit.type !== "chalet" && quickSalesQuery.isError)
+    || (unit.type !== "service" && (bookingsError || cancelledError || financialError))) {
     return <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 space-y-3" dir="rtl">
-      <p className="text-sm font-semibold">تعذّر تحميل إيرادات الخدمات أو المبيعات المفردة. لا يمكن عرض الإجماليات كاملة حالياً.</p>
+      <p className="text-sm font-semibold">تعذّر تحميل بعض البيانات المالية. لا يمكن عرض إجماليات الأنشطة المختارة كاملة حالياً.</p>
       <Button variant="outline" onClick={() => {
         if (unit.type === "all") void revenueProvidersQ.refetch();
         serviceRevenueQueries.forEach(query => { void query.refetch(); });
         void quickSalesQuery.refetch();
+        void refetchBookings(); void refetchFinancial();
       }}>إعادة المحاولة</Button>
     </div>;
   }
@@ -1003,6 +1018,8 @@ export function RevenueTab() {
             </PaginatedItems>
           )}
         </div>
+        <ServiceCollectionChannels selection={selection} period={selectedServicePeriod}
+          source={revenueSource} bookings={serviceAppts} loading={svcLoading} />
       </div>
     );
   }
@@ -1211,6 +1228,9 @@ export function RevenueTab() {
       )}
 
       {unit.type !== "chalet" && revenueSource !== "bookings" && <QuickSalesRevenueDetails sales={combinedQuickSales} />}
+      {unit.type === "all" && revenueProviders.length > 0 && <ServiceCollectionChannels
+        selection={revenueProviders.map(provider => ({ type: "service", id: provider.id, name: provider.businessName }))}
+        period={revenuePeriod} source={revenueSource} bookings={serviceAppts} loading={svcLoading} />}
       <div className={unit.type !== "chalet" && revenueSource === "quick_sales" ? "hidden" : "contents"}>
       {/* ── FINANCIAL CHANNELS DISTRIBUTION ── */}
       <div className="bg-card border border-border rounded-2xl overflow-hidden">
@@ -1268,7 +1288,8 @@ export function RevenueTab() {
                   <span className="font-semibold text-sm text-foreground">كاش لم يودَع / عهدة معلقة</span>
                   <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full">تفاصيل ↓</span>
                 </div>
-                <div className="text-[11px] text-muted-foreground">نقدي بيد المشرف — لم يُودَع في البنك بعد</div>
+                <div className="text-sm text-muted-foreground">{canDepositCash ? "نقدي بيد المشرف — لم يُودَع في البنك بعد"
+                  : "لإيداع الكاش، اختر نشاطاً واحداً لتحديد مصدر الإيداع بدقة."}</div>
               </div>
             </button>
             <div className="flex items-center gap-3 shrink-0">
@@ -1277,7 +1298,7 @@ export function RevenueTab() {
                   {fmtN(channels.cashUndeposited)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
                 </span>
               )}
-              {!loading && channels.cashUndeposited > 0 && (
+              {!loading && channels.cashUndeposited > 0 && canDepositCash && (
                 <button
                   type="button"
                   onClick={() => setDepositCashOpen(true)}
@@ -1617,7 +1638,7 @@ export function RevenueTab() {
             <Button
               onClick={async () => {
                 const amt = depositAmount ? Number(depositAmount) : channels.cashUndeposited;
-                if (!amt || amt <= 0) return;
+                if (!amt || amt <= 0 || !canDepositCash) return;
                 setDepositingCash(true);
                 try {
                   const submissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
@@ -1635,7 +1656,7 @@ export function RevenueTab() {
                   setDepositingCash(false);
                 }
               }}
-              disabled={depositingCash || channels.cashUndeposited === 0 || (!!depositAmount && Number(depositAmount) > channels.cashUndeposited)}
+              disabled={!canDepositCash || depositingCash || channels.cashUndeposited === 0 || (!!depositAmount && Number(depositAmount) > channels.cashUndeposited)}
               className="flex-1 bg-blue-600 hover:bg-blue-700"
             >
               {depositingCash ? "جارٍ التسجيل..." : "✓ تأكيد الإيداع"}

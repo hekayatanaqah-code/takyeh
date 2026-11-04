@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { formatDualDate, HIJRI_MONTHS_AR, toHijriComponents } from "@/lib/hijri";
 import { isExpenseInScope } from "@/lib/expenseScope";
+import { expenseInFinancialSelection, financialSelectionKey } from "@/lib/financialSelection";
 import { Plus, Trash2, Wallet, Receipt, Camera, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,7 @@ import { SectionGuideButton } from "@/components/owner/SectionGuideButton";
 
 
 export function ExpensesTab() {
-  const { unit, expenseActivities = [] } = useAdminFinance();
+  const { unit, expenseActivities = [], financialSelection } = useAdminFinance();
   const [expenseActivityKey, setExpenseActivityKey] = useState("default");
   const defaultActivity = defaultExpenseActivity(unit, expenseActivities);
   const expenseActivity = unit.type === "all" && expenseActivityKey !== "default"
@@ -225,9 +226,10 @@ export function ExpensesTab() {
     } else if (expYear) {
       result = result.filter(e => (e as any).dateStr && getBookingMonthKey((e as any).dateStr, expCalType).startsWith(expYear));
     }
-    result = result.filter(expense => isExpenseInScope(expense, unit));
+    result = result.filter(expense => financialSelection === undefined ? isExpenseInScope(expense, unit)
+      : expenseInFinancialSelection(expense, financialSelection));
     return result;
-  }, [expenses, expCalType, expYear, expMonth, unit, unitProviderId]);
+  }, [expenses, expCalType, expYear, expMonth, unit, unitProviderId, financialSelection]);
 
   const totalMonth = filteredExpenses.reduce((s, e) => s + Number(e.amount), 0);
   const expenseTotalLabel = expMonth
@@ -601,7 +603,7 @@ export function ExpensesTab() {
             <p className="text-sm">لا توجد مصروفات في هذا الشهر</p>
           </div>
         ) : (
-          <PaginatedItems items={filteredExpenses} resetKey={`${expCalType}|${expYear}|${expMonth}|${unit.type}|${unit.type === "chalet" ? (unit as any).submissionId ?? "" : ""}`}>
+          <PaginatedItems items={filteredExpenses} resetKey={`${expCalType}|${expYear}|${expMonth}|${unit.type}|${unit.type === "chalet" ? (unit as any).submissionId ?? "" : ""}|${financialSelectionKey(financialSelection ?? null)}`}>
             {(pagination) => (
               <div ref={pagination.tableRef} className="rounded-xl overflow-hidden border border-border/40 scroll-mt-4">
                 <div className="overflow-x-auto">
