@@ -9,6 +9,113 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Submit a service provider registration with an optional Instagram account
+ */
+export const submitServiceProviderBodyBusinessNameMin = 2;
+
+
+
+
+
+export const submitServiceProviderBodyWhatsappNumberMin = 9;
+
+export const submitServiceProviderBodyInstagramAccountMax = 200;
+
+
+export const submitServiceProviderBodyGalleryPhotosMin = 3;
+
+export const submitServiceProviderBodyYearsOfExperienceMin = 0;
+
+
+export const submitServiceProviderBodyRequiresInsuranceDefault = false;
+
+export const SubmitServiceProviderBody = zod.object({
+  "businessName": zod.string().min(submitServiceProviderBodyBusinessNameMin),
+  "category": zod.string().min(1),
+  "serviceRegionId": zod.number().int().min(1),
+  "serviceCityId": zod.number().int().min(1),
+  "city": zod.string().min(1),
+  "descriptionAr": zod.string().optional(),
+  "whatsappNumber": zod.string().min(submitServiceProviderBodyWhatsappNumberMin),
+  "instagramAccount": zod.string().max(submitServiceProviderBodyInstagramAccountMax).nullish().describe('Optional Instagram handle or profile URL; blank values are stored as null.'),
+  "logoUrl": zod.string().optional(),
+  "galleryPhotos": zod.array(zod.string().min(1)).min(submitServiceProviderBodyGalleryPhotosMin),
+  "videoUrl": zod.string().optional(),
+  "yearsOfExperience": zod.number().int().min(submitServiceProviderBodyYearsOfExperienceMin).optional(),
+  "pricingUnit": zod.enum(['per_day', 'per_hour', 'per_request']),
+  "dailyCapacity": zod.number().int().min(1),
+  "requiresInsurance": zod.boolean().default(submitServiceProviderBodyRequiresInsuranceDefault),
+  "insuranceAmount": zod.union([zod.string(),zod.number()]).nullish(),
+  "coverageTags": zod.array(zod.string()).optional(),
+  "customFeatureTags": zod.array(zod.string()).optional()
+})
+
+export const SubmitServiceProviderResponse = zod.object({
+  "id": zod.number().int(),
+  "businessName": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'needs_revision']),
+  "instagramAccount": zod.string().nullish()
+})
+
+
+
+
+
+export const UpdateServiceProviderSubmissionParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const updateServiceProviderSubmissionBodyBusinessNameMin = 2;
+
+
+
+
+
+export const updateServiceProviderSubmissionBodyWhatsappNumberMin = 9;
+
+export const updateServiceProviderSubmissionBodyInstagramAccountMax = 200;
+
+
+export const updateServiceProviderSubmissionBodyGalleryPhotosMin = 3;
+
+export const updateServiceProviderSubmissionBodyYearsOfExperienceMin = 0;
+
+
+
+
+export const UpdateServiceProviderSubmissionBody = zod.object({
+  "businessName": zod.string().min(updateServiceProviderSubmissionBodyBusinessNameMin).optional(),
+  "category": zod.string().min(1).optional(),
+  "serviceRegionId": zod.number().int().min(1).optional(),
+  "serviceCityId": zod.number().int().min(1).optional(),
+  "city": zod.string().min(1).optional(),
+  "descriptionAr": zod.string().nullish(),
+  "whatsappNumber": zod.string().min(updateServiceProviderSubmissionBodyWhatsappNumberMin).optional(),
+  "instagramAccount": zod.string().max(updateServiceProviderSubmissionBodyInstagramAccountMax).nullish().describe('Optional Instagram account; null or blank clears it, omission preserves it.'),
+  "logoUrl": zod.string().nullish(),
+  "galleryPhotos": zod.array(zod.string().min(1)).min(updateServiceProviderSubmissionBodyGalleryPhotosMin).optional(),
+  "videoUrl": zod.string().nullish(),
+  "yearsOfExperience": zod.number().int().min(updateServiceProviderSubmissionBodyYearsOfExperienceMin).nullish(),
+  "pricingUnit": zod.enum(['per_day', 'per_hour', 'per_request']).optional(),
+  "dailyCapacity": zod.number().int().min(1).optional(),
+  "requiresInsurance": zod.boolean().optional(),
+  "requiresContract": zod.boolean().optional(),
+  "contractText": zod.string().nullish(),
+  "includeElectronicSignature": zod.boolean().optional(),
+  "insuranceAmount": zod.union([zod.string(),zod.number()]).nullish(),
+  "coverageTags": zod.array(zod.string()).optional(),
+  "customFeatureTags": zod.array(zod.string()).optional()
+})
+
+export const UpdateServiceProviderSubmissionResponse = zod.object({
+  "id": zod.number().int(),
+  "businessName": zod.string(),
+  "status": zod.enum(['pending', 'approved', 'rejected', 'needs_revision']),
+  "instagramAccount": zod.string().nullish()
+})
+
+
+/**
  * @summary Request approval of a new service city
  */
 export const createServiceCityRequestBodyCityMin = 2;

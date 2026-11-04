@@ -2085,6 +2085,12 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
           .where(eq(serviceProvidersTable.submissionId, submission.id))
           .limit(1);
 
+        if (linkedProvider.length > 0) {
+          await tx.update(serviceProvidersTable)
+            .set({ instagramAccount: submission.instagramAccount })
+            .where(eq(serviceProvidersTable.id, linkedProvider[0].id));
+        }
+
         if (linkedProvider.length === 0) {
           const legacyProviders = await tx
             .select({ id: serviceProvidersTable.id })
@@ -2107,7 +2113,7 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
           if (legacyProviders.length === 1) {
             await tx
               .update(serviceProvidersTable)
-              .set({ submissionId: submission.id })
+              .set({ submissionId: submission.id, instagramAccount: submission.instagramAccount })
               .where(and(
                 eq(serviceProvidersTable.id, legacyProviders[0].id),
                 isNull(serviceProvidersTable.submissionId),
@@ -2123,6 +2129,7 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
               city: submission.city,
               descriptionAr: submission.descriptionAr ?? undefined,
               whatsappNumber: submission.whatsappNumber,
+              instagramAccount: submission.instagramAccount,
               logoUrl: submission.logoUrl ?? undefined,
               galleryPhotos: submission.galleryPhotos ?? [],
               videoUrl: submission.videoUrl ?? undefined,

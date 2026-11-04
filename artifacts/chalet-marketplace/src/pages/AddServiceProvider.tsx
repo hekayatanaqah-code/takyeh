@@ -15,7 +15,7 @@ import {
 import {
   CheckCircle, Phone, Star, Upload, Image as ImageIcon,
   Loader2, X, Building2, MapPin, Video, ShieldCheck, Briefcase,
-  Globe,
+  Globe, Instagram,
 } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { AddonPaymentModal } from "@/components/AddonPaymentModal";
@@ -114,6 +114,7 @@ export default function AddServiceProvider() {
     city: "",
     descriptionAr: "",
     whatsappNumber: "",
+    instagramAccount: "",
     yearsOfExperience: "",
     pricingUnit: "",
     dailyCapacity: "",
@@ -233,6 +234,7 @@ export default function AddServiceProvider() {
       city: matchedRegion && matchedRegionCities.includes(submissionCity) ? submissionCity : "",
       descriptionAr: editingSubmission.descriptionAr ?? "",
       whatsappNumber: editingSubmission.whatsappNumber ?? "",
+      instagramAccount: editingSubmission.instagramAccount ?? "",
       yearsOfExperience: editingSubmission.yearsOfExperience == null ? "" : String(editingSubmission.yearsOfExperience),
       pricingUnit: editingSubmission.pricingUnit ?? "",
       dailyCapacity: editingSubmission.dailyCapacity == null ? "" : String(editingSubmission.dailyCapacity),
@@ -531,6 +533,7 @@ export default function AddServiceProvider() {
         city: resolvedCity,
         descriptionAr: form.descriptionAr.trim() || undefined,
         whatsappNumber: form.whatsappNumber,
+        instagramAccount: form.instagramAccount.trim() || null,
         yearsOfExperience: Number(form.yearsOfExperience),
         pricingUnit: form.pricingUnit,
         dailyCapacity: Number(form.dailyCapacity),
@@ -806,6 +809,34 @@ export default function AddServiceProvider() {
                   />
                 </div>
               )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="instagramAccount">
+                  حساب إنستقرام <span className="text-muted-foreground font-normal">(اختياري)</span>
+                </Label>
+                <div className="relative">
+                  <Instagram className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    id="instagramAccount"
+                    name="instagramAccount"
+                    type="text"
+                    dir="ltr"
+                    value={form.instagramAccount}
+                    onChange={(e) => handleChange("instagramAccount", e.target.value)}
+                    placeholder="@your_account"
+                    maxLength={200}
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    aria-describedby="instagramAccount-help"
+                    aria-invalid={!!fieldErrors.instagramAccount}
+                    className={`h-9 pr-10 ${fieldErrors.instagramAccount ? "border-red-500 ring-1 ring-red-500" : ""}`}
+                  />
+                </div>
+                <p id="instagramAccount-help" className="text-sm text-muted-foreground">
+                  يمكنك إدخال اسم الحساب أو رابطه، أو ترك الحقل فارغاً.
+                </p>
+                {fieldErrors.instagramAccount && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{fieldErrors.instagramAccount}</p>}
+              </div>
 
               {/* Years of Experience + WhatsApp */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">

@@ -316,6 +316,7 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     city: z.string().min(1, "يرجى اختيار المدينة"),
     descriptionAr: z.string().optional(),
     whatsappNumber: z.string().min(9, "رقم الواتساب يجب أن يكون 9 أرقام على الأقل"),
+    instagramAccount: z.string().trim().max(200, "حساب إنستقرام طويل جداً").nullable().optional(),
     logoUrl: z.string().min(1).optional().or(z.literal("")),
     galleryPhotos: z
       .array(z.string().min(1))
@@ -402,6 +403,7 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     city: data.city,
     descriptionAr: data.descriptionAr ?? null,
     whatsappNumber: data.whatsappNumber,
+    instagramAccount: data.instagramAccount || null,
     logoUrl: data.logoUrl || null,
     galleryPhotos: data.galleryPhotos,
     videoUrl: data.videoUrl || null,
@@ -496,6 +498,7 @@ router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
     city: z.string().min(1, "يرجى اختيار المدينة").optional(),
     descriptionAr: z.string().optional().nullable(),
     whatsappNumber: z.string().min(9, "رقم الواتساب يجب أن يكون 9 أرقام على الأقل").optional(),
+    instagramAccount: z.string().trim().max(200, "حساب إنستقرام طويل جداً").transform(value => value || null).nullable().optional(),
     logoUrl: z.string().optional().nullable(),
     galleryPhotos: z.array(z.string().min(1)).min(3, "يجب رفع 3 صور على الأقل").optional(),
     videoUrl: z.string().optional().nullable(),
@@ -666,6 +669,7 @@ router.patch("/my/approved/:id", requireAuth, async (req: any, res) => {
     businessName: z.string().min(2).optional(),
     descriptionAr: z.string().optional().nullable(),
     whatsappNumber: z.string().min(9).optional(),
+    instagramAccount: z.string().trim().max(200, "حساب إنستقرام طويل جداً").transform(value => value || null).nullable().optional(),
     city: z.string().min(1).optional(),
     logoUrl: z.string().optional().nullable(),
     galleryPhotos: z.array(z.string()).optional(),

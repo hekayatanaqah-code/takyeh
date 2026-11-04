@@ -5,6 +5,131 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type ServiceProviderRegistrationInputPricingUnit = typeof ServiceProviderRegistrationInputPricingUnit[keyof typeof ServiceProviderRegistrationInputPricingUnit];
+
+
+export const ServiceProviderRegistrationInputPricingUnit = {
+  per_day: 'per_day',
+  per_hour: 'per_hour',
+  per_request: 'per_request',
+} as const;
+
+export interface ServiceProviderRegistrationInput {
+  /** @minLength 2 */
+  businessName: string;
+  /** @minLength 1 */
+  category: string;
+  /** @minimum 1 */
+  serviceRegionId: number;
+  /** @minimum 1 */
+  serviceCityId: number;
+  /** @minLength 1 */
+  city: string;
+  descriptionAr?: string;
+  /** @minLength 9 */
+  whatsappNumber: string;
+  /**
+     * Optional Instagram handle or profile URL; blank values are stored as null.
+     * @maxLength 200
+     * @nullable
+     */
+  instagramAccount?: string | null;
+  logoUrl?: string;
+  /**
+     * @minItems 3
+     * @items.minLength 1
+     */
+  galleryPhotos: string[];
+  videoUrl?: string;
+  /** @minimum 0 */
+  yearsOfExperience?: number;
+  pricingUnit: ServiceProviderRegistrationInputPricingUnit;
+  /** @minimum 1 */
+  dailyCapacity: number;
+  requiresInsurance?: boolean;
+  /** @nullable */
+  insuranceAmount?: string | number | null;
+  coverageTags?: string[];
+  customFeatureTags?: string[];
+}
+
+export type ServiceProviderRegistrationUpdatePricingUnit = typeof ServiceProviderRegistrationUpdatePricingUnit[keyof typeof ServiceProviderRegistrationUpdatePricingUnit];
+
+
+export const ServiceProviderRegistrationUpdatePricingUnit = {
+  per_day: 'per_day',
+  per_hour: 'per_hour',
+  per_request: 'per_request',
+} as const;
+
+export interface ServiceProviderRegistrationUpdate {
+  /** @minLength 2 */
+  businessName?: string;
+  /** @minLength 1 */
+  category?: string;
+  /** @minimum 1 */
+  serviceRegionId?: number;
+  /** @minimum 1 */
+  serviceCityId?: number;
+  /** @minLength 1 */
+  city?: string;
+  /** @nullable */
+  descriptionAr?: string | null;
+  /** @minLength 9 */
+  whatsappNumber?: string;
+  /**
+     * Optional Instagram account; null or blank clears it, omission preserves it.
+     * @maxLength 200
+     * @nullable
+     */
+  instagramAccount?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  /**
+     * @minItems 3
+     * @items.minLength 1
+     */
+  galleryPhotos?: string[];
+  /** @nullable */
+  videoUrl?: string | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  yearsOfExperience?: number | null;
+  pricingUnit?: ServiceProviderRegistrationUpdatePricingUnit;
+  /** @minimum 1 */
+  dailyCapacity?: number;
+  requiresInsurance?: boolean;
+  requiresContract?: boolean;
+  /** @nullable */
+  contractText?: string | null;
+  includeElectronicSignature?: boolean;
+  /** @nullable */
+  insuranceAmount?: string | number | null;
+  coverageTags?: string[];
+  customFeatureTags?: string[];
+}
+
+export type ServiceProviderRegistrationRecordStatus = typeof ServiceProviderRegistrationRecordStatus[keyof typeof ServiceProviderRegistrationRecordStatus];
+
+
+export const ServiceProviderRegistrationRecordStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+  needs_revision: 'needs_revision',
+} as const;
+
+export interface ServiceProviderRegistrationRecord {
+  id: number;
+  businessName: string;
+  status: ServiceProviderRegistrationRecordStatus;
+  /** @nullable */
+  instagramAccount?: string | null;
+  [key: string]: unknown;
+ }
+
 export interface ServiceCityRequestInput {
   /**
      * @minLength 2

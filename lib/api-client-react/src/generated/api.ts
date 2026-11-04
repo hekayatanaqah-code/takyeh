@@ -176,6 +176,9 @@ import type {
   ServiceCityRequestInput,
   ServiceCityRequestRecord,
   ServiceGlobalSeason,
+  ServiceProviderRegistrationInput,
+  ServiceProviderRegistrationRecord,
+  ServiceProviderRegistrationUpdate,
   ServiceSeason,
   SettleStaffHoldingBody,
   StaffHolding,
@@ -221,6 +224,177 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getSubmitServiceProviderUrl = () => {
+
+
+
+
+  return `/api/providers/submit`
+}
+
+/**
+ * @summary Submit a service provider registration with an optional Instagram account
+ */
+export const submitServiceProvider = async (serviceProviderRegistrationInput: ServiceProviderRegistrationInput, options?: Parameters<typeof customFetch>[1]): Promise<ServiceProviderRegistrationRecord> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ServiceProviderRegistrationRecord>(getSubmitServiceProviderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(serviceProviderRegistrationInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitServiceProviderMutationKey = () => ['submitServiceProvider'] as const;
+
+export const getSubmitServiceProviderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitServiceProvider>>, TError,SubmitServiceProviderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitServiceProvider>>, TError,SubmitServiceProviderMutationVariables, TContext> => {
+
+const mutationKey = getSubmitServiceProviderMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitServiceProvider>>, SubmitServiceProviderMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitServiceProvider(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitServiceProviderMutationResult = NonNullable<Awaited<ReturnType<typeof submitServiceProvider>>>
+    export type SubmitServiceProviderMutationBody = BodyType<ServiceProviderRegistrationInput>
+    export type SubmitServiceProviderMutationError = ErrorType<unknown>
+    export type SubmitServiceProviderMutationVariables = {data: BodyType<ServiceProviderRegistrationInput>}
+
+    /**
+ * @summary Submit a service provider registration with an optional Instagram account
+ */
+export const useSubmitServiceProvider = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitServiceProvider>>, TError,SubmitServiceProviderMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof submitServiceProvider>>,
+        TError,
+        SubmitServiceProviderMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitServiceProviderMutationOptions(options), queryClient);
+    }
+
+export const getUpdateServiceProviderSubmissionUrl = (id: number,) => {
+
+
+
+
+  return `/api/providers/my/submissions/${id}`
+}
+
+export const updateServiceProviderSubmission = async (id: number,
+    serviceProviderRegistrationUpdate: ServiceProviderRegistrationUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ServiceProviderRegistrationRecord> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ServiceProviderRegistrationRecord>(getUpdateServiceProviderSubmissionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(serviceProviderRegistrationUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateServiceProviderSubmissionMutationKey = () => ['updateServiceProviderSubmission'] as const;
+
+export const getUpdateServiceProviderSubmissionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceProviderSubmission>>, TError,UpdateServiceProviderSubmissionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateServiceProviderSubmission>>, TError,UpdateServiceProviderSubmissionMutationVariables, TContext> => {
+
+const mutationKey = getUpdateServiceProviderSubmissionMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateServiceProviderSubmission>>, UpdateServiceProviderSubmissionMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateServiceProviderSubmission(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateServiceProviderSubmissionMutationResult = NonNullable<Awaited<ReturnType<typeof updateServiceProviderSubmission>>>
+    export type UpdateServiceProviderSubmissionMutationBody = BodyType<ServiceProviderRegistrationUpdate>
+    export type UpdateServiceProviderSubmissionMutationError = ErrorType<unknown>
+    export type UpdateServiceProviderSubmissionMutationVariables = {id: number;data: BodyType<ServiceProviderRegistrationUpdate>}
+
+    export const useUpdateServiceProviderSubmission = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceProviderSubmission>>, TError,UpdateServiceProviderSubmissionMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateServiceProviderSubmission>>,
+        TError,
+        UpdateServiceProviderSubmissionMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateServiceProviderSubmissionMutationOptions(options), queryClient);
+    }
 
 export const getCreateServiceCityRequestUrl = () => {
 

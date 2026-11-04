@@ -20,3 +20,9 @@ Social account identity must survive equivalent URL/handle forms, letter case, a
 **Why:** The user wants duplicate-account prevention for links as well as account identifiers. Raw URL comparison is bypassed by entering the same account as a handle; assuming a platform for an unqualified handle would miss duplicates.
 
 **How to apply:** Use the same identity comparison for early checks and final writes. Exclude the current submission and its live mirror during edits.
+
+Service-provider registration has an optional «حساب إنستقرام» field. Property/chalet registration retains its required social-account field.
+
+**Why:** The user explicitly requested optional Instagram accounts for services while keeping the property registration requirement.
+
+**How to apply:** Keep these validation requirements separate; adding or sharing a service-profile field must not make a social account mandatory for services or relax the property registration requirement.

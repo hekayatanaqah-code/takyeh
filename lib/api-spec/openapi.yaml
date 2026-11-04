@@ -21,6 +21,37 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /providers/submit:
+    post:
+      operationId: submitServiceProvider
+      summary: Submit a service provider registration with an optional Instagram account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceProviderRegistrationInput" }
+      responses:
+        "201":
+          description: Saved registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceProviderRegistrationRecord" }
+  /providers/my/submissions/{id}:
+    patch:
+      operationId: updateServiceProviderSubmission
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ServiceProviderRegistrationUpdate" }
+      responses:
+        "200":
+          description: Updated registration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ServiceProviderRegistrationRecord" }
   /providers/city-request:
     post:
       operationId: createServiceCityRequest
@@ -1744,6 +1775,67 @@ components:
       schema:
         type: string
   schemas:
+    ServiceProviderRegistrationInput:
+      type: object
+      required: [businessName, category, serviceRegionId, serviceCityId, city, whatsappNumber, galleryPhotos, pricingUnit, dailyCapacity]
+      properties:
+        businessName: { type: string, minLength: 2 }
+        category: { type: string, minLength: 1 }
+        serviceRegionId: { type: integer, minimum: 1 }
+        serviceCityId: { type: integer, minimum: 1 }
+        city: { type: string, minLength: 1 }
+        descriptionAr: { type: string }
+        whatsappNumber: { type: string, minLength: 9 }
+        instagramAccount:
+          type: [string, "null"]
+          maxLength: 200
+          description: Optional Instagram handle or profile URL; blank values are stored as null.
+        logoUrl: { type: string }
+        galleryPhotos: { type: array, minItems: 3, items: { type: string, minLength: 1 } }
+        videoUrl: { type: string }
+        yearsOfExperience: { type: integer, minimum: 0 }
+        pricingUnit: { type: string, enum: [per_day, per_hour, per_request] }
+        dailyCapacity: { type: integer, minimum: 1 }
+        requiresInsurance: { type: boolean, default: false }
+        insuranceAmount: { type: [string, number, "null"] }
+        coverageTags: { type: array, items: { type: string } }
+        customFeatureTags: { type: array, items: { type: string } }
+    ServiceProviderRegistrationUpdate:
+      type: object
+      properties:
+        businessName: { type: string, minLength: 2 }
+        category: { type: string, minLength: 1 }
+        serviceRegionId: { type: integer, minimum: 1 }
+        serviceCityId: { type: integer, minimum: 1 }
+        city: { type: string, minLength: 1 }
+        descriptionAr: { type: [string, "null"] }
+        whatsappNumber: { type: string, minLength: 9 }
+        instagramAccount:
+          type: [string, "null"]
+          maxLength: 200
+          description: Optional Instagram account; null or blank clears it, omission preserves it.
+        logoUrl: { type: [string, "null"] }
+        galleryPhotos: { type: array, minItems: 3, items: { type: string, minLength: 1 } }
+        videoUrl: { type: [string, "null"] }
+        yearsOfExperience: { type: [integer, "null"], minimum: 0 }
+        pricingUnit: { type: string, enum: [per_day, per_hour, per_request] }
+        dailyCapacity: { type: integer, minimum: 1 }
+        requiresInsurance: { type: boolean }
+        requiresContract: { type: boolean }
+        contractText: { type: [string, "null"] }
+        includeElectronicSignature: { type: boolean }
+        insuranceAmount: { type: [string, number, "null"] }
+        coverageTags: { type: array, items: { type: string } }
+        customFeatureTags: { type: array, items: { type: string } }
+    ServiceProviderRegistrationRecord:
+      type: object
+      required: [id, businessName, status]
+      additionalProperties: true
+      properties:
+        id: { type: integer }
+        businessName: { type: string }
+        status: { type: string, enum: [pending, approved, rejected, needs_revision] }
+        instagramAccount: { type: [string, "null"] }
     ServiceCityRequestInput:
       type: object
       required: [city]
