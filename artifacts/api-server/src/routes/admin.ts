@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { adminServiceCityRequestsRouter } from "./admin-service-city-requests";
+import { arabicServiceCategoryName, serviceCategoryCreationSchema } from "../lib/service-category-names";
 import photographyAdminRouter from "./photography-admin";
 import partnerAccountsRouter from "./admin-partner-accounts";
 import ownerServicesAdminRouter from "./owner-services-admin";
@@ -1883,13 +1884,8 @@ router.get("/service-categories", async (_req, res) => {
 });
 
 router.post("/service-categories", async (req, res) => {
-  const body = z.object({
-    key: z.string().min(1),
-    labelAr: z.string().min(1),
-    emoji: z.string().default("✨"),
-    sortOrder: z.number().int().default(0),
-  }).safeParse(req.body);
-  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  const body = serviceCategoryCreationSchema.safeParse(req.body);
+  if (!body.success) return res.status(400).json({ error: "يرجى إدخال اسم الفئة بالعربية وبيانات صحيحة" });
   const [row] = await db.insert(serviceCategoriesTable).values(body.data).returning();
   return res.status(201).json(row);
 });
@@ -1908,12 +1904,12 @@ router.patch("/service-categories/reorder", async (req, res) => {
 router.patch("/service-categories/:id", async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({
-    labelAr: z.string().min(1).optional(),
+    labelAr: arabicServiceCategoryName.optional(),
     emoji: z.string().optional(),
     isActive: z.boolean().optional(),
     sortOrder: z.number().int().optional(),
   }).safeParse(req.body);
-  if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (!body.success) return res.status(400).json({ error: "يرجى إدخال اسم الفئة بالعربية وبيانات صحيحة" });
   await db.update(serviceCategoriesTable).set(body.data).where(eq(serviceCategoriesTable.id, id));
   return res.json({ ok: true });
 });
@@ -2049,7 +2045,9 @@ router.get("/service-submissions", requireChaletApprovalsAdmin, async (_req, res
     .select()
     .from(serviceProviderSubmissionsTable)
     .orderBy(serviceProviderSubmissionsTable.createdAt);
-  return res.json(rows.reverse());
+  const categories = await db.select({ key: serviceCategoriesTable.key, labelAr: serviceCategoriesTable.labelAr }).from(serviceCategoriesTable);
+  const categoryLabels = new Map(categories.map(category => [category.key, category.labelAr]));
+  return res.json(rows.reverse().map(row => ({ ...row, categoryLabel: categoryLabels.get(row.category) ?? null })));
 });
 
 router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, async (req, res) => {

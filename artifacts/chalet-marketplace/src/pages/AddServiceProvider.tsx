@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { fromAr, toAr } from "@/lib/utils";
+import { arabicServiceCategoryLabel, isArabicServiceCategoryName } from "@/lib/serviceCategoryLabel";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -241,7 +242,7 @@ export default function AddServiceProvider() {
       requiresInsurance: Boolean(editingSubmission.requiresInsurance),
       insuranceAmount: editingSubmission.insuranceAmount == null ? "" : String(editingSubmission.insuranceAmount),
     });
-    setCustomCategory(isKnownCategory ? "" : submissionCategory);
+    setCustomCategory(isKnownCategory ? "" : arabicServiceCategoryLabel(submissionCategory, ""));
     setRegionSelectVal(matchedRegion);
     setCitySelectVal(matchedRegion && matchedRegionCities.includes(submissionCity) ? submissionCity : "__other__");
     setCustomCity(matchedRegion && matchedRegionCities.includes(submissionCity) ? "" : submissionCity);
@@ -493,6 +494,7 @@ export default function AddServiceProvider() {
     if (!form.businessName.trim()) errs.businessName = "اسم النشاط مطلوب";
     if (!form.category) errs.category = "يرجى اختيار فئة الخدمة";
     if (form.category === "other" && !customCategory.trim()) errs.customCategory = "يرجى كتابة اسم الفئة المخصصة";
+    else if (form.category === "other" && !isArabicServiceCategoryName(customCategory)) errs.customCategory = "اكتب اسم الفئة بالعربية فقط";
     if (!regionSelectVal) errs.region = "يرجى اختيار المنطقة";
     if (!resolvedCity) errs.city = "يرجى اختيار المدينة";
     if (!form.whatsappNumber) errs.whatsappNumber = "رقم الواتساب مطلوب";
@@ -730,7 +732,7 @@ export default function AddServiceProvider() {
                     </SelectTrigger>
                     <SelectContent>
                       {orderedServiceCategories.map((c) => (
-                        <SelectItem key={c.key} value={c.key}>{c.emoji} {c.labelAr}</SelectItem>
+                        <SelectItem key={c.key} value={c.key}>{c.emoji} {arabicServiceCategoryLabel(c.labelAr)}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

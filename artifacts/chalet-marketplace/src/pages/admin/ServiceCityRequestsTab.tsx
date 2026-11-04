@@ -45,9 +45,9 @@ function RequestCard({ request, regions, pending, decide }: {
       <div>
         <label className="mb-2 block text-sm font-semibold text-slate-200" htmlFor={`city-region-${request.id}`}>المنطقة التابعة للمدينة</label>
         <Select value={regionId} onValueChange={setRegionId} disabled={pending} dir="rtl">
-          <SelectTrigger id={`city-region-${request.id}`} className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر المنطقة قبل الموافقة" /></SelectTrigger>
-          <SelectContent className="bg-slate-900 border-slate-700">{regions.filter(r => r.isActive).map(region =>
-            <SelectItem key={region.id} value={String(region.id)} className="text-white focus:bg-slate-700">{region.name}</SelectItem>)}</SelectContent>
+          <SelectTrigger id={`city-region-${request.id}`} className="bg-slate-900 border-slate-600 !text-slate-50 [&_span]:!text-slate-50 data-[placeholder]:!text-slate-300"><SelectValue placeholder="اختر المنطقة قبل الموافقة" /></SelectTrigger>
+          <SelectContent className="bg-slate-900 border-slate-700 text-slate-50">{regions.filter(r => r.isActive).map(region =>
+            <SelectItem key={region.id} value={String(region.id)} className="!text-slate-50 focus:bg-slate-700 focus:!text-white"><span className="!text-slate-50">{region.name}</span></SelectItem>)}</SelectContent>
         </Select>
       </div>
       <div>

@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { normalizeCityName } from "../lib/city-name";
+import { isArabicServiceCategoryName } from "../lib/service-category-names";
 import { CreateServiceCityRequestBody } from "@workspace/api-zod";
 import { CityRequestError, createCityRequest } from "../lib/service-city-requests";
 import { includeOwnerActivityKind } from "../lib/owner-activity-registration";
@@ -344,6 +345,14 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   }
 
   const data = parsed.data;
+  if (!isArabicServiceCategoryName(data.category)) {
+    const [category] = await db.select({ id: serviceCategoriesTable.id }).from(serviceCategoriesTable)
+      .where(eq(serviceCategoriesTable.key, data.category)).limit(1);
+    if (!category) return res.status(422).json({
+      error: "اختر فئة من القائمة أو اكتب اسمها بالعربية",
+      fieldErrors: { category: "اختر فئة من القائمة أو اكتب اسمها بالعربية" },
+    });
+  }
   const access = await ownerPlanAccess(req.user.id);
   if (!access.canSubmitActivities) {
     return res.status(403).json({ error: "انتهى اشتراكك. جدّده لإضافة خدمة جديدة.", upgradeRequired: true });
@@ -519,6 +528,14 @@ router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
     return res.status(422).json({
       error: "بيانات غير صحيحة",
       fieldErrors: parsed.error.flatten().fieldErrors,
+    });
+  }
+  if (parsed.data.category && !isArabicServiceCategoryName(parsed.data.category)) {
+    const [category] = await db.select({ id: serviceCategoriesTable.id }).from(serviceCategoriesTable)
+      .where(eq(serviceCategoriesTable.key, parsed.data.category)).limit(1);
+    if (!category) return res.status(422).json({
+      error: "اختر فئة من القائمة أو اكتب اسمها بالعربية",
+      fieldErrors: { category: "اختر فئة من القائمة أو اكتب اسمها بالعربية" },
     });
   }
   const nextRegionId = parsed.data.serviceRegionId ?? submission.serviceRegionId;

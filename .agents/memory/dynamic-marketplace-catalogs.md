@@ -20,3 +20,9 @@ The administrative service inventory filter may omit the generic “أخرى” 
 **Why:** The user subsequently asked to remove or reduce use of “أخرى” and classify services under their appropriate specific categories.
 
 **How to apply:** This is a narrow exception for the generic administrative filter option, not a reason to hide other newly added categories or to reassign services based only on business-name guesses.
+
+Service category interfaces ask for and display Arabic names only. Internal identifiers remain independent of names and must not change when a category is renamed.
+
+**Why:** The user explicitly requested removal of English category-name/key prompts and displays in registration and administration, without breaking existing category relationships.
+
+**How to apply:** Allocate identifiers internally for new categories, keep existing identifiers intact, and resolve display names from the catalog. Never expose an unknown technical identifier as a label; show an Arabic fallback instead.

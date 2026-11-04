@@ -30,6 +30,9 @@ import type {
   AdminPhotographerProfileInput,
   AdminResetPartnerPassword200,
   AdminResetPartnerPasswordBody,
+  AdminServiceCategoryInput,
+  AdminServiceCategoryRecord,
+  AdminServiceCategoryUpdate,
   AdminUpdatePartnerAccount200,
   AdminUpdatePartnerAccountBody,
   AuthUserEnvelope,
@@ -188,6 +191,7 @@ import type {
   SupportConversationReplyInput,
   SupportConversationReplyResult,
   UpdateAdminPhotographerProfile200,
+  UpdateAdminServiceCategory200,
   UpdatePhotographyPackage200,
   UpdatePhotographyPackageBody,
   UpdatePhotographyPolicy200,
@@ -482,6 +486,177 @@ export const useCreateServiceCityRequest = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateServiceCityRequestMutationOptions(options), queryClient);
+    }
+
+export const getCreateAdminServiceCategoryUrl = () => {
+
+
+
+
+  return `/api/admin/service-categories`
+}
+
+/**
+ * @summary Create a service category using its Arabic display name
+ */
+export const createAdminServiceCategory = async (adminServiceCategoryInput: AdminServiceCategoryInput, options?: Parameters<typeof customFetch>[1]): Promise<AdminServiceCategoryRecord> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AdminServiceCategoryRecord>(getCreateAdminServiceCategoryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminServiceCategoryInput)
+  }
+);}
+
+
+
+
+
+export const getCreateAdminServiceCategoryMutationKey = () => ['createAdminServiceCategory'] as const;
+
+export const getCreateAdminServiceCategoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminServiceCategory>>, TError,CreateAdminServiceCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAdminServiceCategory>>, TError,CreateAdminServiceCategoryMutationVariables, TContext> => {
+
+const mutationKey = getCreateAdminServiceCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAdminServiceCategory>>, CreateAdminServiceCategoryMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createAdminServiceCategory(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateAdminServiceCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof createAdminServiceCategory>>>
+    export type CreateAdminServiceCategoryMutationBody = BodyType<AdminServiceCategoryInput>
+    export type CreateAdminServiceCategoryMutationError = ErrorType<unknown>
+    export type CreateAdminServiceCategoryMutationVariables = {data: BodyType<AdminServiceCategoryInput>}
+
+    /**
+ * @summary Create a service category using its Arabic display name
+ */
+export const useCreateAdminServiceCategory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAdminServiceCategory>>, TError,CreateAdminServiceCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof createAdminServiceCategory>>,
+        TError,
+        CreateAdminServiceCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateAdminServiceCategoryMutationOptions(options), queryClient);
+    }
+
+export const getUpdateAdminServiceCategoryUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/service-categories/${id}`
+}
+
+export const updateAdminServiceCategory = async (id: number,
+    adminServiceCategoryUpdate: AdminServiceCategoryUpdate, options?: Parameters<typeof customFetch>[1]): Promise<UpdateAdminServiceCategory200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<UpdateAdminServiceCategory200>(getUpdateAdminServiceCategoryUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminServiceCategoryUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateAdminServiceCategoryMutationKey = () => ['updateAdminServiceCategory'] as const;
+
+export const getUpdateAdminServiceCategoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminServiceCategory>>, TError,UpdateAdminServiceCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateAdminServiceCategory>>, TError,UpdateAdminServiceCategoryMutationVariables, TContext> => {
+
+const mutationKey = getUpdateAdminServiceCategoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateAdminServiceCategory>>, UpdateAdminServiceCategoryMutationVariables> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateAdminServiceCategory(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateAdminServiceCategoryMutationResult = NonNullable<Awaited<ReturnType<typeof updateAdminServiceCategory>>>
+    export type UpdateAdminServiceCategoryMutationBody = BodyType<AdminServiceCategoryUpdate>
+    export type UpdateAdminServiceCategoryMutationError = ErrorType<unknown>
+    export type UpdateAdminServiceCategoryMutationVariables = {id: number;data: BodyType<AdminServiceCategoryUpdate>}
+
+    export const useUpdateAdminServiceCategory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateAdminServiceCategory>>, TError,UpdateAdminServiceCategoryMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateAdminServiceCategory>>,
+        TError,
+        UpdateAdminServiceCategoryMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateAdminServiceCategoryMutationOptions(options), queryClient);
     }
 
 export const getListServiceCityRequestsUrl = () => {

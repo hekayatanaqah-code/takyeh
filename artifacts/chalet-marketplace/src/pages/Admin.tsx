@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { ServiceCityRequestsTab } from "@/pages/admin/ServiceCityRequestsTab";
+import { arabicServiceCategoryLabel } from "@/lib/serviceCategoryLabel";
 import { refreshCatalogsAfterWrite } from "@/lib/query-client";
 import { matchesOwnerDirectoryTab, ownerWhatsAppUrl, type OwnerDirectoryTab } from "@/lib/owner-directory";
 import { PartnerAccountActions, PhotographerAccounts } from "@/components/admin/PartnerAccounts";
@@ -3103,7 +3104,7 @@ function LegacyServicesTab() {
                       <div className="text-slate-400 text-xs mt-0.5 line-clamp-1">{svc.descriptionAr}</div>
                     </TableCell>
                     <TableCell className="text-slate-300">
-                      {cat ? `${cat.emoji} ${cat.label}` : svc.category}
+                      {cat ? `${cat.emoji} ${arabicServiceCategoryLabel(cat.label)}` : arabicServiceCategoryLabel(svc.category)}
                     </TableCell>
                     <TableCell className="text-slate-300">{svc.city ?? "—"}</TableCell>
                     <TableCell className="text-slate-300">
@@ -3229,7 +3230,7 @@ function ServicesTab() {
 
       <InventoryFilters scope="services" value={inventoryFilters}
         onChange={next => setInventoryFilters(inventoryCatalog.reconcile(inventoryFilters, next, inventoryRows))}
-        options={{ ...inventoryOptions, statuses: serviceStatusOptions, pricing: servicePricingOptions }}
+        options={{ ...inventoryOptions, categories: inventoryOptions.categories.map(option => ({ ...option, label: arabicServiceCategoryLabel(option.label) })), statuses: serviceStatusOptions, pricing: servicePricingOptions }}
         resultCount={filteredServices.length} totalCount={services.length} />
       {(isError || inventoryCatalog.isError) && (
         <div role="alert" className="rounded-lg border border-red-800 bg-red-950/20 p-3 text-sm text-red-200">
@@ -3266,7 +3267,7 @@ function ServicesTab() {
                   )}
                   <div className="text-xs text-slate-300 mt-1">مقدم الخدمة: {service.ownerName || "الاسم غير مسجل"}</div>
                 </TableCell>
-                <TableCell className="text-slate-300">{service.categoryLabel ?? service.category}</TableCell>
+                <TableCell className="text-slate-300">{arabicServiceCategoryLabel(service.categoryLabel ?? PROVIDER_CATEGORY_LABELS[service.category] ?? service.category)}</TableCell>
                 <TableCell className="text-slate-300">
                   {service.city}
                   <div className="text-xs text-slate-500">{describeService(service).region}</div>
@@ -3479,7 +3480,7 @@ function ServiceCategoriesTab() {
   const [isDirtyOrder, setIsDirtyOrder] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  const [newForm, setNewForm] = useState({ key: "", labelAr: "", emoji: "" });
+  const [newForm, setNewForm] = useState({ labelAr: "", emoji: "" });
   const [editId, setEditId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState({ labelAr: "", emoji: "" });
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -3506,17 +3507,16 @@ function ServiceCategoriesTab() {
       const r = await apiFetch("/admin/service-categories", {
         method: "POST",
         body: JSON.stringify({
-          key: newForm.key.trim().toLowerCase().replace(/\s+/g, "_"),
           labelAr: newForm.labelAr.trim(),
           emoji: newForm.emoji.trim() || "",
           sortOrder: items.length,
         }),
       });
-      if (!r.ok) throw new Error("فشل الإضافة");
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "تعذّرت إضافة الفئة");
       return r.json();
     },
     onSuccess: () => {
-      setNewForm({ key: "", labelAr: "", emoji: "" });
+      setNewForm({ labelAr: "", emoji: "" });
       qc.invalidateQueries({ queryKey: ["admin", "service-categories"] });
       qc.invalidateQueries({ queryKey: ["catalog", "service-categories"] });
     },
@@ -3528,12 +3528,14 @@ function ServiceCategoriesTab() {
         method: "PATCH",
         body: JSON.stringify(patch),
       });
-      if (!r.ok) throw new Error("فشل التحديث");
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "تعذّر تحديث الفئة");
     },
     onSuccess: () => {
       setEditId(null);
       qc.invalidateQueries({ queryKey: ["admin", "service-categories"] });
       qc.invalidateQueries({ queryKey: ["catalog", "service-categories"] });
+      qc.invalidateQueries({ queryKey: ["admin", "provider-submissions"] });
+      qc.invalidateQueries({ queryKey: ["admin", "published-service-providers"] });
     },
   });
 
@@ -3571,7 +3573,7 @@ function ServiceCategoriesTab() {
 
   const startEdit = (cat: ServiceCat) => {
     setEditId(cat.id);
-    setEditForm({ labelAr: cat.labelAr, emoji: cat.emoji });
+    setEditForm({ labelAr: arabicServiceCategoryLabel(cat.labelAr, ""), emoji: cat.emoji });
   };
 
   const confirmEdit = () => {
@@ -3622,9 +3624,9 @@ function ServiceCategoriesTab() {
           <Plus className="w-4 h-4 text-amber-400" />
           إضافة فئة جديدة
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <label className="text-slate-400 text-xs font-medium">الإيموجي</label>
+            <label className="text-slate-400 text-xs font-medium">أيقونة اختيارية</label>
             <Input
               value={newForm.emoji}
               onChange={(e) => setNewForm((f) => ({ ...f, emoji: e.target.value }))}
@@ -3641,21 +3643,11 @@ function ServiceCategoriesTab() {
               className="bg-slate-900 border-slate-600 text-white placeholder-slate-500"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-slate-400 text-xs font-medium">المفتاح (بالإنجليزية) *</label>
-            <Input
-              value={newForm.key}
-              onChange={(e) => setNewForm((f) => ({ ...f, key: e.target.value }))}
-              placeholder="مثال: photography"
-              className="bg-slate-900 border-slate-600 text-white placeholder-slate-500 font-mono"
-              dir="ltr"
-            />
-          </div>
         </div>
         <div className="flex justify-end mt-4">
           <Button
             onClick={() => addCategory.mutate()}
-            disabled={!newForm.key.trim() || !newForm.labelAr.trim() || addCategory.isPending}
+            disabled={!newForm.labelAr.trim() || addCategory.isPending}
             className="bg-amber-600 hover:bg-amber-700 text-white font-semibold"
           >
             {addCategory.isPending ? <Loader2 className="w-4 h-4 animate-spin me-1.5" /> : <Plus className="w-4 h-4 me-1.5" />}
@@ -3663,10 +3655,11 @@ function ServiceCategoriesTab() {
           </Button>
         </div>
         {addCategory.isError && (
-          <p className="text-red-400 text-sm mt-2">فشل الإضافة — قد يكون المفتاح مستخدماً بالفعل.</p>
+          <p role="alert" className="text-red-400 text-sm mt-2">{addCategory.error.message}</p>
         )}
       </div>
 
+      {patchCategory.isError && <p role="alert" className="text-red-400 text-sm">{patchCategory.error.message}</p>}
       {/* ── Hint ── */}
       <div className="bg-blue-950/40 border border-blue-800/40 rounded-xl px-4 py-3 text-blue-300 text-sm flex items-start gap-2.5">
         <GripVertical className="w-4 h-4 shrink-0 mt-0.5" />
@@ -3714,7 +3707,6 @@ function ServiceCategoriesTab() {
                     autoFocus
                     onKeyDown={(e) => { if (e.key === "Enter") confirmEdit(); if (e.key === "Escape") setEditId(null); }}
                   />
-                  <span className="font-mono text-xs text-slate-500 bg-slate-900/60 px-2 py-1 rounded border border-slate-700">{cat.key}</span>
                   <Button
                     size="sm"
                     onClick={confirmEdit}
@@ -3743,8 +3735,7 @@ function ServiceCategoriesTab() {
 
                   {/* Label + key */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold">{cat.labelAr}</p>
-                    <p className="text-slate-500 text-xs font-mono">{cat.key}</p>
+                    <p className="text-white font-semibold">{arabicServiceCategoryLabel(cat.labelAr)}</p>
                   </div>
 
                   {/* Active badge */}
@@ -4207,6 +4198,7 @@ interface ProviderSubmission {
   id: number;
   businessName: string;
   category: string;
+  categoryLabel?: string | null;
   city: string;
   descriptionAr: string | null;
   whatsappNumber: string;
@@ -4328,7 +4320,7 @@ function ProviderReviewModal({
             </div>
             <div className="bg-muted/50 rounded-xl p-3">
               <p className="text-muted-foreground text-xs mb-1">الفئة</p>
-              <p className="font-semibold text-foreground">{PROVIDER_CATEGORY_LABELS[sub.category] ?? sub.category}</p>
+              <p className="font-semibold text-foreground">{arabicServiceCategoryLabel(sub.categoryLabel ?? PROVIDER_CATEGORY_LABELS[sub.category] ?? sub.category)}</p>
             </div>
             <div className="bg-muted/50 rounded-xl p-3">
               <p className="text-muted-foreground text-xs mb-1">المدينة</p>
@@ -4598,7 +4590,7 @@ function ProviderSubmissionsTab() {
                     <div>
                       <p className="font-bold text-white">{sub.businessName}</p>
                       <p className="text-sm text-slate-400 mt-0.5">
-                        {PROVIDER_CATEGORY_LABELS[sub.category] ?? sub.category}
+                        {arabicServiceCategoryLabel(sub.categoryLabel ?? PROVIDER_CATEGORY_LABELS[sub.category] ?? sub.category)}
                         {sub.city ? ` — ${sub.city}` : ""}
                       </p>
                     </div>
@@ -7595,7 +7587,7 @@ function DirectAddTab({ mode }: { mode: DirectAddMode }) {
                 }}>
                   <SelectTrigger className="bg-slate-900 border-slate-600 text-white"><SelectValue placeholder="اختر الفئة..." /></SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-700">
-                    {serviceCategories.map(cat => <SelectItem key={cat.key} value={cat.key} className="text-white focus:bg-slate-700">{cat.emoji} {cat.labelAr}</SelectItem>)}
+                    {serviceCategories.map(cat => <SelectItem key={cat.key} value={cat.key} className="text-white focus:bg-slate-700">{cat.emoji} {arabicServiceCategoryLabel(cat.labelAr)}</SelectItem>)}
                     <SelectItem value="__other__" className="text-amber-400 focus:bg-slate-700">فئة أخرى...</SelectItem>
                   </SelectContent>
                 </Select>
