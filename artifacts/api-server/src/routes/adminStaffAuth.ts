@@ -4,6 +4,7 @@ import { adminStaffTable, adminSessionsTable } from "@workspace/db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { clearSession, getSession, getSessionId } from "../lib/auth";
 
 const router = Router();
 
@@ -85,7 +86,13 @@ router.post("/admin-staff/logout", async (req, res) => {
   if (sid) {
     await db.delete(adminSessionsTable).where(eq(adminSessionsTable.sid, sid));
   }
-  res.clearCookie(ADMIN_STAFF_COOKIE);
+  const localSid = getSessionId(req);
+  const localSession = localSid ? await getSession(localSid) : null;
+  // End the alternative OIDC admin session too, without logging out an unrelated owner.
+  if (localSession && process.env.ADMIN_USER_ID && localSession.user.id === process.env.ADMIN_USER_ID) {
+    await clearSession(res, localSid);
+  }
+  res.clearCookie(ADMIN_STAFF_COOKIE, { path: "/" });
   return res.json({ ok: true });
 });
 

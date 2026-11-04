@@ -1963,6 +1963,29 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type GetSuperAdminProfile200 = {
+  username: string;
+  email: string;
+  mobile: string;
+  fallbackEmailConfigured: boolean;
+};
+
+export type UpdateSuperAdminProfileBody = {
+  /** @maxLength 254 */
+  email: string;
+  /** @pattern ^05[0-9]{8}$ */
+  mobile: string;
+  /**
+     * @minLength 1
+     * @maxLength 72
+     */
+  currentPassword: string;
+};
+
+export type UpdateSuperAdminProfile200 = {
+  ok: boolean;
+};
+
 export type UpdateAdminServiceCategory200 = {
   ok?: boolean;
 };

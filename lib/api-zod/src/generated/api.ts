@@ -8,6 +8,32 @@
 import * as zod from 'zod';
 
 
+export const GetSuperAdminProfileResponse = zod.object({
+  "username": zod.string(),
+  "email": zod.string(),
+  "mobile": zod.string(),
+  "fallbackEmailConfigured": zod.boolean()
+})
+
+
+export const updateSuperAdminProfileBodyEmailMax = 254;
+
+export const updateSuperAdminProfileBodyMobileRegExp = new RegExp('^05[0-9]{8}$');
+export const updateSuperAdminProfileBodyCurrentPasswordMax = 72;
+
+
+
+export const UpdateSuperAdminProfileBody = zod.object({
+  "email": zod.string().email().max(updateSuperAdminProfileBodyEmailMax),
+  "mobile": zod.string().regex(updateSuperAdminProfileBodyMobileRegExp),
+  "currentPassword": zod.string().min(1).max(updateSuperAdminProfileBodyCurrentPasswordMax)
+})
+
+export const UpdateSuperAdminProfileResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
 /**
  * @summary Submit a service provider registration with an optional Instagram account
  */

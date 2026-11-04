@@ -55,6 +55,8 @@ import {
 } from "@workspace/db/schema";
 import { eq, inArray, and, or, ilike, gt, lt, ne, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
+import { GetSuperAdminProfileResponse, UpdateSuperAdminProfileBody, UpdateSuperAdminProfileResponse } from "@workspace/api-zod";
+import { createRecoveryRateLimiter, normalizeRecoveryEmail } from "../lib/passwordRecovery";
 import type { Request, Response, NextFunction } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -752,6 +754,60 @@ const staffCredentialsSchema = staffCreateSchema.pick({
 }).partial().extend({
   personalEmail: z.union([z.string().trim().email(), z.literal("")]).optional(),
   mobile: z.union([z.string().trim().regex(/^\+?[0-9٠-٩۰-۹\s-]{8,20}$/), z.literal("")]).optional(),
+});
+
+const profilePasswordLimiter = createRecoveryRateLimiter();
+router.get("/profile", requireSuperAdmin, async (req, res): Promise<void> => {
+  if (!req.adminStaff?.isSuperAdmin) {
+    res.status(409).json({ error: "هذا الحساب يستخدم تسجيل دخول خارجياً؛ تُدار بياناته لدى مزود تسجيل الدخول." }); return;
+  }
+  res.set("Cache-Control", "no-store");
+  res.json(GetSuperAdminProfileResponse.parse({
+    username: req.adminStaff.username,
+    email: req.adminStaff.personalEmail ?? "",
+    mobile: req.adminStaff.mobile ?? "",
+    fallbackEmailConfigured: Boolean(normalizeRecoveryEmail(process.env.SYSTEM_ADMIN_FALLBACK_EMAIL ?? "")),
+  }));
+});
+
+router.patch("/profile", requireSuperAdmin, async (req, res): Promise<void> => {
+  const member = req.adminStaff;
+  if (!member?.isSuperAdmin) {
+    res.status(409).json({ error: "تُدار بيانات حساب تسجيل الدخول الخارجي لدى مزوده." }); return;
+  }
+  const parsed = UpdateSuperAdminProfileBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "أدخل بريداً صحيحاً وجوالاً من ١٠ أرقام يبدأ بـ ٠٥ وكلمة المرور الحالية." }); return;
+  }
+  if (!profilePasswordLimiter.allow(req.ip ?? "unknown", String(member.id))) {
+    res.status(429).json({ error: "محاولات كثيرة. يرجى المحاولة لاحقاً." }); return;
+  }
+  if (!await bcrypt.compare(parsed.data.currentPassword, member.passwordHash)) {
+    res.status(401).json({ error: "كلمة المرور الحالية غير صحيحة." }); return;
+  }
+  const email = normalizeRecoveryEmail(parsed.data.email);
+  if (!email) { res.status(400).json({ error: "البريد الإلكتروني غير صحيح." }); return; }
+  // Serialize profile email changes so concurrent admins cannot claim the same recovery address.
+  const result = await db.transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('admin-profile-email'))`);
+    const [duplicate] = await tx.select({ id: adminStaffTable.id }).from(adminStaffTable)
+      .where(and(sql`lower(${adminStaffTable.personalEmail}) = ${email}`, ne(adminStaffTable.id, member.id)));
+    if (duplicate) return "duplicate";
+    const updated = await tx.update(adminStaffTable)
+      .set({ personalEmail: email, mobile: parsed.data.mobile })
+      .where(and(eq(adminStaffTable.id, member.id), eq(adminStaffTable.isActive, true),
+        eq(adminStaffTable.passwordHash, member.passwordHash), eq(adminStaffTable.isSuperAdmin, true)))
+      .returning({ id: adminStaffTable.id });
+    if (!updated.length) return "stale";
+    // Existing reset links must not outlive a change to the recovery destination.
+    await tx.execute(sql`UPDATE password_reset_tokens SET used = true
+      WHERE target_type = 'admin_staff' AND target_id = ${String(member.id)} AND used = false`);
+    return "saved";
+  });
+  if (result !== "saved") {
+    res.status(409).json({ error: result === "duplicate" ? "البريد مرتبط بحساب إدارة آخر." : "تغيرت بيانات الجلسة؛ سجّل الدخول مجدداً." }); return;
+  }
+  res.json(UpdateSuperAdminProfileResponse.parse({ ok: true }));
 });
 
 router.get("/staff", requireSuperAdmin, async (_req, res) => {

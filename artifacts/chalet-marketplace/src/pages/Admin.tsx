@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { ServiceCityRequestsTab } from "@/pages/admin/ServiceCityRequestsTab";
+import { AdminProfile } from "@/components/admin/AdminProfile";
 import { arabicServiceCategoryLabel } from "@/lib/serviceCategoryLabel";
 import { refreshCatalogsAfterWrite } from "@/lib/query-client";
 import { matchesOwnerDirectoryTab, ownerWhatsAppUrl, type OwnerDirectoryTab } from "@/lib/owner-directory";
@@ -9898,9 +9899,26 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
 export default function Admin() {
   const [, setLocation]         = useLocation();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { adminStaffUser, isAdminStaff, permissions: adminPerms, isLoading: staffLoading, logout: adminStaffLogout } = useAdminStaffAuth();
+  const { adminStaffUser, isAdminStaff, permissions: adminPerms, isLoading: staffLoading } = useAdminStaffAuth();
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [directAddMode, setDirectAddMode] = useState<DirectAddMode>("property");
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const adminQueryClient = useQueryClient();
+  async function logoutAdmin() {
+    setLogoutPending(true);
+    setLogoutError("");
+    try {
+      const response = await fetch(`${BASE}/api/admin-staff/logout`, { method: "POST", credentials: "include" });
+      if (!response.ok) throw new Error();
+      adminQueryClient.clear();
+      window.location.replace(`${BASE}/admin-login`);
+    } catch {
+      setLogoutError("تعذر إنهاء الجلسة. حاول مرة أخرى.");
+      setLogoutPending(false);
+    }
+  }
 
   const { data: accessCheck, isLoading: checkLoading, error: checkError } = useQuery({
     queryKey: ["admin", "access-check"],
@@ -10026,7 +10044,7 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-slate-900 text-white" dir="rtl">
       {/* Header */}
-      <header className="bg-slate-950 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+      <header className="bg-slate-950 border-b border-slate-700 px-4 sm:px-6 py-4 flex flex-wrap gap-4 items-center justify-between">
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isSuperAdmin ? "bg-amber-500" : "bg-slate-600"}`}>
             {isSuperAdmin ? <Settings className="w-5 h-5 text-white" /> : <Shield className="w-5 h-5 text-amber-400" />}
@@ -10038,16 +10056,11 @@ export default function Admin() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-slate-400 text-sm hidden sm:block">{displayName}</span>
-          {isAdminStaff && (
-            <button
-              onClick={() => adminStaffLogout()}
-              className="text-slate-400 hover:text-red-400 text-sm transition-colors"
-            >
-              تسجيل الخروج
-            </button>
-          )}
+          {isSuperAdmin && <button onClick={() => setProfileOpen(true)} className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700">إعدادات حسابي</button>}
+          <button onClick={logoutAdmin} disabled={logoutPending} className="rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm font-bold text-red-200 hover:bg-red-500/25 disabled:opacity-50">{logoutPending ? "جارٍ الخروج..." : "تسجيل خروج"}</button>
+          {logoutError && <p role="alert" className="text-sm text-red-300">{logoutError}</p>}
           {isSuperAdmin && (
             <DropdownMenu dir="rtl">
               <DropdownMenuTrigger asChild>
@@ -10110,6 +10123,7 @@ export default function Admin() {
           </a>
         </div>
       </header>
+      {profileOpen && isSuperAdmin && <AdminProfile onClose={() => setProfileOpen(false)} />}
 
       {/* Admin Staff info banner — only shown for non-super-admin staff */}
       {isAdminStaff && !isSuperAdmin && (

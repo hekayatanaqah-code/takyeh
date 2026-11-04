@@ -14,6 +14,7 @@ import {
   normalizeSaudiMobile,
   type RecoveryPortal,
 } from "../lib/passwordRecovery";
+import { adminRecoveryDestination } from "../lib/adminRecoveryDestination";
 import {
   createPasswordResetEmailProvider,
   unavailableWhatsAppResetProvider,
@@ -87,13 +88,13 @@ async function findOwnerApplicationsByPhone(database: RecoveryDatabase, phone: s
 
 async function findAdminStaff(database: RecoveryDatabase, identifier: string) {
   const result = await database.execute(sql`
-    SELECT id, username, email, password_hash
+    SELECT id, username, email, password_hash, is_super_admin
     FROM admin_staff
-    WHERE LOWER(username) = ${identifier.toLowerCase()}
-       OR LOWER(email) = ${identifier.toLowerCase()}
+    WHERE is_active = true AND (LOWER(username) = ${identifier.toLowerCase()}
+       OR LOWER(email) = ${identifier.toLowerCase()})
   `);
   return readRows<{
-    id: number; username: string; email: string | null; password_hash: string;
+    id: number; username: string; email: string | null; password_hash: string; is_super_admin: boolean;
   }>(result);
 }
 
@@ -117,7 +118,8 @@ async function findRecoveryTarget(
   if (portalType === "admin") {
     const matches = await findAdminStaff(database, identifier);
     if (matches.length !== 1 || !matches[0]?.password_hash) return null;
-    const email = String(matches[0].email ?? "").trim().toLowerCase();
+    // Emergency delivery is restricted to the active superadmin, never delegated staff.
+    const email = adminRecoveryDestination(matches[0], process.env.SYSTEM_ADMIN_FALLBACK_EMAIL);
     if (!email) return null;
     return {
       targetType: "admin_staff",
@@ -184,7 +186,8 @@ async function issueResetToken(
         break;
       case "admin_staff":
         current = await tx.execute(sql`
-          SELECT password_hash FROM admin_staff WHERE id = ${targetId} FOR UPDATE
+          SELECT password_hash, email, is_super_admin FROM admin_staff
+          WHERE id = ${targetId} AND is_active = true FOR UPDATE
         `);
         break;
       case "owner_staff":
@@ -193,8 +196,10 @@ async function issueResetToken(
         `);
         break;
     }
-    const account = readRows<{ password_hash: string | null }>(current)[0];
+    const account = readRows<{ password_hash: string | null; email: string | null; is_super_admin: boolean }>(current)[0];
     if (!account?.password_hash || account.password_hash !== target.observedPasswordHash) return false;
+    if (target.targetType === "admin_staff"
+      && adminRecoveryDestination(account, process.env.SYSTEM_ADMIN_FALLBACK_EMAIL) !== target.destination) return false;
 
     await tx.execute(sql`
       INSERT INTO password_reset_tokens (target_type, target_id, token, expires_at)

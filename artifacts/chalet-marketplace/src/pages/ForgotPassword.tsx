@@ -22,7 +22,7 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
     e.preventDefault();
     if (!identifier.trim()) return;
     const norm = normalizeIdentifier(identifier);
-    if (norm.kind === "other") {
+    if (norm.kind === "other" && !isAdmin) {
       setError("أدخل رقم جوال سعودي صحيح مثل 05XXXXXXXX أو بريداً إلكترونياً صحيحاً");
       return;
     }
@@ -34,7 +34,7 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          identifier: norm.value,
+          identifier: isAdmin ? identifier.trim() : norm.value,
           portalType,
         }),
       });
@@ -49,7 +49,7 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
     }
   }
 
-  const backHref = isAdmin ? `${BASE}/management/portal` : `${BASE}/login`;
+  const backHref = isAdmin ? `${BASE}/admin-login` : `${BASE}/login`;
 
   /* ── Admin portal (unchanged dark theme) ── */
   if (isAdmin) {
@@ -63,7 +63,7 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
             </div>
             <h2 className="text-lg font-bold mb-2 text-slate-100" role="status">تم استلام طلب الاستعادة</h2>
             <p className="text-sm leading-relaxed mb-6 text-slate-400">
-              إذا كان رقم الجوال أو البريد الإلكتروني مطابقاً لحساب مسجل لدينا، سيصلك رابط إعادة تعيين كلمة المرور عبر القناة المتاحة خلال دقائق.
+              إذا طابقت البيانات حساب إدارة نشطاً، سيُرسل رابط الاستعادة إلى بريده المسجل. وللمدير العام فقط يُستخدم بريد الطوارئ المعتمد عند عدم تسجيل بريد شخصي.
             </p>
             <a href={backHref} className="flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300">
               <ArrowRight className="w-4 h-4 rotate-180" />
@@ -80,17 +80,17 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
             <Mail className="w-6 h-6 text-amber-400" />
           </div>
           <h1 className="font-bold text-slate-200">نسيت كلمة المرور؟</h1>
-          <p className="text-xs mt-1 text-slate-400">أدخل رقم جوالك أو بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين</p>
+          <p className="text-sm mt-2 text-slate-300">أدخل اسم المستخدم أو البريد الإلكتروني لإرسال رابط الاستعادة إلى بريد الحساب.</p>
         </div>
         <div className="w-full max-w-sm rounded-2xl p-6 bg-slate-900 border border-slate-800 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="forgot-identifier" className="block text-sm font-medium text-slate-400">{AUTH_LABELS.identifier}</label>
+              <label htmlFor="forgot-identifier" className="block text-sm font-medium text-slate-300">اسم المستخدم أو البريد الإلكتروني</label>
               <input
                 id="forgot-identifier"
                 type="text"
                 autoComplete="off"
-                placeholder={AUTH_LABELS.identifierPlaceholder}
+                placeholder="اسم المستخدم أو البريد الإلكتروني"
                 value={identifier}
                 onChange={(e) => { setIdentifier(e.target.value); setError(null); }}
                 dir="ltr"

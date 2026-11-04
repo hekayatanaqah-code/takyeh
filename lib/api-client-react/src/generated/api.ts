@@ -88,6 +88,7 @@ import type {
   GetPhotographySlotsParams,
   GetPhotographyStatus200,
   GetPropertyPriceQuoteParams,
+  GetSuperAdminProfile200,
   HealthStatus,
   InvitePhotographer200,
   InvitePhotographerBody,
@@ -199,6 +200,8 @@ import type {
   UpdatePhotographySettings200,
   UpdatePhotographySettingsBody,
   UpdateServiceSeasonInput,
+  UpdateSuperAdminProfile200,
+  UpdateSuperAdminProfileBody,
   WalletSubscriptionInput
 } from './api.schemas';
 
@@ -228,6 +231,183 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetSuperAdminProfileUrl = () => {
+
+
+
+
+  return `/api/admin/profile`
+}
+
+export const getSuperAdminProfile = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetSuperAdminProfile200> => {
+
+  return customFetch<GetSuperAdminProfile200>(getGetSuperAdminProfileUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSuperAdminProfileQueryKey = () => {
+    return [
+    `/api/admin/profile`
+    ] as const;
+    }
+
+
+export const getGetSuperAdminProfileQueryOptions = <TData = Awaited<ReturnType<typeof getSuperAdminProfile>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSuperAdminProfile>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSuperAdminProfileQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSuperAdminProfile>>> = ({ signal }) => getSuperAdminProfile({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSuperAdminProfile>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSuperAdminProfileQueryResult = NonNullable<Awaited<ReturnType<typeof getSuperAdminProfile>>>
+export type GetSuperAdminProfileQueryError = ErrorType<void>
+
+
+export function useGetSuperAdminProfile<TData = Awaited<ReturnType<typeof getSuperAdminProfile>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSuperAdminProfile>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSuperAdminProfile>>,
+          TError,
+          Awaited<ReturnType<typeof getSuperAdminProfile>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSuperAdminProfile<TData = Awaited<ReturnType<typeof getSuperAdminProfile>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSuperAdminProfile>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSuperAdminProfile>>,
+          TError,
+          Awaited<ReturnType<typeof getSuperAdminProfile>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSuperAdminProfile<TData = Awaited<ReturnType<typeof getSuperAdminProfile>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSuperAdminProfile>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+
+export function useGetSuperAdminProfile<TData = Awaited<ReturnType<typeof getSuperAdminProfile>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSuperAdminProfile>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSuperAdminProfileQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateSuperAdminProfileUrl = () => {
+
+
+
+
+  return `/api/admin/profile`
+}
+
+export const updateSuperAdminProfile = async (updateSuperAdminProfileBody: UpdateSuperAdminProfileBody, options?: Parameters<typeof customFetch>[1]): Promise<UpdateSuperAdminProfile200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<UpdateSuperAdminProfile200>(getUpdateSuperAdminProfileUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(updateSuperAdminProfileBody)
+  }
+);}
+
+
+
+
+
+export const getUpdateSuperAdminProfileMutationKey = () => ['updateSuperAdminProfile'] as const;
+
+export const getUpdateSuperAdminProfileMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSuperAdminProfile>>, TError,UpdateSuperAdminProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSuperAdminProfile>>, TError,UpdateSuperAdminProfileMutationVariables, TContext> => {
+
+const mutationKey = getUpdateSuperAdminProfileMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSuperAdminProfile>>, UpdateSuperAdminProfileMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateSuperAdminProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateSuperAdminProfileMutationResult = NonNullable<Awaited<ReturnType<typeof updateSuperAdminProfile>>>
+    export type UpdateSuperAdminProfileMutationBody = BodyType<UpdateSuperAdminProfileBody>
+    export type UpdateSuperAdminProfileMutationError = ErrorType<void>
+    export type UpdateSuperAdminProfileMutationVariables = {data: BodyType<UpdateSuperAdminProfileBody>}
+
+    export const useUpdateSuperAdminProfile = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSuperAdminProfile>>, TError,UpdateSuperAdminProfileMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof updateSuperAdminProfile>>,
+        TError,
+        UpdateSuperAdminProfileMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateSuperAdminProfileMutationOptions(options), queryClient);
+    }
 
 export const getSubmitServiceProviderUrl = () => {
 

@@ -21,6 +21,54 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /admin/profile:
+    get:
+      operationId: getSuperAdminProfile
+      tags: [admin]
+      responses:
+        "200":
+          description: Current local superadmin profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [username, email, mobile, fallbackEmailConfigured]
+                properties:
+                  username: { type: string }
+                  email: { type: string }
+                  mobile: { type: string }
+                  fallbackEmailConfigured: { type: boolean }
+        "401": { description: Authentication required }
+        "403": { description: Superadmin required }
+        "409": { description: External identity profile is managed externally }
+    patch:
+      operationId: updateSuperAdminProfile
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, mobile, currentPassword]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                mobile: { type: string, pattern: '^05[0-9]{8}$' }
+                currentPassword: { type: string, minLength: 1, maxLength: 72 }
+      responses:
+        "200":
+          description: Profile saved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "400": { description: Invalid profile }
+        "401": { description: Invalid current password or missing authentication }
+        "403": { description: Superadmin required }
+        "409": { description: Email is already in use or external identity }
   /providers/submit:
     post:
       operationId: submitServiceProvider

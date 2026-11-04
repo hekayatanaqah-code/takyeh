@@ -21,7 +21,7 @@ export default function ResetPassword() {
 
   useEffect(() => { if (!token) setInvalid(true); }, [token]);
 
-  const goLogin = () => { if (isAdmin) window.location.href = `${BASE}/management/portal`; else navigate("/login"); };
+  const goLogin = () => { if (isAdmin) window.location.href = `${BASE}/admin-login`; else navigate("/login"); };
   const goForgot = () => navigate(isAdmin ? "/forgot-password/admin" : "/forgot-password");
 
   async function handleSubmit(e: React.FormEvent) {
