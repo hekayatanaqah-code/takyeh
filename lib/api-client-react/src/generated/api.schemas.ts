@@ -1967,7 +1967,6 @@ export type GetSuperAdminProfile200 = {
   username: string;
   email: string;
   mobile: string;
-  fallbackEmailConfigured: boolean;
 };
 
 export type UpdateSuperAdminProfileBody = {

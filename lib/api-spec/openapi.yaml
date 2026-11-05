@@ -32,12 +32,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [username, email, mobile, fallbackEmailConfigured]
+                required: [username, email, mobile]
                 properties:
                   username: { type: string }
                   email: { type: string }
                   mobile: { type: string }
-                  fallbackEmailConfigured: { type: boolean }
         "401": { description: Authentication required }
         "403": { description: Superadmin required }
         "409": { description: External identity profile is managed externally }

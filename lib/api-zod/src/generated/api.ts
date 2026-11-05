@@ -11,8 +11,7 @@ import * as zod from 'zod';
 export const GetSuperAdminProfileResponse = zod.object({
   "username": zod.string(),
   "email": zod.string(),
-  "mobile": zod.string(),
-  "fallbackEmailConfigured": zod.boolean()
+  "mobile": zod.string()
 })
 
 

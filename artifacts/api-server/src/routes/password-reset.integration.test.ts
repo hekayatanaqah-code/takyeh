@@ -130,11 +130,11 @@ async function createStaff(username: string, phone: string) {
   return id;
 }
 
-async function createAdmin(username: string, email: string) {
+async function createAdmin(username: string, email: string | null, isSuperAdmin = false) {
   const passwordHash = await bcrypt.hash("Original1", 4);
   const inserted = await db.execute(sql`
-    INSERT INTO admin_staff (name, username, email, password_hash)
-    VALUES ('Recovery admin test', ${username}, ${email}, ${passwordHash})
+    INSERT INTO admin_staff (name, username, email, password_hash, is_super_admin)
+    VALUES ('Recovery admin test', ${username}, ${email}, ${passwordHash}, ${isSuperAdmin})
     RETURNING id
   `);
   const id = Number(getRows<{ id: number }>(inserted)[0]?.id);
@@ -571,6 +571,32 @@ describe("custom-auth password recovery", () => {
     );
     const revokedSession = await db.execute(sql`SELECT sid FROM admin_sessions WHERE sid = ${adminSessionId}`);
     assert.equal(getRows<{ sid: string }>(revokedSession).length, 0);
+  });
+
+  it("isolates superadmin and delegated staff recovery to each saved personal email without fallback", async () => {
+    const unique = randomUUID();
+    const accounts = [
+      { username: `super-${unique}`, email: `super-${unique}@example.test`, superadmin: true },
+      { username: `staff-${unique}`, email: `staff-${unique}@example.test`, superadmin: false },
+      { username: `super-empty-${unique}`, email: null, superadmin: true },
+      { username: `staff-empty-${unique}`, email: null, superadmin: false },
+    ];
+    for (const account of accounts) {
+      const id = await createAdmin(account.username, account.email, account.superadmin);
+      const countBefore = sentLinks.length;
+      const response = await forgot(account.username, "admin");
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { ok: true, channel: "email" });
+      if (account.email) {
+        assert.equal(sentLinks.length, countBefore + 1);
+        assert.equal(sentLinks.at(-1)?.destination, account.email);
+      } else {
+        assert.equal(sentLinks.length, countBefore);
+        const tokens = await db.execute(sql`SELECT count(*)::int AS count FROM password_reset_tokens
+          WHERE target_type = 'admin_staff' AND target_id = ${String(id)}`);
+        assert.equal(getRows<{ count: number }>(tokens)[0]?.count, 0);
+      }
+    }
   });
 
   it("returns global channel-unavailable for phone recovery without inserting a token", async () => {

@@ -3,14 +3,15 @@ import { test } from "node:test";
 import { adminRecoveryDestination } from "./adminRecoveryDestination";
 
 test("personal admin email takes priority and is normalized", () => {
-  assert.equal(adminRecoveryDestination({ email: " Admin@Example.test ", is_super_admin: true }, "fallback@example.test"), "admin@example.test");
+  assert.equal(adminRecoveryDestination({ email: " Admin@Example.test ", is_super_admin: true }), "admin@example.test");
 });
-test("only the superadmin without a stored email may use the configured fallback", () => {
-  assert.equal(adminRecoveryDestination({ email: null, is_super_admin: true }, "emergency@example.test"), "emergency@example.test");
-  assert.equal(adminRecoveryDestination({ email: "", is_super_admin: false }, "emergency@example.test"), null);
-  assert.equal(adminRecoveryDestination({ email: null, is_super_admin: true }, undefined), null);
+test("neither superadmin nor delegated staff may use a fallback when personal email is absent", () => {
+  assert.equal(adminRecoveryDestination({ email: null, is_super_admin: true }), null);
+  assert.equal(adminRecoveryDestination({ email: "", is_super_admin: false }), null);
+  assert.equal(adminRecoveryDestination({ email: "  ", is_super_admin: true }), null);
 });
-test("invalid stored email does not silently redirect recovery; invalid fallback is rejected", () => {
-  assert.equal(adminRecoveryDestination({ email: "not-an-email", is_super_admin: true }, "emergency@example.test"), null);
-  assert.equal(adminRecoveryDestination({ email: null, is_super_admin: true }, "invalid"), null);
+test("each staff member gets only their own saved valid destination", () => {
+  assert.equal(adminRecoveryDestination({ email: "not-an-email", is_super_admin: true }), null);
+  assert.equal(adminRecoveryDestination({ email: " employee1@example.test ", is_super_admin: false }), "employee1@example.test");
+  assert.equal(adminRecoveryDestination({ email: "employee2@example.test", is_super_admin: false }), "employee2@example.test");
 });

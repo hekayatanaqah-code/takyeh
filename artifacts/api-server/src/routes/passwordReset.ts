@@ -118,8 +118,8 @@ async function findRecoveryTarget(
   if (portalType === "admin") {
     const matches = await findAdminStaff(database, identifier);
     if (matches.length !== 1 || !matches[0]?.password_hash) return null;
-    // Emergency delivery is restricted to the active superadmin, never delegated staff.
-    const email = adminRecoveryDestination(matches[0], process.env.SYSTEM_ADMIN_FALLBACK_EMAIL);
+    // Superadmins and delegated staff both recover exclusively through their own saved email.
+    const email = adminRecoveryDestination(matches[0]);
     if (!email) return null;
     return {
       targetType: "admin_staff",
@@ -199,7 +199,7 @@ async function issueResetToken(
     const account = readRows<{ password_hash: string | null; email: string | null; is_super_admin: boolean }>(current)[0];
     if (!account?.password_hash || account.password_hash !== target.observedPasswordHash) return false;
     if (target.targetType === "admin_staff"
-      && adminRecoveryDestination(account, process.env.SYSTEM_ADMIN_FALLBACK_EMAIL) !== target.destination) return false;
+      && adminRecoveryDestination(account) !== target.destination) return false;
 
     await tx.execute(sql`
       INSERT INTO password_reset_tokens (target_type, target_id, token, expires_at)

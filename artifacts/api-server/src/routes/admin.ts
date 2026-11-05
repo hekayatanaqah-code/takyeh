@@ -766,7 +766,6 @@ router.get("/profile", requireSuperAdmin, async (req, res): Promise<void> => {
     username: req.adminStaff.username,
     email: req.adminStaff.personalEmail ?? "",
     mobile: req.adminStaff.mobile ?? "",
-    fallbackEmailConfigured: Boolean(normalizeRecoveryEmail(process.env.SYSTEM_ADMIN_FALLBACK_EMAIL ?? "")),
   }));
 });
 

@@ -63,7 +63,7 @@ export default function ForgotPassword({ portalType = "public" }: ForgotPassword
             </div>
             <h2 className="text-lg font-bold mb-2 text-slate-100" role="status">تم استلام طلب الاستعادة</h2>
             <p className="text-sm leading-relaxed mb-6 text-slate-400">
-              إذا طابقت البيانات حساب إدارة نشطاً، سيُرسل رابط الاستعادة إلى بريده المسجل. وللمدير العام فقط يُستخدم بريد الطوارئ المعتمد عند عدم تسجيل بريد شخصي.
+              إذا طابقت البيانات حساب إدارة نشطاً وله بريد مسجل، سيُرسل رابط الاستعادة إلى بريد ذلك الحساب فقط. لا تُحوّل رسائل المدير العام أو الموظفين إلى بريد بديل.
             </p>
             <a href={backHref} className="flex items-center gap-2 text-sm font-medium text-amber-400 hover:text-amber-300">
               <ArrowRight className="w-4 h-4 rotate-180" />

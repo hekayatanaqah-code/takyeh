@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-type Profile = { username: string; email: string; mobile: string; fallbackEmailConfigured: boolean };
+type Profile = { username: string; email: string; mobile: string };
 async function requestProfile(method = "GET", body?: unknown) {
   const response = await fetch(`${BASE}/api/admin/profile`, {
     method, credentials: "include", cache: "no-store",
@@ -56,7 +56,7 @@ function ProfileForm({ profile, onClose }: { profile: Profile; onClose: () => vo
     <label className="block text-sm font-bold">كلمة المرور الحالية
       <input aria-label="كلمة المرور الحالية" required type="password" autoComplete="current-password" maxLength={72} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} />
     </label>
-    <p className="text-sm text-slate-300">{profile.fallbackEmailConfigured ? "بريد الطوارئ معتمد، ويُستخدم للمدير العام فقط عند غياب البريد الشخصي." : "بريد الطوارئ غير مُعدّ حالياً. احفظ بريدك الشخصي لضمان وجود وجهة للاستعادة."}</p>
+    <p className="text-sm leading-6 text-slate-300">استعادة حساب المدير العام مخصصة لبريده الشخصي المسجل فقط، ولا تُحوّل إلى بريد طوارئ أو بريد موظف آخر. احفظ بريداً صحيحاً يمكنك الوصول إليه.</p>
     {save.isError && <p role="alert" className="text-sm text-red-300">{save.error.message}</p>}
     <button disabled={save.isPending} className="w-full rounded-lg bg-amber-500 py-3 font-bold text-slate-950 disabled:opacity-50">{save.isPending ? "جارٍ الحفظ..." : "حفظ بيانات الحساب"}</button>
   </form>;
