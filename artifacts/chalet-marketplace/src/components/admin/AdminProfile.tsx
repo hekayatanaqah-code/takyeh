@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { toAr, whatsappDigits } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 type Profile = { username: string; email: string; mobile: string };
@@ -30,7 +31,7 @@ export function AdminProfile({ onClose }: { onClose: () => void }) {
 
 function ProfileForm({ profile, onClose }: { profile: Profile; onClose: () => void }) {
   const [email, setEmail] = useState(profile.email);
-  const [mobile, setMobile] = useState(profile.mobile);
+  const [mobile, setMobile] = useState(() => toAr(whatsappDigits(profile.mobile)));
   const [password, setPassword] = useState("");
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -51,11 +52,11 @@ function ProfileForm({ profile, onClose }: { profile: Profile; onClose: () => vo
       <input aria-label="البريد الإلكتروني الشخصي" required type="email" dir="ltr" autoComplete="email" maxLength={254} value={email} onChange={e => setEmail(e.target.value)} className={inputClass} />
     </label>
     <label className="block text-sm font-bold">رقم الجوال
-      <input aria-label="رقم الجوال" aria-describedby="admin-mobile-help" required type="tel" autoComplete="tel-national" inputMode="numeric" pattern="05[0-9]{8}" dir="rtl" maxLength={10} placeholder="مثال: ٠٥١٢٣٤٥٦٧٨" title="أدخل رقم جوال سعودي من عشرة أرقام يبدأ بصفر ثم خمسة" value={mobile} onInvalid={e => e.currentTarget.setCustomValidity("أدخل رقم جوال سعودي صحيحاً من عشرة أرقام يبدأ بصفر ثم خمسة.")} onChange={e => {
+      <input aria-label="رقم الجوال" aria-describedby="admin-mobile-help" required type="tel" autoComplete="tel-national" inputMode="numeric" pattern="٠٥[٠-٩]{8}" dir="rtl" maxLength={10} placeholder="مثال: ٠٥١٢٣٤٥٦٧٨" title="أدخل رقم جوال سعودي من عشرة أرقام يبدأ بصفر ثم خمسة" value={mobile} onInvalid={e => e.currentTarget.setCustomValidity("أدخل رقم جوال سعودي صحيحاً من عشرة أرقام يبدأ بصفر ثم خمسة.")} onChange={e => {
         e.currentTarget.setCustomValidity("");
-        setMobile(e.target.value.replace(/[٠-٩۰-۹]/g, c => String(c.charCodeAt(0) >= 1776 ? c.charCodeAt(0) - 1776 : c.charCodeAt(0) - 1632)).replace(/\D/g, "").slice(0, 10));
+        setMobile(toAr(whatsappDigits(e.target.value).slice(0, 10)));
       }} className={`${inputClass} text-right font-[inherit]`} />
-      <span id="admin-mobile-help" className="mt-2 block text-sm font-normal leading-6 text-slate-300">أدخل عشرة أرقام تبدأ بـ ٠٥، دون رمز الدولة. يمكنك استخدام الأرقام العربية أو الإنجليزية.</span>
+      <span id="admin-mobile-help" className="mt-2 block text-sm font-normal leading-6 text-slate-300">أدخل عشرة أرقام تبدأ بـ ٠٥، دون رمز الدولة. تتحول الأرقام العربية أو الإنجليزية تلقائياً إلى الأرقام العربية عند الكتابة والحفظ.</span>
     </label>
     <label className="block text-sm font-bold">كلمة المرور الحالية
       <input aria-label="كلمة المرور الحالية" required type="password" autoComplete="current-password" maxLength={72} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} />

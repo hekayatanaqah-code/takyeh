@@ -95,3 +95,4 @@
 - [Property calendar display](property-calendar-display.md) — preserve each booking across properties and periods; availability mirrors must never suppress actual bookings.
 - [Clean launch and backups](clean-launch-backups.md) — intentional empty initialization must survive restarts; private recovery archives stay outside application serving paths.
 - [Public policy content](public-policy-content.md) — administrator-authored privacy text is authoritative and must refresh in an already-open preview without rebuilding.
+- [Admin profile presentation](admin-profile-presentation.md) — approved generic superadmin label; its mobile must display and persist Arabic digits while accepting both keyboards.

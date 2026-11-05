@@ -52,7 +52,7 @@ paths:
               required: [email, mobile, currentPassword]
               properties:
                 email: { type: string, format: email, maxLength: 254 }
-                mobile: { type: string, pattern: '^05[0-9]{8}$' }
+                mobile: { type: string, pattern: '^(05[0-9]{8}|٠٥[٠-٩]{8})$' }
                 currentPassword: { type: string, minLength: 1, maxLength: 72 }
       responses:
         "200":

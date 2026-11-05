@@ -78,7 +78,12 @@ test("profile validates password, persists contact data and revokes old reset li
   assert.equal((await request("/admin/profile", superCookie, "PATCH", { email, mobile: "0501234567", currentPassword: password })).status, 200);
   const profile = await (await request("/admin/profile", superCookie)).json() as Record<string, unknown>;
   assert.equal(profile.email, email);
-  assert.equal(profile.mobile, "0501234567");
+  assert.equal(profile.mobile, "٠٥٠١٢٣٤٥٦٧");
+  const stored = await db.select({ mobile: adminStaffTable.mobile }).from(adminStaffTable).where(eq(adminStaffTable.id, adminId));
+  assert.equal(stored[0]?.mobile, "٠٥٠١٢٣٤٥٦٧");
+  assert.equal((await request("/admin/profile", superCookie, "PATCH", { email, mobile: "٠٥١٢٣٤٥٦٧٨", currentPassword: password })).status, 200);
+  const arabicProfile = await (await request("/admin/profile", superCookie)).json() as Record<string, unknown>;
+  assert.equal(arabicProfile.mobile, "٠٥١٢٣٤٥٦٧٨");
   const result = await db.execute(sql`SELECT used FROM password_reset_tokens WHERE token = ${resetToken}`);
   assert.equal(result.rows[0]?.used, true);
 });

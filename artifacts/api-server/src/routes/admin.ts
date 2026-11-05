@@ -793,7 +793,7 @@ router.patch("/profile", requireSuperAdmin, async (req, res): Promise<void> => {
       .where(and(sql`lower(${adminStaffTable.personalEmail}) = ${email}`, ne(adminStaffTable.id, member.id)));
     if (duplicate) return "duplicate";
     const updated = await tx.update(adminStaffTable)
-      .set({ personalEmail: email, mobile: parsed.data.mobile })
+      .set({ personalEmail: email, mobile: parsed.data.mobile.replace(/[0-9]/g, digit => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]) })
       .where(and(eq(adminStaffTable.id, member.id), eq(adminStaffTable.isActive, true),
         eq(adminStaffTable.passwordHash, member.passwordHash), eq(adminStaffTable.isSuperAdmin, true)))
       .returning({ id: adminStaffTable.id });

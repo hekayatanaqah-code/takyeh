@@ -10057,7 +10057,7 @@ export default function Admin() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-slate-300 text-sm">{isSuperAdmin ? "المدير العام — تكية" : displayName}</span>
+          <span className="text-slate-300 text-sm">{isSuperAdmin ? "المدير العام — تكيّة" : displayName}</span>
           {isSuperAdmin && <button onClick={() => setProfileOpen(true)} className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm font-bold text-white hover:bg-slate-700">إعدادات حسابي</button>}
           <button onClick={logoutAdmin} disabled={logoutPending} className="rounded-lg border border-red-400/40 bg-red-500/15 px-3 py-2 text-sm font-bold text-red-200 hover:bg-red-500/25 disabled:opacity-50">{logoutPending ? "جارٍ الخروج..." : "تسجيل خروج"}</button>
           {logoutError && <p role="alert" className="text-sm text-red-300">{logoutError}</p>}

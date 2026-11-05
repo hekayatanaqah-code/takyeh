@@ -17,7 +17,7 @@ export const GetSuperAdminProfileResponse = zod.object({
 
 export const updateSuperAdminProfileBodyEmailMax = 254;
 
-export const updateSuperAdminProfileBodyMobileRegExp = new RegExp('^05[0-9]{8}$');
+export const updateSuperAdminProfileBodyMobileRegExp = new RegExp('^(05[0-9]{8}|٠٥[٠-٩]{8})$');
 export const updateSuperAdminProfileBodyCurrentPasswordMax = 72;
 
 

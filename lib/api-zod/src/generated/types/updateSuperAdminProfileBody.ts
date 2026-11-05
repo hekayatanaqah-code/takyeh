@@ -9,7 +9,7 @@
 export type UpdateSuperAdminProfileBody = {
   /** @maxLength 254 */
   email: string;
-  /** @pattern ^05[0-9]{8}$ */
+  /** @pattern ^(05[0-9]{8}|٠٥[٠-٩]{8})$ */
   mobile: string;
   /**
      * @minLength 1
