@@ -51,7 +51,11 @@ function ProfileForm({ profile, onClose }: { profile: Profile; onClose: () => vo
       <input aria-label="البريد الإلكتروني الشخصي" required type="email" dir="ltr" autoComplete="email" maxLength={254} value={email} onChange={e => setEmail(e.target.value)} className={inputClass} />
     </label>
     <label className="block text-sm font-bold">رقم الجوال
-      <input aria-label="رقم الجوال" required type="tel" inputMode="numeric" pattern="05[0-9]{8}" dir="ltr" maxLength={10} placeholder="05xxxxxxxx" value={mobile} onChange={e => setMobile(e.target.value.replace(/[٠-٩۰-۹]/g, c => String(c.charCodeAt(0) >= 1776 ? c.charCodeAt(0) - 1776 : c.charCodeAt(0) - 1632)).replace(/\D/g, "").slice(0, 10))} className={inputClass} />
+      <input aria-label="رقم الجوال" aria-describedby="admin-mobile-help" required type="tel" autoComplete="tel-national" inputMode="numeric" pattern="05[0-9]{8}" dir="rtl" maxLength={10} placeholder="مثال: ٠٥١٢٣٤٥٦٧٨" title="أدخل رقم جوال سعودي من عشرة أرقام يبدأ بصفر ثم خمسة" value={mobile} onInvalid={e => e.currentTarget.setCustomValidity("أدخل رقم جوال سعودي صحيحاً من عشرة أرقام يبدأ بصفر ثم خمسة.")} onChange={e => {
+        e.currentTarget.setCustomValidity("");
+        setMobile(e.target.value.replace(/[٠-٩۰-۹]/g, c => String(c.charCodeAt(0) >= 1776 ? c.charCodeAt(0) - 1776 : c.charCodeAt(0) - 1632)).replace(/\D/g, "").slice(0, 10));
+      }} className={`${inputClass} text-right font-[inherit]`} />
+      <span id="admin-mobile-help" className="mt-2 block text-sm font-normal leading-6 text-slate-300">أدخل عشرة أرقام تبدأ بـ ٠٥، دون رمز الدولة. يمكنك استخدام الأرقام العربية أو الإنجليزية.</span>
     </label>
     <label className="block text-sm font-bold">كلمة المرور الحالية
       <input aria-label="كلمة المرور الحالية" required type="password" autoComplete="current-password" maxLength={72} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} />
