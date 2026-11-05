@@ -351,6 +351,8 @@ const auditSafeSettingValueLimits: Record<string, number> = {
   svc_btn_color: 20,
   svc_btn_label: 100,
   copyright_text: 250,
+  legal_entity_name_ar: 250,
+  legal_entity_name_en: 250,
   footer_title: 120,
   footer_desc: 300,
 };
@@ -2239,6 +2241,9 @@ router.delete("/service-submissions/:id", requireChaletApprovalsAdmin, async (re
 router.patch("/settings", requirePlatformSettingsAdmin, async (req, res) => {
   const body = z.record(z.string(), z.string()).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (["legal_entity_name_ar", "legal_entity_name_en"].some(key => (body.data[key]?.length ?? 0) > 250)) {
+    return res.status(400).json({ error: "يجب ألا يتجاوز الاسم القانوني ٢٥٠ حرفاً." });
+  }
   if ("photography_enabled" in body.data) {
     // Older clients echo the full GET response, including this read-only flag.
     // Accept an unchanged echo, but never change its dedicated lifecycle here.

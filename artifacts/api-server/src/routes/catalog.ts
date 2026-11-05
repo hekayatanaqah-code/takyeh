@@ -194,6 +194,8 @@ router.get("/page-content", async (_req, res) => {
     "footer_title",
     "footer_desc",
     "copyright_text",
+    "legal_entity_name_ar",
+    "legal_entity_name_en",
     "wa_message_template",
     "wa_review_template",
     "svc_btn_enabled",

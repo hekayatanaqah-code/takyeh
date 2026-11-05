@@ -824,6 +824,28 @@ function SettingsTab() {
               placeholder="جميع الحقوق محفوظة." className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500" dir="rtl" />
             <p className="text-xs text-slate-500">يُضاف تلقائياً قبله: © {new Date().getFullYear()} + اسم التذييل.</p>
           </div>
+          <div className="rounded-xl border border-slate-600 bg-slate-900/40 p-4 space-y-4">
+            <div>
+              <h4 className="font-bold text-slate-100">الكيان القانوني</h4>
+              <p className="mt-1 text-sm leading-6 text-slate-300">يظهر الاسم القانوني أسفل صفحات الموقع بعد الحفظ. يمكنك إدخال الاسمين أو ترك أي حقل فارغاً لإخفائه.</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <label htmlFor="legal-entity-name-ar" className="block text-sm font-semibold text-slate-200">الاسم القانوني للكيان (عربي)</label>
+                <Input id="legal-entity-name-ar" value={form.legal_entity_name_ar ?? ""} maxLength={250}
+                  onChange={e => setForm(f => ({ ...f, legal_entity_name_ar: e.target.value }))}
+                  placeholder="أدخل الاسم القانوني المعتمد بالعربية"
+                  className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-400" dir="rtl" />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="legal-entity-name-en" className="block text-sm font-semibold text-slate-200">الاسم القانوني للكيان (إنجليزي)</label>
+                <Input id="legal-entity-name-en" value={form.legal_entity_name_en ?? ""} maxLength={250}
+                  onChange={e => setForm(f => ({ ...f, legal_entity_name_en: e.target.value }))}
+                  placeholder="أدخل الاسم القانوني المعتمد بالإنجليزية"
+                  className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-400 placeholder:text-right" dir="ltr" />
+              </div>
+            </div>
+          </div>
           
         </div>
       </div>

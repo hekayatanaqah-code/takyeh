@@ -28,11 +28,12 @@ export function Footer() {
   const { data: settings = {} } = useQuery<Record<string, string>>({
     queryKey: ["page-content"],
     queryFn: async () => {
-      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include" });
-      if (!r.ok) return {};
+      const r = await fetch(`${BASE}/api/page-content`, { credentials: "include", cache: "no-store" });
+      if (!r.ok) throw new Error("تعذر تحميل بيانات تذييل الموقع");
       return r.json();
     },
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    refetchInterval: 15_000,
   });
 
   const logoUrl     = settings.site_logo_url ?? "";
@@ -54,6 +55,8 @@ export function Footer() {
   const showTikTok    = settings.tiktok_show    === "1";
 
   const hasSocial = showInstagram || showTwitter || showSnapchat || showTikTok;
+  const legalNameAr = settings.legal_entity_name_ar?.trim();
+  const legalNameEn = settings.legal_entity_name_en?.trim();
 
   return (
     <footer className={`bg-foreground text-background ${isHomepage ? "pt-12" : "pt-8"} pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-12 mt-auto`}>
@@ -185,6 +188,12 @@ export function Footer() {
         </div>}
 
         <div className={`border-t border-background/20 ${isHomepage ? "mt-12" : "mt-8"} pt-6 px-2 text-center text-sm leading-7 text-background/50`}>
+          {(legalNameAr || legalNameEn) && (
+            <div className="mx-auto mb-4 max-w-3xl space-y-1 break-words text-base leading-7 text-background/85" aria-label="الكيان القانوني">
+              {legalNameAr && <p lang="ar" dir="rtl" className="font-semibold">{legalNameAr}</p>}
+              {legalNameEn && <p lang="en" dir="ltr">{legalNameEn}</p>}
+            </div>
+          )}
           {(() => {
             const now = new Date();
             const hijriYear = toHijriComponents(now).year.toLocaleString("ar-SA");
