@@ -1,0 +1,15 @@
+// Generated native MariaDB schema; not wired into the PostgreSQL API.
+import * as m from "drizzle-orm/mysql-core";
+import { sql, desc } from "drizzle-orm";
+
+export const amenitiesCatalogTable = m.mysqlTable("amenities_catalog", {
+  id: m.int("id").notNull().autoincrement(),
+  key: m.varchar("key", { length: 191 }).notNull(),
+  labelAr: m.longtext("label_ar").notNull(),
+  isActive: m.boolean("is_active").notNull().default(sql.raw("1")),
+  createdAt: m.datetime("created_at", { mode: "date", fsp: 6 }).notNull().default(sql.raw("CURRENT_TIMESTAMP(6)")),
+}, (table): m.MySqlTableExtraConfigValue[] => [
+  m.check("amenities_catalog_is_active_bool", sql.raw("`is_active` IN (0,1)")),
+  m.uniqueIndex("amenities_catalog_key_unique").on(table.key),
+  m.primaryKey({ columns: [table.id] }),
+]);

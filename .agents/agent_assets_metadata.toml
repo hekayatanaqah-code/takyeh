@@ -113,3 +113,17 @@ mtime_ms = 1793624374924
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/d011a10c-50c1-4779-8523-88b169ddfa9a/0fd1dd1e-e32c-4441-b9aa-caac04e6f73e"
 storage_version_token = "1793624475800736"
 content_type = "application/pdf"
+
+[[outputs]]
+id = "7AxExK0wBTbeugTLhoBR1"
+uri = "file://.local/mariadb-exports/takyeh-mariadb-10.11-schema-seed.zip"
+type = "unspecified"
+title = "تصدير قاعدة تكيّة إلى MariaDB 10.11"
+description = "هيكل ١٠٠ جدول، وبيانات الإعدادات وحساب admin فقط، مع تقرير تحقق وتعليمات الاستيراد. ملف خاص يحتوي تجزئة كلمة مرور المدير. هذه حزمة قاعدة البيانات وليست نسخة تطبيق مكتملة لـ Hostinger."
+logical_id = "92f8974e-a7ad-475b-97c4-4d773841c90d"
+content_hash = "sha256:545336036af7116c0ee0ca91608e031f13005aa6ab07b6bdb929f28516341c38"
+size = 22730
+mtime_ms = 1793961463764
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/92f8974e-a7ad-475b-97c4-4d773841c90d/c2811691-11b8-4346-b37a-26ae31375a51"
+storage_version_token = "1793961556725522"
+content_type = "application/octet-stream"

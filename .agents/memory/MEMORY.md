@@ -97,3 +97,4 @@
 - [Public policy content](public-policy-content.md) — administrator-authored privacy text is authoritative and must refresh in an already-open preview without rebuilding.
 - [Admin profile presentation](admin-profile-presentation.md) — approved generic superadmin label; its mobile must display and persist Arabic digits while accepting both keyboards.
 - [Official launch domain](official-launch-domain.md) — user designated takyeh.sa for launch; verify actual binding rather than assuming deployment completion.
+- [MariaDB Hostinger migration](mariadb-hostinger-boundaries.md) — target MariaDB 10.11; seed settings/admin only; successful SQL import does not prove runtime or lock compatibility.

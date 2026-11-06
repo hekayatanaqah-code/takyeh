@@ -21,11 +21,11 @@
     "test:provider-catalog": "NODE_ENV=production tsx --test src/routes/provider-catalog.integration.test.ts"
   },
   "dependencies": {
-    "@workspace/booking-time": "workspace:*",
     "@google-cloud/storage": "^7.22.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/nodemailer": "^7.0.11",
     "@workspace/api-zod": "workspace:*",
+    "@workspace/booking-time": "workspace:*",
     "@workspace/db": "workspace:*",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
@@ -35,6 +35,7 @@
     "fluent-ffmpeg": "^2.1.3",
     "google-auth-library": "^10.6.2",
     "multer": "^2.4.0",
+    "mysql2": "^3.24.6",
     "nodemailer": "^10.0.12",
     "openid-client": "^6.8.2",
     "pino": "^9",

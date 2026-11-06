@@ -62,6 +62,7 @@ timeoutMs = 90000
 
 [nix]
 channel = "stable-25_05"
+packages = ["mariadb_1011"]
 
 [userenv]
 

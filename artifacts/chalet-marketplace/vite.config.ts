@@ -119,7 +119,7 @@ export default defineConfig({
     },
     fs: {
       strict: true,
-      deny: ["**/.*"],
+      deny: ["**/.*", "**/.local/**", "**/generated-artifacts/**", "**/_independent_backups/**"],
     },
   },
   preview: {

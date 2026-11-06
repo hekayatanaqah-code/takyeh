@@ -1,0 +1,14 @@
+// Generated native MariaDB schema; not wired into the PostgreSQL API.
+import * as m from "drizzle-orm/mysql-core";
+import { sql, desc } from "drizzle-orm";
+
+export const ownerOtpTokensTable = m.mysqlTable("owner_otp_tokens", {
+  id: m.int("id").notNull().autoincrement(),
+  email: m.longtext("email").notNull(),
+  codeHash: m.longtext("code_hash").notNull(),
+  expiresAt: m.datetime("expires_at", { mode: "date", fsp: 6 }).notNull(),
+  usedAt: m.datetime("used_at", { mode: "date", fsp: 6 }),
+  createdAt: m.datetime("created_at", { mode: "date", fsp: 6 }).notNull().default(sql.raw("CURRENT_TIMESTAMP(6)")),
+}, (table): m.MySqlTableExtraConfigValue[] => [
+  m.primaryKey({ columns: [table.id] }),
+]);

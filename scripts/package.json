@@ -5,15 +5,22 @@
   "type": "module",
   "scripts": {
     "hello": "tsx ./src/hello.ts",
+    "export:mariadb": "tsx ./src/export-mariadb.ts",
+    "generate:mariadb-schema": "tsx ./src/generate-mariadb-schema.ts",
+    "verify:mariadb": "tsx ./src/verify-mariadb-export.ts",
+    "test:mariadb": "tsx --test ./src/mariadb/schema-converter.test.ts",
     "seed-chalets": "tsx ./src/seed-chalets.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/booking-time": "workspace:*",
-    "@workspace/db": "workspace:*"
+    "@workspace/db": "workspace:*",
+    "mysql2": "^3.24.6",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/pg": "^8.18.0",
     "tsx": "catalog:"
   }
 }
