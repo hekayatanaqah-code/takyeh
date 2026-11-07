@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { ownerAccountLinksTable, ownerSubscriptionsTable } from "@workspace/db/schema";
 import { inArray, or, sql } from "drizzle-orm";
+import { sqlCurrentSchema,sqlText,sqlBoolean } from "@workspace/db/sql-expressions";
 import { activeOwnersWithFreeAccess, isSubscriptionActive } from "../lib/subscription-access";
 
 const router = Router();
@@ -27,13 +28,13 @@ let ownerIdColumnExists: boolean | undefined;
 async function hasExternalServiceOwnerColumn() {
   if (ownerIdColumnExists !== undefined) return ownerIdColumnExists;
   const result = await db.execute(sql`
-    SELECT EXISTS (
+    SELECT ${sqlBoolean(sql`EXISTS (
       SELECT 1
       FROM information_schema.columns
-      WHERE table_schema = 'public'
+      WHERE table_schema = ${sqlCurrentSchema()}
         AND table_name = 'external_services'
         AND column_name = 'owner_id'
-    ) AS available
+    )`,"available")} AS available
   `);
   ownerIdColumnExists = Boolean((result as any).rows?.[0]?.available);
   return ownerIdColumnExists;
@@ -42,9 +43,9 @@ async function hasExternalServiceOwnerColumn() {
 async function getExternalServices(hasOwnerColumn: boolean, id?: number): Promise<ExternalService[]> {
   const result = hasOwnerColumn
     ? await db.execute(sql`
-        SELECT id, name_ar AS "nameAr", category::text AS category,
+        SELECT id, name_ar AS "nameAr", ${sqlText(sql`category`)} AS category,
                description_ar AS "descriptionAr", whatsapp_number AS "whatsappNumber",
-               price::text AS price, price_note AS "priceNote", city, photos,
+               ${sqlText(sql`price`)} AS price, price_note AS "priceNote", city, photos,
                is_active AS "isActive", trial_ends_at AS "trialEndsAt",
                created_at AS "createdAt", owner_id AS "ownerId"
         FROM external_services
@@ -52,11 +53,11 @@ async function getExternalServices(hasOwnerColumn: boolean, id?: number): Promis
         ORDER BY created_at
       `)
     : await db.execute(sql`
-        SELECT id, name_ar AS "nameAr", category::text AS category,
+        SELECT id, name_ar AS "nameAr", ${sqlText(sql`category`)} AS category,
                description_ar AS "descriptionAr", whatsapp_number AS "whatsappNumber",
-               price::text AS price, price_note AS "priceNote", city, photos,
+               ${sqlText(sql`price`)} AS price, price_note AS "priceNote", city, photos,
                is_active AS "isActive", trial_ends_at AS "trialEndsAt",
-               created_at AS "createdAt", NULL::text AS "ownerId"
+               created_at AS "createdAt", ${sqlText(sql`NULL`)} AS "ownerId"
         FROM external_services
         ${id === undefined ? sql`` : sql`WHERE id = ${id}`}
         ORDER BY created_at

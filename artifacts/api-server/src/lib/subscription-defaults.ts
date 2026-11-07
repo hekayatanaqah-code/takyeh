@@ -1,3 +1,4 @@
+import { writeRecords } from "@workspace/db/mutations";
 import { db } from "@workspace/db";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { siteSettingsTable, subscriptionPlansTable } from "@workspace/db/schema";
@@ -48,20 +49,16 @@ export async function seedSubscriptionPlansOnce() {
       .from(siteSettingsTable).where(eq(siteSettingsTable.key, "subscription_plan_defaults_seeded"));
     if (!marker) {
       for (const plan of DEFAULT_PLANS) {
-        await tx.insert(subscriptionPlansTable).values(plan)
-          .onConflictDoNothing({ target: subscriptionPlansTable.slug });
+        await writeRecords(tx, subscriptionPlansTable, plan, { conflict: { action: "ignore", target: subscriptionPlansTable.slug } });
       }
-      await tx.insert(siteSettingsTable)
-        .values({ key: "subscription_plan_defaults_seeded", value: "1" })
-        .onConflictDoNothing({ target: siteSettingsTable.key });
+      await writeRecords(tx, siteSettingsTable, { key: "subscription_plan_defaults_seeded", value: "1" }, { conflict: { action: "ignore", target: siteSettingsTable.key } });
     }
 
     // Keep the grantable trial row present, even when the original catalog seed
     // marker predates it or an administrator has disabled the plan.
     const trialPlan = DEFAULT_PLANS.find((plan) => plan.slug === "trial");
     if (trialPlan) {
-      await tx.insert(subscriptionPlansTable).values(trialPlan)
-        .onConflictDoNothing({ target: subscriptionPlansTable.slug });
+      await writeRecords(tx, subscriptionPlansTable, trialPlan, { conflict: { action: "ignore", target: subscriptionPlansTable.slug } });
     }
 
     // One-time migration for the fixed 30-day, free trial. Do not touch
@@ -75,9 +72,7 @@ export async function seedSubscriptionPlansOnce() {
         trialDays: 30,
         isActive: true,
       }).where(eq(subscriptionPlansTable.slug, "trial"));
-      await tx.insert(siteSettingsTable)
-        .values({ key: "fixed_trial_terms_migrated", value: "1" })
-        .onConflictDoNothing({ target: siteSettingsTable.key });
+      await writeRecords(tx, siteSettingsTable, { key: "fixed_trial_terms_migrated", value: "1" }, { conflict: { action: "ignore", target: siteSettingsTable.key } });
     }
 
     // Enable cross-category one-time slots for untouched first-generation
@@ -93,9 +88,7 @@ export async function seedSubscriptionPlansOnce() {
           eq(subscriptionPlansTable.serviceLimit, 0),
           isNull(subscriptionPlansTable.extraServicePrice),
         ));
-      await tx.insert(siteSettingsTable)
-        .values({ key: "subscription_cross_category_addons_seeded", value: "1" })
-        .onConflictDoNothing({ target: siteSettingsTable.key });
+      await writeRecords(tx, siteSettingsTable, { key: "subscription_cross_category_addons_seeded", value: "1" }, { conflict: { action: "ignore", target: siteSettingsTable.key } });
     }
 
     const [cleanupMarker] = await tx.select({ key: siteSettingsTable.key })
@@ -118,9 +111,7 @@ export async function seedSubscriptionPlansOnce() {
           AND NOT EXISTS (SELECT 1 FROM subscription_payments pay WHERE pay.plan = p.slug)
       `);
       await tx.update(subscriptionPlansTable).set({ isActive: false }).where(archived);
-      await tx.insert(siteSettingsTable)
-        .values({ key: "legacy_subscription_plans_cleaned", value: "1" })
-        .onConflictDoNothing({ target: siteSettingsTable.key });
+      await writeRecords(tx, siteSettingsTable, { key: "legacy_subscription_plans_cleaned", value: "1" }, { conflict: { action: "ignore", target: siteSettingsTable.key } });
     }
   });
 }

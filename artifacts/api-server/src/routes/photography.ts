@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { lockResource } from "@workspace/db/transaction-lock";
 import {
@@ -115,12 +116,12 @@ router.post("/invites/:token", sameOrigin, loginLimit, async (req, res) => {
     await lockResource(tx, 731222, 1);
     const current = await currentPhotographyContract(tx);
     if (!current || current.id !== agreement.data.contractVersion) return "contract_changed" as const;
-    const [saved] = await tx.update(photographersTable).set({
+    const [saved] = await updateRecords(tx, photographersTable, {
       ...profile.data, iban: agreement.data.iban, bankName: agreement.data.bankName,
       contractVersion: current.id, contractAcceptedAt: new Date(),
       passwordHash, status: "pending", inviteHash: null, inviteExpiresAt: null,
-    }).where(and(eq(photographersTable.inviteHash, photoHash(String(req.params.token))), eq(photographersTable.status, "invited"),
-      gt(photographersTable.inviteExpiresAt, new Date()))).returning();
+    }, and(eq(photographersTable.inviteHash, photoHash(String(req.params.token))), eq(photographersTable.status, "invited"),
+      gt(photographersTable.inviteExpiresAt, new Date())));
     return saved;
   });
   if (row === "contract_changed") return res.status(409).json({ error: "تم تحديث العقد أو لم يُنشر بعد. اقرأ النسخة الحالية ووافق عليها مجدداً" });
@@ -205,10 +206,10 @@ router.patch("/portal", sameOrigin, async (req, res) => {
   if (parsed.data.profileImagePath !== row.profileImagePath && !await ownsProfileImage(row.id, parsed.data.profileImagePath)) return res.status(400).json({ error: "أعد رفع الصورة الشخصية من هذا الحساب" });
   const coverageChanged = parsed.data.regionId !== row.regionId || parsed.data.cityId !== row.cityId
     || parsed.data.allDistricts !== row.allDistricts || JSON.stringify([...parsed.data.districtIds].sort()) !== JSON.stringify([...row.districtIds].sort());
-  const [updated] = await db.update(photographersTable).set({
+  const [updated] = await updateRecords(db, photographersTable, {
     ...parsed.data,
     ...(coverageChanged ? { status: "pending", adminNote: null } : {}),
-  }).where(eq(photographersTable.id, row.id)).returning();
+  }, eq(photographersTable.id, row.id));
   return res.json({ photographer: publicPhotographer(updated) });
 });
 router.post("/payment-callback/:id", loginLimit, async (req, res) => {
@@ -322,14 +323,14 @@ router.post("/bookings", async (req, res) => {
       const choice = await allocatePhotography(tx, target, startAt, { packageId: pack.id, endAt: parsed.data.endAt ? new Date(parsed.data.endAt) : undefined });
       if (!choice) throw new Error("slot");
       const p = choice.photographer;
-      const [row] = await tx.insert(photographyBookingsTable).values({
+      const [row] = await insertRecords(tx, photographyBookingsTable, {
         ownerId: target.ownerId, propertyId: target.kind === "property" ? target.id : null,
         serviceSubmissionId: target.kind === "service" ? target.id : null, photographerId: p.id, packageId: pack.id,
         propertyName: target.nameAr, photographerName: p.name, packageName: pack.name,
         ownerPhone: phone, photographerPhone: p.whatsapp, startAt, endAt: choice.endAt,
         targetCity: target.location, targetRegion: target.region, targetDistrict: target.district, targetType: target.typeKey,
         expiresAt: new Date(Date.now() + 15 * 60000), ...photographyQuote(pack.priceHalalas, Number(pack.platformPercent)),
-      }).returning();
+      });
       return row;
     });
     return res.json({ booking });

@@ -1,3 +1,4 @@
+import { insertRecords, writeRecords } from "@workspace/db/mutations";
 import { db } from "@workspace/db";
 import { citiesCatalogTable, regionsCatalogTable, amenitiesCatalogTable, siteSettingsTable } from "@workspace/db/schema";
 import { isNull, sql } from "drizzle-orm";
@@ -146,11 +147,7 @@ export async function seedCatalogIfEmpty() {
        OR arrival_reminder_template NOT LIKE '%{استرداد_العربون}%'
   `);
 
-  const [qassimRegion] = await db
-    .insert(regionsCatalogTable)
-    .values({ name: "منطقة القصيم" })
-    .onConflictDoUpdate({ target: regionsCatalogTable.name, set: { name: "منطقة القصيم" } })
-    .returning();
+  const [qassimRegion] = await insertRecords(db, regionsCatalogTable, { name: "منطقة القصيم" }, { conflict: { action: "update", target: regionsCatalogTable.name, set: { name: "منطقة القصيم" } } });
 
   const existingCities = await db.select().from(citiesCatalogTable);
   if (existingCities.length === 0) {
@@ -164,16 +161,10 @@ export async function seedCatalogIfEmpty() {
   }
 
   for (const amenity of INITIAL_AMENITIES) {
-    await db
-      .insert(amenitiesCatalogTable)
-      .values(amenity)
-      .onConflictDoNothing({ target: amenitiesCatalogTable.key });
+    await writeRecords(db, amenitiesCatalogTable, amenity, { conflict: { action: "ignore", target: amenitiesCatalogTable.key } });
   }
 
   for (const setting of INITIAL_SITE_SETTINGS) {
-    await db
-      .insert(siteSettingsTable)
-      .values(setting)
-      .onConflictDoNothing({ target: siteSettingsTable.key });
+    await writeRecords(db, siteSettingsTable, setting, { conflict: { action: "ignore", target: siteSettingsTable.key } });
   }
 }

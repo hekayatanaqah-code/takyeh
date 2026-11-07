@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords, writeRecords } from "@workspace/db/mutations";
 import {
   db, photographersTable, photographyBookingsTable, photographyReviewsTable,
   photographyCancellationsTable, photographyAlertsTable, photographyDeliveriesTable, ownerNotificationsTable,
@@ -25,10 +26,10 @@ type Booking = typeof photographyBookingsTable.$inferSelect;
 async function alert(tx: PhotographyTx, input: {
   dedupeKey: string; kind: string; photographerId: number; bookingId?: number; message: string;
 }) {
-  await tx.insert(photographyAlertsTable).values(input).onConflictDoUpdate({
+  await writeRecords(tx, photographyAlertsTable, input, { conflict: { action: "update", ...{
     target: photographyAlertsTable.dedupeKey,
     set: { message: input.message, photographerId: input.photographerId, resolvedAt: null, readAt: null, createdAt: new Date() },
-  });
+  } } });
 }
 export async function photographyCancellationHistory(photographerId?: number) {
   return db.select({
@@ -86,11 +87,11 @@ async function replaceAssignedPhotographer(tx: PhotographyTx, booking: Booking) 
   await tx.update(photographyAlertsTable).set({ resolvedAt: new Date() })
     .where(eq(photographyAlertsTable.dedupeKey, `replacement:${booking.id}`));
   // Only the replacement is notified. Never insert an owner cancellation/rebooking notice.
-  const [delivery] = await tx.insert(photographyDeliveriesTable).values({
+  const [delivery] = await insertRecords(tx, photographyDeliveriesTable, {
     dedupeKey: `booking:${booking.id}:photographer:${p.id}`, bookingId: booking.id, photographerId: p.id,
     recipient: p.whatsapp, kind: "booking",
     parameters: [booking.propertyName, booking.packageName, booking.startAt.toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" }), String(booking.id)],
-  }).onConflictDoNothing({ target: photographyDeliveriesTable.dedupeKey }).returning({ id: photographyDeliveriesTable.id });
+  }, { conflict: { action: "ignore", ...{ target: photographyDeliveriesTable.dedupeKey } }, returning: { id: photographyDeliveriesTable.id } });
   return { reassigned: true, needsAdminReview: false, message: "سُجّل الاعتذار وأُسند الحجز تلقائياً إلى مصور بديل في الموعد نفسه دون إشعار المالك.", replacementId: p.id, deliveryId: delivery?.id };
 }
 
@@ -152,8 +153,7 @@ export async function deliverPhotography(bookingId: number, photographerId: numb
     if (row.deliveredAt && (row.deliveryUrl || row.deliveryFiles.length)) return row;
     const files = delivery.prepareFiles ? await delivery.prepareFiles() : delivery.files ?? [];
     if (!delivery.deliveryUrl && !files.length) throw new Error("delivery_contents");
-    const [updated] = await tx.update(photographyBookingsTable).set({ status: "completed", deliveredAt: row.deliveredAt ?? new Date(), deliveryUrl: delivery.deliveryUrl ?? null, deliveryFiles: files })
-      .where(eq(photographyBookingsTable.id, bookingId)).returning();
+    const [updated] = await updateRecords(tx, photographyBookingsTable, { status: "completed", deliveredAt: row.deliveredAt ?? new Date(), deliveryUrl: delivery.deliveryUrl ?? null, deliveryFiles: files }, eq(photographyBookingsTable.id, bookingId));
     await tx.insert(ownerNotificationsTable).values({
       ownerId: row.ownerId, type: "photography_delivery",
       message: `سلّم المصور ${row.photographerName} جلسة تصوير ${row.propertyName} (حجز ${row.id}). افتح حجوزات التصوير لمراجعة الملفات وتقييم الجلسة.`,
@@ -172,12 +172,12 @@ export async function ratePhotography(bookingId: number, ownerIds: string[], inp
     if (!booking || booking.status !== "completed" || !booking.deliveredAt || booking.assignmentStatus !== "assigned") throw new Error("rating_unavailable");
     const [existing] = await tx.select().from(photographyReviewsTable).where(eq(photographyReviewsTable.bookingId, bookingId));
     if (existing) throw new Error("already_rated");
-    const [saved] = await tx.insert(photographyReviewsTable).values({
+    const [saved] = await insertRecords(tx, photographyReviewsTable, {
       bookingId, photographerId: booking.photographerId, ownerId: booking.ownerId, stars: input.stars, comment: input.comment ?? "",
-    }).returning();
-    const [p] = await tx.update(photographersTable).set({
+    });
+    const [p] = await updateRecords(tx, photographersTable, {
       ratingSum: sql`${photographersTable.ratingSum} + ${input.stars}`, ratingCount: sql`${photographersTable.ratingCount} + 1`,
-    }).where(eq(photographersTable.id, booking.photographerId)).returning();
+    }, eq(photographersTable.id, booking.photographerId));
     const policy = await getPhotographyPolicy(tx);
     if (!qualityEligible({ ...p, status: "approved" }, policy)) await alert(tx, {
       dedupeKey: `quality:${p.id}`, kind: "quality", photographerId: p.id,

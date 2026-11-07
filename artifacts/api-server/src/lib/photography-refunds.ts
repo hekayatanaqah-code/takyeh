@@ -1,3 +1,5 @@
+import { insertRecords } from "@workspace/db/mutations";
+import { sqlInteger } from "@workspace/db/sql-expressions";
 import { db, photographyBookingsTable, photographyRefundsTable } from "@workspace/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -53,7 +55,7 @@ export async function requestPhotographyRefund(bookingId: number, adminId: strin
     const [pending] = await tx.select().from(photographyRefundsTable).where(and(eq(photographyRefundsTable.bookingId, bookingId), eq(photographyRefundsTable.status, "pending")));
     if (pending) throw new Error("refund_pending");
     if (input.destination === "card" && (booking.paymentMethod === "wallet" || !booking.paymentId || !/^[0-9a-f-]{36}$/i.test(booking.paymentId))) throw new Error("refund_card_unavailable");
-    const [row] = await tx.insert(photographyRefundsTable).values({ ...input, bookingId, ownerId: booking.ownerId, requestedBy: adminId }).returning();
+    const [row] = await insertRecords(tx, photographyRefundsTable, { ...input, bookingId, ownerId: booking.ownerId, requestedBy: adminId });
     await tx.update(photographyBookingsTable).set({
       status: booking.deliveredAt ? booking.status : "cancelled", financialStatus: "refund_pending",
     }).where(eq(photographyBookingsTable.id, bookingId));
@@ -73,7 +75,7 @@ export async function reconcilePhotographyRefund(id: number, provider = moyasarR
     const [r] = await tx.select().from(photographyRefundsTable).where(eq(photographyRefundsTable.id, id)).for("update");
     if (!r) throw new Error("refund_missing");
     const [b] = await tx.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, r.bookingId));
-    const [prior] = await tx.select({ amount: sql<number>`coalesce(sum(${photographyRefundsTable.amountHalalas}),0)::integer` }).from(photographyRefundsTable)
+    const [prior] = await tx.select({ amount: sqlInteger(sql`coalesce(sum(${photographyRefundsTable.amountHalalas}),0)`) }).from(photographyRefundsTable)
       .where(and(eq(photographyRefundsTable.bookingId, b.id), eq(photographyRefundsTable.status, "succeeded"), eq(photographyRefundsTable.destination, "card")));
     return { r, b, prior: prior.amount };
   });

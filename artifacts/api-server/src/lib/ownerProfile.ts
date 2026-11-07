@@ -1,4 +1,7 @@
 import { db } from "@workspace/db";
+import { ownerAccountLinksTable } from "@workspace/db";
+import { ownerApplicationsQueryTable } from "@workspace/db/runtime-models";
+import { insertRecords, writeRecords } from "@workspace/db/mutations";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { sql } from "drizzle-orm";
 
@@ -107,22 +110,16 @@ export async function ensureOwnerProfile(
     let applicationId = ((applicationResult as any).rows as Array<{ id: number }>)[0]?.id;
 
     if (!applicationId) {
-      const createdResult = await tx.execute(sql`
-        INSERT INTO owner_applications
-          (full_name, business_name, business_type, phone, email, password_hash, status, email_verified)
-        VALUES
-          (${fullName}, ${businessName}, ${businessType}, ${phone}, ${email}, '', 'approved', true)
-        RETURNING id
-      `);
-      applicationId = ((createdResult as any).rows as Array<{ id: number }>)[0]?.id;
+      const [created] = await insertRecords(tx, ownerApplicationsQueryTable, {
+        fullName, businessName, businessType, phone, email, passwordHash: "",
+        status: "approved", emailVerified: true,
+      }, { returning: { id: ownerApplicationsQueryTable.id } });
+      applicationId = created?.id;
     }
     if (!applicationId) return null;
 
-    await tx.execute(sql`
-      INSERT INTO owner_account_links (user_id, owner_application_id)
-      VALUES (${identity.userId}, ${applicationId})
-      ON CONFLICT DO NOTHING
-    `);
+    await writeRecords(tx, ownerAccountLinksTable, { userId: identity.userId, ownerApplicationId: applicationId },
+      { conflict: { action: "ignore" } });
 
     const finalMappingResult = await tx.execute(sql`
       SELECT oa.email

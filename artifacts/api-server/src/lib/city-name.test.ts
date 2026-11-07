@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { sql } from "drizzle-orm";
-import { db } from "@workspace/db";
-import { normalizeCityName, normalizedCityExpression } from "./city-name";
+import { normalizeCityName } from "./city-name";
 
 const cases = [
   ["الأسياح", "الاسياح"],
@@ -26,10 +24,10 @@ describe("exact normalized city identity", () => {
     assert.notEqual(normalizeCityName("بريدة"), normalizeCityName("عنيزة"));
   });
 
-  it("uses the same city identity in PostgreSQL and JavaScript", async () => {
-    for (const [input, expected] of cases) {
-      const result = await db.execute<{ normalized: string }>(sql`SELECT ${normalizedCityExpression(sql`${input}`)} AS normalized`);
-      assert.equal(result.rows[0].normalized, expected, input);
-    }
+  it("normalizes compatibility forms without using approximate SQL collation", () => {
+    assert.equal(normalizeCityName("ﺑﺮﻳﺪﺓ"),normalizeCityName("بريدة"));
+    assert.equal(normalizeCityName("ÉVRY"),normalizeCityName("E\u0301VRY"));
+    assert.notEqual(normalizeCityName("ÉVRY"),"evry");
+    assert.notEqual(normalizeCityName("ø"),normalizeCityName("o"));
   });
 });

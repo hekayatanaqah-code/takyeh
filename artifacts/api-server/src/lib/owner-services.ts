@@ -1,3 +1,4 @@
+import { writeRecords } from "@workspace/db/mutations";
 import { db, ownerServicesTable, siteSettingsTable, citiesCatalogTable, regionsCatalogTable } from "@workspace/db";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { and, eq, isNull, sql } from "drizzle-orm";
@@ -43,8 +44,7 @@ export async function lockOwnerServices(tx: Store) {
   await tx.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled")).for("update");
 }
 export async function writePhotographyGate(tx: Store, enabled: boolean) {
-  await tx.insert(siteSettingsTable).values({ key: "photography_enabled", value: String(enabled) })
-    .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value: String(enabled), updatedAt: new Date() } });
+  await writeRecords(tx, siteSettingsTable, { key: "photography_enabled", value: String(enabled) }, { conflict: { action: "update", ...{ target: siteSettingsTable.key, set: { value: String(enabled), updatedAt: new Date() } } } });
 }
 export async function photographyCardEnabled(store: Store = db) {
   const [card] = await store.select().from(ownerServicesTable)

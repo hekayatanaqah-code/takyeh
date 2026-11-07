@@ -798,6 +798,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../lib/db
+      esbuild:
+        specifier: 0.27.3
+        version: 0.27.3
       mysql2:
         specifier: ^3.24.6
         version: 3.24.6(@types/node@25.3.5)

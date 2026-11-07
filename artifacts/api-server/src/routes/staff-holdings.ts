@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { Router } from "express";
 import { and, desc, eq } from "drizzle-orm";
 import { db, ownerStaffTable, staffHoldingsTable } from "@workspace/db";
@@ -52,9 +53,9 @@ router.post<{ staffId: string }>("/", async (req, res) => {
     const [employee] = await tx.select({ id: ownerStaffTable.id }).from(ownerStaffTable)
       .where(and(eq(ownerStaffTable.id, staffId), eq(ownerStaffTable.ownerId, ownerId))).for("update");
     if (!employee) return { status: 404, data: { error: "لم يُعثر على الموظف" } };
-    const [row] = await tx.insert(staffHoldingsTable).values({
+    const [row] = await insertRecords(tx, staffHoldingsTable, {
       ...input, ownerId, staffId, amount: input.amount.toFixed(2),
-    }).onConflictDoNothing({ target: [staffHoldingsTable.ownerId, staffHoldingsTable.requestId] }).returning();
+    }, { conflict: { action: "ignore", ...{ target: [staffHoldingsTable.ownerId, staffHoldingsTable.requestId] } } });
     if (row) return { status: 201, data: row };
     const [existing] = await tx.select().from(staffHoldingsTable).where(and(
       eq(staffHoldingsTable.ownerId, ownerId), eq(staffHoldingsTable.requestId, input.requestId),
@@ -83,9 +84,9 @@ router.post<{ staffId: string; holdingId: string }>("/:holdingId/settle", async 
     if (!row) return { status: 404, data: { error: "لم يُعثر على السجل" } };
     if (row.status !== "open") return { status: 409, data: { error: "سبق توثيق تسوية هذا السجل" } };
     if (parsed.data.settledOn < row.recordedOn) return { status: 400, data: { error: "تاريخ التسوية لا يسبق تاريخ التسجيل" } };
-    const [updated] = await tx.update(staffHoldingsTable).set({
+    const [updated] = await updateRecords(tx, staffHoldingsTable, {
       status: "settled", ...parsed.data,
-    }).where(scope).returning();
+    }, scope);
     return { status: 200, data: updated };
   });
   res.status(result.status).json(result.data);

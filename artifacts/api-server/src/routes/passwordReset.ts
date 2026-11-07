@@ -3,7 +3,11 @@ import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { createHash, randomBytes } from "node:crypto";
 import { db } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { adminStaffTable, ownerStaffTable } from "@workspace/db";
+import { ownerApplicationsQueryTable, passwordResetTokensQueryTable } from "@workspace/db/runtime-models";
+import { updateRecords } from "@workspace/db/mutations";
+import { and, eq, sql } from "drizzle-orm";
+import { sqlJsonText,sqlJsonValue,sqlRegexReplace,sqlDigits } from "@workspace/db/sql-expressions";
 import {
   classifyPublicStaffUsername,
   classifyRecoveryIdentifier,
@@ -67,17 +71,12 @@ async function findOwnerApplicationsByEmail(database: RecoveryDatabase, email: s
 }
 
 async function findOwnerApplicationsByPhone(database: RecoveryDatabase, phone: string) {
-  const arabicPersianDigits = "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹";
-  const westernDigits = "01234567890123456789";
   const suffix = phone.slice(-9);
   const result = await database.execute(sql`
     SELECT id, phone, email, password_hash
     FROM owner_applications
     WHERE RIGHT(
-      REGEXP_REPLACE(
-        TRANSLATE(COALESCE(phone, ''), ${arabicPersianDigits}, ${westernDigits}),
-        '[^0-9]', '', 'g'
-      ),
+      ${sqlRegexReplace(sqlDigits(sql`COALESCE(phone,'')`),"[^0-9]","",true)},
       9
     ) = ${suffix}
   `);
@@ -263,25 +262,16 @@ async function consumeAndResetPassword(
     let updated: unknown;
     switch (row.target_type) {
       case "owner_application":
-        updated = await tx.execute(sql`
-          UPDATE owner_applications SET password_hash = ${newPasswordHash}
-          WHERE id = ${Number(row.target_id)}
-          RETURNING id
-        `);
+        updated = { rows: await updateRecords(tx, ownerApplicationsQueryTable, { passwordHash: newPasswordHash },
+          eq(ownerApplicationsQueryTable.id, Number(row.target_id)), { id: ownerApplicationsQueryTable.id }) };
         break;
       case "admin_staff":
-        updated = await tx.execute(sql`
-          UPDATE admin_staff SET password_hash = ${newPasswordHash}
-          WHERE id = ${Number(row.target_id)}
-          RETURNING id
-        `);
+        updated = { rows: await updateRecords(tx, adminStaffTable, { passwordHash: newPasswordHash },
+          eq(adminStaffTable.id, Number(row.target_id)), { id: adminStaffTable.id }) };
         break;
       case "owner_staff":
-        updated = await tx.execute(sql`
-          UPDATE owner_staff SET password_hash = ${newPasswordHash}
-          WHERE id = ${Number(row.target_id)}
-          RETURNING id
-        `);
+        updated = { rows: await updateRecords(tx, ownerStaffTable, { passwordHash: newPasswordHash },
+          eq(ownerStaffTable.id, Number(row.target_id)), { id: ownerStaffTable.id }) };
         break;
       default:
         return "invalid";
@@ -289,12 +279,10 @@ async function consumeAndResetPassword(
 
     if (readRows<{ id: number }>(updated).length !== 1) return "invalid";
 
-    const consumed = await tx.execute(sql`
-      UPDATE password_reset_tokens SET used = true
-      WHERE id = ${row.id} AND used = false
-      RETURNING id
-    `);
-    if (readRows<{ id: number }>(consumed).length !== 1) {
+    const consumed = await updateRecords(tx, passwordResetTokensQueryTable, { used: true },
+      and(eq(passwordResetTokensQueryTable.id, row.id), eq(passwordResetTokensQueryTable.used, false)),
+      { id: passwordResetTokensQueryTable.id });
+    if (consumed.length !== 1) {
       throw new Error("password_reset_token_consumption_failed");
     }
 
@@ -310,23 +298,23 @@ async function consumeAndResetPassword(
         const ownerApplicationId = Number(row.target_id);
         const legacyOwnerId = `owner_${row.target_id}`;
         await tx.execute(sql`
-          DELETE FROM sessions AS session
-          WHERE session.sess ->> 'ownerApplicationId' = ${row.target_id}
-             OR session.sess #>> '{user,id}' IN (
+          DELETE FROM sessions
+          WHERE ${sqlJsonText(sql`sessions.sess`,"ownerApplicationId")} = ${row.target_id}
+             OR ${sqlJsonText(sqlJsonValue(sql`sessions.sess`,"user"),"id")} IN (
                SELECT user_id FROM owner_account_links
                WHERE owner_application_id = ${ownerApplicationId}
              )
              OR (
-               session.sess ->> 'access_token' = 'owner_password_auth'
+               ${sqlJsonText(sql`sessions.sess`,"access_token")} = 'owner_password_auth'
                AND (
-                 session.sess #>> '{user,id}' = ${legacyOwnerId}
+                 ${sqlJsonText(sqlJsonValue(sql`sessions.sess`,"user"),"id")} = ${legacyOwnerId}
                  OR EXISTS (
                    SELECT 1
                    FROM owner_applications AS owner
                    JOIN users AS auth_user
                      ON LOWER(auth_user.email) = LOWER(owner.email)
                    WHERE owner.id = ${ownerApplicationId}
-                     AND auth_user.id = session.sess #>> '{user,id}'
+                     AND auth_user.id = ${sqlJsonText(sqlJsonValue(sql`sessions.sess`,"user"),"id")}
                      AND owner.email IS NOT NULL
                      AND (
                        SELECT COUNT(*) FROM owner_applications AS same_email
@@ -336,7 +324,7 @@ async function consumeAndResetPassword(
                )
                AND NOT EXISTS (
                  SELECT 1 FROM owner_account_links AS conflicting_link
-                 WHERE conflicting_link.user_id = session.sess #>> '{user,id}'
+                 WHERE conflicting_link.user_id = ${sqlJsonText(sqlJsonValue(sql`sessions.sess`,"user"),"id")}
                    AND conflicting_link.owner_application_id <> ${ownerApplicationId}
                )
              )

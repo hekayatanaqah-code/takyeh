@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { Router } from "express";
 import { db, ownerServicesTable } from "@workspace/db";
 import { and, asc, eq, isNull } from "drizzle-orm";
@@ -28,11 +29,11 @@ router.post("/", async (req, res) => {
         if (existing && !existing.deletedAt) throw new Error("بطاقة التصوير موجودة بالفعل");
         await writePhotographyGate(tx, data.state === "available");
         if (existing) {
-          const [restored] = await tx.update(ownerServicesTable).set({ ...data, sortOrder, deletedAt: null, updatedAt: new Date() }).where(eq(ownerServicesTable.id, existing.id)).returning();
+          const [restored] = await updateRecords(tx, ownerServicesTable, { ...data, sortOrder, deletedAt: null, updatedAt: new Date() }, eq(ownerServicesTable.id, existing.id));
           return restored;
         }
       }
-      const [created] = await tx.insert(ownerServicesTable).values({ ...data, sortOrder, key: data.kind === "photography" ? "photography" : `service-${randomUUID()}` }).returning();
+      const [created] = await insertRecords(tx, ownerServicesTable, { ...data, sortOrder, key: data.kind === "photography" ? "photography" : `service-${randomUUID()}` });
       return created;
     });
     return res.status(201).json(card);
@@ -64,7 +65,7 @@ router.patch("/:id", async (req, res) => {
       const error = serviceAvailabilityError(data);
       if (error) throw new Error(error);
       if (current.kind === "photography") await writePhotographyGate(tx, data.state === "available");
-      const [updated] = await tx.update(ownerServicesTable).set({ ...parsed.data, ...(current.kind === "photography" ? { actionUrl: null } : {}), updatedAt: new Date() }).where(eq(ownerServicesTable.id, current.id)).returning();
+      const [updated] = await updateRecords(tx, ownerServicesTable, { ...parsed.data, ...(current.kind === "photography" ? { actionUrl: null } : {}), updatedAt: new Date() }, eq(ownerServicesTable.id, current.id));
       return updated;
     });
     return card ? res.json(card) : res.status(404).json({ error: "الخدمة غير موجودة" });

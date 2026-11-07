@@ -1,6 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { seedCatalogIfEmpty } from "./lib/seed-catalog";
+import { seedCatalogIfEmpty } from "#catalog-bootstrap";
 import { seedSubscriptionPlansOnce } from "./lib/subscription-defaults";
 import { runSubscriptionExpiryReminders } from "./lib/subscription-reminders";
 import { startLongPauseAlertCheck } from "./routes/admin";

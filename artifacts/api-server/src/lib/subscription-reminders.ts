@@ -1,3 +1,4 @@
+import { writeRecords } from "@workspace/db/mutations";
 import { and, eq, gte, like, lt, notInArray, sql } from "drizzle-orm";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { db, ownerNotificationsTable, ownerSubscriptionsTable } from "@workspace/db";
@@ -115,12 +116,10 @@ export async function runSubscriptionExpiryReminders(): Promise<void> {
   } finally {
     const heartbeat = JSON.stringify({ lastCheckAt: new Date().toISOString(), status });
     try {
-      await db.insert(siteSettingsTable)
-        .values({ key: REMINDER_HEARTBEAT_KEY, value: heartbeat, updatedAt: new Date() })
-        .onConflictDoUpdate({
+      await writeRecords(db, siteSettingsTable, { key: REMINDER_HEARTBEAT_KEY, value: heartbeat, updatedAt: new Date() }, { conflict: { action: "update", ...{
           target: siteSettingsTable.key,
           set: { value: heartbeat, updatedAt: new Date() },
-        });
+        } } });
     } catch (heartbeatError) {
       // Preserve the scheduler's original outcome; heartbeat persistence is best-effort.
       logger.error({ err: heartbeatError, jobStatus: status }, "Subscription expiry reminder heartbeat could not be saved");

@@ -1,3 +1,4 @@
+import { insertRecords } from "@workspace/db/mutations";
 import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { z } from "zod";
@@ -70,9 +71,9 @@ export async function completePhotographyReceipt(adminId: string, input: z.infer
   const objectPath = (await receiptStorage.uploadBuffer(buffer, contentType, extension, upload.preparedPath.replace(/^\/objects\//, ""))).replace(/^\/api\/storage/, "");
   await receiptStorage.trySetObjectEntityAclPolicy(objectPath, { visibility: "private", owner: `photography-receipt:${adminId}` });
   const name = `${data.name.replace(/[\\/\r\n\x00-\x1f]/g, "_").replace(/\.[^.]*$/, "")}.${extension}`;
-  const [receipt] = await tx.insert(photographyReceiptsTable).values({
+  const [receipt] = await insertRecords(tx, photographyReceiptsTable, {
     objectPath, sourcePath: input.objectPath, name, contentType, size: buffer.length, uploadedBy: adminId,
-  }).returning();
+  });
   await tx.update(photographyReceiptUploadsTable).set({ state: "ready", receiptId: receipt.id, error: null }).where(eq(photographyReceiptUploadsTable.id, upload.id));
   // No eager deletion. Even the source copy is retained until reviewed cleanup.
   return { receiptId: receipt.id, name: receipt.name, contentType, size: receipt.size };

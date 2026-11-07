@@ -3,10 +3,13 @@ import {
   getTableConfig, type AnyMySqlColumn, type MySqlTable,
   type MySqlInsertValue, type MySqlUpdateSetSource,
 } from "drizzle-orm/mysql-core";
-import type { MariaDbTransaction } from "./transaction";
+import type { MySql2Database } from "drizzle-orm/mysql2";
+import type { Projected } from "../mutation-results";
 
-type Selection = Record<string, AnyMySqlColumn>;
-type Selected<P extends Selection> = { [K in keyof P]: GetColumnData<P[K]> };
+export type NativeMutationDatabase = Pick<MySql2Database, "select" | "insert" | "update" | "delete">;
+type MutationContext = { db: NativeMutationDatabase };
+type Selection = Record<string, AnyMySqlColumn | SQL | SQL.Aliased>;
+type Selected<P extends Selection> = Projected<P>;
 
 function keys<T extends MySqlTable>(table: T): AnyMySqlColumn[] {
   const config = getTableConfig(table);
@@ -16,7 +19,7 @@ function keys<T extends MySqlTable>(table: T): AnyMySqlColumn[] {
   return primary;
 }
 
-function identity<T extends MySqlTable>(table: T, rows: Record<string, unknown>[]): SQL {
+export function mutationIdentity<T extends MySqlTable>(table: T, rows: Record<string, unknown>[]): SQL {
   const columns = getTableColumns(table);
   const primary = keys(table);
   const properties = primary.map(column => {
@@ -40,13 +43,13 @@ function identity<T extends MySqlTable>(table: T, rows: Record<string, unknown>[
  * Primary-key changes are rejected: the original identity must remain stable.
  */
 export async function updateAndRead<T extends MySqlTable>(
-  tx: MariaDbTransaction, table: T, values: MySqlUpdateSetSource<T>, where: SQL,
+  tx: MutationContext, table: T, values: MySqlUpdateSetSource<T>, where: SQL,
 ): Promise<InferSelectModel<T>[]>;
 export async function updateAndRead<T extends MySqlTable, P extends Selection>(
-  tx: MariaDbTransaction, table: T, values: MySqlUpdateSetSource<T>, where: SQL, projection: P,
+  tx: MutationContext, table: T, values: MySqlUpdateSetSource<T>, where: SQL, projection: P,
 ): Promise<Selected<P>[]>;
 export async function updateAndRead<T extends MySqlTable>(
-  tx: MariaDbTransaction, table: T, values: MySqlUpdateSetSource<T>, where: SQL, projection?: Selection,
+  tx: MutationContext, table: T, values: MySqlUpdateSetSource<T>, where: SQL, projection?: Selection,
 ): Promise<Record<string, unknown>[]> {
   const columns = getTableColumns(table);
   for (const key of keys(table)) {
@@ -55,7 +58,7 @@ export async function updateAndRead<T extends MySqlTable>(
   }
   const before = await tx.db.select().from(table).where(where).for("update");
   if (!before.length) return [];
-  const predicate = identity(table, before);
+  const predicate = mutationIdentity(table, before);
   await tx.db.update(table).set(values).where(predicate);
   const selection = projection ?? columns;
   return tx.db.select(selection).from(table).where(predicate);
@@ -63,11 +66,11 @@ export async function updateAndRead<T extends MySqlTable>(
 
 /** DELETE read-back is captured under the same row locks before the deletion. */
 export async function deleteAndRead<T extends MySqlTable>(
-  tx: MariaDbTransaction, table: T, where: SQL,
+  tx: MutationContext, table: T, where: SQL,
 ): Promise<InferSelectModel<T>[]> {
   const before = await tx.db.select().from(table).where(where).for("update");
   if (!before.length) return [];
-  await tx.db.delete(table).where(identity(table, before));
+  await tx.db.delete(table).where(mutationIdentity(table, before));
   return before;
 }
 
@@ -77,7 +80,7 @@ export async function deleteAndRead<T extends MySqlTable>(
  * explicitly. Defaults (including JSON and dates) are read from the database.
  */
 export async function insertAndRead<T extends MySqlTable>(
-  tx: MariaDbTransaction, table: T, input: MySqlInsertValue<T>,
+  tx: MutationContext, table: T, input: MySqlInsertValue<T>,
 ): Promise<InferSelectModel<T>> {
   const primary = keys(table);
   const columns = getTableColumns(table);
@@ -94,7 +97,7 @@ export async function insertAndRead<T extends MySqlTable>(
       row[property] = result.insertId;
     }
   }
-  const [saved] = await tx.db.select().from(table).where(identity(table, [row]));
+  const [saved] = await tx.db.select().from(table).where(mutationIdentity(table, [row]));
   if (!saved) throw new Error("Inserted row could not be read back.");
   return saved;
 }

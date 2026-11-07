@@ -1,3 +1,4 @@
+import { updateRecords } from "@workspace/db/mutations";
 import { db, photographyDeliveriesTable, photographyBookingsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger";
@@ -31,8 +32,7 @@ export async function deliverPhotographyMessage(id: number) {
       .where(and(eq(photographyDeliveriesTable.id, id), eq(photographyDeliveriesTable.status, "pending")));
     return { status: "blocked", error: "whatsapp_not_configured" };
   }
-  const [delivery] = await db.update(photographyDeliveriesTable).set({ status: "sending", error: null })
-    .where(and(eq(photographyDeliveriesTable.id, id), eq(photographyDeliveriesTable.status, "pending"))).returning();
+  const [delivery] = await updateRecords(db, photographyDeliveriesTable, { status: "sending", error: null }, and(eq(photographyDeliveriesTable.id, id), eq(photographyDeliveriesTable.status, "pending")));
   if (!delivery) return { status: "already_processed" };
   try {
     const response = await fetch(`https://graph.facebook.com/v23.0/${encodeURIComponent(process.env.PHOTOGRAPHY_WHATSAPP_PHONE_ID!)}/messages`, {

@@ -1,5 +1,5 @@
 import { applicationDatabaseDialect } from "@workspace/db/runtime-dialect";
-import { createMariaDbConnection } from "@workspace/db/mariadb";
+import { verifyApplicationDatabase } from "@workspace/db";
 import { hostingerConfig } from "./lib/hostinger-config";
 import { logger } from "./lib/logger";
 
@@ -10,9 +10,7 @@ import { logger } from "./lib/logger";
 async function main(): Promise<void> {
   const config = hostingerConfig(process.env, applicationDatabaseDialect);
   process.env.FRONTEND_DIST_DIR = config.frontendDirectory;
-  const target = createMariaDbConnection();
-  try { await target.verifyTarget(); }
-  finally { await target.close(); }
+  await verifyApplicationDatabase();
   await import("./index");
 }
 

@@ -177,7 +177,7 @@ router.get("/", async (req, res) => {
   const conditions: SQL[] = [eq(chaletsTable.isActive, true), isNull(chaletsTable.deletedAt)];
 
   if (location) {
-    conditions.push(cityNameMatches(sql`${chaletsTable.location}`, location));
+    conditions.push(await cityNameMatches(sql`${chaletsTable.location}`, location));
   }
   if (maxGuests !== undefined) {
     conditions.push(gte(chaletsTable.maxGuests, maxGuests));
@@ -373,7 +373,7 @@ router.get("/next-available", async (req, res) => {
     .where(and(
       eq(chaletsTable.isActive, true),
       isNull(chaletsTable.deletedAt),
-      cityNameMatches(sql`${chaletsTable.location}`, location),
+      await cityNameMatches(sql`${chaletsTable.location}`, location),
     ));
 
   const activeOwners = await activeInventoryOwnerIds(allChalets.map((row) => row.ownerId));

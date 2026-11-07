@@ -82,3 +82,17 @@ exercise InnoDB, but did not validate authentication or production privileges.
 **How to apply:** Keep any grant-disabled workaround strictly local,
 socket-only and temporary. Never use it in the application configuration or on
 Hostinger, and distinguish engine/transaction tests from access-control tests.
+
+## Do not replay legacy startup repairs
+
+Migration startup must validate the installed schema rather than replay the
+legacy application's automatic seed/repair routine.
+
+**Why:** The legacy startup routine is not just reference-catalog initialization:
+it also backfills cancelled-booking insurance as refunded and rewrites message
+templates. Replaying that routine during the move could change financial history
+or owner wording without a reviewed data migration.
+
+**How to apply:** Keep destination schema and configuration imports explicit and
+reviewed. Treat historical insurance and template transformations as separate,
+authorized migrations, not as a prerequisite for starting the server.

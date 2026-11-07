@@ -1,3 +1,5 @@
+import { insertRecords } from "@workspace/db/mutations";
+import { ownerApplicationsQueryTable } from "@workspace/db/runtime-models";
 // Synthetic browser-test fixture. Credentials stay in /tmp, never in the repository or output.
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile, unlink } from "node:fs/promises";
@@ -27,18 +29,21 @@ try {
     process.stdout.write("Removed synthetic quick-sales browser fixture.\n");
   } else {
     const email = `quick-sales-browser-${randomUUID()}@example.test`;
-    const inserted = await db.execute(sql`INSERT INTO owner_applications (full_name, business_name, phone, email, password_hash, status, business_type, email_verified)
-      VALUES ('اختبار المبيعات المفردة', 'اختبار المبيعات المفردة', '0500000000', ${email}, '!browser-fixture-no-password', 'approved', 'service', true) RETURNING id`);
-    const applicationId = Number(inserted.rows[0].id);
+    const [inserted] = await insertRecords(db, ownerApplicationsQueryTable, {
+      fullName: "اختبار المبيعات المفردة", businessName: "اختبار المبيعات المفردة",
+      phone: "0500000000", email, passwordHash: "!browser-fixture-no-password",
+      status: "approved", businessType: "service", emailVerified: true,
+    }, { returning: { id: ownerApplicationsQueryTable.id } });
+    const applicationId = inserted.id;
     const ownerId = `owner_${applicationId}`;
     const sid = await createSession({
       user: { id: ownerId, email, firstName: "اختبار المبيعات المفردة", lastName: "", profileImageUrl: null }, access_token: "",
     });
     const providerIds: number[] = [];
     for (const number of [1, 2]) {
-      const [provider] = await db.insert(serviceProvidersTable).values({
+      const [provider] = await insertRecords(db, serviceProvidersTable, {
         ownerId, businessName: `اختبار المبيعات المفردة ${number}`, category: "cake", city: "بريدة", whatsappNumber: "0500000000",
-      }).returning();
+      });
       providerIds.push(provider.id);
     }
     await db.insert(ownerSubscriptionsTable).values({ ownerId, status: "active", expiresAt: new Date(Date.now() + 86400000) });

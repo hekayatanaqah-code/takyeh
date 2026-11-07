@@ -1,9 +1,11 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { Router, type Request } from "express";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { db } from "@workspace/db";
 import { chaletSubmissionsTable, chaletsTable, ownerTempSessionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
 import { eq, and, ne, sql, inArray } from "drizzle-orm";
+import { sqlDistinct } from "@workspace/db/sql-expressions";
 import { z } from "zod";
 import { sendAdminNewSubmissionEmail } from "../lib/email";
 import { ownerPlanAccess } from "../lib/subscription-access";
@@ -330,8 +332,7 @@ router.post("/", async (req, res) => {
     if (!currentAccess.canSubmitActivities ||
         currentAccess.chaletCount >= currentAccess.chaletLimit) return [null];
     if (ownerId) await includeOwnerActivityKind(tx, ownerId, "chalet");
-    return tx.insert(chaletSubmissionsTable)
-    .values({
+    return insertRecords(tx, chaletSubmissionsTable, {
       ownerId,
       nameAr: data.nameAr,
       whatsappNumber: data.whatsappNumber,
@@ -374,8 +375,7 @@ router.post("/", async (req, res) => {
       fullDayCheckIn: data.fullDayCheckIn || null,
       fullDayCheckOut: data.fullDayCheckOut || null,
       trialEndsAt: ownerAccess?.subscription.plan === "trial" ? ownerAccess.subscription.expiresAt : null,
-    })
-    .returning({ id: chaletSubmissionsTable.id });
+    }, { returning: { id: chaletSubmissionsTable.id } });
   });
   if (!submission) {
     return res.status(403).json({ error: "تعذر إضافة العقار ضمن السعة الحالية. راجع حدود الباقة وحالة الاشتراك.", upgradeRequired: true });
@@ -495,7 +495,7 @@ router.patch("/:id", async (req, res) => {
     sql`lower(${chaletsTable.nameAr}) = lower(${checkName})`,
     sql`lower(${chaletsTable.location}) = lower(${checkLoc})`,
     sql`lower(coalesce(${chaletsTable.district}, '')) = lower(${checkDistrict ?? ""})`,
-    sql`${chaletsTable.submissionId} IS DISTINCT FROM ${id}`,
+    sqlDistinct(chaletsTable.submissionId,sql`${id}`),
   ];
 
   const [
@@ -572,11 +572,7 @@ router.patch("/:id", async (req, res) => {
     (updateSet as any).suggestedCategoryName = d.suggestedCategoryName ?? null;
   }
 
-  const saved = await db
-    .update(chaletSubmissionsTable)
-    .set(updateSet as any)
-    .where(and(eq(chaletSubmissionsTable.id, id), eq(chaletSubmissionsTable.status, "needs_revision")))
-    .returning({ id: chaletSubmissionsTable.id });
+  const saved = await updateRecords(db, chaletSubmissionsTable, updateSet as any, and(eq(chaletSubmissionsTable.id, id), eq(chaletSubmissionsTable.status, "needs_revision")), { id: chaletSubmissionsTable.id });
   if (!saved.length) return res.status(409).json({ error: "تغيرت حالة الطلب. لا يمكن إعادة إرسال طلب مرفوض نهائياً." });
 
   return res.json({ ok: true, message: "تم إعادة تقديم الطلب للمراجعة" });

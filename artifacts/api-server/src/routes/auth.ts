@@ -1,3 +1,4 @@
+import { insertRecords } from "@workspace/db/mutations";
 import * as oidc from "openid-client";
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
@@ -64,17 +65,13 @@ async function upsertUser(claims: Record<string, unknown>) {
       | null,
   };
 
-  const [user] = await db
-    .insert(usersTable)
-    .values(userData)
-    .onConflictDoUpdate({
+  const [user] = await insertRecords(db, usersTable, userData, { conflict: { action: "update", ...{
       target: usersTable.id,
       set: {
         ...userData,
         updatedAt: new Date(),
       },
-    })
-    .returning();
+    } } });
   return user;
 }
 

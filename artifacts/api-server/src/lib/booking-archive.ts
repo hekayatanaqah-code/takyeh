@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { and, count, desc, getTableColumns, gte, inArray, isNotNull, isNull, lte, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { nationalPhoneSql } from "./contact-sql";
 import { z } from "zod";
 import { db, ownerBookingsTable, ownerRescheduleLogsTable } from "@workspace/db";
 import { GetOwnerBookingArchiveQueryParams } from "@workspace/api-zod";
@@ -33,7 +34,7 @@ function searchCondition(search: string | undefined, name: AnyColumn, phone: Any
   const digits = query.replace(/\D/g, "");
   // A local 05… phone and its international +9665… equivalent must match.
   const phoneQuery = digits.replace(/^(00966|966)/, "0");
-  const normalizedPhone = sql`regexp_replace(regexp_replace(translate(coalesce(${phone}, ''), '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), '[^0-9]', '', 'g'), '^(00966|966)', '0')`;
+  const normalizedPhone = nationalPhoneSql(phone,"0");
   const idQuery = query.replace(/^#\s*/, "");
   return sql`(
     position(${query} in lower(${name})) > 0

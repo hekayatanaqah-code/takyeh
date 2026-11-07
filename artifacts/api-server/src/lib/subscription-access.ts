@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { db } from "@workspace/db";
 import { lockResource } from "@workspace/db/transaction-lock";
 import {
@@ -168,14 +169,14 @@ async function pendingOwnerSubscription(tx: SubscriptionWriter, keys: string[]) 
   if (sub) return sub;
 
   const trialState = initialTrialSubscriptionState(true);
-  const [created] = await tx.insert(ownerSubscriptionsTable).values({
+  const [created] = await insertRecords(tx, ownerSubscriptionsTable, {
     ownerId: [...keys].sort()[0],
     plan: "trial",
     status: trialState.status,
     paymentStatus: "free",
     expiresAt: trialState.expiresAt,
     billingCycleDays: DEFAULT_TRIAL_DAYS,
-  }).onConflictDoNothing().returning();
+  }, { conflict: { action: "ignore" } });
   if (created) return created;
   const [concurrent] = await tx.select().from(ownerSubscriptionsTable)
     .where(inArray(ownerSubscriptionsTable.ownerId, keys)).limit(1);
@@ -204,12 +205,12 @@ export async function activateOwnerTrial(ownerId: string, tx: SubscriptionWriter
   const sub = await pendingOwnerSubscription(tx, keys);
   if (sub.plan !== "trial" || sub.status !== "pending_activation" || sub.trialStartedAt) return sub;
   const activatedAt = now ?? new Date();
-  const [activated] = await tx.update(ownerSubscriptionsTable).set({
+  const [activated] = await updateRecords(tx, ownerSubscriptionsTable, {
     status: "active",
     trialStartedAt: activatedAt,
     expiresAt: new Date(activatedAt.getTime() + DEFAULT_TRIAL_DAYS * DAY_MS),
     billingCycleDays: DEFAULT_TRIAL_DAYS,
-  }).where(and(eq(ownerSubscriptionsTable.id, sub.id), eq(ownerSubscriptionsTable.status, "pending_activation"))).returning();
+  }, and(eq(ownerSubscriptionsTable.id, sub.id), eq(ownerSubscriptionsTable.status, "pending_activation")));
   return activated ?? sub;
 }
 

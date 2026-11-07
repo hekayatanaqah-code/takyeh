@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, photographyDeliveriesTable, photographyBookingsTable } from "@workspace/db";
 import { and, eq, sql, desc, isNull, or, inArray } from "drizzle-orm";
+import { sqlConcat,sqlText } from "@workspace/db/sql-expressions";
 import { getPhotographer } from "../lib/photographer-auth";
 import { subscribePhotographyBookings } from "../lib/photography-events";
 
@@ -16,8 +17,8 @@ export async function photographerNotifications(photographerId: number) {
       eq(photographyBookingsTable.assignmentStatus, "assigned"),
       inArray(photographyBookingsTable.status, ["confirmed", "completed"]),
       or(eq(photographyDeliveriesTable.photographerId, photographerId), isNull(photographyDeliveriesTable.photographerId)),
-      sql`(${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer'
-        OR ${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer:' || ${photographerId}::text)`))
+      sql`(${photographyDeliveriesTable.dedupeKey} = ${sqlConcat(sql`'booking:'`,sqlText(photographyBookingsTable.id),sql`':photographer'`)}
+        OR ${photographyDeliveriesTable.dedupeKey} = ${sqlConcat(sql`'booking:'`,sqlText(photographyBookingsTable.id),sql`':photographer:'`,sqlText(sql`${photographerId}`))})`))
     .orderBy(desc(photographyDeliveriesTable.createdAt)).limit(200);
 }
 const router = Router();
@@ -37,8 +38,8 @@ router.post("/notifications/:id/read", async (req, res) => {
       eq(photographyBookingsTable.photographerId, photographer.id),
       eq(photographyBookingsTable.assignmentStatus, "assigned"),
       or(eq(photographyDeliveriesTable.photographerId, photographer.id), isNull(photographyDeliveriesTable.photographerId)),
-      sql`(${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer'
-        OR ${photographyDeliveriesTable.dedupeKey} = 'booking:' || ${photographyBookingsTable.id}::text || ':photographer:' || ${photographer.id}::text)`));
+      sql`(${photographyDeliveriesTable.dedupeKey} = ${sqlConcat(sql`'booking:'`,sqlText(photographyBookingsTable.id),sql`':photographer'`)}
+        OR ${photographyDeliveriesTable.dedupeKey} = ${sqlConcat(sql`'booking:'`,sqlText(photographyBookingsTable.id),sql`':photographer:'`,sqlText(sql`${photographer.id}`))})`));
   if (!notice) return res.status(404).json({ error: "الإشعار غير موجود" });
   await db.update(photographyDeliveriesTable).set({ internalReadAt: new Date() })
     .where(and(eq(photographyDeliveriesTable.id, notice.id), isNull(photographyDeliveriesTable.internalReadAt)));

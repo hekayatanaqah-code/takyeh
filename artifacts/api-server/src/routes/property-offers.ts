@@ -1,3 +1,4 @@
+import { deleteRecords, insertRecords, updateRecords } from "@workspace/db/mutations";
 import { Router, type Request } from "express";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -50,7 +51,7 @@ export function propertyOffersRouter(ownerIds: (req: Request) => Promise<string[
     if (!parsed.success) { res.status(400).json({ error: "تحقق من الاسم والتواريخ والأيام وقيمة الخصم", details: parsed.error.flatten() }); return; }
     const sub = await owned(req, parsed.data.submissionId);
     if (!sub?.ownerId) { res.status(403).json({ error: "غير مصرح" }); return; }
-    const [row] = await db.insert(propertyOffersTable).values({ ...parsed.data, ownerId: sub.ownerId, value: parsed.data.value.toFixed(2) }).returning();
+    const [row] = await insertRecords(db, propertyOffersTable, { ...parsed.data, ownerId: sub.ownerId, value: parsed.data.value.toFixed(2) });
     res.status(201).json(serializeOffer(row));
   });
   router.patch("/offers/:offerId", async (req, res) => {
@@ -62,15 +63,14 @@ export function propertyOffersRouter(ownerIds: (req: Request) => Promise<string[
     if (!existing || !await owned(req, existing.submissionId)) { res.status(404).json({ error: "العرض غير موجود" }); return; }
     const merged = offerInput.safeParse({ ...existing, value: Number(existing.value), ...patch.data });
     if (!merged.success) { res.status(400).json({ error: "تحقق من تواريخ العرض وقيمة الخصم", details: merged.error.flatten() }); return; }
-    const [row] = await db.update(propertyOffersTable).set({ ...merged.data, value: merged.data.value.toFixed(2), updatedAt: new Date() })
-      .where(and(eq(propertyOffersTable.id, id.data), inArray(propertyOffersTable.ownerId, ids))).returning();
+    const [row] = await updateRecords(db, propertyOffersTable, { ...merged.data, value: merged.data.value.toFixed(2), updatedAt: new Date() }, and(eq(propertyOffersTable.id, id.data), inArray(propertyOffersTable.ownerId, ids)));
     res.json(serializeOffer(row));
   });
   router.delete("/offers/:offerId", async (req, res) => {
     const id = idInput.safeParse(req.params.offerId);
     if (!id.success) { res.status(400).json({ error: "عرض غير صحيح" }); return; }
     const ids = await ownerIds(req);
-    const [deleted] = await db.delete(propertyOffersTable).where(and(eq(propertyOffersTable.id, id.data), inArray(propertyOffersTable.ownerId, ids))).returning();
+    const [deleted] = await deleteRecords(db, propertyOffersTable, and(eq(propertyOffersTable.id, id.data), inArray(propertyOffersTable.ownerId, ids)));
     if (!deleted) { res.status(404).json({ error: "العرض غير موجود" }); return; }
     res.sendStatus(204);
   });

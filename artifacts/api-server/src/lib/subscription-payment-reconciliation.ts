@@ -1,3 +1,4 @@
+import { updateRecords } from "@workspace/db/mutations";
 import { and, eq, inArray, isNull, lt, lte, or } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
@@ -170,13 +171,13 @@ async function claimReconciliation(id: number) {
       ))
       .for("update").limit(1);
     if (!row) return null;
-    const [claimed] = await tx.update(subscriptionPaymentReconciliationsTable).set({
+    const [claimed] = await updateRecords(tx, subscriptionPaymentReconciliationsTable, {
       status: "processing",
       lockedAt: now,
       lastAttemptAt: now,
       attemptCount: row.attemptCount + 1,
       updatedAt: now,
-    }).where(eq(subscriptionPaymentReconciliationsTable.id, id)).returning();
+    }, eq(subscriptionPaymentReconciliationsTable.id, id));
     return claimed ?? null;
   });
 }
@@ -303,18 +304,18 @@ export async function retrySubscriptionPaymentReconciliation(
     const requestedAt = new Date();
     const refundAttemptNumber = reconciliation.refundAttemptNumber + 1;
     refundAttemptKey = `subscription-reconciliation-${id}-${refundAttemptNumber}`;
-    const [reserved] = await db.update(subscriptionPaymentReconciliationsTable).set({
+    const [reserved] = await updateRecords(db, subscriptionPaymentReconciliationsTable, {
       refundRequestedAt: requestedAt,
       refundAttemptNumber,
       refundAttemptKey,
       status: "refund_pending",
       updatedAt: requestedAt,
-    }).where(and(
+    }, and(
       eq(subscriptionPaymentReconciliationsTable.id, id),
       isNull(subscriptionPaymentReconciliationsTable.refundRequestedAt),
       eq(subscriptionPaymentReconciliationsTable.status, "processing"),
       eq(subscriptionPaymentReconciliationsTable.lockedAt, reconciliation.lockedAt!),
-    )).returning({ id: subscriptionPaymentReconciliationsTable.id });
+    ), { id: subscriptionPaymentReconciliationsTable.id });
     if (!reserved) {
       await releaseClaim({
         row: reconciliation,

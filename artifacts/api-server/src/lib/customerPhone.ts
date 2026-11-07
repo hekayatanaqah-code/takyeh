@@ -1,4 +1,5 @@
 import { sql, type SQL } from "drizzle-orm";
+import { sqlCustomerPhone } from "@workspace/db/sql-expressions";
 
 const ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
 const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
@@ -19,9 +20,5 @@ export function normalizeCustomerPhone(value: string): string {
 
 /** Same identity normalization for historical records, without rewriting snapshots. */
 export function customerPhoneSql(value: SQL): SQL {
-  return sql`(SELECT CASE
-    WHEN digits ~ '^9665[0-9]{8}$' THEN '0' || substring(digits FROM 4)
-    WHEN digits ~ '^5[0-9]{8}$' THEN '0' || digits ELSE digits END
-    FROM (SELECT regexp_replace(regexp_replace(translate(coalesce(${value}, ''),
-      '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), '[^0-9]', '', 'g'), '^00', '') AS digits) phone)`;
+  return sqlCustomerPhone(value);
 }

@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
@@ -120,7 +121,7 @@ async function createOrReadDueInvoice(ownerId: string, now: Date) {
           const discounted = discountInvoiceLines(quotedLines, accountDiscount, now);
           const amountHalala = discounted.lineItems.reduce((sum, line) => sum + line.amountHalala, 0);
           if (amountHalala > 0 && amountHalala <= 2_147_483_647) {
-            const [updated] = await tx.update(subscriptionRenewalInvoicesTable).set({
+            const [updated] = await updateRecords(tx, subscriptionRenewalInvoicesTable, {
               givenId: randomUUID(),
               periodEndAt,
               cycleDays,
@@ -132,7 +133,7 @@ async function createOrReadDueInvoice(ownerId: string, now: Date) {
               attempts: 0,
               nextAttemptAt: now,
               lastError: null,
-            }).where(eq(subscriptionRenewalInvoicesTable.id, existing.id)).returning();
+            }, eq(subscriptionRenewalInvoicesTable.id, existing.id));
             return updated ?? existing;
           }
         }
@@ -160,7 +161,7 @@ async function createOrReadDueInvoice(ownerId: string, now: Date) {
     const amountHalala = lineItems.reduce((sum, line) => sum + line.amountHalala, 0);
     if (!Number.isSafeInteger(amountHalala) || amountHalala <= 0 || amountHalala > 2_147_483_647) return null;
     const givenId = randomUUID();
-    const [created] = await tx.insert(subscriptionRenewalInvoicesTable).values({
+    const [created] = await insertRecords(tx, subscriptionRenewalInvoicesTable, {
       ownerId,
       periodStartAt,
       periodEndAt,
@@ -173,9 +174,9 @@ async function createOrReadDueInvoice(ownerId: string, now: Date) {
       accountDiscountSnapshot: discounted.snapshot,
       status: "pending",
       nextAttemptAt: now,
-    }).onConflictDoNothing({
+    }, { conflict: { action: "ignore", ...{
       target: [subscriptionRenewalInvoicesTable.ownerId, subscriptionRenewalInvoicesTable.periodStartAt],
-    }).returning();
+    } } });
     if (created) return created;
     const [raced] = await tx.select().from(subscriptionRenewalInvoicesTable)
       .where(and(
@@ -221,12 +222,12 @@ async function claimAttempt(invoiceId: number) {
         .where(eq(ownerBillingProfilesTable.ownerId, invoice.ownerId));
       const possiblyDispatched = latest && latest.status !== "failed" && latest.status !== "cancelled";
       if (possiblyDispatched) {
-        const [reconciling] = await tx.update(subscriptionRenewalAttemptsTable).set({
+        const [reconciling] = await updateRecords(tx, subscriptionRenewalAttemptsTable, {
           status: "reconciling",
           nextAttemptAt: new Date(),
           updatedAt: new Date(),
           lastError: "Free access active; look up any prior provider payment without issuing a new charge",
-        }).where(eq(subscriptionRenewalAttemptsTable.id, latest.id)).returning();
+        }, eq(subscriptionRenewalAttemptsTable.id, latest.id));
         await tx.update(subscriptionRenewalInvoicesTable).set({
           status: "processing",
           nextAttemptAt: new Date(),
@@ -265,12 +266,12 @@ async function claimAttempt(invoiceId: number) {
         (!!latest.paymentId && latest.status !== "failed" && latest.status !== "cancelled")
       );
       if (mayHaveReachedProvider) {
-        const [reconciling] = await tx.update(subscriptionRenewalAttemptsTable).set({
+        const [reconciling] = await updateRecords(tx, subscriptionRenewalAttemptsTable, {
           status: "reconciling",
           nextAttemptAt: new Date(),
           updatedAt: new Date(),
           lastError: "Account discount changed; reconcile provider state by payment ID or idempotency key using GET only",
-        }).where(eq(subscriptionRenewalAttemptsTable.id, latest.id)).returning();
+        }, eq(subscriptionRenewalAttemptsTable.id, latest.id));
         await tx.update(subscriptionRenewalInvoicesTable).set({
           status: "processing",
           nextAttemptAt: new Date(),
@@ -321,11 +322,11 @@ async function claimAttempt(invoiceId: number) {
     // A non-terminal prior request must be reconciled with its original idempotency key.
     if (latest && latest.status !== "failed") {
       if (latest.nextAttemptAt > new Date()) return null;
-      const [claimed] = await tx.update(subscriptionRenewalAttemptsTable).set({
+      const [claimed] = await updateRecords(tx, subscriptionRenewalAttemptsTable, {
         status: "processing",
         nextAttemptAt: new Date(Date.now() + 5 * 60 * 1000),
         updatedAt: new Date(),
-      }).where(eq(subscriptionRenewalAttemptsTable.id, latest.id)).returning();
+      }, eq(subscriptionRenewalAttemptsTable.id, latest.id));
       await tx.update(subscriptionRenewalInvoicesTable).set({ status: "processing" })
         .where(eq(subscriptionRenewalInvoicesTable.id, invoiceId));
       return claimed ? {
@@ -341,13 +342,13 @@ async function claimAttempt(invoiceId: number) {
       latest ? { status: latest.status, givenId: latest.givenId } : undefined,
       randomUUID(),
     );
-    const [attempt] = await tx.insert(subscriptionRenewalAttemptsTable).values({
+    const [attempt] = await insertRecords(tx, subscriptionRenewalAttemptsTable, {
       invoiceId,
       attemptNumber,
       givenId,
       status: "processing",
       nextAttemptAt: new Date(Date.now() + 5 * 60 * 1000),
-    }).returning();
+    });
     await tx.update(subscriptionRenewalInvoicesTable).set({
       status: "processing",
       givenId,
@@ -627,13 +628,13 @@ async function recordAttemptResult(
       const latestFreeGrant = latestOwnerFreeAccess(freeGrants);
       const freeAccessActive = isOwnerFreeAccessGrantActive(latestFreeGrant, now);
 
-      const receipt = await tx.insert(subscriptionPaymentsTable).values({
+      const receipt = await insertRecords(tx, subscriptionPaymentsTable, {
         paymentId: paidPaymentId,
         ownerId: invoice.ownerId,
         intentId: `renewal:${invoice.id}`,
         plan: `renewal:${invoice.basePlan}`,
         amountHalala: invoice.amountHalala,
-      }).onConflictDoNothing().returning({ paymentId: subscriptionPaymentsTable.paymentId });
+      }, { conflict: { action: "ignore" }, returning: { paymentId: subscriptionPaymentsTable.paymentId } });
       if (!receipt.length) {
         const [existingReceipt] = await tx.select().from(subscriptionPaymentsTable)
           .where(eq(subscriptionPaymentsTable.paymentId, paidPaymentId)).limit(1);
@@ -652,7 +653,7 @@ async function recordAttemptResult(
         .at(-1) : undefined;
       const grantTimestampUnknown = !hasProviderPaidAt && freeGrants.length > 0;
       if (grantAtPayment || grantTimestampUnknown) {
-        const [reconciliation] = await tx.insert(subscriptionPaymentReconciliationsTable).values({
+        const [reconciliation] = await insertRecords(tx, subscriptionPaymentReconciliationsTable, {
           paymentId: paidPaymentId,
           ownerId: invoice.ownerId,
           intentId: String(invoice.id),
@@ -662,7 +663,7 @@ async function recordAttemptResult(
             : "Renewal payment was captured after superadmin free access; do not activate the paid renewal",
           status: "required",
           refundEligible: !!grantAtPayment,
-        }).onConflictDoNothing().returning({ id: subscriptionPaymentReconciliationsTable.id });
+        }, { conflict: { action: "ignore" }, returning: { id: subscriptionPaymentReconciliationsTable.id } });
         const [existingReconciliation] = reconciliation ? [] : await tx.select({
           id: subscriptionPaymentReconciliationsTable.id,
         }).from(subscriptionPaymentReconciliationsTable)

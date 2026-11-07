@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { randomUUID } from "node:crypto";
 import {
   db, photographyReceiptUploadsTable as uploads, photographyReceiptCleanupRunsTable as runs,
@@ -49,7 +50,7 @@ export async function previewPhotographyReceiptCleanup(retentionDays: number) {
     for (const upload of await tx.select().from(uploads)) {
       report.push(await inspect(tx, upload, retentionDays, new Date()));
     }
-    const [run] = await tx.insert(runs).values({ id: randomUUID(), retentionDays, report }).returning();
+    const [run] = await insertRecords(tx, runs, { id: randomUUID(), retentionDays, report });
     return run;
   });
 }
@@ -64,7 +65,7 @@ export async function approvePhotographyReceiptCleanup(runId: string, retentionD
     const [run] = await tx.select().from(runs).where(eq(runs.id, runId)).for("update");
     if (!run || run.retentionDays !== retentionDays) throw new Error("cleanup_report_mismatch");
     if (run.approvedAt) throw new Error("cleanup_already_approved");
-    const [approved] = await tx.update(runs).set({ approvedBy, approvedAt: new Date() }).where(eq(runs.id, runId)).returning();
+    const [approved] = await updateRecords(tx, runs, { approvedBy, approvedAt: new Date() }, eq(runs.id, runId));
     return approved;
   });
 }

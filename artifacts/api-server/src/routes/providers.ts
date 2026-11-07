@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords, writeRecords } from "@workspace/db/mutations";
 import { Router, Request, Response, NextFunction } from "express";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { normalizeCityName } from "../lib/city-name";
@@ -182,15 +183,11 @@ router.post("/service-contract/:appointmentId/sign", async (req, res) => {
   if (contract.status === "cancelled" || contract.cancelledAt) return res.status(410).json({ error: "لا يمكن توقيع عقد حجز ملغى" });
   if (contract.contractSigned) return res.status(409).json({ error: "تم توقيع هذا العقد مسبقاً" });
 
-  const [updated] = await db
-    .update(serviceAppointmentsTable)
-    .set({
+  const [updated] = await updateRecords(db, serviceAppointmentsTable, {
       contractSigned: true,
       contractSignatureDataUrl: signatureDataUrl,
       contractSignedAt: new Date(),
-    })
-    .where(eq(serviceAppointmentsTable.id, appointmentId))
-    .returning({
+    }, eq(serviceAppointmentsTable.id, appointmentId), {
       contractSigned: serviceAppointmentsTable.contractSigned,
       contractSignatureDataUrl: serviceAppointmentsTable.contractSignatureDataUrl,
       contractSignedAt: serviceAppointmentsTable.contractSignedAt,
@@ -437,7 +434,7 @@ router.post("/submit", requireAuth, async (req: any, res) => {
     if (!currentAccess.canSubmitActivities ||
         currentAccess.serviceCount >= currentAccess.serviceLimit) return [null];
     await includeOwnerActivityKind(tx, req.user!.id, "service");
-    return tx.insert(serviceProviderSubmissionsTable).values(values).returning();
+    return insertRecords(tx, serviceProviderSubmissionsTable, values);
   });
   if (!row) {
     return res.status(403).json({ error: "تعذر إضافة الخدمة ضمن السعة الحالية. راجع حدود الباقة وحالة الاشتراك.", upgradeRequired: true });
@@ -561,16 +558,12 @@ router.patch("/my/submissions/:id", requireAuth, async (req: any, res) => {
     });
   }
 
-  const [updated] = await db
-    .update(serviceProviderSubmissionsTable)
-    .set({
+  const [updated] = await updateRecords(db, serviceProviderSubmissionsTable, {
       ...parsed.data,
       ...insuranceConfig,
       status: "pending",
       adminNote: null,
-    })
-    .where(eq(serviceProviderSubmissionsTable.id, id))
-    .returning();
+    }, eq(serviceProviderSubmissionsTable.id, id));
 
   return res.json(updated);
 });
@@ -614,11 +607,7 @@ router.patch("/my/approved/:id/toggle", requireAuth, async (req: any, res) => {
   if (!provider || provider.ownerId !== req.user.id) {
     return res.status(404).json({ error: "المزود غير موجود" });
   }
-  const [updated] = await db
-    .update(serviceProvidersTable)
-    .set({ isActive: !provider.isActive })
-    .where(eq(serviceProvidersTable.id, id))
-    .returning();
+  const [updated] = await updateRecords(db, serviceProvidersTable, { isActive: !provider.isActive }, eq(serviceProvidersTable.id, id));
   return res.json({ isActive: updated.isActive });
 });
 
@@ -705,10 +694,10 @@ router.patch("/my/approved/:id", requireAuth, async (req: any, res) => {
     });
   }
 
-  const [updated] = await db.update(serviceProvidersTable).set({
+  const [updated] = await updateRecords(db, serviceProvidersTable, {
     ...parsed.data,
     ...insuranceConfig,
-  }).where(eq(serviceProvidersTable.id, id)).returning();
+  }, eq(serviceProvidersTable.id, id));
   return res.json(updated);
 });
 
@@ -722,10 +711,7 @@ router.post("/my/approved/:id/reviews/:reviewId/report", requireAuth, async (req
   const [provider] = await db.select({ id: serviceProvidersTable.id }).from(serviceProvidersTable)
     .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user!.id))).limit(1);
   if (!provider) return res.status(404).json({ error: "الخدمة غير موجودة" });
-  const [updated] = await db.update(serviceReviewsTable)
-    .set({ reportedBy: req.user!.id, reportedAt: new Date(), reportReason: parsed.data.reason })
-    .where(and(eq(serviceReviewsTable.id, reviewId), eq(serviceReviewsTable.providerId, providerId), sql`${serviceReviewsTable.reportedAt} IS NULL`))
-    .returning({ id: serviceReviewsTable.id });
+  const [updated] = await updateRecords(db, serviceReviewsTable, { reportedBy: req.user!.id, reportedAt: new Date(), reportReason: parsed.data.reason }, and(eq(serviceReviewsTable.id, reviewId), eq(serviceReviewsTable.providerId, providerId), sql`${serviceReviewsTable.reportedAt} IS NULL`), { id: serviceReviewsTable.id });
   if (!updated) return res.status(409).json({ error: "التقييم غير موجود أو لديه اعتراض قيد المراجعة" });
   return res.json({ ok: true });
 });
@@ -753,12 +739,12 @@ router.post("/my/approved/:id/review-invite", requireAuth, async (req: any, res)
   const parsed = z.object({ guestName: z.string().trim().max(255).optional().nullable() }).safeParse(req.body ?? {});
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة" });
   const token = randomBytes(5).toString("hex");
-  const [invitation] = await db.insert(serviceReviewInvitationsTable).values({
+  const [invitation] = await insertRecords(db, serviceReviewInvitationsTable, {
     token,
     providerId,
     guestName: parsed.data.guestName || null,
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-  }).returning();
+  });
   return res.status(201).json({ token: invitation.token, providerName: provider.businessName });
 });
 
@@ -770,10 +756,7 @@ router.post("/my/approved/:id/reviews/:reviewId/reply", requireAuth, async (req:
   const [provider] = await db.select({ id: serviceProvidersTable.id }).from(serviceProvidersTable)
     .where(and(eq(serviceProvidersTable.id, providerId), eq(serviceProvidersTable.ownerId, req.user.id))).limit(1);
   if (!provider) return res.status(404).json({ error: "المزود غير موجود" });
-  const [updated] = await db.update(serviceReviewsTable)
-    .set({ ownerReply: parsed.data.reply, ownerReplyAt: new Date() })
-    .where(and(eq(serviceReviewsTable.id, reviewId), eq(serviceReviewsTable.providerId, providerId)))
-    .returning();
+  const [updated] = await updateRecords(db, serviceReviewsTable, { ownerReply: parsed.data.reply, ownerReplyAt: new Date() }, and(eq(serviceReviewsTable.id, reviewId), eq(serviceReviewsTable.providerId, providerId)));
   if (!updated) return res.status(404).json({ error: "التقييم غير موجود" });
   return res.json(updated);
 });
@@ -823,12 +806,12 @@ router.post("/my/approved/:id/blocked-dates", requireAuth, async (req: any, res)
       .limit(1);
     if (existing) return { activeAppointment: false as const, created: false as const, row: existing };
 
-    const [row] = await tx.insert(serviceBlockedDatesTable).values({
+    const [row] = await insertRecords(tx, serviceBlockedDatesTable, {
       providerId,
       ownerId: req.user.id,
       dateStr: parsed.data.dateStr,
       reason: parsed.data.reason ?? null,
-    }).returning();
+    });
     return { activeAppointment: false as const, created: true as const, row };
   });
 
@@ -904,9 +887,9 @@ router.post("/my/approved/:id/seasons", requireAuth, async (req: any, res) => {
   if (!name || !startDate || !endDate || endDate < startDate) {
     return res.status(422).json({ error: "اسم الموسم والتواريخ مطلوبة، ويجب ألا يسبق تاريخ الانتهاء تاريخ البدء" });
   }
-  const [row] = await db.insert(serviceSeasonsTable).values({
+  const [row] = await insertRecords(db, serviceSeasonsTable, {
     providerId, ownerId: req.user.id, ...parsed.data, name, startDate, endDate,
-  }).onConflictDoNothing({ target: [serviceSeasonsTable.providerId, serviceSeasonsTable.globalSeasonId] }).returning();
+  }, { conflict: { action: "ignore", target: [serviceSeasonsTable.providerId, serviceSeasonsTable.globalSeasonId] } });
   if (!row) return res.status(409).json({ error: "هذا الموسم العام مسجل لهذه الخدمة بالفعل" });
   return res.status(201).json(await serviceSeasonResponse(row));
 });
@@ -931,7 +914,7 @@ router.patch("/my/approved/:id/seasons/:seasonId", requireAuth, async (req: any,
   if ((parsed.data.endDate ?? row.endDate) < (parsed.data.startDate ?? row.startDate)) {
     return res.status(422).json({ error: "تاريخ الانتهاء يجب ألا يسبق تاريخ البدء" });
   }
-  const [updated] = await db.update(serviceSeasonsTable).set(parsed.data).where(eq(serviceSeasonsTable.id, seasonId)).returning();
+  const [updated] = await updateRecords(db, serviceSeasonsTable, parsed.data, eq(serviceSeasonsTable.id, seasonId));
   return res.json(await serviceSeasonResponse(updated));
 });
 
@@ -1016,7 +999,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
       if ((capacityRow?.count ?? 0) >= dailyCapacity) return { blocked: false as const, full: true as const, dailyCapacity };
     }
 
-    await tx.insert(ownerCustomersTable).values({
+    await writeRecords(tx, ownerCustomersTable, {
       ownerId: req.user.id,
       phoneNormalized,
       phone: phoneNormalized,
@@ -1024,28 +1007,28 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
       serviceAddress: parsed.data.serviceAddress?.trim() || null,
       serviceDeliveryMethod: parsed.data.serviceDeliveryMethod,
       clientIdNumber: provider.requiresInsurance ? (parsed.data.clientIdNumber?.trim() || null) : null,
-    }).onConflictDoUpdate({
+    }, { conflict: { action: "update", ...{
       target: [ownerCustomersTable.ownerId, ownerCustomersTable.phoneNormalized],
       set: {
         phone: phoneNormalized,
         name: parsed.data.clientName.trim(),
-        serviceAddress: sql`coalesce(nullif(excluded.service_address, ''), ${ownerCustomersTable.serviceAddress})`,
+        serviceAddress: sql`coalesce(nullif(${parsed.data.serviceAddress?.trim() || null}, ''), ${ownerCustomersTable.serviceAddress})`,
         serviceDeliveryMethod: parsed.data.serviceDeliveryMethod,
         clientIdNumber: provider.requiresInsurance
-          ? sql`coalesce(nullif(excluded.client_id_number, ''), ${ownerCustomersTable.clientIdNumber})`
-          : ownerCustomersTable.clientIdNumber,
+          ? sql`coalesce(nullif(${parsed.data.clientIdNumber?.trim() || null}, ''), ${ownerCustomersTable.clientIdNumber})`
+          : sql`${ownerCustomersTable.clientIdNumber}`,
         updatedAt: new Date(),
       },
-    });
+    } } });
 
-    const [row] = await tx.insert(serviceAppointmentsTable).values({
+    const [row] = await insertRecords(tx, serviceAppointmentsTable, {
       providerId,
       ownerId: req.user.id,
       ...parsed.data,
       clientPhone: phoneNormalized,
       clientIdNumber: provider.requiresInsurance ? (parsed.data.clientIdNumber || null) : null,
       insuranceAmount: initialAppointmentInsurance(provider, parsed.data.insuranceAmount),
-    }).returning();
+    });
     return { blocked: false as const, full: false as const, row };
   });
 
@@ -1099,9 +1082,7 @@ router.post("/my/approved/:id/appointments/:apptId/payments", requireAuth, async
       return { status: 409, error: "تغيّرت بيانات الدفع. حدّث الحجز وأعد فتح إضافة الدفعة." };
     }
     if (added > total - paid) return { status: 422, error: "مبلغ الدفعة يتجاوز المتبقي على الحجز" };
-    const [updated] = await tx.update(serviceAppointmentsTable)
-      .set({ deposit: ((paid + added) / 100).toFixed(2) })
-      .where(eq(serviceAppointmentsTable.id, row.id)).returning();
+    const [updated] = await updateRecords(tx, serviceAppointmentsTable, { deposit: ((paid + added) / 100).toFixed(2) }, eq(serviceAppointmentsTable.id, row.id));
     return { status: 200, updated };
   });
   if (result.status !== 200) return res.status(result.status).json({ error: result.error });
@@ -1222,15 +1203,11 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
       if ((capacityRow?.count ?? 0) >= dailyCapacity) return { blocked: false as const, full: true as const, dailyCapacity };
     }
 
-    const [updated] = await tx
-      .update(serviceAppointmentsTable)
-      .set(updates)
-      .where(and(
+    const [updated] = await updateRecords(tx, serviceAppointmentsTable, updates, and(
         eq(serviceAppointmentsTable.id, apptId),
         eq(serviceAppointmentsTable.providerId, providerId),
         eq(serviceAppointmentsTable.ownerId, req.user.id),
-      ))
-      .returning();
+      ));
     return { blocked: false as const, full: false as const, missingProvider: false as const, updated };
   });
 
@@ -1290,9 +1267,9 @@ router.post("/my/insurances", requireAuth, async (req: any, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors: parsed.error.flatten().fieldErrors });
 
-  const [row] = await db.insert(serviceInsurancesTable).values({
+  const [row] = await insertRecords(db, serviceInsurancesTable, {
     ownerId: req.user.id, ...parsed.data,
-  }).returning();
+  });
   return res.status(201).json(row);
 });
 
@@ -1314,7 +1291,7 @@ router.patch("/my/insurances/:insId", requireAuth, async (req: any, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ error: "بيانات غير صحيحة" });
 
-  const [updated] = await db.update(serviceInsurancesTable).set(parsed.data).where(eq(serviceInsurancesTable.id, insId)).returning();
+  const [updated] = await updateRecords(db, serviceInsurancesTable, parsed.data, eq(serviceInsurancesTable.id, insId));
   return res.json(updated);
 });
 

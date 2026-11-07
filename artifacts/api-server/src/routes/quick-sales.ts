@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords, writeRecords } from "@workspace/db/mutations";
 import { Router } from "express";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { createHash } from "node:crypto";
@@ -26,8 +27,7 @@ router.patch("/quick-sales/settings", async (req, res): Promise<void> => {
   const ownerId = req.user!.id;
   await db.transaction(async tx => {
     await lockResource(tx, "long-identity", `quick-sales:${ownerId}`);
-    await tx.insert(quickSalesSettingsTable).values({ ownerId, enabled: body.data.enabled })
-      .onConflictDoUpdate({ target: quickSalesSettingsTable.ownerId, set: { enabled: body.data.enabled } });
+    await writeRecords(tx, quickSalesSettingsTable, { ownerId, enabled: body.data.enabled }, { conflict: { action: "update", ...{ target: quickSalesSettingsTable.ownerId, set: { enabled: body.data.enabled } } } });
   });
   res.json(body.data);
 });
@@ -86,19 +86,19 @@ router.post("/quick-sales", async (req, res): Promise<void> => {
       ));
       clientName = customer?.name || clientName;
       if (!clientName) return { error: "اكتب اسم العميل الجديد", status: 400 };
-      const [savedCustomer] = await tx.insert(ownerCustomersTable).values({
+      const [savedCustomer] = await insertRecords(tx, ownerCustomersTable, {
         ownerId, phoneNormalized: input.clientPhone, phone: input.clientPhone, name: clientName,
-      }).onConflictDoUpdate({
+      }, { conflict: { action: "update", ...{
         target: [ownerCustomersTable.ownerId, ownerCustomersTable.phoneNormalized],
         set: { phone: input.clientPhone, updatedAt: new Date() },
-      }).returning();
+      } } });
       clientName = savedCustomer.name;
     }
-    const [row] = await tx.insert(quickSalesTable).values({
+    const [row] = await insertRecords(tx, quickSalesTable, {
       ownerId, providerId: provider.id, providerName: provider.businessName, dateStr: input.dateStr,
       clientName, clientPhone: input.clientPhone, items, total: (quickSaleTotalCents(items) / 100).toFixed(2),
       paymentMethod: input.paymentMethod, notes: input.notes, idempotencyKey: input.idempotencyKey, requestHash: hash,
-    }).returning();
+    });
     return { row };
   });
   if (result.error) { res.status(result.status!).json({ error: result.error }); return; }
@@ -113,9 +113,9 @@ router.post("/quick-sales/:saleId/cancel", async (req, res): Promise<void> => {
   const ownerId = req.user!.id;
   const access = await ownerPlanAccess(ownerId);
   if (!access.active) { res.status(403).json({ error: "الحساب للقراءة فقط" }); return; }
-  const [row] = await db.update(quickSalesTable).set({
+  const [row] = await updateRecords(db, quickSalesTable, {
     status: "cancelled", cancellationReason: body.data.reason.trim(), cancelledAt: new Date(),
-  }).where(and(eq(quickSalesTable.id, params.data.saleId), eq(quickSalesTable.ownerId, ownerId), eq(quickSalesTable.status, "completed"))).returning();
+  }, and(eq(quickSalesTable.id, params.data.saleId), eq(quickSalesTable.ownerId, ownerId), eq(quickSalesTable.status, "completed")));
   if (!row) {
     const [existing] = await db.select({ id: quickSalesTable.id }).from(quickSalesTable)
       .where(and(eq(quickSalesTable.id, params.data.saleId), eq(quickSalesTable.ownerId, ownerId)));

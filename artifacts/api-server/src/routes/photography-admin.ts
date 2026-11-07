@@ -1,3 +1,5 @@
+import { insertRecords, updateRecords, writeRecords } from "@workspace/db/mutations";
+import { isUniqueViolation } from "@workspace/db/database-errors";
 import { Router } from "express";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable, photographyAlertsTable, photographyReceiptsTable, chaletCategoriesTable, serviceCategoriesTable, chaletSubmissionsTable } from "@workspace/db";
@@ -55,7 +57,7 @@ router.post("/contract", async (req, res) => {
   if (!html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()) return res.status(400).json({ error: "لا يمكن نشر عقد فارغ" });
   const version = await db.transaction(async tx => {
     await lockResource(tx, 731222, 1);
-    const [contract] = await tx.insert(photographyContractsTable).values({ html }).returning();
+    const [contract] = await insertRecords(tx, photographyContractsTable, { html });
     return contract;
   });
   return res.status(201).json(version);
@@ -86,16 +88,16 @@ router.post("/photographers/:id/transfers", async (req, res) => {
       if (duplicate) return { error: "مرجع التحويل مستخدم سابقاً", status: 409 };
       const balance = await photographyBalances(photographer.id, tx);
       if (parsed.data.amountHalalas > balance.netDueHalalas) return { error: "مبلغ التحويل يتجاوز صافي المستحقات", status: 400 };
-      const [transfer] = await tx.insert(photographyTransfersTable).values({
+      const [transfer] = await insertRecords(tx, photographyTransfersTable, {
         photographerId: photographer.id, ...parsed.data, reference: parsed.data.reference.toUpperCase(),
         recordedBy: actor, transferredAt: new Date(parsed.data.transferredAt),
-      }).returning();
+      });
       return { transfer };
     });
     if ("error" in result) return res.status(result.status!).json({ error: result.error });
     return res.status(201).json(result.transfer);
   } catch (error) {
-    if ((error as { cause?: { code?: string }; code?: string }).code === "23505" || (error as { cause?: { code?: string } }).cause?.code === "23505") {
+      if (isUniqueViolation(error)) {
       return res.status(409).json({ error: "مرجع التحويل مسجل سابقاً؛ لم يُحتسب المبلغ مرة أخرى" });
     }
     throw error;
@@ -133,8 +135,7 @@ router.patch("/policy", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "راجع حدود التوزيع والتقييم" });
   await db.transaction(async tx => {
     await lockPhotographyAllocation(tx);
-    await tx.insert(siteSettingsTable).values({ key: "photography_policy", value: JSON.stringify(parsed.data) })
-      .onConflictDoUpdate({ target: siteSettingsTable.key, set: { value: JSON.stringify(parsed.data), updatedAt: new Date() } });
+    await writeRecords(tx, siteSettingsTable, { key: "photography_policy", value: JSON.stringify(parsed.data) }, { conflict: { action: "update", target: siteSettingsTable.key, set: { value: JSON.stringify(parsed.data), updatedAt: new Date() } } });
   });
   return res.json({ policy: parsed.data });
 });
@@ -155,7 +156,7 @@ router.get("/options", async (_req, res) => {
 router.post("/alerts/:id/read", async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: "معرّف غير صحيح" });
-  const [row] = await db.update(photographyAlertsTable).set({ readAt: new Date() }).where(eq(photographyAlertsTable.id, id)).returning();
+  const [row] = await updateRecords(db, photographyAlertsTable, { readAt: new Date() }, eq(photographyAlertsTable.id, id));
   return row ? res.json({ success: true }) : res.status(404).json({ error: "التنبيه غير موجود" });
 });
 router.post("/bookings/:id/reassign", async (req, res) => {
@@ -181,15 +182,14 @@ router.patch("/settings", async (req, res) => {
 router.post("/packages", async (req, res) => {
   const parsed = packageSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "راجع اسم الباقة والسعر ونسبة المنصة" });
-  const [row] = await db.insert(photographyPackagesTable).values({ ...parsed.data, platformPercent: String(parsed.data.platformPercent) }).returning();
+  const [row] = await insertRecords(db, photographyPackagesTable, { ...parsed.data, platformPercent: String(parsed.data.platformPercent) });
   return res.json({ ...row, platformPercent: Number(row.platformPercent) });
 });
 router.patch("/packages/:id", async (req, res) => {
   const parsed = packageSchema.partial().safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "بيانات الباقة غير صحيحة" });
   const { platformPercent, ...data } = parsed.data;
-  const [row] = await db.update(photographyPackagesTable).set({ ...data, ...(platformPercent !== undefined ? { platformPercent: String(platformPercent) } : {}) })
-    .where(eq(photographyPackagesTable.id, Number(req.params.id))).returning();
+  const [row] = await updateRecords(db, photographyPackagesTable, { ...data, ...(platformPercent !== undefined ? { platformPercent: String(platformPercent) } : {}) }, eq(photographyPackagesTable.id, Number(req.params.id)));
   return row ? res.json({ ...row, platformPercent: Number(row.platformPercent) }) : res.status(404).json({ error: "الباقة غير موجودة" });
 });
 router.post("/invites", async (req, res) => {
@@ -207,16 +207,16 @@ router.post("/invites", async (req, res) => {
   if (existing && existing.status !== "invited") return res.status(409).json({ error: "للمصور حساب بالفعل؛ راجع طلبه أو نطاقه بدلاً من إنشاء حساب ثانٍ" });
   const values = { name: parsed.data.name, whatsapp: phone, inviteHash: photoHash(token), inviteExpiresAt: expiresAt };
   const [photographer] = existing
-    ? await db.update(photographersTable).set(values).where(eq(photographersTable.id, existing.id)).returning()
-    : await db.insert(photographersTable).values(values).returning();
+    ? await updateRecords(db, photographersTable, values, eq(photographersTable.id, existing.id))
+    : await insertRecords(db, photographersTable, values);
   const invitePath = `/photographer/invite/${token}`;
   const link = `${origin}${invitePath}`;
   const message = `مرحباً ${photographer.name}، يسعدنا دعوتك للانضمام إلى مصوري تكية لتصوير وتوثيق العقارات. أكمل ملفك وحدد نطاقك ومواعيدك عبر الرابط: ${link}`;
-  const [delivery] = await db.insert(photographyDeliveriesTable).values({
+  const [delivery] = await insertRecords(db, photographyDeliveriesTable, {
     dedupeKey: `invite:${photographer.id}:${photoHash(token)}`, photographerId: photographer.id,
     recipient: phone, kind: "invite", parameters: [photographer.name, link],
     status: parsed.data.sendAutomatically ? "pending" : "manual",
-  }).returning();
+  });
   const deliveryResult = parsed.data.sendAutomatically ? await deliverPhotographyMessage(delivery.id) : { status: "manual" };
   return res.json({ invitePath, expiresAt, message, whatsappUrl: `https://wa.me/${phone}?text=${encodeURIComponent(message)}`, delivery: deliveryResult });
 });
@@ -232,7 +232,7 @@ router.patch("/photographers/:id", async (req, res) => {
   const coverage = coverageSchema.safeParse({ ...current, ...parsed.data });
   if (parsed.data.status === "approved" && (!coverage.success || !await validPhotographyCoverage(coverage.data))) return res.status(400).json({ error: "حدد نطاقاً جغرافياً صحيحاً للمصور قبل القبول" });
   if (parsed.data.status !== "approved" && !parsed.data.adminNote) return res.status(400).json({ error: "سبب القرار مطلوب" });
-  const [row] = await db.update(photographersTable).set(parsed.data).where(eq(photographersTable.id, current.id)).returning();
+  const [row] = await updateRecords(db, photographersTable, parsed.data, eq(photographersTable.id, current.id));
   return res.json(publicPhotographer(row));
 });
 router.patch("/photographers/:id/profile", async (req, res) => {
@@ -251,7 +251,7 @@ router.patch("/photographers/:id/profile", async (req, res) => {
     if (existing.length !== ids.length) return res.status(400).json({ error: "إحدى الباقات المعتمدة غير موجودة" });
     parsed.data.approvedPackageIds = ids;
   }
-  const [row] = await db.update(photographersTable).set(parsed.data).where(eq(photographersTable.id, Number(req.params.id))).returning();
+  const [row] = await updateRecords(db, photographersTable, parsed.data, eq(photographersTable.id, Number(req.params.id)));
   return row ? res.json(publicPhotographer(row)) : res.status(404).json({ error: "المصور غير موجود" });
 });
 export default router;

@@ -1,3 +1,7 @@
+import { insertRecords, updateRecords, writeRecords } from "@workspace/db/mutations";
+import { ownerBroadcastPreferencesTable } from "@workspace/db";
+import { sqlInteger,sqlArrayFallback,sqlEmptyTextArray,sqlEmptyJsonArray,sqlText,sqlBoolean,sqlRegex,sqlOwnerId } from "@workspace/db/sql-expressions";
+import { supportMessagesQueryTable,supportRequestsQueryTable } from "@workspace/db/runtime-models";
 import { Router } from "express";
 import { lockResource } from "@workspace/db/transaction-lock";
 import staffHoldingsRouter from "./staff-holdings";
@@ -9,8 +13,8 @@ import { paySalaryWithExpense } from "../lib/salary-expenses";
 import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
 import { SaveOwnerWhatsAppSettingsBody } from "@workspace/api-zod";
 import { capturePropertyCheckout, propertyStayComplete } from "../lib/booking-completion";
-import { sendCrmHistory, sendCrmProfile } from "../lib/customer-history";
-import { sendCrmCustomers } from "../lib/customer-directory";
+import { sendCrmHistory, sendCrmProfile } from "#crm-history";
+import { sendCrmCustomers } from "#crm-directory";
 import { resolveAddonQuantities } from "../lib/chalet-addon-quantity";
 import { sendBookingArchive } from "../lib/booking-archive";
 import { bookingCheckoutAt, INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
@@ -289,7 +293,7 @@ router.get("/available-owners", async (req, res) => {
       sql`SELECT owner_id, MIN(name_ar) AS name_ar
           FROM chalet_submissions
           WHERE owner_id NOT LIKE '__demo%'
-            AND NOT (owner_id ~ '^[0-9]+$')
+            AND NOT ${sqlRegex(sql`owner_id`,"^[0-9]+$")}
           GROUP BY owner_id
           ORDER BY owner_id`
     );
@@ -305,7 +309,7 @@ router.get("/available-owners", async (req, res) => {
     sql`SELECT cs.owner_id, MIN(cs.name_ar) AS name_ar
         FROM chalet_submissions cs
         JOIN owner_applications oa ON LOWER(oa.email) = LOWER(${email})
-        WHERE cs.owner_id = CONCAT('owner_', oa.id::text)
+        WHERE cs.owner_id = ${sqlOwnerId(sql`oa.id`)}
           AND cs.owner_id NOT LIKE '__demo%'
         GROUP BY cs.owner_id
         ORDER BY cs.owner_id`
@@ -334,7 +338,7 @@ router.post("/auto-session", async (req, res) => {
           FROM chalet_submissions cs
           JOIN owner_applications oa ON LOWER(oa.email) = LOWER(${email})
           WHERE cs.owner_id = ${ownerId}
-            AND cs.owner_id = CONCAT('owner_', oa.id::text)
+            AND cs.owner_id = ${sqlOwnerId(sql`oa.id`)}
           LIMIT 1`
     );
     if (!((ownerCheck as any).rows as any[]).length) {
@@ -652,20 +656,20 @@ router.patch("/broadcast-preferences", async (req, res): Promise<void> => {
     return;
   }
   const pref = parsed.data;
-  const result = await db.execute(sql`
-    INSERT INTO owner_broadcast_preferences (owner_key, in_app, inbox, email, whatsapp, updated_at)
-    VALUES (${ownerKey}, ${pref.inApp ?? true}, ${pref.inbox ?? false}, ${pref.email ?? false}, ${pref.whatsapp ?? false}, now())
-    ON CONFLICT (owner_key) DO UPDATE SET
-      in_app = COALESCE(${pref.inApp ?? null}, owner_broadcast_preferences.in_app),
-      inbox = COALESCE(${pref.inbox ?? null}, owner_broadcast_preferences.inbox),
-      email = COALESCE(${pref.email ?? null}, owner_broadcast_preferences.email),
-      whatsapp = COALESCE(${pref.whatsapp ?? null}, owner_broadcast_preferences.whatsapp),
-      updated_at = now()
-    RETURNING in_app, inbox, email, whatsapp
-  `);
-  const row = ((result as any).rows as Array<{
-    in_app: boolean; inbox: boolean; email: boolean; whatsapp: boolean;
-  }>)[0];
+  const [row] = await insertRecords(db, ownerBroadcastPreferencesTable, {
+    ownerKey, inApp: pref.inApp ?? true, inbox: pref.inbox ?? false,
+    email: pref.email ?? false, whatsapp: pref.whatsapp ?? false, updatedAt: sql`NOW()`,
+  }, {
+    conflict: { action: "update", target: ownerBroadcastPreferencesTable.ownerKey, set: {
+      inApp: sql`COALESCE(${pref.inApp ?? null}, ${ownerBroadcastPreferencesTable.inApp})`,
+      inbox: sql`COALESCE(${pref.inbox ?? null}, ${ownerBroadcastPreferencesTable.inbox})`,
+      email: sql`COALESCE(${pref.email ?? null}, ${ownerBroadcastPreferencesTable.email})`,
+      whatsapp: sql`COALESCE(${pref.whatsapp ?? null}, ${ownerBroadcastPreferencesTable.whatsapp})`,
+      updatedAt: sql`NOW()`,
+    } },
+    returning: { in_app: ownerBroadcastPreferencesTable.inApp, inbox: ownerBroadcastPreferencesTable.inbox,
+      email: ownerBroadcastPreferencesTable.email, whatsapp: ownerBroadcastPreferencesTable.whatsapp },
+  });
   res.json(serializeBroadcastPreferences(row));
 });
 
@@ -695,7 +699,7 @@ export async function getOwnerIds(req: Request): Promise<string[]> {
       const r = await db.execute(sql`
         SELECT user_id FROM owner_account_links
         WHERE owner_application_id = ${applicationId}
-          AND user_id !~ '^owner_[0-9]+$' LIMIT 1
+          AND NOT ${sqlRegex(sql`user_id`,"^owner_[0-9]+$")} LIMIT 1
       `);
       const linkedUserId = ((r as any).rows as Array<{ user_id: string }>)[0]?.user_id;
       linkedAlias = linkedUserId ?? null;
@@ -1154,12 +1158,10 @@ router.post("/support-request", requireAuth, supportUpload.array("files", 10), a
       }
     }
 
-    /* drizzle spreads JS arrays as ($1,$2) record — pass as Postgres literal instead */
-    const pgAttachArr = `{${attachmentUrls.join(",")}}`;
-    await db.execute(
-      sql`INSERT INTO owner_support_requests (owner_id, owner_name, subject, message, status, attachment_urls, created_at)
-          VALUES (${String(ownerId)}, ${ownerName}, ${subject.trim()}, ${message.trim()}, 'new', ${pgAttachArr}::text[], now())`
-    );
+    await insertRecords(db,supportRequestsQueryTable,{
+      ownerId:String(ownerId),ownerName,subject:subject.trim(),message:message.trim(),
+      status:"new",attachmentUrls,createdAt:new Date(),
+    });
     return res.json({ ok: true, attachment_urls: attachmentUrls });
   } catch (err) {
     console.error("[POST /owner/support-request]", err);
@@ -1175,19 +1177,19 @@ router.get("/support-requests", requireAuth, async (req, res) => {
     const result = await db.execute(
       sql`SELECT * FROM (
             SELECT id, owner_id, subject, message, status, source,
-              CASE WHEN array_length(attachment_urls, 1) > 0 THEN attachment_urls WHEN attachment_url IS NOT NULL THEN ARRAY[attachment_url] ELSE '{}'::text[] END AS attachment_urls,
+              ${sqlArrayFallback(sql`attachment_urls`,sql`attachment_url`,"attachment_urls")} AS attachment_urls,
               admin_reply, admin_reply_at,
-              CASE WHEN array_length(admin_attachment_urls, 1) > 0 THEN admin_attachment_urls WHEN admin_attachment_url IS NOT NULL THEN ARRAY[admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
-              is_read_by_owner, created_at, false AS platform_message, 'owner' AS sender,
+              ${sqlArrayFallback(sql`admin_attachment_urls`,sql`admin_attachment_url`,"admin_attachment_urls")} AS admin_attachment_urls,
+              is_read_by_owner, created_at, ${sqlBoolean(sql`false`,"platform_message")} AS platform_message, 'owner' AS sender,
               ${supportMessagesSql(sql`s.id`)} AS messages
             FROM owner_support_requests s
             WHERE owner_id IN (${ownerIdFilter}) AND source <> 'admin_broadcast'
             UNION ALL
             SELECT -id AS id, owner_id, subject, message, 'admin_message' AS status,
-              'admin_broadcast' AS source, '{}'::text[] AS attachment_urls,
-              NULL::text AS admin_reply, NULL::timestamptz AS admin_reply_at,
-              '{}'::text[] AS admin_attachment_urls, is_read AS is_read_by_owner,
-              created_at, true AS platform_message, 'platform' AS sender, '[]'::jsonb AS messages
+              'admin_broadcast' AS source, ${sqlEmptyTextArray("attachment_urls")} AS attachment_urls,
+              ${sqlText(sql`NULL`)} AS admin_reply, NULL AS admin_reply_at,
+              ${sqlEmptyTextArray("admin_attachment_urls")} AS admin_attachment_urls, is_read AS is_read_by_owner,
+              created_at, ${sqlBoolean(sql`true`,"platform_message")} AS platform_message, 'platform' AS sender, ${sqlEmptyJsonArray("messages")} AS messages
             FROM owner_broadcast_inbox
             WHERE owner_id IN (${ownerIdFilter})
           ) messages
@@ -1216,8 +1218,9 @@ router.post("/support-requests/:id/reply", requireAuth, async (req, res) => {
       if (!locked.rows[0]) return null;
       if (isSupportClosed(locked.rows[0].status)) throw new SupportTicketClosedError();
       await preserveLegacySupportReply(tx, id);
-      await tx.execute(sql`INSERT INTO owner_support_messages(ticket_id, author_role, author_id, body)
-        VALUES (${id}, 'owner', ${String(req.user!.id)}, ${message})`);
+      await writeRecords(tx, supportMessagesQueryTable, {
+        ticketId: id, authorRole: "owner", authorId: String(req.user!.id), body: message, attachmentUrls: [],
+      });
       await tx.execute(sql`UPDATE owner_support_requests SET status = 'in_progress' WHERE id = ${id}`);
       const saved = await tx.execute(sql`SELECT s.*, ${supportMessagesSql(sql`s.id`)} AS messages
         FROM owner_support_requests s WHERE s.id = ${id}`);
@@ -1546,14 +1549,10 @@ router.put("/message-settings", async (req, res) => {
     updatedAt: new Date(),
   };
 
-  const [saved] = await db
-    .insert(ownerNotificationSettingsTable)
-    .values(values)
-    .onConflictDoUpdate({
+  const [saved] = await insertRecords(db, ownerNotificationSettingsTable, values, { conflict: { action: "update", ...{
       target: ownerNotificationSettingsTable.ownerId,
       set: values,
-    })
-    .returning();
+    } } });
 
   return res.json(normalizeMessageSettings(saved, ownerId));
 });
@@ -1761,23 +1760,21 @@ router.post("/bookings", async (req, res) => {
   const phoneNormalized = normalizeCustomerPhone(restBooking.clientPhone);
   const booking = await db.transaction(async (tx) => {
     const checkoutAt = await capturePropertyCheckout(restBooking, tx);
-    await tx.insert(ownerCustomersTable).values({
+    await writeRecords(tx, ownerCustomersTable, {
       ownerId,
       phoneNormalized,
       phone: phoneNormalized,
       name: customerName,
-    }).onConflictDoUpdate({
+    }, { conflict: { action: "update", ...{
       target: [ownerCustomersTable.ownerId, ownerCustomersTable.phoneNormalized],
       set: {
         phone: phoneNormalized,
         name: customerName,
         updatedAt: new Date(),
       },
-    });
+    } } });
 
-    const [createdBooking] = await tx
-      .insert(ownerBookingsTable)
-      .values({
+    const [createdBooking] = await insertRecords(tx, ownerBookingsTable, {
         ...restBooking,
         checkoutAt,
         clientName: customerName,
@@ -1789,8 +1786,7 @@ router.post("/bookings", async (req, res) => {
         depositPaid: depositPaid !== undefined ? String(Math.round(depositPaid)) : null,
         insuranceFee: insuranceFee !== undefined ? String(Math.round(insuranceFee)) : null,
         bookedAddons: resolvedAddons,
-      })
-      .returning();
+      });
     return createdBooking;
   });
 
@@ -1980,9 +1976,7 @@ router.patch("/bookings/:id", async (req, res) => {
       if (deduction > 0 && !(body.data.insuranceDeductReason ?? existing.insuranceDeductReason)?.trim())
         return { error: "يجب توثيق سبب خصم التأمين", status: 400 };
     }
-    const [row] = await tx
-    .update(ownerBookingsTable)
-    .set({
+    const [row] = await updateRecords(tx, ownerBookingsTable, {
       ...rest,
       checkoutAt,
       ...(bookingDate !== undefined ? { bookingDate } : {}),
@@ -1991,9 +1985,7 @@ router.patch("/bookings/:id", async (req, res) => {
       insuranceDeducted: insuranceDeducted !== undefined ? String(Math.round(insuranceDeducted)) : undefined,
       insuranceProofImages: insuranceProofImages !== undefined ? JSON.stringify(insuranceProofImages) : undefined,
       ...(restore ? { cancelledAt: null, cancelReason: null } : {}),
-    })
-    .where(and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)))
-    .returning();
+    }, and(eq(ownerBookingsTable.id, id), eq(ownerBookingsTable.ownerId, ownerId)));
     return { row };
   });
   if (updateResult.status !== undefined) return res.status(updateResult.status).json({ error: updateResult.error });
@@ -2120,7 +2112,7 @@ router.get(["/customers/lookup", "/bookings/lookup"], async (req, res) => {
   const clientIdNumber: string | null = "clientIdNumber" in historical
     ? (String(historical.clientIdNumber ?? "").trim() || null)
     : null;
-  await db.insert(ownerCustomersTable).values({
+  await writeRecords(db, ownerCustomersTable, {
     ownerId,
     phoneNormalized,
     phone,
@@ -2128,7 +2120,7 @@ router.get(["/customers/lookup", "/bookings/lookup"], async (req, res) => {
     serviceAddress,
     serviceDeliveryMethod,
     clientIdNumber,
-  }).onConflictDoNothing();
+  }, { conflict: { action: "ignore" } });
 
   return res.json({
     clientName: historical.clientName,
@@ -2270,13 +2262,10 @@ router.patch("/chalets/:id/pause", async (req, res) => {
     .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, chalet.submissionId!)).limit(1);
   if (!sub || sub.ownerId !== ownerId) return res.status(403).json({ error: "غير مصرح" });
 
-  const [updated] = await db.update(chaletsTable)
-    .set({
+  const [updated] = await updateRecords(db, chaletsTable, {
       pausedFrom: body.data.clear ? null : body.data.pausedFrom!,
       pausedUntil: body.data.clear ? null : body.data.pausedUntil ?? null,
-    })
-    .where(eq(chaletsTable.id, chaletId))
-    .returning({
+    }, eq(chaletsTable.id, chaletId), {
       id: chaletsTable.id,
       pausedFrom: chaletsTable.pausedFrom,
       pausedUntil: chaletsTable.pausedUntil,
@@ -2326,10 +2315,7 @@ router.post("/review-invite", async (req, res) => {
   const token = randomBytes(5).toString("hex");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  const [inv] = await db
-    .insert(reviewInvitationsTable)
-    .values({ token, chaletId: chalet.id, expiresAt, guestName: body.data.guestName ?? null, bookingId: body.data.bookingId ?? null })
-    .returning();
+  const [inv] = await insertRecords(db, reviewInvitationsTable, { token, chaletId: chalet.id, expiresAt, guestName: body.data.guestName ?? null, bookingId: body.data.bookingId ?? null });
 
   return res.json({ token: inv.token, chaletId: chalet.id, chaletName: chalet.nameAr });
 });
@@ -2416,8 +2402,7 @@ router.patch("/chalets/:id/toggle-active", async (req, res) => {
     const [current] = await tx.select({ status: chaletSubmissionsTable.status })
       .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, chalet.submissionId!)).for("update");
     if (current?.status !== "approved") return null;
-    const [saved] = await tx.update(chaletsTable).set({ isActive: !chalet.isActive })
-      .where(eq(chaletsTable.id, chaletId)).returning({ isActive: chaletsTable.isActive });
+    const [saved] = await updateRecords(tx, chaletsTable, { isActive: !chalet.isActive }, eq(chaletsTable.id, chaletId), { isActive: chaletsTable.isActive });
     return saved;
   });
   if (!updated) return res.status(409).json({ error: "لا يمكن تفعيل عقار لم تتم الموافقة على طلبه أو رُفض نهائياً." });
@@ -2493,11 +2478,7 @@ router.patch("/chalets/:id/review-template", async (req, res) => {
   const subIds = subs.map((s) => s.id);
   if (subIds.length === 0) return res.status(403).json({ error: "غير مصرح" });
 
-  const [updated] = await db
-    .update(chaletsTable)
-    .set({ waReviewTemplate: body.data.waReviewTemplate || null })
-    .where(and(eq(chaletsTable.id, chaletId), inArray(chaletsTable.submissionId, subIds)))
-    .returning({ id: chaletsTable.id });
+  const [updated] = await updateRecords(db, chaletsTable, { waReviewTemplate: body.data.waReviewTemplate || null }, and(eq(chaletsTable.id, chaletId), inArray(chaletsTable.submissionId, subIds)), { id: chaletsTable.id });
 
   if (!updated) return res.status(403).json({ error: "غير مصرح أو الشاليه غير موجود" });
   return res.json({ ok: true });
@@ -2537,9 +2518,7 @@ router.patch("/chalets/:chaletId/times", async (req, res) => {
 
   if (chaletRows.length === 0) return res.status(403).json({ error: "غير مصرح" });
 
-  const [updated] = await db
-    .update(chaletsTable)
-    .set({
+  const [updated] = await updateRecords(db, chaletsTable, {
       checkInTime: body.data.checkInTime ?? null,
       checkOutTime: body.data.checkOutTime ?? null,
       morningCheckIn: body.data.morningCheckIn ?? null,
@@ -2548,9 +2527,7 @@ router.patch("/chalets/:chaletId/times", async (req, res) => {
       eveningCheckOut: body.data.eveningCheckOut ?? null,
       fullDayCheckIn: body.data.fullDayCheckIn ?? null,
       fullDayCheckOut: body.data.fullDayCheckOut ?? null,
-    })
-    .where(eq(chaletsTable.id, chaletId))
-    .returning();
+    }, eq(chaletsTable.id, chaletId));
 
   return res.json(updated);
 });
@@ -2659,23 +2636,16 @@ router.post("/availability", async (req, res) => {
     .limit(1);
 
   if (existing.length > 0) {
-    const [updated] = await db
-      .update(chaletAvailabilityTable)
-      .set({
+    const [updated] = await updateRecords(db, chaletAvailabilityTable, {
         periodMorning: body.data.periodMorning,
         periodEvening: body.data.periodEvening,
         periodFullDay: body.data.periodFullDay,
         notes: body.data.notes ?? null,
-      })
-      .where(eq(chaletAvailabilityTable.id, existing[0].id))
-      .returning();
+      }, eq(chaletAvailabilityTable.id, existing[0].id));
     return res.json(updated);
   }
 
-  const [row] = await db
-    .insert(chaletAvailabilityTable)
-    .values({ ...body.data, ownerId })
-    .returning();
+  const [row] = await insertRecords(db, chaletAvailabilityTable, { ...body.data, ownerId });
 
   return res.status(201).json(row);
 });
@@ -2762,9 +2732,7 @@ router.post("/availability/bulk", async (req, res) => {
         .where(eq(chaletAvailabilityTable.id, existing.id));
       created.push(existing.id);
     } else {
-      const [row] = await db.insert(chaletAvailabilityTable)
-        .values({ chaletId, ownerId, dateStr, periodMorning: true, periodEvening: true, periodFullDay: true, notes: blockNote })
-        .returning({ id: chaletAvailabilityTable.id });
+      const [row] = await insertRecords(db, chaletAvailabilityTable, { chaletId, ownerId, dateStr, periodMorning: true, periodEvening: true, periodFullDay: true, notes: blockNote }, { returning: { id: chaletAvailabilityTable.id } });
       created.push(row.id);
     }
   }
@@ -2848,8 +2816,7 @@ router.patch("/global-seasons/:globalSeasonId", async (req, res) => {
     .limit(1);
   if (!season) return res.status(404).json({ error: "الموسم غير موجود" });
 
-  const [association] = await db.insert(chaletGlobalSeasonsTable)
-    .values({
+  const [association] = await insertRecords(db, chaletGlobalSeasonsTable, {
       submissionId: parsed.data.submissionId,
       globalSeasonId,
       enabled: parsed.data.enabled,
@@ -2857,8 +2824,7 @@ router.patch("/global-seasons/:globalSeasonId", async (req, res) => {
       priceEvening: parsed.data.priceEvening != null ? String(parsed.data.priceEvening) : null,
       priceFullDay: parsed.data.priceFullDay != null ? String(parsed.data.priceFullDay) : null,
       dailyPrices: parsed.data.dailyPrices ?? null,
-    })
-    .onConflictDoUpdate({
+    }, { conflict: { action: "update", ...{
       target: [chaletGlobalSeasonsTable.submissionId, chaletGlobalSeasonsTable.globalSeasonId],
       set: {
         enabled: parsed.data.enabled,
@@ -2874,8 +2840,7 @@ router.patch("/global-seasons/:globalSeasonId", async (req, res) => {
         ...(parsed.data.dailyPrices !== undefined ? { dailyPrices: parsed.data.dailyPrices } : {}),
         updatedAt: new Date(),
       },
-    })
-    .returning();
+    } } });
 
   return res.json({
     ...season,
@@ -2945,8 +2910,7 @@ router.post("/seasons", async (req, res) => {
     : null;
   const primaryPrice = priceFullDay ?? priceMorning ?? priceEvening ?? minDayPrice ?? 0;
 
-  const [row] = await db.insert(chaletSeasonsTable)
-    .values({
+  const [row] = await insertRecords(db, chaletSeasonsTable, {
       submissionId: body.data.submissionId,
       nameAr: body.data.nameAr,
       startDate: body.data.startDate,
@@ -2958,8 +2922,7 @@ router.post("/seasons", async (req, res) => {
       dailyPrices: dailyPrices && Object.keys(dailyPrices).length > 0 ? dailyPrices : null,
       period: body.data.period,
       ownerId,
-    })
-    .returning();
+    });
 
   return res.status(201).json(row);
 });
@@ -2994,8 +2957,7 @@ router.put("/seasons/:id", async (req, res) => {
     ? Math.min(...allDayPrices.flatMap(dp => [dp.morning, dp.evening, dp.fullDay].filter(Boolean) as number[]))
     : null;
   const primaryPrice = priceFullDay ?? priceMorning ?? priceEvening ?? minDayPrice ?? 0;
-  const [row] = await db.update(chaletSeasonsTable)
-    .set({
+  const [row] = await updateRecords(db, chaletSeasonsTable, {
       nameAr: body.data.nameAr,
       startDate: body.data.startDate,
       endDate: body.data.endDate,
@@ -3005,9 +2967,7 @@ router.put("/seasons/:id", async (req, res) => {
       priceFullDay: priceFullDay != null ? String(priceFullDay) : null,
       dailyPrices: dailyPrices && Object.keys(dailyPrices).length > 0 ? dailyPrices : null,
       period: body.data.period ?? null,
-    })
-    .where(and(eq(chaletSeasonsTable.id, id), eq(chaletSeasonsTable.ownerId, ownerId)))
-    .returning();
+    }, and(eq(chaletSeasonsTable.id, id), eq(chaletSeasonsTable.ownerId, ownerId)));
   if (!row) return res.status(404).json({ error: "الموسم غير موجود" });
   return res.json(row);
 });
@@ -3415,15 +3375,13 @@ router.post("/subscription/addons/:purchaseId/cancel", async (req, res) => {
     );
     if (hasManualSnapshot) return { kind: "open-checkout" as const };
 
-    const [updated] = await tx.update(subscriptionAddonPurchasesTable)
-      .set({
+    const [updated] = await updateRecords(tx, subscriptionAddonPurchasesTable, {
         cancelAtPeriodEnd: true,
         revision: sql`${subscriptionAddonPurchasesTable.revision} + 1`,
-      })
-      .where(and(
+      }, and(
         eq(subscriptionAddonPurchasesTable.id, purchase.id),
         inArray(subscriptionAddonPurchasesTable.ownerId, ownerKeys),
-      )).returning();
+      ));
     return updated ? { kind: "updated" as const, purchase: updated } : { kind: "missing" as const };
   });
   if (result.kind === "missing") return res.status(404).json({ error: "الإضافة غير موجودة" });
@@ -3561,10 +3519,7 @@ router.post("/expenses", async (req, res) => {
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة", details: body.error.flatten() });
   const { amount, ...expRest } = body.data;
-  const [row] = await db
-    .insert(ownerExpensesTable)
-    .values({ ownerId, ...expRest, amount: String(amount) } as any)
-    .returning();
+  const [row] = await insertRecords(db, ownerExpensesTable, { ownerId, ...expRest, amount: String(amount) } as any);
   return res.status(201).json(row);
 });
 
@@ -3580,7 +3535,7 @@ router.post("/expense-categories", async (req, res) => {
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
   const existing = await db.select().from(expenseCategoriesTable).where(eq(expenseCategoriesTable.name, body.data.name));
   if (existing.length > 0) return res.json(existing[0]);
-  const [row] = await db.insert(expenseCategoriesTable).values({ ...body.data, isOther: false, sortOrder: 100 }).returning();
+  const [row] = await insertRecords(db, expenseCategoriesTable, { ...body.data, isOther: false, sortOrder: 100 });
   return res.status(201).json(row);
 });
 
@@ -3659,10 +3614,7 @@ router.post("/staff", async (req, res) => {
     hireDate: body.data.hireDate || null,
   };
 
-  const [row] = await db
-    .insert(ownerStaffTable)
-    .values(values as any)
-    .returning();
+  const [row] = await insertRecords(db, ownerStaffTable, values as any);
   const { passwordHash: _ph, ...safe } = row;
   return res.status(201).json(safe);
 });
@@ -3700,11 +3652,7 @@ router.patch("/staff/:id", async (req, res) => {
   if (body.data.birthDate !== undefined) staffPatch.birthDate = body.data.birthDate || null;
   if (body.data.hireDate !== undefined) staffPatch.hireDate = body.data.hireDate || null;
 
-  const [row] = await db
-    .update(ownerStaffTable)
-    .set(staffPatch as any)
-    .where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)))
-    .returning();
+  const [row] = await updateRecords(db, ownerStaffTable, staffPatch as any, and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)));
   if (!row) return res.status(404).json({ error: "لم يُعثر على الموظف" });
   const { passwordHash: _ph, ...safe } = row;
   return res.json(safe);
@@ -3716,11 +3664,7 @@ router.put("/staff/:id/permissions", async (req, res) => {
   const id = Number(req.params.id);
   const body = z.object({ permissions: z.record(z.boolean()) }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const [row] = await db
-    .update(ownerStaffTable)
-    .set({ permissions: body.data.permissions } as any)
-    .where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)))
-    .returning();
+  const [row] = await updateRecords(db, ownerStaffTable, { permissions: body.data.permissions } as any, and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)));
   if (!row) return res.status(404).json({ error: "لم يُعثر على الموظف" });
   return res.json({ ok: true, permissions: row.permissions });
 });
@@ -3775,25 +3719,18 @@ router.post("/salary-logs", async (req, res) => {
     .limit(1);
 
   if (existing) {
-    const [updated] = await db
-      .update(salaryLogsTable)
-      .set({ bonus: String(body.data.bonus), deduction: String(body.data.deduction), notes: body.data.notes ?? null })
-      .where(eq(salaryLogsTable.id, existing.id))
-      .returning();
+    const [updated] = await updateRecords(db, salaryLogsTable, { bonus: String(body.data.bonus), deduction: String(body.data.deduction), notes: body.data.notes ?? null }, eq(salaryLogsTable.id, existing.id));
     return res.json(updated);
   }
 
-  const [row] = await db
-    .insert(salaryLogsTable)
-    .values({
+  const [row] = await insertRecords(db, salaryLogsTable, {
       ownerId,
       staffId: body.data.staffId,
       month: body.data.month,
       bonus: String(body.data.bonus),
       deduction: String(body.data.deduction),
       notes: body.data.notes ?? null,
-    })
-    .returning();
+    });
   return res.status(201).json(row);
 });
 
@@ -4418,10 +4355,7 @@ router.post("/bookings/:id/refund", async (req, res) => {
   const collected = deposit + (booking.balanceCollected ? remaining : 0);
   if (Number(amount) > collected) return res.status(400).json({ error: "المبلغ يتجاوز ما تم تحصيله" });
 
-  const [refund] = await db
-    .insert(ownerRefundsTable)
-    .values({ ownerId, bookingId, amount: String(amount), type: type ?? "partial", reason: reason ?? null })
-    .returning();
+  const [refund] = await insertRecords(db, ownerRefundsTable, { ownerId, bookingId, amount: String(amount), type: type ?? "partial", reason: reason ?? null });
 
   return res.json(refund);
 });
@@ -4779,11 +4713,10 @@ router.put("/service-clients/:phone/note", async (req, res) => {
   }
   const phone = req.params.phone;
   const notes = String(req.body?.notes ?? "");
-  await db.execute(sql`
-    INSERT INTO customer_notes (owner_id, client_phone, notes, updated_at)
-    VALUES (${ownerId}, ${phone}, ${notes}, now())
-    ON CONFLICT (owner_id, client_phone) DO UPDATE SET notes = ${notes}, updated_at = now()
-  `);
+  await writeRecords(db, customerNotesTable, { ownerId, clientPhone: phone, notes, updatedAt: sql`NOW()` }, {
+    conflict: { action: "update", target: [customerNotesTable.ownerId, customerNotesTable.clientPhone],
+      set: { notes, updatedAt: sql`NOW()` } },
+  });
   return res.json({ ok: true });
 });
 
@@ -4806,9 +4739,9 @@ router.put("/service-clients/:phone", async (req, res) => {
     eq(serviceAppointmentsTable.clientPhone, oldPhone),
   ));
   if (newPhone && newPhone !== oldPhone) {
-    const [remainingService] = await db.select({ count: sql<number>`count(*)::int` }).from(serviceAppointmentsTable)
+      const [remainingService] = await db.select({ count: sqlInteger(sql`count(*)`) }).from(serviceAppointmentsTable)
       .where(and(eq(serviceAppointmentsTable.ownerId, ownerId), eq(serviceAppointmentsTable.clientPhone, oldPhone)));
-    const [remainingChalet] = await db.select({ count: sql<number>`count(*)::int` }).from(ownerBookingsTable)
+      const [remainingChalet] = await db.select({ count: sqlInteger(sql`count(*)`) }).from(ownerBookingsTable)
       .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, oldPhone)));
     if ((remainingService?.count ?? 0) === 0 && (remainingChalet?.count ?? 0) === 0) {
       await db.update(customerNotesTable).set({ clientPhone: newPhone }).where(and(
@@ -4831,9 +4764,9 @@ router.delete("/service-clients/:phone", async (req, res) => {
     eq(serviceAppointmentsTable.providerId, providerId),
     eq(serviceAppointmentsTable.clientPhone, req.params.phone),
   ));
-  const [remainingService] = await db.select({ count: sql<number>`count(*)::int` }).from(serviceAppointmentsTable)
+    const [remainingService] = await db.select({ count: sqlInteger(sql`count(*)`) }).from(serviceAppointmentsTable)
     .where(and(eq(serviceAppointmentsTable.ownerId, ownerId), eq(serviceAppointmentsTable.clientPhone, req.params.phone)));
-  const [remainingChalet] = await db.select({ count: sql<number>`count(*)::int` }).from(ownerBookingsTable)
+    const [remainingChalet] = await db.select({ count: sqlInteger(sql`count(*)`) }).from(ownerBookingsTable)
     .where(and(eq(ownerBookingsTable.ownerId, ownerId), eq(ownerBookingsTable.clientPhone, req.params.phone)));
   if ((remainingService?.count ?? 0) === 0 && (remainingChalet?.count ?? 0) === 0) {
     await db.delete(customerNotesTable).where(and(
@@ -5123,18 +5056,11 @@ router.post("/reports/archive", async (req, res) => {
     .limit(1);
 
   if (existing.length > 0) {
-    const [updated] = await db
-      .update(ownerReportArchiveTable)
-      .set({ data, propertyName, pdfUrl: pdfUrl ?? null, createdAt: new Date() })
-      .where(eq(ownerReportArchiveTable.id, existing[0].id))
-      .returning();
+    const [updated] = await updateRecords(db, ownerReportArchiveTable, { data, propertyName, pdfUrl: pdfUrl ?? null, createdAt: new Date() }, eq(ownerReportArchiveTable.id, existing[0].id));
     return res.json(updated);
   }
 
-  const [created] = await db
-    .insert(ownerReportArchiveTable)
-    .values({ ownerId, reportType, reportPeriod, submissionId: submissionId ?? null, propertyName, pdfUrl: pdfUrl ?? null, data })
-    .returning();
+  const [created] = await insertRecords(db, ownerReportArchiveTable, { ownerId, reportType, reportPeriod, submissionId: submissionId ?? null, propertyName, pdfUrl: pdfUrl ?? null, data });
   return res.json(created);
 });
 
@@ -5325,15 +5251,11 @@ router.post("/reviews/:id/report", async (req, res) => {
 
   if (!review) return res.status(404).json({ error: "not found or forbidden" });
 
-  const [reported] = await db
-    .update(reviewsTable)
-    .set({
+  const [reported] = await updateRecords(db, reviewsTable, {
       reportedBy: ownerId,
       reportedAt: new Date(),
       reportReason: body.data.reason,
-    })
-    .where(and(eq(reviewsTable.id, reviewId), sql`${reviewsTable.reportedAt} IS NULL`))
-    .returning({ id: reviewsTable.id });
+    }, and(eq(reviewsTable.id, reviewId), sql`${reviewsTable.reportedAt} IS NULL`), { id: reviewsTable.id });
   if (!reported) return res.status(409).json({ error: "يوجد اعتراض قيد المراجعة بالفعل" });
 
   return res.json({ ok: true });
@@ -5527,9 +5449,7 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
       });
       if (result === "changed") return res.status(409).json({ error: "تغيرت حالة الطلب. يرجى تحديث الصفحة." });
     } else {
-      const saved = await db.update(chaletSubmissionsTable).set(updateData)
-        .where(and(eq(chaletSubmissionsTable.id, submissionId), eq(chaletSubmissionsTable.status, sub.status)))
-        .returning({ id: chaletSubmissionsTable.id });
+      const saved = await updateRecords(db, chaletSubmissionsTable, updateData, and(eq(chaletSubmissionsTable.id, submissionId), eq(chaletSubmissionsTable.status, sub.status)), { id: chaletSubmissionsTable.id });
       if (!saved.length) return res.status(409).json({ error: "تغيرت حالة الطلب. يرجى تحديث الصفحة." });
     }
   }
@@ -5720,13 +5640,10 @@ router.put("/customers/:phone/note", async (req, res) => {
   const phone   = req.params.phone;
   const notes   = String(req.body?.notes ?? "");
 
-  await db.execute(
-    sql`
-      INSERT INTO customer_notes (owner_id, client_phone, notes, updated_at)
-      VALUES (${ownerId}, ${phone}, ${notes}, now())
-      ON CONFLICT (owner_id, client_phone) DO UPDATE SET notes = ${notes}, updated_at = now()
-    `
-  );
+  await writeRecords(db, customerNotesTable, { ownerId, clientPhone: phone, notes, updatedAt: sql`NOW()` }, {
+    conflict: { action: "update", target: [customerNotesTable.ownerId, customerNotesTable.clientPhone],
+      set: { notes, updatedAt: sql`NOW()` } },
+  });
   return res.json({ ok: true });
 });
 
@@ -5842,7 +5759,7 @@ router.post("/chalets/:chaletId/services", async (req, res) => {
     return res.status(422).json({ error: "بيانات غير صحيحة", fieldErrors });
   }
   const body = parsed.data;
-  const [service] = await db.insert(chaletServicesTable).values({
+  const [service] = await insertRecords(db, chaletServicesTable, {
     chaletId,
     name: body.name,
     category: body.category ?? null,
@@ -5854,7 +5771,7 @@ router.post("/chalets/:chaletId/services", async (req, res) => {
     minPersons: body.minPersons ?? null,
     maxPersons: body.maxPersons ?? null,
     maxQuantity: body.maxQuantity ?? null,
-  }).returning();
+  });
   return res.status(201).json(service);
 });
 
@@ -5898,7 +5815,7 @@ router.patch("/chalets/:chaletId/services/:serviceId", async (req, res) => {
   if (body.minPersons !== undefined) patch.minPersons = body.minPersons;
   if (body.maxPersons !== undefined) patch.maxPersons = body.maxPersons;
   if (body.maxQuantity !== undefined) patch.maxQuantity = body.maxQuantity;
-  const [updated] = await db.update(chaletServicesTable).set(patch).where(and(eq(chaletServicesTable.id, serviceId), eq(chaletServicesTable.chaletId, chaletId))).returning();
+  const [updated] = await updateRecords(db, chaletServicesTable, patch, and(eq(chaletServicesTable.id, serviceId), eq(chaletServicesTable.chaletId, chaletId)));
   if (!updated) return res.status(404).json({ error: "not found" });
   return res.json(updated);
 });
@@ -6155,9 +6072,7 @@ router.patch("/notification-settings", async (req, res) => {
   if (waEnabled !== undefined) patch.waEnabled = waEnabled;
   if (waPhone !== undefined) patch.waPhone = waPhone;
   if (waSupportEnabled !== undefined) patch.waSupportEnabled = waSupportEnabled;
-  await db.insert(ownerNotificationSettingsTable)
-    .values({ ownerId, waEnabled: waEnabled ?? false, waPhone: waPhone ?? null, waSupportEnabled: waSupportEnabled ?? false })
-    .onConflictDoUpdate({ target: ownerNotificationSettingsTable.ownerId, set: patch });
+  await writeRecords(db, ownerNotificationSettingsTable, { ownerId, waEnabled: waEnabled ?? false, waPhone: waPhone ?? null, waSupportEnabled: waSupportEnabled ?? false }, { conflict: { action: "update", target: ownerNotificationSettingsTable.ownerId, set: patch } });
   return res.json({ ok: true });
 });
 
@@ -6191,16 +6106,13 @@ router.post("/mark-cash-deposited", async (req, res) => {
     return res.status(400).json({ error: "المبلغ غير صحيح" });
   }
 
-  const [log] = await db
-    .insert(cashDepositLogsTable)
-    .values({
+  const [log] = await insertRecords(db, cashDepositLogsTable, {
       ownerId,
       submissionId: submissionId ? Number(submissionId) : null,
       bookingId: bookingId ? Number(bookingId) : null,
       amount: String(Math.round(Number(amount))),
       note: note ?? "إيداع نقدي",
-    })
-    .returning();
+    });
 
   if (bookingId && !isInsurance && totalCash && Number(amount) >= Number(totalCash)) {
     await db

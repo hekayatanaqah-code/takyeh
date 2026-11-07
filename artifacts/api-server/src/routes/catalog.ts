@@ -1,3 +1,4 @@
+import { insertRecords } from "@workspace/db/mutations";
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { citiesCatalogTable, regionsCatalogTable, amenitiesCatalogTable, districtsCatalogTable, chaletCategoriesTable, serviceCategoriesTable, expenseCategoriesTable, siteSettingsTable, serviceRegionsCatalogTable, serviceCitiesCatalogTable, serviceDistrictsCatalogTable } from "@workspace/db/schema";
@@ -95,7 +96,7 @@ router.post("/cities", async (req, res) => {
   const existing = await db.select().from(citiesCatalogTable)
     .where(sql`LOWER(${citiesCatalogTable.name}) = LOWER(${name})`);
   if (existing.length > 0) return res.json(existing[0]);
-  const [city] = await db.insert(citiesCatalogTable).values({ name }).returning();
+  const [city] = await insertRecords(db, citiesCatalogTable, { name });
   return res.status(201).json(city);
 });
 
@@ -107,7 +108,7 @@ router.post("/districts", async (req, res) => {
   const existing = await db.select().from(districtsCatalogTable)
     .where(and(sql`LOWER(${districtsCatalogTable.name}) = LOWER(${name})`, eq(districtsCatalogTable.cityId, cityId)));
   if (existing.length > 0) return res.json(existing[0]);
-  const [district] = await db.insert(districtsCatalogTable).values({ name, cityId }).returning();
+  const [district] = await insertRecords(db, districtsCatalogTable, { name, cityId });
   return res.status(201).json(district);
 });
 

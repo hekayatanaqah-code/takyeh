@@ -12,6 +12,15 @@ export type MariaDbTransaction = {
   connection: PoolConnection;
   db: MySql2Database<Record<string, unknown>> & { $client: PoolConnection };
 };
+const activeDatabases = new WeakSet<object>();
+const contextAliases = new WeakMap<object, object>();
+/** Driver-framing facades retain the underlying connection's transaction scope. */
+export function registerMariaDbContextAlias(alias: object, database: object): void {
+  contextAliases.set(alias, database);
+}
+export function isMariaDbTransactionDatabase(database: object): boolean {
+  return activeDatabases.has(contextAliases.get(database) ?? database);
+}
 
 export async function lockMariaDbTransaction(tx: MariaDbTransaction, lockKeys: readonly Buffer[]): Promise<void> {
   await lockResourceDigests(tx.db, lockKeys);
@@ -36,21 +45,32 @@ export async function withMariaDbTransaction<T>(
   pool: Pool,
   lockKeys: readonly Buffer[],
   work: (tx: MariaDbTransaction) => Promise<T>,
+  options: { isolationLevel?: "read uncommitted" | "read committed" | "repeatable read" | "serializable" } = {},
 ): Promise<T> {
   if (lockKeys.length > 128 || lockKeys.some(key => !Buffer.isBuffer(key) || key.length !== 32)) {
     throw new Error("Invalid transaction locks.");
+  }
+  const isolation = options.isolationLevel ?? "read committed";
+  if (!["read uncommitted", "read committed", "repeatable read", "serializable"].includes(isolation)) {
+    throw new Error("Invalid transaction isolation level.");
   }
   // Stable order prevents cycles when callers supply overlapping resource sets.
   const connection = await pool.getConnection();
   let started = false;
   let reusable = true;
   try {
-    await connection.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    await connection.query(`SET TRANSACTION ISOLATION LEVEL ${isolation.toUpperCase()}`);
     await connection.beginTransaction();
     started = true;
     const tx = { connection, db: drizzle(connection, { mode: "default" }) };
-    await lockMariaDbTransaction(tx, lockKeys);
-    const result = await work(tx);
+    activeDatabases.add(tx.db);
+    let result: T;
+    try {
+      await lockMariaDbTransaction(tx, lockKeys);
+      result = await work(tx);
+    } finally {
+      activeDatabases.delete(tx.db);
+    }
     try {
       await connection.commit();
     } catch {

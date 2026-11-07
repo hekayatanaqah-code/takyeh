@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { Router } from "express";
 import { propertyStayComplete } from "../lib/booking-completion";
 import { REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
@@ -96,10 +97,7 @@ router.post("/admin/chalets/:id/review-invite", requireAdminOrAdminStaff, requir
   const token = randomBytes(5).toString("hex");
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
-  const [inv] = await db
-    .insert(reviewInvitationsTable)
-    .values({ token, chaletId, expiresAt })
-    .returning();
+  const [inv] = await insertRecords(db, reviewInvitationsTable, { token, chaletId, expiresAt });
 
   return res.json({ token: inv.token, chaletId, chaletName: chalet.nameAr });
 });
@@ -181,13 +179,10 @@ router.post("/reviews/:token", async (req, res) => {
       .where(eq(serviceProvidersTable.id, serviceInv.providerId)).limit(1);
     if (!provider) return res.status(404).json({ error: "provider_not_found" });
     const submitted = await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(serviceReviewInvitationsTable)
-        .set({ used: true })
-        .where(and(
+      const [claimed] = await updateRecords(tx, serviceReviewInvitationsTable, { used: true }, and(
           eq(serviceReviewInvitationsTable.id, serviceInv.id),
           eq(serviceReviewInvitationsTable.used, false),
-        ))
-        .returning({ id: serviceReviewInvitationsTable.id });
+        ), { id: serviceReviewInvitationsTable.id });
       if (!claimed) return false;
 
       await tx.insert(serviceReviewsTable).values({
@@ -251,7 +246,7 @@ router.post("/reviews/:token", async (req, res) => {
   }
 
   await db.transaction(async (tx) => {
-    const [inserted] = await tx.insert(reviewsTable).values({
+    const [inserted] = await insertRecords(tx, reviewsTable, {
       chaletId: inv.chaletId,
       invitationId: inv.id,
       rating: body.data.rating,
@@ -261,7 +256,7 @@ router.post("/reviews/:token", async (req, res) => {
       isAnonymous: body.data.isAnonymous ?? false,
       isVerified: true,
       isHidden: false,
-    }).returning({ id: reviewsTable.id });
+    }, { returning: { id: reviewsTable.id } });
 
     await tx
       .update(reviewInvitationsTable)
@@ -371,11 +366,7 @@ router.patch("/admin/reviews/:id", requireAdminOrAdminStaff, requireSupportDispu
   const body = z.object({ isHidden: z.boolean() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "validation" });
 
-  const [updated] = await db
-    .update(reviewsTable)
-    .set({ isHidden: body.data.isHidden })
-    .where(eq(reviewsTable.id, reviewId))
-    .returning({ id: reviewsTable.id });
+  const [updated] = await updateRecords(db, reviewsTable, { isHidden: body.data.isHidden }, eq(reviewsTable.id, reviewId), { id: reviewsTable.id });
 
   if (!updated) return res.status(404).json({ error: "not found" });
   return res.json({ ok: true });

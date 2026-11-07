@@ -2,6 +2,7 @@ import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { auditSource, type Finding } from "./mariadb/runtime-audit";
+import { nativeSourceGraph } from "./mariadb/native-source-graph";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -17,13 +18,11 @@ async function sourceFiles(directory: string): Promise<string[]> {
 }
 
 async function main() {
-  const files = [
-    ...await sourceFiles(path.join(root, "artifacts/api-server/src")),
-    ...await sourceFiles(path.join(root, "lib/db/src")),
-  ].sort();
+  const sources = await nativeSourceGraph(root);
+  const files = sources.map(source => source.file);
   const findings: Finding[] = [];
-  for (const file of files) {
-    findings.push(...auditSource(path.relative(root, file), await readFile(file, "utf8")));
+  for (const source of sources) {
+    findings.push(...auditSource(source.file, source.text, true));
   }
   const groups: Record<string, number> = {};
   for (const finding of findings) groups[finding.rule] = (groups[finding.rule] ?? 0) + 1;
@@ -35,6 +34,7 @@ async function main() {
     releaseReady: false,
     staticAuditPassed: blocking.length === 0,
     nativeCriticalFlowsVerified: false,
+    nativeRuntimeBindingsVerified: true,
     storageMigrationVerified: false,
     hostingerDeploymentVerified: false,
     scannedSourceFiles: files.length,
@@ -68,7 +68,7 @@ async function main() {
     ...findings.map(item => `| ${item.file} | ${item.line} | ${item.rule} |`),
     "",
     "الفحص بنيوي للشيفرة وليس إثباتاً لصحة SQL أو المعاملات. لم يتم نقل بيانات أو تغيير قاعدة التطوير.",
-    "لا يتضمن محتوى الإعدادات أو كلمات المرور. يلزم تحويل المستهلكين واختبارهم فعلياً على MariaDB قبل إصدار الحزمة.",
+    "لا يتضمن محتوى الإعدادات أو كلمات المرور. يلزم إغلاق الموانع المتبقية واختبار حزمة التشغيل المستقلة قبل إصدارها.",
   ];
   await writeFile(path.join(directory, "runtime-audit.md"), lines.join("\n") + "\n", { mode: 0o600 });
   const escape = (value: string) => value.replace(/[&<>"']/g, character => ({
@@ -88,29 +88,32 @@ small{font-size:14px} @media print{body,main{padding:0;background:white}thead{di
 <h1>مراجعة نقل تكيّة إلى MariaDB وHostinger</h1>
 <p><small>تاريخ إنشاء التقرير: <bdi>${escape(report.generatedAt)}</bdi></small></p>
 <div class="status"><strong>التحويل الشامل غير مكتمل — لا توجد حزمة نهائية معتمدة للرفع.</strong>
-<p>الخادم الحالي ما زال PostgreSQL. لم يتم تحويل جميع الاستعلامات أو ربط المسارات المالية بطبقة MariaDB الجديدة، ولم يتم نشر شيء أو تعديل قاعدة المنصة.</p></div>
+<p>تم التحقق من ربط مسار تشغيل Hostinger بموصل MariaDB وتعريفاته الأصلية. الاعتمادات المتبقية موضحة أدناه؛ تخزين الملفات ما زال يحتاج بديلاً مستقلاً عن خدمة Replit الداخلية. معاينة التطوير بقيت على PostgreSQL لحماية البيانات الحالية. لم يتم نشر شيء.</p></div>
 <h2>نطاق الفحص</h2><p>فُحص ${files.length} ملف مصدر، وتوجد ملاحظات في ${report.affectedFiles} ملفاً:
 ${blocking.length} موضعاً مانعاً و${report.reviewFindings} موضعاً يحتاج مراجعة لهيئة النتائج.
 هذه أعداد مواضع في الشيفرة، وليست أعداد أعطال ظهرت للمستخدمين.</p>
 <h2>ما تم تجهيزه</h2><ul>
-<li>طبقة معاملات MariaDB أصلية مع أقفال صفوف InnoDB داخل المعاملة نفسها، دون GET_LOCK أو إعادة محاولة تلقائية للمدفوعات. ليست موصولة بعد بمسارات المنصة الحالية.</li>
-<li>نقطة تشغيل Express مخصصة للاستضافة، مع تقديم الواجهة وAPI من خدمة واحدة عند اكتمال التحويل. ترفض حالياً تشغيل الخادم القديم باعتباره MariaDB.</li>
+<li>ربط أصلي ومشروط لنسخة MariaDB، مع أقفال InnoDB وواجهة حفظ وقراءة نتائج، دون GET_LOCK أو إعادة محاولة تلقائية للمدفوعات.</li>
+<li>نقطة تشغيل Express مخصصة للاستضافة، مع تقديم الواجهة وAPI من خدمة واحدة، والتحقق من التعريفات الأصلية قبل تحميل المسارات والمهام. لا يوجد تحويل تلقائي إلى PostgreSQL.</li>
+<li>استبدال استدعاءات الحفظ وreturning وupsert في التطبيق بواجهة معاملات أصلية، مع قراءة النتيجة الفعلية بعد الحفظ ومنع تجاوز تعارضات المفاتيح أو فشل القيود.</li>
 <li>حماية الملفات المخفية، وعدم تحويل أخطاء API والأصول المفقودة إلى صفحة HTML.</li>
 <li>فحص يمنع بناء نسخة Hostinger عند اكتشاف الاعتمادات القديمة.</li>
 </ul>
 <h2>التحقق المنفذ</h2><ul>
 <li>اختبارات طبقة المعاملات على MariaDB 10.11 محلي مستقل: منع صرف الرصيد مرتين، منع تجاوز سعة واحدة، التراجع، تحرر الأقفال، واستقلال موارد مختلفة.</li>
 <li>اختبار فشل COMMIT ذي النتيجة المجهولة: لا إعادة تنفيذ تلقائية، ولا إعادة الاتصال المتضرر للمسبح.</li>
+<li>اختبارات الحفظ وupsert المتزامن، وتراجع الدفعات، وثبات المفتاح الرئيسي، والكسور المالية وJSON والتواريخ، وقراءة جميع التعريفات من هيكل مستورد فعلياً.</li>
+<li>اختبارات معالجات سجلات العملاء على MariaDB: عزل الملاك والعقارات والخدمات، واستبعاد البيع الملغى والتأمين، والصفحات والأرشيف والبحث بالأرقام العربية.</li>
+<li>اختبارات استعلامات إحصاءات الإيرادات والفترات الأسبوعية والشهرية، والمطابقة الدقيقة لأسماء المدن، واكتشاف اقتطاع رسائل الدعم بدلاً من عرض بيانات ناقصة.</li>
 <li>اختبارات إعدادات تشغيل Hostinger ومسارات الواجهة والأصول وAPI وحجب الملفات الخاصة.</li>
-</ul><p><strong>ليست هذه اختبارات اعتماد لرحلات الدخول والحجز والدفع والتقارير بعد تحويلها. تلك الرحلات لم تُنقل بالكامل بعد.</strong></p>
+</ul><p><strong>هذه اختبارات فعلية لطبقات ومسارات محددة، وليست اعتماداً لتشغيل حزمة نهائية كاملة على Hostinger أو لإرسال رسائل أو تنفيذ دفعات حقيقية.</strong></p>
 <h2>تصنيف الاعتمادات المكتشفة</h2><table><thead><tr><th>الاعتماد التقني</th><th>المواضع</th></tr></thead><tbody>
 ${Object.entries(groups).sort().map(([rule, count]) => `<tr><td><code>${escape(rule)}</code></td><td>${count}</td></tr>`).join("")}
 </tbody></table>
 <h2>متطلبات اعتماد الحزمة النهائية</h2><ol>
-<li>نقل جميع مستهلكي قاعدة البيانات إلى التعريفات الأصلية، وتحويل نتائج الحفظ والتعارضات وSQL والمصفوفات وJSON ورموز الأخطاء.</li>
-<li>توصيل جميع كتّاب الأرصدة والسعة والاستردادات والأرقام التراكمية بأقفال متسقة واختبارها بالتزامن.</li>
+<li>إغلاق أي موانع مسجلة في فحص مسار التشغيل الفعلي أعلاه، وعدم اعتبار غياب الأنماط البرمجية وحده إثباتاً للجاهزية.</li>
 <li>فصل تخزين الملفات عن خدمة Replit الداخلية ونقل الوسائط الخاصة والعامة بصلاحياتها.</li>
-<li>اختبار الدخول والدفع والإلغاء والاسترداد والتقارير على MariaDB، ثم اختبار الاستضافة قبل ربط النطاق.</li>
+<li>تجميع الحزمة المستقلة وفحص الدخول والحجوزات والإلغاء والاسترداد والتقارير منها على MariaDB، ثم فحص إعدادات الاستضافة قبل ربط النطاق.</li>
 </ol><p>تم الحفاظ على نطاق النقل السابق: الإعدادات وحساب المدير فقط. لا يحتوي التقرير بيانات حسابات أو كلمات مرور أو تجزئاتها.</p>
 <details><summary>قائمة مواقع المراجعة الكاملة</summary><table><thead><tr><th>الملف</th><th>السطر</th><th>الملاحظة</th></tr></thead><tbody>
 ${findings.map(item => `<tr><td class="path">${escape(item.file)}</td><td>${item.line}</td><td><code>${escape(item.rule)}</code></td></tr>`).join("")}

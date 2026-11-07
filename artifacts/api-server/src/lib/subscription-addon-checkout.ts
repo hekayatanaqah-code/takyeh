@@ -1,3 +1,4 @@
+import { insertRecords, writeRecords } from "@workspace/db/mutations";
 import { randomUUID } from "node:crypto";
 import { and, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db } from "@workspace/db";
@@ -80,7 +81,7 @@ async function recordAndRefundStaleAddonCheckout(input: {
   amountHalala: number;
   refundEligible: boolean;
 }): Promise<string> {
-  const [reconciliation] = await db.insert(subscriptionPaymentReconciliationsTable).values({
+  const [reconciliation] = await insertRecords(db, subscriptionPaymentReconciliationsTable, {
     paymentId: input.paymentId,
     ownerId: input.ownerId,
     intentId: input.checkoutId,
@@ -90,7 +91,7 @@ async function recordAndRefundStaleAddonCheckout(input: {
       : "A provider-confirmed add-on payment has no verifiable timestamp while free access exists; do not activate without review",
     status: "required",
     refundEligible: input.refundEligible,
-  }).onConflictDoNothing().returning();
+  }, { conflict: { action: "ignore" } });
   await db.update(subscriptionAddonCheckoutIntentsTable)
     .set({ consumedAt: new Date() })
     .where(and(
@@ -444,7 +445,7 @@ export async function createAddonCheckout(input: {
       quantity,
       quoteTime,
     });
-    const [created] = await tx.insert(subscriptionAddonCheckoutIntentsTable).values({
+    const [created] = await insertRecords(tx, subscriptionAddonCheckoutIntentsTable, {
       id: randomUUID(),
       ownerId: lockedSubscription.ownerId,
       addonType: input.addonType,
@@ -463,7 +464,7 @@ export async function createAddonCheckout(input: {
       quoteVersion: 2,
       autoRenewConsent: consent,
       expiresAt: new Date(Date.now() + INTENT_TTL_MS),
-    }).returning();
+    });
     return created;
   });
   if (!intent) throw new SubscriptionAddonCheckoutError("تعذّر إنشاء طلب الإضافة", 500);
@@ -699,7 +700,7 @@ async function finalizeAddonCheckout(input: {
       });
       const recurring = !intent.freeAccessBlockedAt &&
         !isOwnerFreeAccessGrantActive(latestGrant) && billingTerms.recurring;
-      const [purchase] = await tx.insert(subscriptionAddonPurchasesTable).values({
+      const [purchase] = await insertRecords(tx, subscriptionAddonPurchasesTable, {
         ownerId: intent.ownerId,
         addonType: intent.addonType,
         paymentId: input.paymentId,
@@ -710,7 +711,7 @@ async function finalizeAddonCheckout(input: {
         monthlyUnitPriceHalala: billingTerms.monthlyUnitPriceHalala,
         periodStartAt: intent.periodStartAt,
         paidThroughAt: billingTerms.paidThroughAt,
-      }).returning();
+      });
 
       await tx.insert(subscriptionPaymentsTable).values({
         paymentId: input.paymentId,
@@ -722,19 +723,19 @@ async function finalizeAddonCheckout(input: {
       if (intent.quoteVersion >= 2 && intent.autoRenewConsent && input.paymentToken) {
         const encryptedPaymentToken = encryptMoyasarToken(input.paymentToken);
         if (encryptedPaymentToken) {
-          await tx.insert(ownerBillingProfilesTable).values({
+          await writeRecords(tx, ownerBillingProfilesTable, {
             ownerId: intent.ownerId,
             encryptedPaymentToken,
             tokenPaymentId: input.paymentId,
             autoRenewEnabled: false,
-          }).onConflictDoUpdate({
+          }, { conflict: { action: "update", ...{
             target: ownerBillingProfilesTable.ownerId,
             set: {
               encryptedPaymentToken,
               tokenPaymentId: input.paymentId,
               updatedAt: now,
             },
-          });
+          } } });
         }
       }
       await tx.update(subscriptionAddonCheckoutIntentsTable)

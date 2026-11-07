@@ -1,6 +1,10 @@
 import { Router } from "express";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { db, adminAuditLogsTable } from "@workspace/db";
+import { broadcastCampaignsTable, broadcastDeliveriesTable, broadcastSmtpSettingsTable, ownerBroadcastInboxTable } from "@workspace/db";
+import { ownerNotificationsQueryTable } from "@workspace/db/runtime-models";
+import { insertRecords, updateRecords, writeRecords } from "@workspace/db/mutations";
+import { addSqlMinutes,sqlOwnerId,sqlText,sqlBoolean } from "@workspace/db/sql-expressions";
 import { z } from "zod";
 import { logger } from "../lib/logger";
 import {
@@ -170,17 +174,17 @@ async function getRecipients(audience: z.infer<typeof audienceSchema>): Promise<
   for (let offset = 0; offset < sourceOwnerIds.length; offset += 500) {
     const chunk = sourceOwnerIds.slice(offset, offset + 500);
     const matches = sql.join(chunk.map(ownerId => sql`
-      (link.user_id = ${ownerId} OR CONCAT('owner_', oa.id::text) = ${ownerId})
+      (link.user_id = ${ownerId} OR ${sqlOwnerId(sql`oa.id`)} = ${ownerId})
     `), sql` OR `);
     const ownerResult = await db.execute<OwnerRow>(sql`
       SELECT DISTINCT oa.id AS app_id, oa.email, oa.full_name, link.user_id,
              (SELECT settings.wa_phone FROM owner_notification_settings settings
                WHERE settings.wa_enabled = true AND settings.owner_id IN
-                 (COALESCE(link.user_id, CONCAT('owner_', oa.id::text)), CONCAT('owner_', oa.id::text))
+                 (COALESCE(link.user_id, ${sqlOwnerId(sql`oa.id`)}), ${sqlOwnerId(sql`oa.id`)})
                ORDER BY settings.updated_at DESC LIMIT 1) AS wa_phone,
-             EXISTS(SELECT 1 FROM owner_notification_settings settings
+             ${sqlBoolean(sql`EXISTS(SELECT 1 FROM owner_notification_settings settings
                WHERE settings.wa_enabled = true AND settings.owner_id IN
-                 (COALESCE(link.user_id, CONCAT('owner_', oa.id::text)), CONCAT('owner_', oa.id::text))) AS wa_settings_enabled,
+                 (COALESCE(link.user_id, ${sqlOwnerId(sql`oa.id`)}), ${sqlOwnerId(sql`oa.id`)}))`,"wa_settings_enabled")} AS wa_settings_enabled,
              oa.whatsapp_news_subscribe, oa.whatsapp_subscribed_at
       FROM owner_applications oa
       LEFT JOIN owner_account_links link ON link.owner_application_id = oa.id
@@ -259,7 +263,7 @@ function channelCounts(recipients: Recipient[]): Record<Channel, number> {
 
 async function getDeliveryCounts(campaignId: number) {
   const result = await db.execute<{ channel: Channel; status: string; count: string }>(sql`
-    SELECT channel, status, COUNT(*)::text AS count FROM broadcast_deliveries
+    SELECT channel, status, ${sqlText(sql`COUNT(*)`)} AS count FROM broadcast_deliveries
     WHERE campaign_id = ${campaignId} GROUP BY channel, status
   `);
   const counts: Record<Channel, { total: number; delivered: number; failed: number; pending: number; sending: number }> = {
@@ -335,21 +339,16 @@ async function processDelivery(job: DeliveryJob, mailer: any): Promise<void> {
   if (job.channel === "inApp" || job.channel === "inbox") {
     await db.transaction(async tx => {
       if (job.channel === "inApp") {
-        await tx.execute(sql`
-          INSERT INTO owner_notifications
-            (owner_id, type, message, is_read, broadcast_campaign_id, broadcast_recipient_key, created_at)
-          VALUES (${job.recipient_owner_id}, 'broadcast', ${`${job.title}\n${job.body}`}, false,
-            ${job.campaign_id}, ${job.recipient_key}, now())
-          ON CONFLICT (broadcast_campaign_id, broadcast_recipient_key) DO NOTHING
-        `);
+        await writeRecords(tx, ownerNotificationsQueryTable, {
+          ownerId: job.recipient_owner_id, type: "broadcast", message: `${job.title}\n${job.body}`,
+          isRead: false, broadcastCampaignId: job.campaign_id, broadcastRecipientKey: job.recipient_key,
+        }, { conflict: { action: "ignore",
+          target: [ownerNotificationsQueryTable.broadcastCampaignId, ownerNotificationsQueryTable.broadcastRecipientKey] } });
       } else {
-        await tx.execute(sql`
-          INSERT INTO owner_broadcast_inbox
-            (owner_id, owner_name, subject, message, campaign_id, recipient_key, is_read, created_at)
-          VALUES (${job.recipient_owner_id}, ${job.recipient_name}, ${job.title}, ${job.body},
-            ${job.campaign_id}, ${job.recipient_key}, false, now())
-          ON CONFLICT (campaign_id, recipient_key) DO NOTHING
-        `);
+        await writeRecords(tx, ownerBroadcastInboxTable, {
+          ownerId: job.recipient_owner_id, ownerName: job.recipient_name, subject: job.title,
+          message: job.body, campaignId: job.campaign_id, recipientKey: job.recipient_key, isRead: false,
+        }, { conflict: { action: "ignore", target: [ownerBroadcastInboxTable.campaignId, ownerBroadcastInboxTable.recipientKey] } });
       }
       await tx.execute(sql`
         UPDATE broadcast_deliveries SET status = 'delivered', error_code = NULL,
@@ -400,9 +399,9 @@ async function getCurrentEmailAndConsent(recipientKey: string): Promise<{
   const appMatch = /^app:(\d+)$/.exec(recipientKey);
   if (appMatch) {
     const result = await db.execute(sql`
-      SELECT oa.email, COALESCE(pref.email, false) AS marketing_consent
+      SELECT oa.email, ${sqlBoolean(sql`COALESCE(pref.email, false)`,"marketing_consent")} AS marketing_consent
       FROM owner_applications oa
-      LEFT JOIN owner_broadcast_preferences pref ON pref.owner_key = CONCAT('app:', oa.id::text)
+      LEFT JOIN owner_broadcast_preferences pref ON pref.owner_key = CONCAT('app:', ${sqlText(sql`oa.id`)})
       WHERE oa.id = ${Number(appMatch[1])} LIMIT 1
     `);
     const row = ((result as any).rows as Array<{ email: string | null; marketing_consent: boolean }>)[0];
@@ -415,9 +414,9 @@ async function getCurrentEmailAndConsent(recipientKey: string): Promise<{
   const ownerAliasMatch = /^owner_(\d+)$/.exec(rawUserId);
   if (ownerAliasMatch) {
     const result = await db.execute(sql`
-      SELECT oa.email, COALESCE(pref.email, false) AS marketing_consent
+      SELECT oa.email, ${sqlBoolean(sql`COALESCE(pref.email, false)`,"marketing_consent")} AS marketing_consent
       FROM owner_applications oa
-      LEFT JOIN owner_broadcast_preferences pref ON pref.owner_key = CONCAT('app:', oa.id::text)
+      LEFT JOIN owner_broadcast_preferences pref ON pref.owner_key = CONCAT('app:', ${sqlText(sql`oa.id`)})
       WHERE oa.id = ${Number(ownerAliasMatch[1])} LIMIT 1
     `);
     const row = ((result as any).rows as Array<{ email: string | null; marketing_consent: boolean }>)[0];
@@ -426,11 +425,11 @@ async function getCurrentEmailAndConsent(recipientKey: string): Promise<{
 
   const result = await db.execute(sql`
     SELECT COALESCE(oa.email, u.email) AS email,
-      COALESCE(app_pref.email, user_pref.email, false) AS marketing_consent
+      ${sqlBoolean(sql`COALESCE(app_pref.email, user_pref.email, false)`,"marketing_consent")} AS marketing_consent
     FROM users u
     LEFT JOIN owner_account_links link ON link.user_id = u.id
     LEFT JOIN owner_applications oa ON oa.id = link.owner_application_id
-    LEFT JOIN owner_broadcast_preferences app_pref ON app_pref.owner_key = CONCAT('app:', link.owner_application_id::text)
+    LEFT JOIN owner_broadcast_preferences app_pref ON app_pref.owner_key = CONCAT('app:', ${sqlText(sql`link.owner_application_id`)})
     LEFT JOIN owner_broadcast_preferences user_pref ON user_pref.owner_key = CONCAT('user:', u.id)
     WHERE u.id = ${rawUserId} LIMIT 1
   `);
@@ -451,29 +450,40 @@ async function drainBroadcastQueue(): Promise<void> {
         error_code = CASE WHEN attempts >= 5 THEN 'max_attempts_exhausted' ELSE NULL END,
         started_at = NULL
       WHERE status = 'sending' AND channel IN ('inApp', 'inbox')
-        AND started_at < now() - interval '2 minutes'
+        AND started_at < ${addSqlMinutes(sql`NOW()`, -2)}
     `);
     await db.execute(sql`
       UPDATE broadcast_deliveries SET status = 'failed',
         error_code = 'delivery_outcome_unknown', started_at = NULL
       WHERE status = 'sending' AND channel = 'email'
-        AND started_at < now() - interval '2 minutes'
+        AND started_at < ${addSqlMinutes(sql`NOW()`, -2)}
     `);
-    const claimed = await db.execute(sql`
-      WITH candidates AS (
-        SELECT id FROM broadcast_deliveries
-        WHERE status = 'pending' AND attempts < 5 AND channel IN ('inApp', 'inbox', 'email')
-        ORDER BY id FOR UPDATE SKIP LOCKED LIMIT 25
-      )
-      UPDATE broadcast_deliveries d
-      SET status = 'sending', attempts = attempts + 1, started_at = now()
-      FROM candidates c, broadcast_campaigns campaign
-      WHERE d.id = c.id AND campaign.id = d.campaign_id
-      RETURNING d.id, d.campaign_id, d.recipient_key, d.recipient_owner_id,
-        d.recipient_email, d.recipient_whatsapp_phone, d.recipient_name, d.channel,
-        campaign.title, campaign.body
-    `);
-    const jobs = (claimed as any).rows as DeliveryJob[];
+    const jobs = await db.transaction(async tx => {
+      const pending = await tx.select().from(broadcastDeliveriesTable)
+        .where(and(eq(broadcastDeliveriesTable.status, "pending"), lt(broadcastDeliveriesTable.attempts, 5),
+          inArray(broadcastDeliveriesTable.channel, ["inApp", "inbox", "email"])))
+        .orderBy(broadcastDeliveriesTable.id).limit(25).for("update", { skipLocked: true });
+      if (!pending.length) return [];
+      const campaigns = await tx.select({ id: broadcastCampaignsTable.id, title: broadcastCampaignsTable.title, body: broadcastCampaignsTable.body })
+        .from(broadcastCampaignsTable).where(inArray(broadcastCampaignsTable.id, [...new Set(pending.map(row => row.campaignId))]));
+      const byId = new Map(campaigns.map(row => [row.id, row]));
+      const valid = pending.filter(row => byId.has(row.campaignId));
+      if (!valid.length) return [];
+      await updateRecords(tx, broadcastDeliveriesTable, {
+        status: "sending", attempts: sql`${broadcastDeliveriesTable.attempts} + 1`, startedAt: sql`NOW()`,
+      }, inArray(broadcastDeliveriesTable.id, valid.map(row => row.id)));
+      return valid.map((row): DeliveryJob => {
+        const campaign = byId.get(row.campaignId)!;
+        const channel = row.channel;
+        if (channel !== "inApp" && channel !== "inbox" && channel !== "email") throw new Error("Invalid claimed delivery channel.");
+        return {
+          id: row.id, campaign_id: row.campaignId, recipient_key: row.recipientKey,
+          recipient_owner_id: row.recipientOwnerId, recipient_email: row.recipientEmail,
+          recipient_whatsapp_phone: row.recipientWhatsappPhone, recipient_name: row.recipientName,
+          channel, title: campaign.title, body: campaign.body,
+        };
+      });
+    });
     const mailer = await getSmtpTransport();
     for (let index = 0; index < jobs.length; index += 5) {
       await Promise.all(jobs.slice(index, index + 5).map(job => processDelivery(job, mailer)));
@@ -546,16 +556,12 @@ router.put("/settings/smtp", async (req, res): Promise<void> => {
     ?? "Superadmin";
   try {
     await db.transaction(async tx => {
-      await tx.execute(sql`
-        INSERT INTO broadcast_smtp_settings
-          (id, host, port, secure, username, from_address, encrypted_password, enabled, updated_by, updated_at)
-        VALUES (1, ${config.host}, ${config.port}, ${config.secure}, ${config.username},
-          ${config.fromAddress}, ${encryptedPassword}, true, ${actorId}, now())
-        ON CONFLICT (id) DO UPDATE SET host = EXCLUDED.host, port = EXCLUDED.port,
-          secure = EXCLUDED.secure, username = EXCLUDED.username, from_address = EXCLUDED.from_address,
-          encrypted_password = EXCLUDED.encrypted_password, enabled = true,
-          updated_by = EXCLUDED.updated_by, updated_at = now()
-      `);
+      const smtp = { id: 1, host: config.host, port: config.port, secure: config.secure,
+        username: config.username, fromAddress: config.fromAddress, encryptedPassword,
+        enabled: true, updatedBy: actorId, updatedAt: sql`NOW()` };
+      await writeRecords(tx, broadcastSmtpSettingsTable, smtp, {
+        conflict: { action: "update", target: broadcastSmtpSettingsTable.id, set: smtp },
+      });
       await tx.insert(adminAuditLogsTable).values({
         actorId,
         actorName,
@@ -596,12 +602,10 @@ router.delete("/settings/smtp", async (req, res): Promise<void> => {
     ?? "Superadmin";
   try {
     await db.transaction(async tx => {
-      await tx.execute(sql`
-        INSERT INTO broadcast_smtp_settings (id, enabled, encrypted_password, updated_by, updated_at)
-        VALUES (1, false, NULL, ${actorId}, now())
-        ON CONFLICT (id) DO UPDATE SET enabled = false, encrypted_password = NULL,
-          updated_by = EXCLUDED.updated_by, updated_at = now()
-      `);
+      const smtp = { id: 1, enabled: false, encryptedPassword: null, updatedBy: actorId, updatedAt: sql`NOW()` };
+      await writeRecords(tx, broadcastSmtpSettingsTable, smtp, {
+        conflict: { action: "update", target: broadcastSmtpSettingsTable.id, set: smtp },
+      });
       await tx.insert(adminAuditLogsTable).values({
         actorId,
         actorName,
@@ -766,23 +770,19 @@ router.post("/", async (req, res): Promise<void> => {
   let creation: { campaignId: number; isExisting: boolean; idempotencyConflict: boolean };
   try {
     creation = await db.transaction(async tx => {
-      const createResult = await tx.execute(sql`
-        INSERT INTO broadcast_campaigns (title, body, audience, channels, idempotency_key, created_by)
-        VALUES (${data.title}, ${data.body}, ${data.audience}, ${`{${selected.join(",")}}`}::text[], ${idempotencyKey}, ${String((req as any).adminStaff?.id ?? (req as any).user?.id ?? "superadmin")})
-        ON CONFLICT (idempotency_key) DO NOTHING
-        RETURNING id
-      `);
-      let inserted = ((createResult as any).rows as Array<{ id: number }>)[0];
+      const createResult = await insertRecords(tx, broadcastCampaignsTable, {
+        title: data.title, body: data.body, audience: data.audience, channels: selected,
+        idempotencyKey, createdBy: String((req as any).adminStaff?.id ?? req.user?.id ?? "superadmin"),
+      }, { conflict: { action: "ignore", target: broadcastCampaignsTable.idempotencyKey },
+        returning: { id: broadcastCampaignsTable.id } });
+      let inserted: { id: number } | undefined = createResult[0];
       let isExisting = false;
       let idempotencyConflict = false;
       if (!inserted) {
-        const existingResult = await tx.execute(sql`
-          SELECT id, title, body, audience, channels FROM broadcast_campaigns
-          WHERE idempotency_key = ${idempotencyKey} LIMIT 1
-        `);
-        const existing = ((existingResult as any).rows as Array<{
-          id: number; title: string; body: string; audience: string; channels: string[];
-        }>)[0];
+        const [existing] = await tx.select({
+          id: broadcastCampaignsTable.id, title: broadcastCampaignsTable.title, body: broadcastCampaignsTable.body,
+          audience: broadcastCampaignsTable.audience, channels: broadcastCampaignsTable.channels,
+        }).from(broadcastCampaignsTable).where(eq(broadcastCampaignsTable.idempotencyKey, idempotencyKey)).limit(1);
         inserted = existing;
         isExisting = true;
         idempotencyConflict = !!existing && !idempotencyPayloadMatches(existing, data);
@@ -792,17 +792,13 @@ router.post("/", async (req, res): Promise<void> => {
       if (!isExisting) {
         for (let offset = 0; offset < deliveryPlans.length; offset += 1000) {
           const chunk = deliveryPlans.slice(offset, offset + 1000);
-          const values = sql.join(chunk.map(({ recipient, channel }) => sql`(
-            ${campaignId}, ${recipient.key}, ${recipient.ownerId}, ${recipient.email},
-            ${recipient.whatsappPhone}, ${recipient.name}, ${channel}, 'pending'
-          )`), sql`, `);
-          await tx.execute(sql`
-            INSERT INTO broadcast_deliveries
-              (campaign_id, recipient_key, recipient_owner_id, recipient_email,
-               recipient_whatsapp_phone, recipient_name, channel, status)
-            VALUES ${values}
-            ON CONFLICT (campaign_id, recipient_key, channel) DO NOTHING
-          `);
+          await writeRecords(tx, broadcastDeliveriesTable, chunk.map(({ recipient, channel }) => ({
+            campaignId, recipientKey: recipient.key, recipientOwnerId: recipient.ownerId,
+            recipientEmail: recipient.email, recipientWhatsappPhone: recipient.whatsappPhone,
+            recipientName: recipient.name, channel, status: "pending",
+          })), { conflict: { action: "ignore", target: [
+            broadcastDeliveriesTable.campaignId, broadcastDeliveriesTable.recipientKey, broadcastDeliveriesTable.channel,
+          ] } });
         }
       }
       return { campaignId, isExisting, idempotencyConflict };

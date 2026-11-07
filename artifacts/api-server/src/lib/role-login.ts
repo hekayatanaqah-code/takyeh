@@ -3,6 +3,8 @@ import { randomBytes, createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { db, sessionsTable, staffSessionsTable, adminSessionsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
+import { sqlJsonText,sqlRegexReplace } from "@workspace/db/sql-expressions";
+import { nationalPhoneSql } from "./contact-sql";
 import { RoleLoginBody, SelectLoginRoleBody } from "@workspace/api-zod";
 import { createSession, SESSION_COOKIE, SESSION_TTL } from "./auth";
 import { setPhotographerSession } from "./photographer-auth";
@@ -47,21 +49,21 @@ async function candidates(identifier: string): Promise<Candidate[]> {
     SELECT 'owner' AS role, id, password_hash FROM owner_applications
     WHERE email_verified = true AND deleted_at IS NULL AND password_hash IS NOT NULL AND
       (LOWER(email) = ${email} OR (${phone} <> '' AND
-        regexp_replace(regexp_replace(translate(phone, '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), '[^0-9]', '', 'g'), '^(00966|966|0)', '') = ${phone}))
+        ${nationalPhoneSql(sql`phone`)} = ${phone}))
     UNION ALL
     SELECT 'photographer', id, password_hash FROM photographers
     WHERE password_hash IS NOT NULL AND
-      (LOWER(email) = ${email} OR (${phone} <> '' AND regexp_replace(whatsapp, '^(00966|966|0)', '') = ${phone}))
+      (LOWER(email) = ${email} OR (${phone} <> '' AND ${sqlRegexReplace(sql`whatsapp`,"^(00966|966|0)","")} = ${phone}))
     UNION ALL
     SELECT 'admin', id, password_hash FROM admin_staff
     WHERE is_active = true AND
       (LOWER(email) = ${email} OR username = ${identifier} OR (${phone} <> '' AND
-        regexp_replace(regexp_replace(translate(mobile, '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), '[^0-9]', '', 'g'), '^(00966|966|0)', '') = ${phone}))
+        ${nationalPhoneSql(sql`mobile`)} = ${phone}))
     UNION ALL
     SELECT 'staff', id, password_hash FROM owner_staff
     WHERE is_active = true AND password_hash IS NOT NULL AND username IS NOT NULL AND
       (LOWER(email) = ${email} OR username = ${identifier} OR (${phone} <> '' AND
-        regexp_replace(regexp_replace(translate(phone_num, '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), '[^0-9]', '', 'g'), '^(00966|966|0)', '') = ${phone}))
+        ${nationalPhoneSql(sql`phone_num`)} = ${phone}))
     LIMIT 20
   `);
   return (result as unknown as { rows: Candidate[] }).rows;
@@ -85,7 +87,7 @@ async function clearChallenge(req: Request, res: Response) {
   const token = req.cookies?.[COOKIE];
   if (typeof token === "string" && /^[a-f0-9]{64}$/.test(token)) {
     // Only remove challenge records, never a normal authenticated session.
-    await db.execute(sql`DELETE FROM sessions WHERE sid = ${token} AND sess ->> 'roleLogin' = 'true'`);
+    await db.execute(sql`DELETE FROM sessions WHERE sid = ${token} AND ${sqlJsonText(sql`sess`,"roleLogin")} = 'true'`);
   }
   res.clearCookie(COOKIE, cookieOptions(req));
 }

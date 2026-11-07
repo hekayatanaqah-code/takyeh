@@ -3,7 +3,12 @@ import { lockResource } from "@workspace/db/transaction-lock";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { adminAuditLogsTable } from "@workspace/db";
+import { updateRecords } from "@workspace/db/mutations";
+import { eq, sql } from "drizzle-orm";
+import { nationalPhoneSql } from "../lib/contact-sql";
+import { isUniqueViolation } from "@workspace/db/database-errors";
+import { sqlJsonText,sqlJsonValue,sqlRegex } from "@workspace/db/sql-expressions";
 import { normalizeRolePhone } from "../lib/role-login";
 import { ownerSecurityNotification, ownerPasswordChangedMessage, type OwnerSecuritySender } from "../lib/owner-security-notification";
 
@@ -54,7 +59,7 @@ router.patch("/:kind/:id", async (req, res) => {
       if (!existing.rows.length) return false;
       const duplicates = await tx.execute(sql`SELECT id FROM ${table} WHERE id<>${id}
         AND ((${email}<>'' AND LOWER(email)=${email}) OR
-          regexp_replace(regexp_replace(translate(${phoneColumn}, '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789'), '[^0-9]', '', 'g'), '^(00966|966|0)', '')=${national})
+          ${nationalPhoneSql(phoneColumn)}=${national})
         LIMIT 1`);
       if (duplicates.rows.length) throw new Error("PARTNER_DUPLICATE");
       await tx.execute(sql`UPDATE photographers SET name=${name}, whatsapp=${`966${national}`}, email=${email} WHERE id=${id}`);
@@ -63,7 +68,7 @@ router.patch("/:kind/:id", async (req, res) => {
     return found ? res.json({ ok: true }) : res.status(404).json({ error: "الحساب غير موجود" });
   } catch (error) {
     if (error instanceof Error && error.message === "PARTNER_DUPLICATE"
-      || (error as { code?: string }).code === "23505") {
+      || isUniqueViolation(error)) {
       return res.status(409).json({ error: "الجوال أو البريد مستخدم لحساب آخر من الدور نفسه؛ يمكن مشاركته بين المالك والمصور" });
     }
     throw error;
@@ -108,15 +113,24 @@ router.post("/:kind/:id/password", async (req, res) => {
       };
       // Persist the reason and exact target in the SAME transaction as the
       // credential change; the write-ahead actor and timestamp already exist.
-      const audit = await tx.execute(sql`UPDATE admin_audit_logs
-        SET metadata=metadata || ${JSON.stringify(res.locals.adminAuditDetails)}::jsonb
-        WHERE id=${res.locals.adminAuditId} RETURNING id`);
-      if (!audit.rows.length) throw new Error("OWNER_RESET_AUDIT_MISSING");
+      const [intent] = await tx.select({ metadata: adminAuditLogsTable.metadata }).from(adminAuditLogsTable)
+        .where(eq(adminAuditLogsTable.id, res.locals.adminAuditId)).for("update");
+      if (!intent) throw new Error("OWNER_RESET_AUDIT_MISSING");
+      if (intent.metadata !== null && (typeof intent.metadata !== "object" || Array.isArray(intent.metadata))) {
+        throw new Error("OWNER_RESET_AUDIT_METADATA_INVALID");
+      }
+      const audit = await updateRecords(tx, adminAuditLogsTable,
+        { metadata: { ...intent.metadata, ...res.locals.adminAuditDetails } },
+        eq(adminAuditLogsTable.id, res.locals.adminAuditId), { id: adminAuditLogsTable.id });
+      if (!audit.length) throw new Error("OWNER_RESET_AUDIT_MISSING");
       // A trusted administrative reset is manual account recovery, not a new signup.
       await tx.execute(sql`UPDATE owner_applications SET password_hash=${hash}, email_verified=true WHERE id=${id}`);
-      await tx.execute(sql`DELETE FROM sessions WHERE sess->>'access_token'='owner_password_auth'
-        AND (sess->>'ownerApplicationId'=${String(id)} OR sess->'user'->>'id'=${`owner_${id}`} OR
-          sess->'user'->>'id' IN (SELECT user_id FROM owner_account_links WHERE owner_application_id=${id} AND user_id !~ '^owner_[0-9]+$'))`);
+      await tx.execute(sql`DELETE FROM sessions WHERE ${sqlJsonText(sql`sess`,"access_token")}='owner_password_auth'
+        AND (${sqlJsonText(sql`sess`,"ownerApplicationId")}=${String(id)}
+          OR ${sqlJsonText(sqlJsonValue(sql`sess`,"user"),"id")}=${`owner_${id}`} OR
+          ${sqlJsonText(sqlJsonValue(sql`sess`,"user"),"id")} IN
+            (SELECT user_id FROM owner_account_links WHERE owner_application_id=${id}
+             AND NOT ${sqlRegex(sql`user_id`,"^owner_[0-9]+$")}))`);
       await tx.execute(sql`DELETE FROM password_reset_tokens WHERE target_type='owner_application' AND target_id=${String(id)}`);
       try {
         // Emergency-only operation. A rejected/unconfirmed send rolls the
@@ -124,8 +138,9 @@ router.post("/:kind/:id/password", async (req, res) => {
         const notice = await sender!.send({ to: `966${destination}`, body: ownerPasswordChangedMessage });
         if (!notice.messageId?.trim()) throw new Error("Missing provider acknowledgement");
         res.locals.adminAuditDetails.whatsappNotification = { status: "accepted", messageId: notice.messageId.slice(0, 200) };
-        await tx.execute(sql`UPDATE admin_audit_logs SET metadata=metadata ||
-          ${JSON.stringify(res.locals.adminAuditDetails)}::jsonb WHERE id=${res.locals.adminAuditId}`);
+        await updateRecords(tx,adminAuditLogsTable,
+          {metadata:{...intent.metadata,...res.locals.adminAuditDetails}},
+          eq(adminAuditLogsTable.id,res.locals.adminAuditId),{id:adminAuditLogsTable.id});
       } catch {
         res.locals.adminAuditDetails.whatsappNotification = { status: "unconfirmed" };
         throw new Error("OWNER_SECURITY_NOTICE_FAILED");

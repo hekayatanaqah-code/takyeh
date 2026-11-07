@@ -17,6 +17,7 @@
     "test:mariadb-transactions": "tsx --test ./src/mariadb/transaction.integration.test.ts",
     "test:mariadb-contracts": "tsx --test ./src/mariadb/application-contracts.test.ts",
     "test:mariadb-mutations": "tsx --test ./src/mariadb/mutations.integration.test.ts",
+    "test:mariadb-commands": "tsx --test ./src/mariadb/commands.integration.test.ts",
     "test:mariadb-models": "tsx --test ./src/mariadb/schema-model.integration.test.ts",
     "seed-chalets": "tsx ./src/seed-chalets.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -24,6 +25,7 @@
   "dependencies": {
     "@workspace/booking-time": "workspace:*",
     "@workspace/db": "workspace:*",
+    "esbuild": "0.27.3",
     "mysql2": "^3.24.6",
     "pg": "^8.20.0"
   },

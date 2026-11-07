@@ -1,3 +1,4 @@
+import { deleteRecords, insertRecords, updateRecords } from "@workspace/db/mutations";
 import { Router } from "express";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -85,17 +86,16 @@ router.post("/:providerId/catalog-media", (req, res, next) => {
 router.post("/:providerId/catalog", async (req, res) => {
   const body = itemInput.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "تحقق من اسم المنتج وقيمته ووحدة التسعير" });
-  const [row] = await db.insert(items).values({
+  const [row] = await insertRecords(db, items, {
     ...body.data, providerId: res.locals.catalogProviderId, price: body.data.price.toFixed(2),
-  }).returning();
+  });
   return res.status(201).json(catalogItemJson(row));
 });
 router.patch("/:providerId/catalog/:itemId", async (req, res) => {
   const id = idInput.safeParse(req.params.itemId);
   const body = itemInput.safeParse(req.body);
   if (!id.success || !body.success) return res.status(400).json({ error: "بيانات المنتج غير صحيحة" });
-  const [row] = await db.update(items).set({ ...body.data, price: body.data.price.toFixed(2) })
-    .where(and(eq(items.id, id.data), eq(items.providerId, res.locals.catalogProviderId), isNull(items.deletedAt))).returning();
+  const [row] = await updateRecords(db, items, { ...body.data, price: body.data.price.toFixed(2) }, and(eq(items.id, id.data), eq(items.providerId, res.locals.catalogProviderId), isNull(items.deletedAt)));
   if (!row) return res.status(404).json({ error: "المنتج غير موجود" });
   return res.json(catalogItemJson(row));
 });
@@ -103,8 +103,7 @@ router.delete("/:providerId/catalog/:itemId", async (req, res) => {
   const id = idInput.safeParse(req.params.itemId);
   if (!id.success) return res.status(400).json({ error: "معرّف المنتج غير صالح" });
   const removed = await db.transaction(async tx => {
-    const [row] = await tx.update(items).set({ deletedAt: new Date(), isActive: false })
-      .where(and(eq(items.id, id.data), eq(items.providerId, res.locals.catalogProviderId), isNull(items.deletedAt))).returning();
+    const [row] = await updateRecords(tx, items, { deletedAt: new Date(), isActive: false }, and(eq(items.id, id.data), eq(items.providerId, res.locals.catalogProviderId), isNull(items.deletedAt)));
     if (!row) return false;
     await tx.update(offers).set({ isActive: false }).where(and(eq(offers.providerId, row.providerId), eq(offers.itemId, row.id)));
     return true;
@@ -132,8 +131,8 @@ for (const method of ["post", "patch"] as const) {
       }
       const values = { ...body.data, providerId, value: body.data.value.toFixed(2) };
       const [row] = method === "post"
-        ? await tx.insert(offers).values(values).returning()
-        : await tx.update(offers).set(values).where(and(eq(offers.id, id!.data!), eq(offers.providerId, providerId))).returning();
+        ? await insertRecords(tx, offers, values)
+        : await updateRecords(tx, offers, values, and(eq(offers.id, id!.data!), eq(offers.providerId, providerId)));
       return row ?? null;
     });
     if (!result) return res.status(404).json({ error: "المنتج أو العرض غير موجود في هذه الخدمة" });
@@ -143,7 +142,7 @@ for (const method of ["post", "patch"] as const) {
 router.delete("/:providerId/offers/:offerId", async (req, res) => {
   const id = idInput.safeParse(req.params.offerId);
   if (!id.success) return res.status(400).json({ error: "معرّف العرض غير صالح" });
-  const [row] = await db.delete(offers).where(and(eq(offers.id, id.data), eq(offers.providerId, res.locals.catalogProviderId))).returning();
+  const [row] = await deleteRecords(db, offers, and(eq(offers.id, id.data), eq(offers.providerId, res.locals.catalogProviderId)));
   if (!row) return res.status(404).json({ error: "العرض غير موجود" });
   return res.status(204).end();
 });

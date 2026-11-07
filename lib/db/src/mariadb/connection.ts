@@ -36,11 +36,12 @@ export function createMariaDbConnection(options: {
     supportBigNumbers: true,
     bigNumberStrings: true,
     decimalNumbers: false,
+    dateStrings: true,
     multipleStatements: false,
     connectionLimit: 5,
   });
   pool.pool.on("connection", connection => {
-    connection.query("SET time_zone = '+00:00'", error => {
+    connection.query("SET time_zone = '+00:00', sql_mode = 'STRICT_ALL_TABLES,ANSI_QUOTES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'", error => {
       // Never retain a connection whose timestamp session could not initialize.
       if (error) connection.destroy();
     });

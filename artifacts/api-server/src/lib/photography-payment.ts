@@ -1,3 +1,4 @@
+import { updateRecords, writeRecords } from "@workspace/db/mutations";
 import { db, photographersTable, photographyBookingsTable, photographyDeliveriesTable } from "@workspace/db";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { and, eq, sql } from "drizzle-orm";
@@ -42,24 +43,22 @@ export async function reconcilePhotographyBooking(id: number, options: {
     if (invoice.status === "paid" && paid) {
       // Invoiced reservations are held until the provider reports a final state,
       // so payment made before invoice expiry remains safe even when reconciliation is delayed.
-       const [confirmed] = await tx.update(photographyBookingsTable).set({ status: "confirmed", paymentId: paid.id, financialStatus: "paid" })
-        .where(eq(photographyBookingsTable.id, id)).returning();
+       const [confirmed] = await updateRecords(tx, photographyBookingsTable, { status: "confirmed", paymentId: paid.id, financialStatus: "paid" }, eq(photographyBookingsTable.id, id));
       newlyConfirmed = true;
       await tx.update(photographersTable).set({ confirmedAssignments: sql`${photographersTable.confirmedAssignments} + 1` })
         .where(eq(photographersTable.id, booking.photographerId));
       const localTime = booking.startAt.toLocaleString("ar-SA", { timeZone: "Asia/Riyadh" });
       for (const [role, recipient] of [["owner", booking.ownerPhone], ["photographer", booking.photographerPhone]]) {
-        await tx.insert(photographyDeliveriesTable).values({
+        await writeRecords(tx, photographyDeliveriesTable, {
           dedupeKey: `booking:${id}:${role}`, bookingId: id, recipient, kind: "booking",
           ...(role === "photographer" ? { photographerId: booking.photographerId } : {}),
           parameters: [booking.propertyName, booking.packageName, localTime, String(booking.id)],
-        }).onConflictDoNothing({ target: photographyDeliveriesTable.dedupeKey });
+        }, { conflict: { action: "ignore", ...{ target: photographyDeliveriesTable.dedupeKey } } });
       }
       return confirmed;
     }
     if (["expired", "canceled", "voided", "refunded"].includes(invoice.status)) {
-      const [expired] = await tx.update(photographyBookingsTable).set({ status: "expired" })
-        .where(eq(photographyBookingsTable.id, id)).returning();
+      const [expired] = await updateRecords(tx, photographyBookingsTable, { status: "expired" }, eq(photographyBookingsTable.id, id));
       return expired;
     }
     return booking;

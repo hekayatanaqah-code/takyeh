@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { db, ownerExpensesTable, ownerStaffTable, salaryLogsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 
@@ -37,7 +38,7 @@ export async function paySalaryWithExpense(ownerId: string, payment: SalaryPayme
     const dateStr = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit",
     }).format(paidAt);
-    const [expense] = await tx.insert(ownerExpensesTable).values({
+    const [expense] = await insertRecords(tx, ownerExpensesTable, {
       ownerId,
       category: "salaries",
       amount: (netCents / 100).toFixed(2),
@@ -45,7 +46,7 @@ export async function paySalaryWithExpense(ownerId: string, payment: SalaryPayme
       notes: `راتب الموظف - ${staff.name} — ${payment.month}${payment.notes ? ` — ${payment.notes}` : ""}`,
       receiptUrl: null,
       submissionId: null,
-    }).returning();
+    });
 
     const values = {
       bonus: payment.bonus.toFixed(2),
@@ -57,10 +58,10 @@ export async function paySalaryWithExpense(ownerId: string, payment: SalaryPayme
       expenseId: expense.id,
     };
     const [salaryLog] = existing
-      ? await tx.update(salaryLogsTable).set(values).where(eq(salaryLogsTable.id, existing.id)).returning()
-      : await tx.insert(salaryLogsTable).values({
+      ? await updateRecords(tx, salaryLogsTable, values, eq(salaryLogsTable.id, existing.id))
+      : await insertRecords(tx, salaryLogsTable, {
         ownerId, staffId: staff.id, month: payment.month, ...values,
-      }).returning();
+      });
     return { kind: "paid", salaryLog, expense } as const;
   });
 }

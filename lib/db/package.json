@@ -4,10 +4,39 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./schema": "./src/schema/index.ts",
-    "./runtime-dialect": "./src/runtime-dialect.ts",
+    "./database-errors": {
+      "mariadb": "./src/mariadb/database-errors.ts",
+      "default": "./src/database-errors.ts"
+    },
+    ".": {
+      "mariadb": "./src/mariadb/application.ts",
+      "default": "./src/index.ts"
+    },
+    "./schema": {
+      "mariadb": "./src/mariadb/application-schema/index.ts",
+      "default": "./src/schema/index.ts"
+    },
+    "./runtime-dialect": {
+      "mariadb": "./src/mariadb/runtime-dialect.ts",
+      "default": "./src/runtime-dialect.ts"
+    },
     "./transaction-lock": "./src/transaction-lock.ts",
+    "./mutations": {
+      "mariadb": "./src/mariadb/commands.ts",
+      "default": "./src/mutations.ts"
+    },
+    "./mariadb/commands": "./src/mariadb/commands.ts",
+    "./mariadb/application-driver": "./src/mariadb/application-driver.ts",
+    "./raw-result-codecs": "./src/raw-result-codecs.ts",
+    "./sql-expressions": {
+      "mariadb": "./src/mariadb/sql-expressions.ts",
+      "default": "./src/sql-expressions.ts"
+    },
+    "./mariadb/sql-expressions": "./src/mariadb/sql-expressions.ts",
+    "./runtime-models": {
+      "mariadb": "./src/mariadb/runtime-models.ts",
+      "default": "./src/runtime-models.ts"
+    },
     "./mariadb": "./src/mariadb/connection.ts",
     "./mariadb/transaction": "./src/mariadb/transaction.ts",
     "./mariadb/mutations": "./src/mariadb/mutations.ts",

@@ -1,3 +1,4 @@
+import { writeRecords } from "@workspace/db/mutations";
 import { db, ownerWalletEntriesTable } from "@workspace/db";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { eq, sql, desc } from "drizzle-orm";
@@ -42,6 +43,5 @@ export async function creditOwnerWallet(tx: PhotographyTx, ownerId: string, amou
     if (existing.ownerId !== key || existing.amountHalalas !== amountHalalas) throw new Error("wallet_duplicate_mismatch");
     return;
   }
-  await tx.insert(ownerWalletEntriesTable).values({ ownerId: key, amountHalalas, sourceKey, kind: "refund", description })
-    .onConflictDoNothing({ target: ownerWalletEntriesTable.sourceKey });
+  await writeRecords(tx, ownerWalletEntriesTable, { ownerId: key, amountHalalas, sourceKey, kind: "refund", description }, { conflict: { action: "ignore", ...{ target: ownerWalletEntriesTable.sourceKey } } });
 }

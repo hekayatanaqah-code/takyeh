@@ -6,7 +6,7 @@ export type Finding = { file: string; line: number; rule: string; severity: "blo
  * Structural source inventory, not a SQL translator or a substitute for native
  * integration tests. Findings contain locations only, never settings/row values.
  */
-export function auditSource(file: string, text: string): Finding[] {
+export function auditSource(file: string, text: string, nativeBindingsVerified = false): Finding[] {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
   const findings: Finding[] = [];
   const add = (node: ts.Node, rule: string, severity: Finding["severity"] = "blocker") => {
@@ -22,17 +22,21 @@ export function auditSource(file: string, text: string): Finding[] {
            node.parent.expression.getText(source) === "require")))) {
       const name = node.text;
       if (/^(pg(?:\/|$)|drizzle-orm\/(?:node-postgres|pg-core))/.test(name)) add(node, "postgres-driver-or-schema");
-      if (name === "@workspace/db" || name === "@workspace/db/schema") add(node, "legacy-database-import");
+      if (!nativeBindingsVerified && (name === "@workspace/db" || name === "@workspace/db/schema")) add(node, "legacy-database-import");
     }
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       if (node.expression.name.text === "returning") add(node, "mutation-returning");
       if (/^onConflictDo/.test(node.expression.name.text)) add(node, "postgres-upsert");
     }
-    if (ts.isPropertyAccessExpression(node) && node.name.text === "rows") {
+    if (!nativeBindingsVerified && ts.isPropertyAccessExpression(node) && node.name.text === "rows") {
       add(node, "postgres-result-shape", "review");
     }
     if (ts.isStringLiteral(node) && ["23505", "23503", "23514", "40001", "40P01"].includes(node.text)) {
-      add(node, "postgres-error-code");
+      // This shared infrastructure intentionally recognizes duplicate technical
+      // mutex inserts in both real driver protocols. It contains no PG query.
+      // Application handlers must still select their native error classifier.
+      if (!(nativeBindingsVerified && file==="lib/db/src/transaction-lock.ts" &&
+        node.text==="23505" && text.includes("current.errno === 1062"))) add(node, "postgres-error-code");
     }
     // Scan SQL tagged literals as one statement, including interpolated parts.
     // Arbitrary interpolations remain unconverted and require native tests.
@@ -55,6 +59,7 @@ export function auditSource(file: string, text: string): Finding[] {
         ["postgres-raw-returning", /\bRETURNING\b/i],
         ["postgres-regex", /\bSIMILAR\s+TO\b|(?:!~\*?|~\*)|(?:^|\s)~(?:\s|$)/i],
         ["postgres-time-expression", /\b(?:TO_CHAR|DATE_TRUNC|MAKE_INTERVAL)\s*\(|\bEXTRACT\s*\(\s*EPOCH\b/i],
+        ["postgres-query-construct", /\b(?:LATERAL|regexp_match|make_date|bool_or|string_agg)\b|\btranslate\s*\(|\bIS\s+(?:NOT\s+)?DISTINCT\s+FROM\b/i],
       ];
       for (const [rule, pattern] of rules) if (pattern.test(sql)) add(node, rule);
     }

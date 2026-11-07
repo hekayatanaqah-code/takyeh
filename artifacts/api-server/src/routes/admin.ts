@@ -1,3 +1,6 @@
+import { supportRequestsQueryTable, supportMessagesQueryTable } from "@workspace/db/runtime-models";
+import { deleteRecords, insertRecords, updateRecords, writeRecords } from "@workspace/db/mutations";
+import { addSqlDays } from "@workspace/db/sql-expressions";
 import { Router } from "express";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { adminServiceCityRequestsRouter } from "./admin-service-city-requests";
@@ -54,7 +57,11 @@ import {
   type AdminPermKey,
   type AdminStaffPermissions,
 } from "@workspace/db/schema";
-import { eq, inArray, and, or, ilike, gt, lt, ne, sql, isNull } from "drizzle-orm";
+import { eq, inArray, and, or, gt, lt, ne, sql, isNull } from "drizzle-orm";
+import { isUniqueViolation } from "@workspace/db/database-errors";
+import { sqlInsensitiveLike as ilike } from "@workspace/db/sql-expressions";
+import { sqlOwnerId,sqlRegex,sqlArrayFallback,sqlRemainingDays,sqlBoolean,sqlText,sqlDistinct } from "@workspace/db/sql-expressions";
+import { adminMonthlyRevenueSql,adminWeeklyBookingsSql,adminMonthlyBookingsSql } from "#admin-analytics-sql";
 import { z } from "zod";
 import { GetSuperAdminProfileResponse, UpdateSuperAdminProfileBody, UpdateSuperAdminProfileResponse } from "@workspace/api-zod";
 import { createRecoveryRateLimiter, normalizeRecoveryEmail } from "../lib/passwordRecovery";
@@ -134,12 +141,10 @@ async function logLongPauseAlerts(chalets: Array<{ id: number; nameAr: string; p
     if (!alreadyLogged) log.unshift(alert);
   }
 
-  await db.insert(siteSettingsTable)
-    .values({ key, value: JSON.stringify(log.slice(0, 100)), updatedAt: new Date() })
-    .onConflictDoUpdate({
+  await writeRecords(db, siteSettingsTable, { key, value: JSON.stringify(log.slice(0, 100)), updatedAt: new Date() }, { conflict: { action: "update", ...{
       target: siteSettingsTable.key,
       set: { value: JSON.stringify(log.slice(0, 100)), updatedAt: new Date() },
-    });
+    } } });
 }
 
 type PauseAlertGlobal = typeof globalThis & {
@@ -578,7 +583,7 @@ router.use(async (req, res, next) => {
     const action = req.method === "POST" && entity === "partner-accounts" && targetOwnerId
       ? "owner_emergency_password_reset"
       : `${req.method.toLowerCase()}_${entity}`.slice(0, 255);
-    const [audit] = await db.insert(adminAuditLogsTable).values({
+    const [audit] = await insertRecords(db, adminAuditLogsTable, {
       actorId,
       actorName: String(actorName).slice(0, 255),
       action,
@@ -588,7 +593,7 @@ router.use(async (req, res, next) => {
       entityId: initialEntityId,
       targetOwnerId,
       metadata: { source: "admin-router", status: "started", action, targetOwnerId },
-    }).returning({ id: adminAuditLogsTable.id });
+    }, { returning: { id: adminAuditLogsTable.id } });
     res.locals.adminAuditId = audit.id;
 
     let settingsBaseline: Map<string, string | null> | undefined;
@@ -693,7 +698,7 @@ router.post("/global-seasons", requirePlatformSettingsAdmin, async (req, res) =>
     return res.status(400).json({ error: "تاريخ النهاية قبل البداية" });
   }
 
-  const [row] = await db.insert(globalSeasonsTable).values(parsed.data).returning();
+  const [row] = await insertRecords(db, globalSeasonsTable, parsed.data);
   return res.status(201).json(row);
 });
 
@@ -712,19 +717,14 @@ router.put("/global-seasons/:id", requirePlatformSettingsAdmin, async (req, res)
     return res.status(400).json({ error: "تاريخ النهاية قبل البداية" });
   }
 
-  const [row] = await db.update(globalSeasonsTable)
-    .set(parsed.data)
-    .where(eq(globalSeasonsTable.id, id))
-    .returning();
+  const [row] = await updateRecords(db, globalSeasonsTable, parsed.data, eq(globalSeasonsTable.id, id));
   return res.json(row);
 });
 
 router.delete("/global-seasons/:id", requirePlatformSettingsAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "معرّف غير صحيح" });
-  const deleted = await db.delete(globalSeasonsTable)
-    .where(eq(globalSeasonsTable.id, id))
-    .returning({ id: globalSeasonsTable.id });
+  const deleted = await deleteRecords(db, globalSeasonsTable, eq(globalSeasonsTable.id, id), { id: globalSeasonsTable.id });
   if (deleted.length === 0) return res.status(404).json({ error: "الموسم غير موجود" });
   return res.json({ ok: true });
 });
@@ -803,11 +803,8 @@ router.patch("/profile", requireSuperAdmin, async (req, res): Promise<void> => {
     const [duplicate] = await tx.select({ id: adminStaffTable.id }).from(adminStaffTable)
       .where(and(sql`lower(${adminStaffTable.personalEmail}) = ${email}`, ne(adminStaffTable.id, member.id)));
     if (duplicate) return "duplicate";
-    const updated = await tx.update(adminStaffTable)
-      .set({ personalEmail: email, mobile: parsed.data.mobile.replace(/[0-9]/g, digit => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]) })
-      .where(and(eq(adminStaffTable.id, member.id), eq(adminStaffTable.isActive, true),
-        eq(adminStaffTable.passwordHash, member.passwordHash), eq(adminStaffTable.isSuperAdmin, true)))
-      .returning({ id: adminStaffTable.id });
+    const updated = await updateRecords(tx, adminStaffTable, { personalEmail: email, mobile: parsed.data.mobile.replace(/[0-9]/g, digit => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]) }, and(eq(adminStaffTable.id, member.id), eq(adminStaffTable.isActive, true),
+        eq(adminStaffTable.passwordHash, member.passwordHash), eq(adminStaffTable.isSuperAdmin, true)), { id: adminStaffTable.id });
     if (!updated.length) return "stale";
     // Existing reset links must not outlive a change to the recovery destination.
     await tx.execute(sql`UPDATE password_reset_tokens SET used = true
@@ -845,12 +842,10 @@ router.post("/staff", requireSuperAdmin, async (req, res) => {
   if (existing) return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
   const passwordHash = await bcrypt.hash(password, 10);
   try {
-    const [staff] = await db.insert(adminStaffTable)
-      .values({ ...fields, passwordHash })
-      .returning({ id: adminStaffTable.id, name: adminStaffTable.name, username: adminStaffTable.username, personalEmail: adminStaffTable.personalEmail, mobile: adminStaffTable.mobile, permissions: adminStaffTable.permissions, isActive: adminStaffTable.isActive, createdAt: adminStaffTable.createdAt });
+    const [staff] = await insertRecords(db, adminStaffTable, { ...fields, passwordHash }, { returning: { id: adminStaffTable.id, name: adminStaffTable.name, username: adminStaffTable.username, personalEmail: adminStaffTable.personalEmail, mobile: adminStaffTable.mobile, permissions: adminStaffTable.permissions, isActive: adminStaffTable.isActive, createdAt: adminStaffTable.createdAt } });
     return res.status(201).json(staff);
   } catch (error) {
-    if ((error as { code?: string }).code === "23505") return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
+    if (isUniqueViolation(error)) return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
     throw error;
   }
 });
@@ -860,7 +855,7 @@ router.put("/staff/:id/permissions", requireSuperAdmin, async (req, res) => {
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "معرّف الموظف غير صحيح" });
   const parsed = adminPermissionsSchema.safeParse(req.body?.permissions);
   if (!parsed.success) return res.status(400).json({ error: "الصلاحيات غير صحيحة" });
-  const [updated] = await db.update(adminStaffTable).set({ permissions: parsed.data }).where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false))).returning({ id: adminStaffTable.id });
+  const [updated] = await updateRecords(db, adminStaffTable, { permissions: parsed.data }, and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)), { id: adminStaffTable.id });
   if (!updated) return res.status(404).json({ error: "الموظف غير موجود" });
   return res.json({ ok: true });
 });
@@ -879,13 +874,11 @@ router.put("/staff/:id/credentials", requireSuperAdmin, async (req, res) => {
   if (password) updates.passwordHash = await bcrypt.hash(password, 10);
   if (Object.keys(updates).length === 0) return res.status(400).json({ error: "لا توجد بيانات للتحديث" });
   try {
-    const [updated] = await db.update(adminStaffTable).set(updates)
-      .where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)))
-      .returning({ id: adminStaffTable.id });
+    const [updated] = await updateRecords(db, adminStaffTable, updates, and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)), { id: adminStaffTable.id });
     if (!updated) return res.status(404).json({ error: "الموظف غير موجود" });
     return res.json({ ok: true });
   } catch (error) {
-    if ((error as { code?: string }).code === "23505") return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
+    if (isUniqueViolation(error)) return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
     throw error;
   }
 });
@@ -894,9 +887,7 @@ router.put("/staff/:id/status", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   const { isActive } = req.body ?? {};
   if (!Number.isInteger(id) || id < 1 || typeof isActive !== "boolean") return res.status(400).json({ error: "حالة الحساب غير صحيحة" });
-  const [updated] = await db.update(adminStaffTable).set({ isActive })
-    .where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)))
-    .returning({ id: adminStaffTable.id });
+  const [updated] = await updateRecords(db, adminStaffTable, { isActive }, and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)), { id: adminStaffTable.id });
   if (!updated) return res.status(404).json({ error: "الموظف غير موجود" });
   if (!isActive) await db.delete(adminSessionsTable).where(eq(adminSessionsTable.adminStaffId, id));
   return res.json({ ok: true });
@@ -905,9 +896,7 @@ router.put("/staff/:id/status", requireSuperAdmin, async (req, res) => {
 router.delete("/staff/:id", requireSuperAdmin, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "معرّف الموظف غير صحيح" });
-  const [deleted] = await db.delete(adminStaffTable)
-    .where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)))
-    .returning({ id: adminStaffTable.id });
+  const [deleted] = await deleteRecords(db, adminStaffTable, and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)), { id: adminStaffTable.id });
   if (!deleted) return res.status(404).json({ error: "الموظف غير موجود" });
   return res.json({ ok: true });
 });
@@ -1341,21 +1330,13 @@ router.get("/owners", async (_req, res) => {
     has_activity: boolean;
   }>(
     sql`SELECT oa.id, oa.full_name, oa.phone, oa.email, oa.created_at, oa.deleted_at, oal.user_id,
-               activity.has_activity
+               ${sqlBoolean(sql`(EXISTS (SELECT 1 FROM chalet_submissions cs
+                 WHERE cs.owner_id IN (${sqlOwnerId(sql`oa.id`)},oal.user_id))
+                 OR EXISTS (SELECT 1 FROM service_provider_submissions ss
+                 WHERE ss.owner_id IN (${sqlOwnerId(sql`oa.id`)},oal.user_id)))`,"has_activity")} AS has_activity
         FROM owner_applications oa
         LEFT JOIN owner_account_links oal
-          ON oal.owner_application_id = oa.id AND oal.user_id !~ '^owner_[0-9]+$'
-        LEFT JOIN LATERAL (
-          SELECT (
-            EXISTS (
-              SELECT 1 FROM chalet_submissions cs
-              WHERE cs.owner_id IN ('owner_' || oa.id::text, oal.user_id)
-            ) OR EXISTS (
-              SELECT 1 FROM service_provider_submissions ss
-              WHERE ss.owner_id IN ('owner_' || oa.id::text, oal.user_id)
-            )
-          ) AS has_activity
-        ) activity ON TRUE
+          ON oal.owner_application_id = oa.id AND NOT ${sqlRegex(sql`oal.user_id`,"^owner_[0-9]+$")}
         ORDER BY oa.created_at ASC`
   );
   const ownerAliases = new Map<string, string>();
@@ -1415,7 +1396,7 @@ router.get("/owners", async (_req, res) => {
   }
 
   const supportData = await db.execute<{ owner_id: string; message_count: string }>(
-    sql`SELECT owner_id, COUNT(*)::text AS message_count
+    sql`SELECT owner_id, ${sqlText(sql`COUNT(*)`)} AS message_count
         FROM owner_support_requests
         GROUP BY owner_id`
   );
@@ -1603,7 +1584,7 @@ router.get("/service-regions", requireServiceCatalogAdmin, async (_req, res) => 
 router.post("/service-regions", requireServiceCatalogAdmin, async (req, res) => {
   const body = z.object({ name: z.string().trim().min(1) }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
-  const [region] = await db.insert(serviceRegionsCatalogTable).values({ name: body.data.name }).returning();
+  const [region] = await insertRecords(db, serviceRegionsCatalogTable, { name: body.data.name });
   return res.status(201).json(region);
 });
 
@@ -1611,8 +1592,7 @@ router.patch("/service-regions/:id", requireServiceCatalogAdmin, async (req, res
   const id = Number(req.params.id);
   const body = z.object({ name: z.string().trim().min(1).optional(), isActive: z.boolean().optional() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const [region] = await db.update(serviceRegionsCatalogTable).set(body.data)
-    .where(eq(serviceRegionsCatalogTable.id, id)).returning();
+  const [region] = await updateRecords(db, serviceRegionsCatalogTable, body.data, eq(serviceRegionsCatalogTable.id, id));
   if (!region) return res.status(404).json({ error: "المنطقة غير موجودة" });
   return res.json(region);
 });
@@ -1629,7 +1609,7 @@ router.post("/service-cities", requireServiceCatalogAdmin, async (req, res) => {
   const [parent] = await db.select({ id: serviceRegionsCatalogTable.id }).from(serviceRegionsCatalogTable)
     .where(eq(serviceRegionsCatalogTable.id, body.data.regionId));
   if (!parent) return res.status(400).json({ error: "المنطقة غير موجودة" });
-  const [city] = await db.insert(serviceCitiesCatalogTable).values(body.data).returning();
+  const [city] = await insertRecords(db, serviceCitiesCatalogTable, body.data);
   return res.status(201).json(city);
 });
 
@@ -1646,16 +1626,14 @@ router.patch("/service-cities/:id", requireServiceCatalogAdmin, async (req, res)
       .where(eq(serviceRegionsCatalogTable.id, body.data.regionId));
     if (!parent) return res.status(400).json({ error: "المنطقة غير موجودة" });
   }
-  const [city] = await db.update(serviceCitiesCatalogTable).set(body.data)
-    .where(eq(serviceCitiesCatalogTable.id, id)).returning();
+  const [city] = await updateRecords(db, serviceCitiesCatalogTable, body.data, eq(serviceCitiesCatalogTable.id, id));
   if (!city) return res.status(404).json({ error: "المدينة غير موجودة" });
   return res.json(city);
 });
 
 router.delete("/service-cities/:id", requireServiceCatalogAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const [city] = await db.delete(serviceCitiesCatalogTable)
-    .where(eq(serviceCitiesCatalogTable.id, id)).returning();
+  const [city] = await deleteRecords(db, serviceCitiesCatalogTable, eq(serviceCitiesCatalogTable.id, id));
   if (!city) return res.status(404).json({ error: "المدينة غير موجودة" });
   return res.json({ ok: true });
 });
@@ -1672,7 +1650,7 @@ router.post("/service-districts", requireServiceCatalogAdmin, async (req, res) =
   const [parent] = await db.select({ id: serviceCitiesCatalogTable.id }).from(serviceCitiesCatalogTable)
     .where(eq(serviceCitiesCatalogTable.id, body.data.cityId));
   if (!parent) return res.status(400).json({ error: "المدينة غير موجودة" });
-  const [district] = await db.insert(serviceDistrictsCatalogTable).values(body.data).returning();
+  const [district] = await insertRecords(db, serviceDistrictsCatalogTable, body.data);
   return res.status(201).json(district);
 });
 
@@ -1689,16 +1667,14 @@ router.patch("/service-districts/:id", requireServiceCatalogAdmin, async (req, r
       .where(eq(serviceCitiesCatalogTable.id, body.data.cityId));
     if (!parent) return res.status(400).json({ error: "المدينة غير موجودة" });
   }
-  const [district] = await db.update(serviceDistrictsCatalogTable).set(body.data)
-    .where(eq(serviceDistrictsCatalogTable.id, id)).returning();
+  const [district] = await updateRecords(db, serviceDistrictsCatalogTable, body.data, eq(serviceDistrictsCatalogTable.id, id));
   if (!district) return res.status(404).json({ error: "الحي غير موجود" });
   return res.json(district);
 });
 
 router.delete("/service-districts/:id", requireServiceCatalogAdmin, async (req, res) => {
   const id = Number(req.params.id);
-  const [district] = await db.delete(serviceDistrictsCatalogTable)
-    .where(eq(serviceDistrictsCatalogTable.id, id)).returning();
+  const [district] = await deleteRecords(db, serviceDistrictsCatalogTable, eq(serviceDistrictsCatalogTable.id, id));
   if (!district) return res.status(404).json({ error: "الحي غير موجود" });
   return res.json({ ok: true });
 });
@@ -1713,7 +1689,7 @@ router.get("/regions", async (_req, res) => {
 router.post("/regions", async (req, res) => {
   const body = z.object({ name: z.string().trim().min(1) }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
-  const [region] = await db.insert(regionsCatalogTable).values({ name: body.data.name }).returning();
+  const [region] = await insertRecords(db, regionsCatalogTable, { name: body.data.name });
   return res.status(201).json(region);
 });
 
@@ -1737,10 +1713,7 @@ router.post("/cities", async (req, res) => {
   const body = z.object({ name: z.string().min(1), regionId: z.number().int().positive() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
 
-  const [city] = await db
-    .insert(citiesCatalogTable)
-    .values({ name: body.data.name, regionId: body.data.regionId })
-    .returning();
+  const [city] = await insertRecords(db, citiesCatalogTable, { name: body.data.name, regionId: body.data.regionId });
 
   return res.status(201).json(city);
 });
@@ -1778,10 +1751,7 @@ router.post("/districts", async (req, res) => {
   const body = z.object({ name: z.string().min(1), cityId: z.number().int().positive() }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
-  const [district] = await db
-    .insert(districtsCatalogTable)
-    .values({ name: body.data.name, cityId: body.data.cityId })
-    .returning();
+  const [district] = await insertRecords(db, districtsCatalogTable, { name: body.data.name, cityId: body.data.cityId });
 
   return res.status(201).json(district);
 });
@@ -1806,10 +1776,7 @@ router.post("/amenities", async (req, res) => {
   const body = z.object({ key: z.string().min(1), labelAr: z.string().min(1) }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
-  const [amenity] = await db
-    .insert(amenitiesCatalogTable)
-    .values({ key: body.data.key, labelAr: body.data.labelAr })
-    .returning();
+  const [amenity] = await insertRecords(db, amenitiesCatalogTable, { key: body.data.key, labelAr: body.data.labelAr });
 
   return res.status(201).json(amenity);
 });
@@ -1858,15 +1825,12 @@ router.post("/services", async (req, res) => {
 
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
 
-  const [svc] = await db
-    .insert(externalServicesTable)
-    .values({
+  const [svc] = await insertRecords(db, externalServicesTable, {
       ...body.data,
       price: body.data.price != null ? String(body.data.price) : null,
       photos: body.data.photos ?? [],
       trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    })
-    .returning();
+    });
 
   return res.status(201).json(svc);
 });
@@ -1914,7 +1878,7 @@ router.post("/categories", async (req, res) => {
     emoji: z.string().optional().default("🏠"),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "الاسم مطلوب" });
-  const [row] = await db.insert(chaletCategoriesTable).values({ nameAr: body.data.nameAr, emoji: body.data.emoji }).returning();
+  const [row] = await insertRecords(db, chaletCategoriesTable, { nameAr: body.data.nameAr, emoji: body.data.emoji });
   return res.status(201).json(row);
 });
 
@@ -1952,7 +1916,7 @@ router.get("/service-categories", async (_req, res) => {
 router.post("/service-categories", async (req, res) => {
   const body = serviceCategoryCreationSchema.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "يرجى إدخال اسم الفئة بالعربية وبيانات صحيحة" });
-  const [row] = await db.insert(serviceCategoriesTable).values(body.data).returning();
+  const [row] = await insertRecords(db, serviceCategoriesTable, body.data);
   return res.status(201).json(row);
 });
 
@@ -2016,7 +1980,7 @@ const DEFAULT_EXPENSE_CATS = [
 router.get("/expense-categories", async (_req, res) => {
   let rows = await db.select().from(expenseCategoriesTable).orderBy(expenseCategoriesTable.sortOrder, expenseCategoriesTable.createdAt);
   if (rows.length === 0) {
-    rows = await db.insert(expenseCategoriesTable).values(DEFAULT_EXPENSE_CATS).returning();
+    rows = await insertRecords(db, expenseCategoriesTable, DEFAULT_EXPENSE_CATS);
   }
   return res.json(rows);
 });
@@ -2030,7 +1994,7 @@ router.post("/expense-categories", async (req, res) => {
     sortOrder: z.number().int().default(0),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const [row] = await db.insert(expenseCategoriesTable).values(body.data).returning();
+  const [row] = await insertRecords(db, expenseCategoriesTable, body.data);
   return res.status(201).json(row);
 });
 
@@ -2161,7 +2125,7 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
             .from(serviceProvidersTable)
             .where(and(
               isNull(serviceProvidersTable.submissionId),
-              sql`${serviceProvidersTable.ownerId} IS NOT DISTINCT FROM ${submission.ownerId}`,
+              sql`NOT ${sqlDistinct(serviceProvidersTable.ownerId,sql`${submission.ownerId}`)}`,
               eq(serviceProvidersTable.businessName, submission.businessName),
               eq(serviceProvidersTable.category, submission.category),
               eq(serviceProvidersTable.city, submission.city),
@@ -2183,7 +2147,7 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
                 isNull(serviceProvidersTable.submissionId),
               ));
           } else {
-            await tx.insert(serviceProvidersTable).values({
+            await writeRecords(tx, serviceProvidersTable, {
               submissionId: submission.id,
               ownerId: submission.ownerId ?? null,
               businessName: submission.businessName,
@@ -2208,12 +2172,12 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
               coverageTags: submission.coverageTags ?? [],
               customFeatureTags: submission.customFeatureTags ?? [],
               isActive: true,
-            }).onConflictDoNothing({
+            }, { conflict: { action: "ignore", ...{
               target: serviceProvidersTable.submissionId,
               // Legacy databases use a partial unique index for non-null links.
               // The predicate also works with a full unique constraint.
               where: sql`${serviceProvidersTable.submissionId} IS NOT NULL`,
-            });
+            } } });
           }
         }
       }
@@ -2267,12 +2231,11 @@ router.patch("/settings", requirePlatformSettingsAdmin, async (req, res) => {
   try {
     const saved = await db.transaction(async (tx) => {
       const updatedAt = new Date();
-      await tx.insert(siteSettingsTable)
-        .values(entries.map(([key, value]) => ({ key, value, updatedAt })))
-        .onConflictDoUpdate({
-          target: siteSettingsTable.key,
-          set: { value: sql`excluded.value`, updatedAt: sql`excluded.updated_at` },
+      for (const [key, value] of entries) {
+        await writeRecords(tx, siteSettingsTable, { key, value, updatedAt }, {
+          conflict: { action: "update", target: siteSettingsTable.key, set: { value, updatedAt } },
         });
+      }
       const rows = await tx.select({ key: siteSettingsTable.key, value: siteSettingsTable.value })
         .from(siteSettingsTable)
         .where(inArray(siteSettingsTable.key, entries.map(([key]) => key)));
@@ -2295,7 +2258,7 @@ router.patch("/settings", requirePlatformSettingsAdmin, async (req, res) => {
 const expiringSubscriptionWhere = sql`
   os.expires_at IS NOT NULL
   AND os.expires_at >= NOW()
-  AND os.expires_at <= NOW() + INTERVAL '5 days'
+  AND os.expires_at <= ${addSqlDays(sql`NOW()`,5)}
   AND LOWER(os.status) NOT IN ('cancelled', 'canceled', 'expired')
 `;
 
@@ -2310,17 +2273,13 @@ router.get("/expiring-subscriptions", requireSuperAdmin, async (req, res) => {
       expires_at: Date; days_remaining: string;
     }>(sql`
       SELECT os.id, os.owner_id,
-        COALESCE(NULLIF(TRIM(owner_profile.full_name), ''), os.owner_id) AS owner_name,
+        COALESCE(NULLIF(TRIM((SELECT oa.full_name FROM owner_applications oa
+          LEFT JOIN owner_account_links account ON account.owner_application_id=oa.id
+          WHERE oa.deleted_at IS NULL AND (account.user_id=os.owner_id OR os.owner_id=${sqlOwnerId(sql`oa.id`)})
+          LIMIT 1)), ''), os.owner_id) AS owner_name,
         os.plan, os.expires_at,
-        GREATEST(0, CEIL(EXTRACT(EPOCH FROM (os.expires_at - NOW())) / 86400))::int AS days_remaining
+        ${sqlRemainingDays(sql`os.expires_at`)} AS days_remaining
       FROM owner_subscriptions os
-      LEFT JOIN LATERAL (
-        SELECT oa.full_name FROM owner_applications oa
-        LEFT JOIN owner_account_links account ON account.owner_application_id = oa.id
-        WHERE oa.deleted_at IS NULL
-          AND (account.user_id = os.owner_id OR os.owner_id = 'owner_' || oa.id::text)
-        LIMIT 1
-      ) owner_profile ON true
       WHERE ${expiringSubscriptionWhere}
       ORDER BY os.expires_at ASC, os.id ASC
       LIMIT ${pageSize} OFFSET ${offset}
@@ -2351,17 +2310,15 @@ router.get(["/dashboard", "/smart-dashboard"], requireGlobalFinancialsAdmin, asy
     plan: string; status: string; expires_at: Date; days_remaining: string;
   }>(sql`
     SELECT os.id, os.owner_id,
-           COALESCE(NULLIF(TRIM(oa.full_name), ''), cs.name_ar, os.owner_id) AS owner_name,
-           cs.name_ar AS property_name, os.plan, os.status, os.expires_at,
-           GREATEST(0, CEIL(EXTRACT(EPOCH FROM (os.expires_at - NOW())) / 86400))::int AS days_remaining
+           COALESCE(NULLIF(TRIM(oa.full_name), ''),
+             (SELECT name_ar FROM chalet_submissions WHERE owner_id=os.owner_id ORDER BY created_at DESC LIMIT 1),
+             os.owner_id) AS owner_name,
+           (SELECT name_ar FROM chalet_submissions WHERE owner_id=os.owner_id ORDER BY created_at DESC LIMIT 1) AS property_name,
+           os.plan, os.status, os.expires_at,
+           ${sqlRemainingDays(sql`os.expires_at`)} AS days_remaining
     FROM owner_subscriptions os
-    LEFT JOIN LATERAL (
-      SELECT name_ar FROM chalet_submissions
-      WHERE owner_id = os.owner_id
-      ORDER BY created_at DESC LIMIT 1
-    ) cs ON true
     LEFT JOIN owner_applications oa
-      ON ('owner_' || oa.id::text) = os.owner_id
+      ON ${sqlOwnerId(sql`oa.id`)} = os.owner_id
     WHERE ${expiringSubscriptionWhere}
     ORDER BY os.expires_at ASC
     LIMIT 100
@@ -2505,10 +2462,7 @@ router.patch(["/contact-inquiries/:id/status", "/contact-inquiries/:id"], requir
   if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
   const status = body.data.status === "read" ? "in_progress" : body.data.status === "replied" ? "answered" : body.data.status;
   const adminNotes = body.data.adminNotes !== undefined ? body.data.adminNotes : body.data.adminNote;
-  const [updated] = await db.update(contactInquiriesTable)
-    .set({ status, ...(adminNotes !== undefined ? { adminNotes } : {}) })
-    .where(eq(contactInquiriesTable.id, id))
-    .returning({ id: contactInquiriesTable.id, status: contactInquiriesTable.status, adminNotes: contactInquiriesTable.adminNotes, updatedAt: contactInquiriesTable.updatedAt });
+  const [updated] = await updateRecords(db, contactInquiriesTable, { status, ...(adminNotes !== undefined ? { adminNotes } : {}) }, eq(contactInquiriesTable.id, id), { id: contactInquiriesTable.id, status: contactInquiriesTable.status, adminNotes: contactInquiriesTable.adminNotes, updatedAt: contactInquiriesTable.updatedAt });
   if (!updated) return res.status(404).json({ error: "الاستفسار غير موجود" });
   return res.json({ ok: true, ...updated });
 });
@@ -2516,33 +2470,24 @@ router.patch(["/contact-inquiries/:id/status", "/contact-inquiries/:id"], requir
 /* ── Owner Support Requests ──────────────────────────────── */
 const supportOwnerNameSql = sql`COALESCE(
   NULLIF(TRIM(linked_oa.full_name), ''),
-  CASE WHEN TRIM(COALESCE(s.owner_name, '')) !~ '^owner_[0-9]+$'
+  CASE WHEN NOT ${sqlRegex(sql`TRIM(COALESCE(s.owner_name, ''))`,"^owner_[0-9]+$")}
     THEN NULLIF(NULLIF(TRIM(s.owner_name), ''), s.owner_id) END,
-  NULLIF(TRIM(oa.full_name), ''), 'مالك غير مسمى')`;
+  NULLIF(TRIM((SELECT full_name FROM owner_applications
+    WHERE phone=(SELECT whatsapp_number FROM chalet_submissions WHERE owner_id=s.owner_id LIMIT 1)
+    ORDER BY id LIMIT 1)), ''), 'مالك غير مسمى')`;
 const supportIdentityJoinsSql = sql`
   LEFT JOIN owner_account_links oal ON oal.user_id = s.owner_id
-    AND s.owner_id !~ '^owner_[0-9]+$'
-  LEFT JOIN owner_applications linked_oa ON linked_oa.id =
-    CASE WHEN s.owner_id ~ '^owner_[1-9][0-9]*$'
-      THEN SUBSTRING(s.owner_id FROM 7)::numeric ELSE oal.owner_application_id END
-  LEFT JOIN LATERAL (
-    SELECT user_id FROM owner_account_links WHERE owner_application_id = linked_oa.id
-      AND user_id !~ '^owner_[0-9]+$' LIMIT 1
-  ) canonical_support_owner ON true
-  LEFT JOIN LATERAL (
-    SELECT whatsapp_number FROM chalet_submissions WHERE owner_id = s.owner_id LIMIT 1
-  ) cs ON true
-  LEFT JOIN LATERAL (
-    SELECT full_name FROM owner_applications WHERE phone = cs.whatsapp_number ORDER BY id LIMIT 1
-  ) oa ON true`;
+    AND NOT ${sqlRegex(sql`s.owner_id`,"^owner_[0-9]+$")}
+  LEFT JOIN owner_applications linked_oa ON (
+    (${sqlRegex(sql`s.owner_id`,"^owner_[1-9][0-9]*$")} AND ${sqlOwnerId(sql`linked_oa.id`)}=s.owner_id)
+    OR (NOT ${sqlRegex(sql`s.owner_id`,"^owner_[1-9][0-9]*$")} AND linked_oa.id=oal.owner_application_id))`;
 const supportTicketColumnsSql = sql`
-  s.id, s.owner_id, COALESCE(canonical_support_owner.user_id, s.owner_id) AS owner_group_id,
+  s.id, s.owner_id, COALESCE((SELECT user_id FROM owner_account_links WHERE owner_application_id=linked_oa.id
+    AND NOT ${sqlRegex(sql`user_id`,"^owner_[0-9]+$")} LIMIT 1), s.owner_id) AS owner_group_id,
   ${supportOwnerNameSql} AS owner_name, s.subject, s.message, s.status,
-  CASE WHEN array_length(s.attachment_urls, 1) > 0 THEN s.attachment_urls
-    WHEN s.attachment_url IS NOT NULL THEN ARRAY[s.attachment_url] ELSE '{}'::text[] END AS attachment_urls,
+  ${sqlArrayFallback(sql`s.attachment_urls`,sql`s.attachment_url`,"attachment_urls")} AS attachment_urls,
   s.admin_reply, s.admin_reply_at,
-  CASE WHEN array_length(s.admin_attachment_urls, 1) > 0 THEN s.admin_attachment_urls
-    WHEN s.admin_attachment_url IS NOT NULL THEN ARRAY[s.admin_attachment_url] ELSE '{}'::text[] END AS admin_attachment_urls,
+  ${sqlArrayFallback(sql`s.admin_attachment_urls`,sql`s.admin_attachment_url`,"admin_attachment_urls")} AS admin_attachment_urls,
   s.is_read_by_owner, s.created_at, ${supportMessagesSql(sql`s.id`)} AS messages`;
 router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) => {
   try {
@@ -2553,7 +2498,7 @@ router.get("/support-requests", requireSupportDisputesAdmin, async (req, res) =>
       if (Number.isFinite(applicationId)) {
         const linked = await db.execute<{ user_id: string }>(
           sql`SELECT user_id FROM owner_account_links WHERE owner_application_id = ${applicationId}
-            AND user_id !~ '^owner_[0-9]+$' LIMIT 1`
+            AND NOT ${sqlRegex(sql`user_id`,"^owner_[0-9]+$")} LIMIT 1`
         );
         if (linked.rows[0]?.user_id) ownerIds.push(linked.rows[0].user_id);
       }
@@ -2591,11 +2536,10 @@ router.patch("/support-requests/:id/status", requireSupportDisputesAdmin, async 
   const id = Number(req.params.id);
   const body = z.object({ status: z.enum(["new", "in_progress", "resolved"]) }).safeParse(req.body);
   if (!body.success || !Number.isFinite(id)) return res.status(400).json({ error: "بيانات غير صحيحة" });
-  const updated = await db.execute(
-    sql`UPDATE owner_support_requests SET status = ${body.data.status} WHERE id = ${id} RETURNING status`
-  );
-  if (!updated.rows.length) return res.status(404).json({ error: "الطلب غير موجود" });
-  return res.json({ ok: true, status: updated.rows[0].status });
+  const updated = await updateRecords(db, supportRequestsQueryTable, { status: body.data.status },
+    eq(supportRequestsQueryTable.id, id), { status: supportRequestsQueryTable.status });
+  if (!updated.length) return res.status(404).json({ error: "الطلب غير موجود" });
+  return res.json({ ok: true, status: updated[0].status });
 });
 
 router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminReplyUpload.array("files", 10), async (req, res) => {
@@ -2637,21 +2581,15 @@ router.post("/support-requests/:id/reply", requireSupportDisputesAdmin, adminRep
       if (!locked.rows[0]) return null;
       if (isSupportClosed(locked.rows[0].status)) throw new SupportTicketClosedError();
       await preserveLegacySupportReply(tx, id);
-      await tx.execute(sql`INSERT INTO owner_support_messages
-        (ticket_id, author_role, author_id, author_name, body, attachment_urls)
-        VALUES (${id}, 'admin', ${String(req.adminStaff?.id ?? req.user?.id ?? "superadmin")},
-          ${req.adminStaff?.name ?? "فريق الدعم"}, ${reply},
-          ${`{${adminAttachmentUrls.join(",")}}`}::text[])`);
-      const updated = await tx.execute(sql`UPDATE owner_support_requests
-          SET admin_reply = ${reply},
-              admin_reply_at = NOW(),
-              status = 'replied',
-              is_read_by_owner = false,
-              admin_attachment_urls = ${`{${adminAttachmentUrls.join(",")}}`}::text[],
-              admin_attachment_url = NULL
-          WHERE id = ${id}
-          RETURNING id`);
-      if (!updated.rows.length) return null;
+      await writeRecords(tx, supportMessagesQueryTable, {
+        ticketId: id, authorRole: "admin", authorId: String(req.adminStaff?.id ?? req.user?.id ?? "superadmin"),
+        authorName: req.adminStaff?.name ?? "فريق الدعم", body: reply, attachmentUrls: adminAttachmentUrls,
+      });
+      const updated = await updateRecords(tx, supportRequestsQueryTable, {
+        adminReply: reply, adminReplyAt: sql`NOW()`, status: "replied", isReadByOwner: false,
+        adminAttachmentUrls, adminAttachmentUrl: null,
+      }, eq(supportRequestsQueryTable.id, id), { id: supportRequestsQueryTable.id });
+      if (!updated.length) return null;
       // The UPDATE retains its row lock until commit, so this snapshot belongs
       // to the same saved reply, not a concurrent administrator's later update.
       const saved = await tx.execute(sql`SELECT ${supportTicketColumnsSql}
@@ -2696,11 +2634,11 @@ router.post("/subscription-reminder-preview", requireSuperAdmin, async (req, res
 
   const requestedId = body.data.ownerId;
   const owner = await db.execute<{ owner_id: string }>(sql`
-    SELECT COALESCE(account.user_id, 'owner_' || app.id::text) AS owner_id
+    SELECT COALESCE(account.user_id, ${sqlOwnerId(sql`app.id`)}) AS owner_id
     FROM owner_applications app
     LEFT JOIN owner_account_links account ON account.owner_application_id = app.id
     WHERE app.deleted_at IS NULL
-      AND (account.user_id = ${requestedId} OR 'owner_' || app.id::text = ${requestedId})
+      AND (account.user_id = ${requestedId} OR ${sqlOwnerId(sql`app.id`)} = ${requestedId})
     LIMIT 1
   `);
   if (!owner.rows[0]) {
@@ -2735,12 +2673,10 @@ router.post("/subscription-reminder-preview", requireSuperAdmin, async (req, res
   const marker = `subscription-expiry:${expiresAt.getTime()}:${milestone}`;
 
   await db.transaction(async (tx) => {
-    await tx.insert(siteSettingsTable)
-      .values({ key: `${REMINDER_PREVIEW_PREFIX}${ownerId}`, value: JSON.stringify(preview), updatedAt: now })
-      .onConflictDoUpdate({
+    await writeRecords(tx, siteSettingsTable, { key: `${REMINDER_PREVIEW_PREFIX}${ownerId}`, value: JSON.stringify(preview), updatedAt: now }, { conflict: { action: "update", ...{
         target: siteSettingsTable.key,
         set: { value: JSON.stringify(preview), updatedAt: now },
-      });
+      } } });
     await tx.insert(ownerNotificationsTable).values({
       ownerId,
       type: "subscription_expiry_reminder",
@@ -2801,14 +2737,14 @@ router.get("/subscription-reminder-log", requireSuperAdmin, async (_req, res): P
       ORDER BY created_at DESC
       LIMIT 200
     ) n
-    LEFT JOIN LATERAL (
-      SELECT app.full_name, app.phone
+    LEFT JOIN owner_applications oa ON oa.id=(
+      SELECT app.id
       FROM owner_applications app
       LEFT JOIN owner_account_links account ON account.owner_application_id = app.id
       WHERE app.deleted_at IS NULL
-        AND (account.user_id = n.owner_id OR n.owner_id = 'owner_' || app.id::text)
+        AND (account.user_id = n.owner_id OR n.owner_id = ${sqlOwnerId(sql`app.id`)})
       LIMIT 1
-    ) oa ON true
+    )
     ORDER BY n.created_at DESC
   `);
 
@@ -2887,17 +2823,13 @@ router.post("/plans", async (req, res) => {
   if (!baseSlug) return res.status(400).json({ error: "اسم الخطة يجب أن يحتوي على حروف أو أرقام" });
   for (let suffix = 1; suffix <= 100; suffix++) {
     const slug = suffix === 1 ? baseSlug : `${baseSlug}-${suffix}`;
-    const [plan] = await db
-      .insert(subscriptionPlansTable)
-      .values({
+    const [plan] = await insertRecords(db, subscriptionPlansTable, {
         slug, nameAr, price: String(price), durationDays, trialDays, features,
         scope, chaletLimit, serviceLimit,
         extraChaletPrice: extraChaletPrice == null ? null : String(extraChaletPrice),
         extraServicePrice: extraServicePrice == null ? null : String(extraServicePrice),
         isActive, sortOrder,
-      })
-      .onConflictDoNothing({ target: subscriptionPlansTable.slug })
-      .returning();
+      }, { conflict: { action: "ignore", target: subscriptionPlansTable.slug } });
     if (plan) return res.json(plan);
   }
   return res.status(409).json({ error: "تعذّر إضافة الخطة بهذا الاسم. جرّب اسماً مختلفاً." });
@@ -2918,9 +2850,7 @@ router.put("/plans/:id", async (req, res) => {
     return res.status(400).json({ error: "مدة وسعر الخطة التجريبية ثابتان: مجانية لمدة 30 يوماً" });
   }
   const { price, extraChaletPrice, extraServicePrice, ...rest } = parsed.data;
-  const [plan] = await db
-    .update(subscriptionPlansTable)
-    .set({
+  const [plan] = await updateRecords(db, subscriptionPlansTable, {
       ...rest,
       ...(price !== undefined ? { price: String(price) } : {}),
       ...(extraChaletPrice !== undefined
@@ -2929,9 +2859,7 @@ router.put("/plans/:id", async (req, res) => {
       ...(extraServicePrice !== undefined
         ? { extraServicePrice: extraServicePrice === null ? null : String(extraServicePrice) }
         : {}),
-    })
-    .where(eq(subscriptionPlansTable.id, id))
-    .returning();
+    }, eq(subscriptionPlansTable.id, id));
   if (!plan) return res.status(404).json({ error: "الخطة غير موجودة" });
   return res.json(plan);
 });
@@ -2983,11 +2911,11 @@ router.post("/promo-codes", requireSuperAdmin, async (req, res) => {
     res.status(409).json({ error: "رمز الخصم مستخدم بالفعل" });
     return;
   }
-  const [created] = await db.insert(subscriptionPromoCodesTable).values({
+  const [created] = await insertRecords(db, subscriptionPromoCodesTable, {
     ...promo,
     code,
     value: String(promo.value),
-  }).returning();
+  });
   res.status(201).json(created);
 });
 
@@ -3036,14 +2964,11 @@ router.put("/promo-codes/:id", requireSuperAdmin, async (req, res) => {
     }
   }
   const { value, ...promoRest } = promo;
-  const [updated] = await db.update(subscriptionPromoCodesTable)
-    .set({
+  const [updated] = await updateRecords(db, subscriptionPromoCodesTable, {
       ...promoRest,
       ...(code ? { code } : {}),
       ...(value !== undefined ? { value: String(value) } : {}),
-    })
-    .where(eq(subscriptionPromoCodesTable.id, params.data))
-    .returning();
+    }, eq(subscriptionPromoCodesTable.id, params.data));
   if (!updated) {
     res.status(404).json({ error: "رمز الخصم غير موجود" });
     return;
@@ -3065,10 +2990,7 @@ router.delete("/promo-codes/:id", requireSuperAdmin, async (req, res) => {
   }
   // Keep the original code available for already-paid but not yet confirmed
   // checkouts; deactivation prevents future uses without stranding buyers.
-  const [deactivated] = await db.update(subscriptionPromoCodesTable)
-    .set({ isActive: false })
-    .where(eq(subscriptionPromoCodesTable.id, promo.id))
-    .returning();
+  const [deactivated] = await updateRecords(db, subscriptionPromoCodesTable, { isActive: false }, eq(subscriptionPromoCodesTable.id, promo.id));
   res.json({ ...deactivated, deactivatedInsteadOfDeleted: true });
 });
 
@@ -3128,12 +3050,12 @@ router.post("/owners/:ownerId/free-access", requireSuperAdmin, async (req, res):
   const ownerId = parsedOwnerId.data;
   const knownOwner = await db.execute<{ owner_id: string }>(sql`
     SELECT owner_id FROM (
-      SELECT COALESCE(oal.user_id, 'owner_' || oa.id::text) AS owner_id
+      SELECT COALESCE(oal.user_id, ${sqlOwnerId(sql`oa.id`)}) AS owner_id
       FROM owner_applications oa
       LEFT JOIN owner_account_links oal ON oal.owner_application_id = oa.id
       WHERE oa.deleted_at IS NULL
       UNION
-      SELECT 'owner_' || id::text AS owner_id
+      SELECT ${sqlOwnerId(sql`id`)} AS owner_id
       FROM owner_applications WHERE deleted_at IS NULL
       UNION
       SELECT owner_id FROM chalet_submissions
@@ -3167,7 +3089,7 @@ router.post("/owners/:ownerId/free-access", requireSuperAdmin, async (req, res):
     const expiresAt = body.data.duration === "unlimited" || dateMode
       ? null
       : new Date(now.getTime() + body.data.days! * 86_400_000);
-    const [created] = await tx.insert(ownerFreeAccessGrantsTable).values({
+    const [created] = await insertRecords(tx, ownerFreeAccessGrantsTable, {
       ownerId,
       actorId,
       reason: body.data.reason,
@@ -3175,7 +3097,7 @@ router.post("/owners/:ownerId/free-access", requireSuperAdmin, async (req, res):
       startDate: body.data.startDate ?? null,
       endDate: body.data.endDate ?? null,
       createdAt: now,
-    }).returning();
+    });
     const grantActiveNow = dateMode
       ? body.data.startDate! <= saudiCalendarDate(now) && body.data.endDate! >= saudiCalendarDate(now)
       : body.data.duration === "unlimited" || expiresAt! > now;
@@ -3300,11 +3222,11 @@ router.post("/owners/:ownerId/discount", requireSuperAdmin, async (req, res): Pr
   const ownerId = parsedOwnerId.data;
   const knownOwner = await db.execute<{ owner_id: string }>(sql`
     SELECT owner_id FROM (
-      SELECT COALESCE(oal.user_id, 'owner_' || oa.id::text) AS owner_id
+      SELECT COALESCE(oal.user_id, ${sqlOwnerId(sql`oa.id`)}) AS owner_id
       FROM owner_applications oa
       LEFT JOIN owner_account_links oal ON oal.owner_application_id = oa.id
       WHERE oa.deleted_at IS NULL
-      UNION SELECT 'owner_' || id::text FROM owner_applications WHERE deleted_at IS NULL
+      UNION SELECT ${sqlOwnerId(sql`id`)} FROM owner_applications WHERE deleted_at IS NULL
       UNION SELECT owner_id FROM chalet_submissions
       UNION SELECT owner_id FROM service_provider_submissions
       UNION SELECT user_id AS owner_id FROM owner_account_links
@@ -3327,7 +3249,7 @@ router.post("/owners/:ownerId/discount", requireSuperAdmin, async (req, res): Pr
       .where(inArray(ownerSubscriptionsTable.ownerId, ownerKeys))
       .orderBy(ownerSubscriptionsTable.ownerId)
       .for("update");
-    const [discount] = await tx.insert(ownerAccountDiscountsTable).values({
+    const [discount] = await insertRecords(tx, ownerAccountDiscountsTable, {
       ownerId,
       actorId,
       kind: body.data.kind,
@@ -3336,7 +3258,7 @@ router.post("/owners/:ownerId/discount", requireSuperAdmin, async (req, res): Pr
       endDate: body.data.duration === "fixed" ? body.data.endDate! : null,
       reason: body.data.reason,
       createdAt: now,
-    }).returning();
+    });
     const activeNow = (!discount.startDate || discount.startDate <= saudiCalendarDate(now)) &&
       (!discount.endDate || discount.endDate >= saudiCalendarDate(now));
     if (activeNow) {
@@ -3443,12 +3365,12 @@ router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req
   }
   const ownerResult = await db.execute<{ owner_id: string }>(sql`
     SELECT owner_id FROM (
-      SELECT COALESCE(oal.user_id, 'owner_' || oa.id::text) AS owner_id
+      SELECT COALESCE(oal.user_id, ${sqlOwnerId(sql`oa.id`)}) AS owner_id
       FROM owner_applications oa
       LEFT JOIN owner_account_links oal ON oal.owner_application_id = oa.id
       WHERE oa.deleted_at IS NULL
       UNION
-      SELECT 'owner_' || id::text AS owner_id
+      SELECT ${sqlOwnerId(sql`id`)} AS owner_id
       FROM owner_applications WHERE deleted_at IS NULL
       UNION
       SELECT owner_id FROM chalet_submissions
@@ -3478,16 +3400,14 @@ router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req
   } : null;
   const subscriptionOwnerId = existingSubscription.ownerId;
   await db.transaction(async (tx) => {
-    await tx.insert(ownerSubscriptionsTable)
-      .values({
+    await writeRecords(tx, ownerSubscriptionsTable, {
         ownerId: subscriptionOwnerId,
         plan,
         status: "active",
         paymentStatus: "manual",
         termsSnapshot: grantTerms,
         expiresAt: newExpiry,
-      })
-      .onConflictDoUpdate({
+      }, { conflict: { action: "update", ...{
         target: ownerSubscriptionsTable.ownerId,
         set: {
           plan,
@@ -3496,9 +3416,9 @@ router.post("/owners/:ownerId/subscription-grant", requireSuperAdmin, async (req
           termsSnapshot: grantTerms,
           expiresAt: expiresAt
             ? newExpiry
-            : sql`GREATEST(COALESCE(${ownerSubscriptionsTable.expiresAt}, NOW()), NOW()) + (${days} * INTERVAL '1 day')`,
+            : addSqlDays(sql`GREATEST(COALESCE(${ownerSubscriptionsTable.expiresAt}, NOW()), NOW())`, days),
         },
-      });
+      } } });
     await tx.insert(subscriptionGrantAuditTable).values({
       ownerId: subscriptionOwnerId,
       actorId,
@@ -3561,7 +3481,7 @@ router.post("/demo-preview", async (req, res) => {
 
   {
     /* ── 1. Demo chalet submission ── */
-    const [newSub] = await db.insert(chaletSubmissionsTable).values({
+    const [newSub] = await insertRecords(db, chaletSubmissionsTable, {
       ownerId: DEMO_OWNER_ID,
       nameAr: "شاليه النخيل التجريبي",
       whatsappNumber: "0501234567",
@@ -3579,7 +3499,7 @@ router.post("/demo-preview", async (req, res) => {
       bedrooms: 4,
       status: "approved",
       trialEndsAt: new Date(today.getFullYear() + 2, today.getMonth(), today.getDate()),
-    }).returning({ id: chaletSubmissionsTable.id });
+    }, { returning: { id: chaletSubmissionsTable.id } });
     const subId = newSub.id;
 
     /* ── 2. Demo bookings — 5 repeat customers with history ── */
@@ -3794,7 +3714,7 @@ router.get("/platform-revenue", requireSuperAdmin, async (_req, res) => {
   }>(sql`
     SELECT os.plan,
            COUNT(*) as count,
-           COALESCE(sp.price::text, '0') as plan_price
+           COALESCE(${sqlText(sql`sp.price`)}, '0') as plan_price
     FROM owner_subscriptions os
     LEFT JOIN subscription_plans sp ON sp.slug = os.plan
     WHERE os.payment_status = 'paid'
@@ -3914,83 +3834,12 @@ router.get("/analytics", requireGlobalFinancialsAdmin, async (_req, res) => {
   // subscription revenue or booking revenue, even via a direct API request.
   if (!_req.isSuperAdmin) return res.json(nonFinancialAnalytics);
 
-  const monthlyRev = await db.execute<{ month: string; total: string }>(sql`
-    SELECT TO_CHAR(DATE_TRUNC('month', os.created_at), 'YYYY-MM') AS month,
-           SUM(sp.price) AS total
-    FROM owner_subscriptions os
-    LEFT JOIN subscription_plans sp ON sp.slug = os.plan
-    WHERE os.payment_status = 'paid'
-      AND os.created_at >= NOW() - INTERVAL '12 months'
-    GROUP BY DATE_TRUNC('month', os.created_at)
-    ORDER BY DATE_TRUNC('month', os.created_at)
-  `);
+  const monthlyRev = await db.execute<{ month: string; total: string }>(adminMonthlyRevenueSql());
 
   /* Booking performance excludes cancelled records and uses the owner's
    * recorded revenue first, falling back to the legacy total_price field. */
-  const weeklyBookings = await db.execute<{ period: string; bookings: string; revenue: string }>(sql`
-    WITH periods AS (
-      SELECT generate_series(
-        DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '11 weeks',
-        DATE_TRUNC('week', CURRENT_DATE),
-        INTERVAL '1 week'
-      ) AS period
-    ), totals AS (
-      SELECT DATE_TRUNC('week', TO_DATE(NULLIF(b.booking_date, ''), 'YYYY-MM-DD')) AS period,
-             COUNT(*) AS bookings,
-             COALESCE(SUM(
-               CASE WHEN b.total_price IS NOT NULL
-                 THEN COALESCE(b.deposit_paid, 0)
-                   + CASE WHEN b.balance_collected
-                       THEN GREATEST(b.total_price - COALESCE(b.deposit_paid, 0), 0)
-                       ELSE 0 END
-                 ELSE COALESCE(b.revenue_amount, b.deposit_paid, 0)
-               END
-             ), 0) AS revenue
-      FROM owner_bookings b
-      WHERE b.cancelled_at IS NULL
-        AND b.booking_date IS NOT NULL
-        AND b.booking_date <> ''
-        AND TO_DATE(b.booking_date, 'YYYY-MM-DD') >= DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '11 weeks'
-      GROUP BY 1
-    )
-    SELECT TO_CHAR(p.period, 'YYYY-MM-DD') AS period,
-           COALESCE(t.bookings, 0)::text AS bookings,
-           COALESCE(t.revenue, 0)::text AS revenue
-    FROM periods p LEFT JOIN totals t ON t.period = p.period
-    ORDER BY p.period
-  `);
-  const monthlyBookings = await db.execute<{ period: string; bookings: string; revenue: string }>(sql`
-    WITH periods AS (
-      SELECT generate_series(
-        DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months',
-        DATE_TRUNC('month', CURRENT_DATE),
-        INTERVAL '1 month'
-      ) AS period
-    ), totals AS (
-      SELECT DATE_TRUNC('month', TO_DATE(NULLIF(b.booking_date, ''), 'YYYY-MM-DD')) AS period,
-             COUNT(*) AS bookings,
-             COALESCE(SUM(
-               CASE WHEN b.total_price IS NOT NULL
-                 THEN COALESCE(b.deposit_paid, 0)
-                   + CASE WHEN b.balance_collected
-                       THEN GREATEST(b.total_price - COALESCE(b.deposit_paid, 0), 0)
-                       ELSE 0 END
-                 ELSE COALESCE(b.revenue_amount, b.deposit_paid, 0)
-               END
-             ), 0) AS revenue
-      FROM owner_bookings b
-      WHERE b.cancelled_at IS NULL
-        AND b.booking_date IS NOT NULL
-        AND b.booking_date <> ''
-        AND TO_DATE(b.booking_date, 'YYYY-MM-DD') >= DATE_TRUNC('month', CURRENT_DATE) - INTERVAL '11 months'
-      GROUP BY 1
-    )
-    SELECT TO_CHAR(p.period, 'YYYY-MM') AS period,
-           COALESCE(t.bookings, 0)::text AS bookings,
-           COALESCE(t.revenue, 0)::text AS revenue
-    FROM periods p LEFT JOIN totals t ON t.period = p.period
-    ORDER BY p.period
-  `);
+  const weeklyBookings = await db.execute<{ period: string; bookings: string; revenue: string }>(adminWeeklyBookingsSql());
+  const monthlyBookings = await db.execute<{ period: string; bookings: string; revenue: string }>(adminMonthlyBookingsSql());
   const toSeries = (rows: Array<{ period: string; bookings: string; revenue: string }>) =>
     rows.map((row) => ({
       period: row.period,
@@ -4151,13 +4000,10 @@ router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
   const submission = await db.transaction(async (tx) => {
   /* Create submission (already approved) */
   const activated = effectiveOwnerId ? await activateOwnerTrial(effectiveOwnerId, tx) : null;
-  const [submission] = await tx
-    .insert(chaletSubmissionsTable)
-    .values({ ...vals, trialEndsAt: activated?.plan === "trial" ? activated.expiresAt : null })
-    .returning({ id: chaletSubmissionsTable.id });
+  const [submission] = await insertRecords(tx, chaletSubmissionsTable, { ...vals, trialEndsAt: activated?.plan === "trial" ? activated.expiresAt : null }, { returning: { id: chaletSubmissionsTable.id } });
 
   /* Auto-create active chalet record */
-  await tx.insert(chaletsTable).values({
+  await writeRecords(tx, chaletsTable, {
     submissionId: submission.id,
     ownerId: effectiveOwnerId,
     nameAr: vals.nameAr,
@@ -4192,7 +4038,7 @@ router.post("/direct-add-chalet", requireSuperAdmin, async (req, res) => {
     fullDayCheckIn: vals.fullDayCheckIn,
     fullDayCheckOut: vals.fullDayCheckOut,
     isVerified: false,
-  }).onConflictDoNothing();
+  }, { conflict: { action: "ignore" } });
 
   return submission;
   });
@@ -4276,10 +4122,7 @@ router.post("/direct-add-service", requireSuperAdmin, async (req, res) => {
 
   const submission = await db.transaction(async (tx) => {
     /* Create submission (already approved) */
-    const [createdSubmission] = await tx
-      .insert(serviceProviderSubmissionsTable)
-      .values({ ...svcVals, status: "approved" })
-      .returning({ id: serviceProviderSubmissionsTable.id });
+    const [createdSubmission] = await insertRecords(tx, serviceProviderSubmissionsTable, { ...svcVals, status: "approved" }, { returning: { id: serviceProviderSubmissionsTable.id } });
 
     /* Auto-create active service provider record */
     await tx.insert(serviceProvidersTable).values({
@@ -4311,7 +4154,7 @@ router.post("/section-guides", requirePlatformSettingsAdmin, async (req, res) =>
   try {
     const { sectionKey, title, videoUrl } = req.body as { sectionKey: string; title: string; videoUrl: string };
     if (!sectionKey || !title || !videoUrl) return res.status(400).json({ error: "بيانات ناقصة" });
-    const [row] = await db.insert(sectionGuidesTable).values({ sectionKey, title, videoUrl }).returning();
+    const [row] = await insertRecords(db, sectionGuidesTable, { sectionKey, title, videoUrl });
     return res.json(row);
   } catch (err) {
     console.error("[POST /admin/section-guides]", err);
@@ -4323,10 +4166,7 @@ router.put("/section-guides/:id", requirePlatformSettingsAdmin, async (req, res)
   try {
     const id = Number(req.params.id);
     const { title, videoUrl } = req.body as { title?: string; videoUrl?: string };
-    const [row] = await db.update(sectionGuidesTable)
-      .set({ ...(title !== undefined && { title }), ...(videoUrl !== undefined && { videoUrl }) })
-      .where(eq(sectionGuidesTable.id, id))
-      .returning();
+    const [row] = await updateRecords(db, sectionGuidesTable, { ...(title !== undefined && { title }), ...(videoUrl !== undefined && { videoUrl }) }, eq(sectionGuidesTable.id, id));
     if (!row) return res.status(404).json({ error: "غير موجود" });
     return res.json(row);
   } catch (err) {

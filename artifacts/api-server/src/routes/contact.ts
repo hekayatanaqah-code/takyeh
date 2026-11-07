@@ -1,3 +1,4 @@
+import { insertRecords } from "@workspace/db/mutations";
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { adminAuditLogsTable } from "@workspace/db/schema";
@@ -60,7 +61,7 @@ router.patch("/admin/inquiries/:id/status", requireAdminOrAdminStaff, requireSup
       return res.status(400).json({ error: "حالة غير صالحة" });
     }
     const normalizedStatus = status === "read" ? "in_progress" : status === "replied" ? "answered" : status;
-    const [audit] = await db.insert(adminAuditLogsTable).values({
+    const [audit] = await insertRecords(db, adminAuditLogsTable, {
       actorId: req.adminStaff?.id != null ? String(req.adminStaff.id) : req.user?.id ?? null,
       actorName: req.adminStaff?.name ?? (req.user as { name?: string } | undefined)?.name ?? "مجهول",
       action: "patch_contact_inquiry",
@@ -69,7 +70,7 @@ router.patch("/admin/inquiries/:id/status", requireAdminOrAdminStaff, requireSup
       entity: "contact-inquiries",
       entityId: id,
       metadata: { source: "contact-admin-route", status: "started" },
-    }).returning({ id: adminAuditLogsTable.id });
+    }, { returning: { id: adminAuditLogsTable.id } });
     await db.execute(
       sql`UPDATE contact_inquiries
           SET status = ${normalizedStatus},

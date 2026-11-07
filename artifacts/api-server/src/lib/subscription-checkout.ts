@@ -1,3 +1,4 @@
+import { insertRecords, updateRecords, writeRecords } from "@workspace/db/mutations";
 import { randomUUID } from "node:crypto";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { and, count, desc, eq, gt, inArray, isNull, notLike, sql } from "drizzle-orm";
@@ -426,7 +427,7 @@ export async function createSubscriptionCheckout(input: {
       }
     } else assertPaymentConfigured(checkoutQuote.amountHalala);
     const recurringAddonSnapshot = makeRecurringAddonSnapshot(recurringAddonRows);
-    const [intent] = await tx.insert(subscriptionCheckoutIntentsTable).values({
+    const [intent] = await insertRecords(tx, subscriptionCheckoutIntentsTable, {
       id: checkoutId,
       ownerId: lockedSubscription.ownerId,
       plan: plan.slug,
@@ -443,7 +444,7 @@ export async function createSubscriptionCheckout(input: {
       recurringAddonSnapshot,
       autoRenewConsent: input.paymentMethod !== "wallet" && input.autoRenewConsent === true,
       expiresAt,
-    }).returning();
+    });
     return {
       intent,
       invoiceLines: checkoutQuote.lineItems,
@@ -625,7 +626,7 @@ async function recordAndRefundStaleCapturedCheckout(input: {
   reason?: string;
   tryRefund?: boolean;
 }) {
-  const [reconciliation] = await db.insert(subscriptionPaymentReconciliationsTable).values({
+  const [reconciliation] = await insertRecords(db, subscriptionPaymentReconciliationsTable, {
     paymentId: input.paymentId,
     ownerId: input.ownerId,
     intentId: input.checkoutId,
@@ -633,7 +634,7 @@ async function recordAndRefundStaleCapturedCheckout(input: {
     reason: input.reason ?? "Paid checkout quote no longer matches the current subscription or recurring add-ons",
     status: "required",
     refundEligible: input.tryRefund !== false,
-  }).onConflictDoNothing().returning();
+  }, { conflict: { action: "ignore" } });
   await db.update(subscriptionCheckoutIntentsTable)
     .set({ consumedAt: new Date() })
     .where(and(
@@ -856,8 +857,7 @@ async function finalizeCheckout(input: {
         : now;
       const expiresAt = new Date(baseDate.getTime() + intent.durationDays * DAY_MS);
       const [subscription] = existingSubscription
-        ? await tx.update(ownerSubscriptionsTable)
-          .set({
+        ? await updateRecords(tx, ownerSubscriptionsTable, {
             plan: intent.plan,
             status: "active",
             expiresAt,
@@ -866,10 +866,8 @@ async function finalizeCheckout(input: {
             autoRenewEnabled,
             paymentStatus: "paid",
             termsSnapshot: intent.termsSnapshot,
-          })
-          .where(eq(ownerSubscriptionsTable.ownerId, intent.ownerId))
-          .returning()
-        : await tx.insert(ownerSubscriptionsTable).values({
+          }, eq(ownerSubscriptionsTable.ownerId, intent.ownerId))
+        : await insertRecords(tx, ownerSubscriptionsTable, {
             ownerId: intent.ownerId,
             plan: intent.plan,
             status: "active",
@@ -879,7 +877,7 @@ async function finalizeCheckout(input: {
             autoRenewEnabled,
             paymentStatus: "paid",
             termsSnapshot: intent.termsSnapshot,
-          }).returning();
+          });
 
       if (input.walletPayment) await debitOwnerWallet(tx, intent.ownerId, intent.amountHalala, `subscription-payment:${intent.id}`, `اشتراك ${intent.planLabel}`);
       await tx.insert(subscriptionPaymentsTable).values({
@@ -890,12 +888,12 @@ async function finalizeCheckout(input: {
         amountHalala: intent.amountHalala,
       });
       if (encryptedPaymentToken) {
-        await tx.insert(ownerBillingProfilesTable).values({
+        await writeRecords(tx, ownerBillingProfilesTable, {
           ownerId: intent.ownerId,
           encryptedPaymentToken,
           tokenPaymentId: input.paymentId,
           autoRenewEnabled,
-        }).onConflictDoUpdate({
+        }, { conflict: { action: "update", ...{
           target: ownerBillingProfilesTable.ownerId,
           set: {
             encryptedPaymentToken,
@@ -903,7 +901,7 @@ async function finalizeCheckout(input: {
             autoRenewEnabled,
             updatedAt: now,
           },
-        });
+        } } });
       } else if (existingBillingProfile && existingBillingProfile.autoRenewEnabled !== autoRenewEnabled) {
         await tx.update(ownerBillingProfilesTable)
           .set({ autoRenewEnabled, updatedAt: now })

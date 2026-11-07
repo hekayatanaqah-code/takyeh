@@ -1,8 +1,9 @@
+import { insertRecords, updateRecords } from "@workspace/db/mutations";
 import { db } from "@workspace/db";
 import { lockResource } from "@workspace/db/transaction-lock";
 import { serviceCityRequestsTable as requests, serviceCitiesCatalogTable as cities, serviceRegionsCatalogTable as regions, type ServiceCityRequest } from "@workspace/db/schema";
 import { and, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
-import { normalizeCityName, normalizedCityExpression } from "./city-name";
+import { normalizeCityName } from "./city-name";
 
 export class CityRequestError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -32,21 +33,21 @@ export async function createCityRequest(input: { city: string; regionId?: number
     }
     const identity = normalizeCityName(input.city);
     if (identity.length < 2) throw new CityRequestError(400, "يرجى إدخال اسم مدينة صحيح");
-    const [existingCity] = await tx.select({ id: cities.id }).from(cities).where(and(
-      eq(normalizedCityExpression(sql`${cities.name}`), identity),
+    const availableCities = await tx.select({ id: cities.id,name:cities.name }).from(cities).where(and(
       eq(cities.isActive, true), input.regionId ? eq(cities.regionId, input.regionId) : undefined,
     ));
+    const existingCity = availableCities.find(city=>normalizeCityName(city.name)===identity);
     if (existingCity) throw new CityRequestError(409, "هذه المدينة موجودة بالفعل في قائمة مدن الخدمات");
-    const [pending] = await tx.select().from(requests).where(and(
+    const pendingRequests = await tx.select().from(requests).where(and(
       eq(requests.requesterId, requesterId), eq(requests.status, "pending"),
-      eq(normalizedCityExpression(sql`${requests.city}`), identity),
       input.regionId ? eq(requests.regionId, input.regionId) : isNull(requests.regionId),
     ));
+    const pending = pendingRequests.find(request=>normalizeCityName(request.city)===identity);
     if (pending) return cityRequestRecord({ ...pending, regionName });
-    const [saved] = await tx.insert(requests).values({
+    const [saved] = await insertRecords(tx, requests, {
       city: input.city.trim(), regionId: input.regionId ?? null, requesterId,
       requesterName: requesterName.trim() || "مقدم خدمة",
-    }).returning();
+    });
     return cityRequestRecord({ ...saved, regionName });
   });
 }
@@ -73,15 +74,13 @@ export async function reviewCityRequest(id: number, input: { decision: "approve"
       const [region] = await tx.select().from(regions).where(and(eq(regions.id, regionId), eq(regions.isActive, true)));
       if (!region) throw new CityRequestError(400, "المنطقة غير موجودة أو غير مفعّلة");
       regionName = region.name;
-      const [existing] = await tx.select().from(cities).where(and(
-        eq(cities.regionId, regionId),
-        eq(normalizedCityExpression(sql`${cities.name}`), normalizeCityName(request.city)),
-      ));
+      const regionCities = await tx.select().from(cities).where(eq(cities.regionId, regionId));
+      const existing = regionCities.find(city=>normalizeCityName(city.name)===normalizeCityName(request.city));
       if (existing) {
         approvedCityId = existing.id;
         if (!existing.isActive) await tx.update(cities).set({ isActive: true }).where(eq(cities.id, existing.id));
       } else {
-        const [added] = await tx.insert(cities).values({ name: request.city, regionId, isActive: true }).returning({ id: cities.id });
+        const [added] = await insertRecords(tx, cities, { name: request.city, regionId, isActive: true }, { returning: { id: cities.id } });
         approvedCityId = added.id;
       }
     }
@@ -89,10 +88,10 @@ export async function reviewCityRequest(id: number, input: { decision: "approve"
       const [region] = await tx.select({ name: regions.name }).from(regions).where(eq(regions.id, regionId));
       regionName = region?.name ?? null;
     }
-    const [updated] = await tx.update(requests).set({
+    const [updated] = await updateRecords(tx, requests, {
       status: input.decision === "approve" ? "approved" : "rejected", regionId,
       reason: input.reason?.trim() || null, reviewedBy: actorId, reviewedAt: new Date(), approvedCityId,
-    }).where(eq(requests.id, id)).returning();
+    }, eq(requests.id, id));
     return cityRequestRecord({ ...updated, regionName });
   });
 }
