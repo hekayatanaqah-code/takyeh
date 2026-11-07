@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { lockResource } from "@workspace/db/transaction-lock";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@workspace/db";
@@ -44,8 +45,8 @@ router.patch("/:kind/:id", async (req, res) => {
   try {
     const found = await db.transaction(async tx => {
       // Same-role contacts must remain unambiguous; cross-role sharing is valid.
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`partner:${kind}:phone:${national}`}))`);
-      if (email) await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(LOWER(${email})))`);
+      await lockResource(tx, "identity", `partner:${kind}:phone:${national}`);
+      if (email) await lockResource(tx, "identity", email.toLowerCase());
       const table = sql`photographers`;
       const phoneColumn = sql`whatsapp`;
       const existing = await tx.execute(sql`SELECT id FROM ${table} WHERE id=${id}

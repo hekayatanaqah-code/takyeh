@@ -1,0 +1,61 @@
+
+// Generated native MariaDB schema; native application model.
+import * as m from "drizzle-orm/mysql-core";
+import { sql, desc } from "drizzle-orm";
+import { chaletSubmissionsTable } from "./chalet_submissions";
+
+export const ownerBookingsTable = m.mysqlTable("owner_bookings", {
+  id: m.int("id").notNull().autoincrement(),
+  ownerId: m.varchar("owner_id", { length: 191 }).notNull(),
+  submissionId: m.int("submission_id"),
+  clientName: m.longtext("client_name").notNull(),
+  bookingDate: m.varchar("booking_date", { length: 191 }).notNull(),
+  durationDays: m.int("duration_days").notNull().default(sql.raw("1")),
+  source: m.mysqlEnum("source", ["platform","external"]).notNull().default(sql.raw("'platform'")),
+  notes: m.longtext("notes"),
+  createdAt: m.datetime("created_at", { mode: "date", fsp: 6 }).notNull().default(sql.raw("CURRENT_TIMESTAMP(6)")),
+  period: m.longtext("period"),
+  revenueAmount: m.decimal("revenue_amount", { precision: 10, scale: 2 }),
+  clientPhone: m.varchar("client_phone", { length: 191 }),
+  totalPrice: m.decimal("total_price", { precision: 10, scale: 2 }),
+  depositPaid: m.decimal("deposit_paid", { precision: 10, scale: 2 }),
+  insuranceFee: m.decimal("insurance_fee", { precision: 10, scale: 2 }),
+  balanceCollected: m.boolean("balance_collected").notNull().default(sql.raw("0")),
+  insuranceRefunded: m.boolean("insurance_refunded").notNull().default(sql.raw("0")),
+  insuranceDeducted: m.decimal("insurance_deducted", { precision: 10, scale: 2 }),
+  insuranceDeductReason: m.longtext("insurance_deduct_reason"),
+  insuranceProofImages: m.longtext("insurance_proof_images"),
+  cancelledAt: m.datetime("cancelled_at", { mode: "date", fsp: 6 }),
+  cancelReason: m.longtext("cancel_reason"),
+  ratedAt: m.datetime("rated_at", { mode: "date", fsp: 6 }),
+  cancelReasonCode: m.longtext("cancel_reason_code"),
+  cancelRefundAmount: m.decimal("cancel_refund_amount", { precision: 10, scale: 2 }),
+  cancelIncome: m.decimal("cancel_income", { precision: 10, scale: 2 }),
+  paymentMethod: m.mysqlEnum("payment_method", ["cash","transfer","pos"]).default(sql.raw("'cash'")),
+  cashDeposited: m.boolean("cash_deposited").notNull().default(sql.raw("0")),
+  paymentReceiptUrl: m.longtext("payment_receipt_url"),
+  bookedAddons: m.json("booked_addons").$type<Array<{ id: number; name: string; price: string; unit: string }>>(),
+  insuranceReceived: m.boolean("insurance_received").notNull().default(sql.raw("0")),
+  insurancePaymentMethod: m.longtext("insurance_payment_method").$type<"cash" | "transfer">().notNull().default(sql.raw("'transfer'")),
+  contractSigned: m.boolean("contract_signed").notNull().default(sql.raw("0")),
+  contractSignerName: m.longtext("contract_signer_name"),
+  contractSignerId: m.longtext("contract_signer_id"),
+  contractSignatureDataUrl: m.longtext("contract_signature_data_url"),
+  contractSignedAt: m.datetime("contract_signed_at", { mode: "date", fsp: 6 }),
+  offerSnapshot: m.json("offer_snapshot").$type<{
+    basePrice: number; price: number; discountAmount: number;
+    days: Array<{ date: string; basePrice: number; price: number; offerId: number | null; offerName: string | null; badge: string | null }>;
+  }>(),
+  checkoutAt: m.datetime("checkout_at", { mode: "date", fsp: 6 }),
+}, (table): m.MySqlTableExtraConfigValue[] => [
+  m.check("owner_bookings_balance_collected_bool", sql.raw("`balance_collected` IN (0,1)")),
+  m.check("owner_bookings_insurance_refunded_bool", sql.raw("`insurance_refunded` IN (0,1)")),
+  m.check("owner_bookings_cash_deposited_bool", sql.raw("`cash_deposited` IN (0,1)")),
+  m.check("owner_bookings_insurance_received_bool", sql.raw("`insurance_received` IN (0,1)")),
+  m.check("owner_bookings_contract_signed_bool", sql.raw("`contract_signed` IN (0,1)")),
+  m.index("owner_bookings_booking_date_idx").on(table.bookingDate),
+  m.index("owner_bookings_cancelled_at_idx").on(table.cancelledAt),
+  m.index("owner_bookings_customer_history_idx").on(table.ownerId, table.clientPhone, desc(table.bookingDate), desc(table.id)),
+  m.primaryKey({ columns: [table.id] }),
+  m.foreignKey({ name: "owner_bookings_submission_id_chalet_submissions_id_fk", columns: [table.submissionId], foreignColumns: [chaletSubmissionsTable.id] }).onDelete("set null").onUpdate("restrict"),
+]);

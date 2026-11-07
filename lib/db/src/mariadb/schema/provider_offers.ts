@@ -11,8 +11,8 @@ export const providerOffersTable = m.mysqlTable("provider_offers", {
   name: m.longtext("name").notNull(),
   discountType: m.longtext("discount_type").notNull(),
   value: m.decimal("value", { precision: 12, scale: 2 }).notNull(),
-  startDate: m.date("start_date").notNull(),
-  endDate: m.date("end_date").notNull(),
+  startDate: m.date("start_date", { mode: "string" }).notNull(),
+  endDate: m.date("end_date", { mode: "string" }).notNull(),
   isActive: m.boolean("is_active").notNull().default(sql.raw("1")),
 }, (table): m.MySqlTableExtraConfigValue[] => [
   m.check("provider_offers_is_active_bool", sql.raw("`is_active` IN (0,1)")),

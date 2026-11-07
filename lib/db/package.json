@@ -7,9 +7,13 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./runtime-dialect": "./src/runtime-dialect.ts",
+    "./transaction-lock": "./src/transaction-lock.ts",
     "./mariadb": "./src/mariadb/connection.ts",
     "./mariadb/transaction": "./src/mariadb/transaction.ts",
-    "./mariadb/schema": "./src/mariadb/schema/index.ts"
+    "./mariadb/mutations": "./src/mariadb/mutations.ts",
+    "./mariadb/wallet": "./src/mariadb/wallet.ts",
+    "./mariadb/schema": "./src/mariadb/schema/index.ts",
+    "./mariadb/application-schema": "./src/mariadb/application-schema/index.ts"
   },
   "scripts": {
     "push": "drizzle-kit push --config ./drizzle.config.ts",

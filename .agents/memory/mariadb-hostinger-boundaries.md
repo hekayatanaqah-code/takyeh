@@ -22,13 +22,27 @@ Successful schema/seed import does not establish that PostgreSQL routes or
 transaction/advisory-lock semantics work on MariaDB. Keep the existing source
 database intact until the ported runtime passes its critical-flow tests.
 
-**Why:** The application relies on PostgreSQL-specific mutation results,
-upserts, raw JSON/array expressions and transaction-scoped advisory locks.
+**Why:** The application historically relied on PostgreSQL-specific mutation
+results, upserts, raw JSON/array expressions and advisory locks. Porting one
+category does not establish compatibility of the others.
 Replacing only the driver can silently undermine booking and financial safety.
 
 **How to apply:** Require native query and locking implementations with actual
 MariaDB verification before switching the application connection or publishing.
 GET_LOCK is not automatically equivalent to a PostgreSQL transaction lock.
+
+## Lock protocol cutover
+
+Stop all writers using the old advisory-lock protocol before activating writers
+using transaction row locks against the same database. Do not do a rolling
+cutover that leaves both locking protocols active.
+
+**Why:** Lock identities in different database primitives do not synchronize,
+even when each implementation is safe in isolation.
+
+**How to apply:** Pause old workers, schedulers and web writers; provision the
+new technical mutex reference table on the destination; activate and verify
+the new writers together. Never delete/reseed mutex rows during active work.
 
 ## Native tooling limitations
 

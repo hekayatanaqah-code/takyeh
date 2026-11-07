@@ -10,11 +10,11 @@ export const staffHoldingsTable = m.mysqlTable("staff_holdings", {
   kind: m.longtext("kind").notNull(),
   description: m.longtext("description").notNull(),
   amount: m.decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  recordedOn: m.date("recorded_on").notNull(),
+  recordedOn: m.date("recorded_on", { mode: "string" }).notNull(),
   notes: m.longtext("notes").notNull().default(sql.raw("''")),
   requestId: m.varchar("request_id", { length: 191 }).notNull(),
   status: m.longtext("status").notNull().default(sql.raw("'open'")),
-  settledOn: m.date("settled_on"),
+  settledOn: m.date("settled_on", { mode: "string" }),
   settlementNotes: m.longtext("settlement_notes"),
   createdAt: m.datetime("created_at", { mode: "date", fsp: 6 }).notNull().default(sql.raw("CURRENT_TIMESTAMP(6)")),
 }, (table): m.MySqlTableExtraConfigValue[] => [

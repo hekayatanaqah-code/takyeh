@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { createHash } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, ownerCustomersTable, providerCatalogItemsTable, quickSalesSettingsTable, quickSalesTable, serviceProvidersTable } from "@workspace/db";
@@ -24,7 +25,7 @@ router.patch("/quick-sales/settings", async (req, res): Promise<void> => {
   if (!body.success) { res.status(400).json({ error: "اختر حالة تفعيل صحيحة" }); return; }
   const ownerId = req.user!.id;
   await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`quick-sales:${ownerId}`}, 0))`);
+    await lockResource(tx, "long-identity", `quick-sales:${ownerId}`);
     await tx.insert(quickSalesSettingsTable).values({ ownerId, enabled: body.data.enabled })
       .onConflictDoUpdate({ target: quickSalesSettingsTable.ownerId, set: { enabled: body.data.enabled } });
   });
@@ -57,7 +58,7 @@ router.post("/quick-sales", async (req, res): Promise<void> => {
   const hash = createHash("sha256").update(JSON.stringify(input.clientPhone ? input : legacyInput)).digest("hex");
   const result = await db.transaction(async tx => {
     // Serializes disable/create and retries for the SAME owner, not the marketplace.
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`quick-sales:${ownerId}`}, 0))`);
+    await lockResource(tx, "long-identity", `quick-sales:${ownerId}`);
     const [existing] = await tx.select().from(quickSalesTable).where(and(
       eq(quickSalesTable.ownerId, ownerId), eq(quickSalesTable.idempotencyKey, input.idempotencyKey),
     ));
@@ -79,7 +80,7 @@ router.post("/quick-sales", async (req, res): Promise<void> => {
     let clientName = input.clientName;
     if (input.clientPhone) {
       // Same unique owner/normalized-phone key as bookings; no name-only matching.
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`customer:${ownerId}:${input.clientPhone}`}, 0))`);
+      await lockResource(tx, "long-identity", `customer:${ownerId}:${input.clientPhone}`);
       const [customer] = await tx.select().from(ownerCustomersTable).where(and(
         eq(ownerCustomersTable.ownerId, ownerId), eq(ownerCustomersTable.phoneNormalized, input.clientPhone),
       ));

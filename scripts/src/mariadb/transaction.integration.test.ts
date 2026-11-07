@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import mysql, { type Pool, type RowDataPacket } from "mysql2/promise";
 import { createMariaDbConnection } from "@workspace/db/mariadb";
 import { transactionLockDDL, transactionLockKey, withMariaDbTransaction } from "@workspace/db/mariadb/transaction";
+import { transactionMutexSeedSQL } from "@workspace/db/transaction-lock";
 
 test("lock identities are unambiguous and ordered by the transaction wrapper", () => {
   assert.notDeepEqual(transactionLockKey("capacity", "1:2", "3"), transactionLockKey("capacity", "1", "2:3"));
@@ -46,6 +47,17 @@ test("native InnoDB serialization, money rollback, capacity and pooled lock rele
     store = createMariaDbConnection({ socketPath, database, user: "root" });
     await store.verifyTarget();
     await store.pool.query(transactionLockDDL);
+    await store.pool.query(transactionMutexSeedSQL);
+    const unseeded = transactionLockKey("initialization", "technical-reference-only");
+    const stripe = unseeded.readUInt16BE(0) >>> 4;
+    await store.pool.execute("DELETE FROM application_transaction_mutex WHERE id=?", [stripe]);
+    await assert.rejects(withMariaDbTransaction(store.pool, [unseeded], async () => {
+      throw new Error("metadata-rollback");
+    }), /metadata-rollback/);
+    const [missing] = await store.pool.query<mysql.RowDataPacket[]>(
+      "SELECT COUNT(*) AS count FROM application_transaction_mutex WHERE id=?", [stripe]);
+    assert.equal(Number(missing[0].count), 0, "technical row initialization rolls back with the transaction");
+    await withMariaDbTransaction(store.pool, [unseeded], async () => {});
     await store.pool.query("CREATE TABLE wallet_probe (id INT PRIMARY KEY, amount_halalas BIGINT NOT NULL CHECK (amount_halalas>=0)) ENGINE=InnoDB");
     await store.pool.query("CREATE TABLE capacity_probe (id INT AUTO_INCREMENT PRIMARY KEY, resource_id INT NOT NULL) ENGINE=InnoDB");
     await store.pool.query("INSERT INTO wallet_probe VALUES (1,100)");

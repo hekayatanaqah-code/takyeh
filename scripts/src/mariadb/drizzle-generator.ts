@@ -21,6 +21,7 @@ function nativeColumn(column: Column, indexed: boolean): string {
     const method = methods[type];
     if (!method) throw new Error(`Unsupported native Drizzle type: ${type}`);
     const options = type === "DATETIME(6)" ? ", { mode: \"date\", fsp: 6 }"
+      : type === "DATE" ? ", { mode: \"string\" }"
       : type === "BIGINT" ? ", { mode: \"bigint\" }" : "";
     code = `m.${method}(${name}${options})`;
   }
@@ -64,6 +65,12 @@ export function generateDrizzleSchemas(catalog: Catalog): Map<string, string> {
       } else if (column.data_type === "ARRAY") {
         extra.push(`m.check(${JSON.stringify(`${table}_${column.column_name}_array`.slice(0, 64))}, ${raw(`JSON_TYPE(\`${column.column_name}\`) = 'ARRAY'`)})`);
       }
+    }
+    // Explicit, additive application migration; see 001-application-contract.sql.
+    // The legacy catalog lacks this nullable model field.
+    if (table === "external_services" && !catalog.columns.some(column =>
+      column.table_name === table && column.column_name === "owner_id")) {
+      fields.push('  ownerId: m.varchar("owner_id", { length: 191 }),');
     }
     for (const check of catalog.constraints.filter(item => item.table_name === table && item.kind === "c")) {
       extra.push(`m.check(${JSON.stringify(check.constraint_name)}, ${raw(translateExpression(check.definition).replace(/^CHECK\s*/i, ""))})`);

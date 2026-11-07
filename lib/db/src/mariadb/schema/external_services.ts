@@ -15,6 +15,7 @@ export const externalServicesTable = m.mysqlTable("external_services", {
   isActive: m.boolean("is_active").notNull().default(sql.raw("1")),
   createdAt: m.datetime("created_at", { mode: "date", fsp: 6 }).notNull().default(sql.raw("CURRENT_TIMESTAMP(6)")),
   trialEndsAt: m.datetime("trial_ends_at", { mode: "date", fsp: 6 }),
+  ownerId: m.varchar("owner_id", { length: 191 }),
 }, (table): m.MySqlTableExtraConfigValue[] => [
   m.check("external_services_photos_array", sql.raw("JSON_TYPE(`photos`) = 'ARRAY'")),
   m.check("external_services_is_active_bool", sql.raw("`is_active` IN (0,1)")),

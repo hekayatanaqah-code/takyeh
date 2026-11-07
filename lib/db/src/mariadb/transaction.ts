@@ -1,27 +1,25 @@
-import { createHash } from "node:crypto";
 import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
 import type { Pool, PoolConnection } from "mysql2/promise";
+import { lockResourceDigests, resourceLockDigest, transactionMutexDDL } from "../transaction-lock";
 
 /**
  * Provision separately, before accepting traffic. Never run DDL inside a money
  * transaction: MariaDB DDL implicitly commits even when issued inside BEGIN.
  */
-export const transactionLockDDL = `CREATE TABLE app_transaction_locks (
-  lock_key BINARY(32) NOT NULL PRIMARY KEY
-) ENGINE=InnoDB`;
+export const transactionLockDDL = `${transactionMutexDDL} ENGINE=InnoDB`;
 
 export type MariaDbTransaction = {
   connection: PoolConnection;
   db: MySql2Database<Record<string, unknown>> & { $client: PoolConnection };
 };
 
+export async function lockMariaDbTransaction(tx: MariaDbTransaction, lockKeys: readonly Buffer[]): Promise<void> {
+  await lockResourceDigests(tx.db, lockKeys);
+}
+
 /** Unambiguous, case-sensitive identity; do not reuse PostgreSQL hashtext IDs. */
 export function transactionLockKey(namespace: string, ...parts: string[]): Buffer {
-  const values = [namespace, ...parts];
-  if (values.some(value => typeof value !== "string" || !value || value.length > 1024)) {
-    throw new Error("Invalid transaction lock identity.");
-  }
-  return createHash("sha256").update(JSON.stringify(values), "utf8").digest();
+  return resourceLockDigest(namespace, ...parts);
 }
 
 /**
@@ -43,7 +41,6 @@ export async function withMariaDbTransaction<T>(
     throw new Error("Invalid transaction locks.");
   }
   // Stable order prevents cycles when callers supply overlapping resource sets.
-  const keys = [...new Set(lockKeys.map(key => key.toString("hex")))].sort();
   const connection = await pool.getConnection();
   let started = false;
   let reusable = true;
@@ -51,15 +48,9 @@ export async function withMariaDbTransaction<T>(
     await connection.query("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
     await connection.beginTransaction();
     started = true;
-    for (const key of keys) {
-      // An upsert takes an exclusive InnoDB record lock, including an existing
-      // key. It is not INSERT IGNORE, which could hide unrelated SQL failures.
-      await connection.execute(
-        "INSERT INTO app_transaction_locks (lock_key) VALUES (?) ON DUPLICATE KEY UPDATE lock_key=VALUES(lock_key)",
-        [Buffer.from(key, "hex")],
-      );
-    }
-    const result = await work({ connection, db: drizzle(connection, { mode: "default" }) });
+    const tx = { connection, db: drizzle(connection, { mode: "default" }) };
+    await lockMariaDbTransaction(tx, lockKeys);
+    const result = await work(tx);
     try {
       await connection.commit();
     } catch {

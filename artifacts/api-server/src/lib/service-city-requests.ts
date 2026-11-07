@@ -1,4 +1,5 @@
 import { db } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { serviceCityRequestsTable as requests, serviceCitiesCatalogTable as cities, serviceRegionsCatalogTable as regions, type ServiceCityRequest } from "@workspace/db/schema";
 import { and, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import { normalizeCityName, normalizedCityExpression } from "./city-name";
@@ -17,11 +18,12 @@ export function cityRequestRecord(row: ServiceCityRequest & { regionName?: strin
 }
 
 // Serialize request submissions and reviews, including two approvals for the same city.
-const catalogLock = sql`SELECT pg_advisory_xact_lock(hashtext('service-city-request-catalog'))`;
+const catalogLock = (tx: Parameters<typeof lockResource>[0]) =>
+  lockResource(tx, "identity", "service-city-request-catalog");
 
 export async function createCityRequest(input: { city: string; regionId?: number }, requesterId: string, requesterName: string, database: Pick<typeof db, "transaction"> = db) {
   return database.transaction(async tx => {
-    await tx.execute(catalogLock);
+    await catalogLock(tx);
     let regionName: string | null = null;
     if (input.regionId) {
       const [region] = await tx.select().from(regions).where(and(eq(regions.id, input.regionId), eq(regions.isActive, true)));
@@ -58,7 +60,7 @@ export async function listCityRequests() {
 
 export async function reviewCityRequest(id: number, input: { decision: "approve" | "reject"; regionId?: number; reason?: string }, actorId: string, database: Pick<typeof db, "transaction"> = db) {
   return database.transaction(async tx => {
-    await tx.execute(catalogLock);
+    await catalogLock(tx);
     const [request] = await tx.select().from(requests).where(eq(requests.id, id)).for("update");
     if (!request) throw new CityRequestError(404, "طلب المدينة غير موجود");
     if (request.status !== "pending") throw new CityRequestError(409, "تمت مراجعة هذا الطلب مسبقاً؛ يرجى تحديث القائمة");

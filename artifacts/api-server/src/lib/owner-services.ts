@@ -1,4 +1,5 @@
 import { db, ownerServicesTable, siteSettingsTable, citiesCatalogTable, regionsCatalogTable } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { photographyReadiness } from "./photography-delivery";
@@ -37,7 +38,7 @@ export function serviceAvailabilityError(service: { kind: string; state: string;
   return null;
 }
 export async function lockOwnerServices(tx: Store) {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(731221, 0)`);
+  await lockResource(tx, 731221, 0);
   // Lock the existing payment gate first, matching checkout/reservation lock order.
   await tx.select().from(siteSettingsTable).where(eq(siteSettingsTable.key, "photography_enabled")).for("update");
 }

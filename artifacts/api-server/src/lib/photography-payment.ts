@@ -1,4 +1,5 @@
 import { db, photographersTable, photographyBookingsTable, photographyDeliveriesTable } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { and, eq, sql } from "drizzle-orm";
 import { deliverPhotographyMessage } from "./photography-delivery";
 import { logger } from "./logger";
@@ -33,7 +34,7 @@ export async function reconcilePhotographyBooking(id: number, options: {
   let newlyConfirmed = false;
   const result = await db.transaction(async tx => {
     await lockPhotographyAllocation(tx);
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(731220, ${initial.photographerId})`);
+    await lockResource(tx, 731220, initial.photographerId);
     const [booking] = await tx.select().from(photographyBookingsTable).where(eq(photographyBookingsTable.id, id)).for("update");
     if (!booking) throw new Error("booking_missing");
     if (booking.status === "confirmed" || booking.status === "completed") return booking;

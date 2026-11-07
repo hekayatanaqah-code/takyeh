@@ -1,4 +1,5 @@
 import { db } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { siteSettingsTable, subscriptionPlansTable } from "@workspace/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
@@ -42,7 +43,7 @@ const DEFAULT_PLANS = [
 
 export async function seedSubscriptionPlansOnce() {
   await db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(1735699031, 2)`);
+    await lockResource(tx, 1735699031, 2);
     const [marker] = await tx.select({ key: siteSettingsTable.key })
       .from(siteSettingsTable).where(eq(siteSettingsTable.key, "subscription_plan_defaults_seeded"));
     if (!marker) {

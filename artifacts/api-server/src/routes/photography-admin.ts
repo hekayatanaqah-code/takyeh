@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { db, photographersTable, photographyPackagesTable, photographyBookingsTable, photographyDeliveriesTable, siteSettingsTable, citiesCatalogTable, districtsCatalogTable, photographyContractsTable, photographyTransfersTable, photographyAlertsTable, photographyReceiptsTable, chaletCategoriesTable, serviceCategoriesTable, chaletSubmissionsTable } from "@workspace/db";
 import { and, eq, inArray, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -53,7 +54,7 @@ router.post("/contract", async (req, res) => {
   const html = cleanContractHtml(parsed.data.html);
   if (!html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim()) return res.status(400).json({ error: "لا يمكن نشر عقد فارغ" });
   const version = await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(731222, 1)`);
+    await lockResource(tx, 731222, 1);
     const [contract] = await tx.insert(photographyContractsTable).values({ html }).returning();
     return contract;
   });

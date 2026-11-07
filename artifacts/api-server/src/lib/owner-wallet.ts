@@ -1,4 +1,5 @@
 import { db, ownerWalletEntriesTable } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { eq, sql, desc } from "drizzle-orm";
 import { subscriptionOwnerKeys } from "./subscription-access";
 import type { PhotographyTx } from "./photography-allocation";
@@ -9,12 +10,12 @@ export async function walletOwnerKey(ownerId: string) {
 }
 export async function lockOwnerWallet(tx: PhotographyTx, ownerId: string) {
   const key = await walletOwnerKey(ownerId);
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(731250, hashtext(${key}))`);
+  await lockResource(tx, 731250, key);
   return key;
 }
 export async function ownerWallet(ownerId: string, store: Pick<typeof db, "select"> = db) {
   const key = await walletOwnerKey(ownerId);
-  const [row] = await store.select({ amount: sql<string>`coalesce(sum(${ownerWalletEntriesTable.amountHalalas}),0)::text` })
+  const [row] = await store.select({ amount: sql<string>`coalesce(sum(${ownerWalletEntriesTable.amountHalalas}),0)`.mapWith(String) })
     .from(ownerWalletEntriesTable).where(eq(ownerWalletEntriesTable.ownerId, key));
   const balanceHalalas = Number(row.amount);
   if (!Number.isSafeInteger(balanceHalalas) || balanceHalalas < 0) throw new Error("wallet_ledger_invalid");

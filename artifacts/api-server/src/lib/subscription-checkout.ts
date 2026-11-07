@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { and, count, desc, eq, gt, inArray, isNull, notLike, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import {
@@ -744,7 +745,7 @@ async function finalizeCheckout(input: {
         // Lock every linked identity in a deterministic order so distinct free
         // checkout intents for the same account cannot both pass the lifetime check.
         for (const ownerKey of [...new Set(ownerKeys)].sort()) {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(731204, hashtext(${ownerKey}))`);
+          await lockResource(tx, 731204, ownerKey);
         }
         const [priorFreeRedemption] = await tx.select({ value: count() })
           .from(subscriptionPaymentsTable)

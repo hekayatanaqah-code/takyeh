@@ -1,4 +1,5 @@
 import { Router, type Request } from "express";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { db } from "@workspace/db";
 import { chaletSubmissionsTable, chaletsTable, ownerTempSessionsTable } from "@workspace/db/schema";
 import { CreateSubmissionBody } from "@workspace/api-zod";
@@ -324,7 +325,7 @@ router.post("/", async (req, res) => {
   // Lock the owner's property quota until the submission is committed. Without
   // this second check, two concurrent requests can both consume the last slot.
   const [submission] = await db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${ownerAccess!.subscription.ownerId}))`);
+    await lockResource(tx, 731205, ownerAccess!.subscription.ownerId);
     const currentAccess = await ownerPlanAccess(ownerId!);
     if (!currentAccess.canSubmitActivities ||
         currentAccess.chaletCount >= currentAccess.chaletLimit) return [null];

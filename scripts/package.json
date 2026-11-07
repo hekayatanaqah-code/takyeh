@@ -6,12 +6,18 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "export:mariadb": "tsx ./src/export-mariadb.ts",
+    "export:mariadb-locks": "tsx ./src/export-transaction-mutex.ts",
+    "verify:transaction-locks": "tsx ./src/verify-transaction-mutex.ts",
     "generate:mariadb-schema": "tsx ./src/generate-mariadb-schema.ts",
+    "generate:mariadb-contracts": "tsx ./src/generate-mariadb-contracts.ts",
     "verify:mariadb": "tsx ./src/verify-mariadb-export.ts",
     "test:mariadb": "tsx --test ./src/mariadb/schema-converter.test.ts",
     "audit:hostinger": "tsx ./src/audit-hostinger.ts",
     "test:runtime-audit": "tsx --test ./src/mariadb/runtime-audit.test.ts",
     "test:mariadb-transactions": "tsx --test ./src/mariadb/transaction.integration.test.ts",
+    "test:mariadb-contracts": "tsx --test ./src/mariadb/application-contracts.test.ts",
+    "test:mariadb-mutations": "tsx --test ./src/mariadb/mutations.integration.test.ts",
+    "test:mariadb-models": "tsx --test ./src/mariadb/schema-model.integration.test.ts",
     "seed-chalets": "tsx ./src/seed-chalets.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -24,6 +30,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/pg": "^8.18.0",
+    "drizzle-orm": "catalog:",
     "tsx": "catalog:",
     "typescript": "~5.9.3"
   }

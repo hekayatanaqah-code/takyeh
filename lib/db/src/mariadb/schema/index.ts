@@ -2,6 +2,7 @@ export * from "./admin_audit_logs";
 export * from "./admin_sessions";
 export * from "./admin_staff";
 export * from "./amenities_catalog";
+export * from "./application_transaction_mutex";
 export * from "./booking_payments";
 export * from "./broadcast_campaigns";
 export * from "./broadcast_deliveries";

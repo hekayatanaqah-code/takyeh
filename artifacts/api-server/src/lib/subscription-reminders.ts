@@ -1,4 +1,5 @@
 import { and, eq, gte, like, lt, notInArray, sql } from "drizzle-orm";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { db, ownerNotificationsTable, ownerSubscriptionsTable } from "@workspace/db";
 import { siteSettingsTable } from "@workspace/db/schema";
 import { logger } from "./logger";
@@ -46,16 +47,14 @@ function reminderMessage(daysUntilExpiry: number, marker: string): string {
 
 /**
  * Inserts in-app renewal reminders once per owner, expiry timestamp, and
- * milestone. A database advisory transaction lock makes the check-and-insert
+ * milestone. A database row transaction lock makes the check-and-insert
  * safe across restarts and concurrent server instances.
  */
 export async function runSubscriptionExpiryReminders(): Promise<void> {
   let status: "success" | "failure" = "success";
   try {
     const createdCount = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(${REMINDER_LOCK_NAMESPACE}, ${REMINDER_LOCK_ID})`,
-      );
+      await lockResource(tx, REMINDER_LOCK_NAMESPACE, REMINDER_LOCK_ID);
 
       const now = new Date();
       let inserted = 0;

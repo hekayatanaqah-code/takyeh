@@ -1,4 +1,5 @@
 import { db } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { sql } from "drizzle-orm";
 
 type OwnerIdentity = {
@@ -88,7 +89,7 @@ export async function ensureOwnerProfile(
   const businessType = hasService && hasChalet ? "both" : hasService ? "service" : "chalet";
 
   return db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(LOWER(${email})))`);
+    await lockResource(tx, "identity", email.toLowerCase());
 
     const concurrentLinkResult = await tx.execute(sql`
       SELECT oa.email

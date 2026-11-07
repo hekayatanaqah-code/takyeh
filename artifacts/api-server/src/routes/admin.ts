@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { adminServiceCityRequestsRouter } from "./admin-service-city-requests";
 import { arabicServiceCategoryName, serviceCategoryCreationSchema } from "../lib/service-category-names";
 import photographyAdminRouter from "./photography-admin";
@@ -798,7 +799,7 @@ router.patch("/profile", requireSuperAdmin, async (req, res): Promise<void> => {
   if (!email) { res.status(400).json({ error: "البريد الإلكتروني غير صحيح." }); return; }
   // Serialize profile email changes so concurrent admins cannot claim the same recovery address.
   const result = await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('admin-profile-email'))`);
+    await lockResource(tx, "identity", "admin-profile-email");
     const [duplicate] = await tx.select({ id: adminStaffTable.id }).from(adminStaffTable)
       .where(and(sql`lower(${adminStaffTable.personalEmail}) = ${email}`, ne(adminStaffTable.id, member.id)));
     if (duplicate) return "duplicate";
@@ -976,7 +977,7 @@ router.patch("/submissions/:id/status", requireChaletApprovalsAdmin, async (req,
   };
   const result = await db.transaction(async (tx) => {
     if (subscription) {
-      await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${subscription.ownerId}))`);
+      await lockResource(tx, 731205, subscription.ownerId);
     }
     const [submission] = await tx
       .select()

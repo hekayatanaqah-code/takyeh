@@ -8,8 +8,8 @@ export const ownerAccountDiscountsTable = m.mysqlTable("owner_account_discounts"
   actorId: m.longtext("actor_id").notNull(),
   kind: m.longtext("kind").notNull(),
   value: m.decimal("value", { precision: 15, scale: 2 }).notNull(),
-  startDate: m.date("start_date"),
-  endDate: m.date("end_date"),
+  startDate: m.date("start_date", { mode: "string" }),
+  endDate: m.date("end_date", { mode: "string" }),
   reason: m.longtext("reason").notNull(),
   createdAt: m.datetime("created_at", { mode: "date", fsp: 6 }).notNull().default(sql.raw("CURRENT_TIMESTAMP(6)")),
 }, (table): m.MySqlTableExtraConfigValue[] => [

@@ -1,11 +1,12 @@
 import { db, photographyReceiptsTable, photographyReceiptUploadsTable } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { eq, sql } from "drizzle-orm";
 
 export type ReceiptTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // Shared by completion, transfer attachment and cleanup. Never use a
 // process-local mutex: more than one server/maintenance process may be running.
 export async function lockPhotographyReceipts(tx: ReceiptTransaction) {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(731226, 1)`);
+  await lockResource(tx, 731226, 1);
 }
 
 export async function attachablePhotographyReceipt(tx: ReceiptTransaction, receiptId: number, actor: string) {

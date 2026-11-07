@@ -1,0 +1,45 @@
+
+// Generated native MariaDB schema; native application model.
+import * as m from "drizzle-orm/mysql-core";
+import { sql, desc } from "drizzle-orm";
+import { serviceCitiesCatalogTable } from "./service_cities_catalog";
+import { serviceRegionsCatalogTable } from "./service_regions_catalog";
+
+export const serviceProviderSubmissionsTable = m.mysqlTable("service_provider_submissions", {
+  id: m.int("id").notNull().autoincrement(),
+  ownerId: m.longtext("owner_id"),
+  businessName: m.longtext("business_name").notNull(),
+  category: m.longtext("category").notNull(),
+  city: m.longtext("city").notNull(),
+  descriptionAr: m.longtext("description_ar"),
+  whatsappNumber: m.longtext("whatsapp_number").notNull(),
+  logoUrl: m.longtext("logo_url"),
+  galleryPhotos: m.json("gallery_photos").$type<string[]>().notNull().default(sql.raw("'[]'")),
+  status: m.mysqlEnum("status", ["pending","approved","rejected","needs_revision"]).notNull().default(sql.raw("'pending'")),
+  adminNote: m.longtext("admin_note"),
+  createdAt: m.datetime("created_at", { mode: "date", fsp: 6 }).notNull().default(sql.raw("CURRENT_TIMESTAMP(6)")),
+  videoUrl: m.longtext("video_url"),
+  yearsOfExperience: m.int("years_of_experience"),
+  coverageTags: m.json("coverage_tags").$type<string[]>().notNull().default(sql.raw("'[]'")),
+  customFeatureTags: m.json("custom_feature_tags").$type<string[]>().notNull().default(sql.raw("'[]'")),
+  pricingUnit: m.longtext("pricing_unit"),
+  dailyCapacity: m.int("daily_capacity"),
+  requiresInsurance: m.boolean("requires_insurance").notNull().default(sql.raw("0")),
+  insuranceAmount: m.decimal("insurance_amount", { precision: 10, scale: 2 }),
+  requiresContract: m.boolean("requires_contract").notNull().default(sql.raw("0")),
+  contractText: m.longtext("contract_text"),
+  includeElectronicSignature: m.boolean("include_electronic_signature").notNull().default(sql.raw("1")),
+  serviceRegionId: m.int("service_region_id"),
+  serviceCityId: m.int("service_city_id"),
+  instagramAccount: m.longtext("instagram_account"),
+}, (table): m.MySqlTableExtraConfigValue[] => [
+  m.check("service_provider_submissions_gallery_photos_array", sql.raw("JSON_TYPE(`gallery_photos`) = 'ARRAY'")),
+  m.check("service_provider_submissions_coverage_tags_array", sql.raw("JSON_TYPE(`coverage_tags`) = 'ARRAY'")),
+  m.check("service_provider_submissions_custom_feature_tags_array", sql.raw("JSON_TYPE(`custom_feature_tags`) = 'ARRAY'")),
+  m.check("service_provider_submissions_requires_insurance_bool", sql.raw("`requires_insurance` IN (0,1)")),
+  m.check("service_provider_submissions_requires_contract_bool", sql.raw("`requires_contract` IN (0,1)")),
+  m.check("service_provider_submissions_include_electronic_signature_bool", sql.raw("`include_electronic_signature` IN (0,1)")),
+  m.primaryKey({ columns: [table.id] }),
+  m.foreignKey({ name: "service_provider_submissions_service_city_id_fkey", columns: [table.serviceCityId], foreignColumns: [serviceCitiesCatalogTable.id] }).onDelete("restrict").onUpdate("restrict"),
+  m.foreignKey({ name: "service_provider_submissions_service_region_id_fkey", columns: [table.serviceRegionId], foreignColumns: [serviceRegionsCatalogTable.id] }).onDelete("restrict").onUpdate("restrict"),
+]);

@@ -8,7 +8,7 @@ export const quickSalesTable = m.mysqlTable("quick_sales", {
   ownerId: m.varchar("owner_id", { length: 191 }).notNull(),
   providerId: m.int("provider_id").notNull(),
   providerName: m.longtext("provider_name").notNull(),
-  dateStr: m.date("date_str").notNull(),
+  dateStr: m.date("date_str", { mode: "string" }).notNull(),
   clientName: m.longtext("client_name").notNull().default(sql.raw("''")),
   items: m.json("items").notNull(),
   total: m.decimal("total", { precision: 14, scale: 2 }).notNull(),

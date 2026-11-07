@@ -1,4 +1,5 @@
 import { db } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import {
   ownerAccountLinksTable,
   ownerSubscriptionsTable,
@@ -191,7 +192,7 @@ export async function getOrStartOwnerSubscription(ownerId: string) {
     .where(inArray(ownerSubscriptionsTable.ownerId, keys)));
   if (existing) return existing;
   return db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${[...keys].sort()[0]}))`);
+    await lockResource(tx, 731205, [...keys].sort()[0]);
     return pendingOwnerSubscription(tx, keys);
   });
 }
@@ -199,7 +200,7 @@ export async function getOrStartOwnerSubscription(ownerId: string) {
 /** Called in the same transaction that approves and publishes the first activity. */
 export async function activateOwnerTrial(ownerId: string, tx: SubscriptionWriter, now?: Date) {
   const keys = await subscriptionOwnerKeys(ownerId);
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${[...keys].sort()[0]}))`);
+  await lockResource(tx, 731205, [...keys].sort()[0]);
   const sub = await pendingOwnerSubscription(tx, keys);
   if (sub.plan !== "trial" || sub.status !== "pending_activation" || sub.trialStartedAt) return sub;
   const activatedAt = now ?? new Date();

@@ -1,4 +1,5 @@
 import { db, photographersTable, photographyBookingsTable, photographyCancellationsTable } from "@workspace/db";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { coveredPhotographyTarget, type PhotographyTarget } from "./photography-targets";
 import { photographySlots } from "./photography-rules";
@@ -11,13 +12,13 @@ type Store = Pick<typeof db, "select">;
 type Photographer = typeof photographersTable.$inferSelect;
 export async function lockPhotographyAllocation(tx: PhotographyTx) {
   // One ordering lock across allocations, paid confirmation, ratings and declines.
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(731226, 1)`);
+  await lockResource(tx, 731226, 1);
 }
 export async function recentCancellationCounts(store: Store = db) {
   const policy = await getPhotographyPolicy(store);
   const rows = await store.select({
     id: photographyCancellationsTable.photographerId,
-    count: sql<number>`count(*)::integer`,
+    count: sql<number>`count(*)`.mapWith(Number),
   }).from(photographyCancellationsTable)
     .where(gte(photographyCancellationsTable.createdAt, new Date(Date.now() - policy.cancellationWindowDays * 86400000)))
     .groupBy(photographyCancellationsTable.photographerId);

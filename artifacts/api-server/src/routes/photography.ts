@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
+import { lockResource } from "@workspace/db/transaction-lock";
 import {
   db, photographersTable, photographyPackagesTable, photographerSessionsTable, photographyBookingsTable,
   siteSettingsTable, photographyReviewsTable, photographyRefundsTable,
@@ -111,7 +112,7 @@ router.post("/invites/:token", sameOrigin, loginLimit, async (req, res) => {
   if (!agreement.success) return res.status(400).json({ error: "أدخل بيانات البنك والآيبان السعودي الصحيح ووافق على العقد" });
   const passwordHash = await bcrypt.hash(password.data, 12);
   const row = await db.transaction(async tx => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(731222, 1)`);
+    await lockResource(tx, 731222, 1);
     const current = await currentPhotographyContract(tx);
     if (!current || current.id !== agreement.data.contractVersion) return "contract_changed" as const;
     const [saved] = await tx.update(photographersTable).set({

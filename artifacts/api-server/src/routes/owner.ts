@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { lockResource } from "@workspace/db/transaction-lock";
 import staffHoldingsRouter from "./staff-holdings";
 import quickSalesRouter from "./quick-sales";
 import { propertyOffersRouter } from "./property-offers";
@@ -947,7 +948,7 @@ router.put("/profile", async (req, res) => {
       try {
         await db.transaction(async (tx) => {
           if (newEmailClean && newEmailClean !== currentEmail.toLowerCase()) {
-            await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(LOWER(${newEmailClean})))`);
+            await lockResource(tx, "identity", newEmailClean.toLowerCase());
             const duplicateEmail = await tx.execute(
               sql`SELECT id
                   FROM owner_applications
@@ -5515,7 +5516,7 @@ router.patch("/submissions/:id", requireAuth, async (req, res) => {
     if (isResubmission) {
       const result = await db.transaction(async (tx) => {
         const access = await ownerPlanAccess(req.user!.id);
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(731205, hashtext(${access.subscription.ownerId}))`);
+        await lockResource(tx, 731205, access.subscription.ownerId);
         const [current] = await tx.select({ status: chaletSubmissionsTable.status })
           .from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, submissionId)).for("update");
         if (current?.status !== "needs_revision") return "changed";

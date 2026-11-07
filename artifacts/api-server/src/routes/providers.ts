@@ -1,5 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
+import { lockResource } from "@workspace/db/transaction-lock";
 import { normalizeCityName } from "../lib/city-name";
+import { providerCoversCity, shuffledInventory } from "../lib/provider-city-filter";
 import { isArabicServiceCategoryName } from "../lib/service-category-names";
 import { CreateServiceCityRequestBody } from "@workspace/api-zod";
 import { CityRequestError, createCityRequest } from "../lib/service-city-requests";
@@ -214,24 +216,13 @@ router.get("/", async (req, res) => {
   if (category && category !== "all") {
     conditions.push(eq(serviceProvidersTable.category, category));
   }
-  if (city && city !== "all") {
-    conditions.push(sql`(
-      LOWER(${serviceProvidersTable.city}) = LOWER(${city})
-      OR EXISTS (
-        SELECT 1
-        FROM UNNEST(${serviceProvidersTable.coverageTags}) AS coverage(city_name)
-         WHERE LOWER(coverage.city_name) = LOWER(${city})
-            OR LOWER(coverage.city_name) = LOWER(${ALL_KINGDOM_COVERAGE})
-      )
-    )`);
-  }
   const rows = await db
     .select()
     .from(serviceProvidersTable)
-    .where(and(...conditions))
-    .orderBy(sql`RANDOM()`);
-  const activeOwners = await activeInventoryOwnerIds(rows.map((row) => row.ownerId));
-  return res.json(rows.filter((row) => row.ownerId && activeOwners.has(row.ownerId)));
+    .where(and(...conditions));
+  const matching = rows.filter(row => providerCoversCity(row, city, ALL_KINGDOM_COVERAGE));
+  const activeOwners = await activeInventoryOwnerIds(matching.map((row) => row.ownerId));
+  return res.json(shuffledInventory(matching.filter((row) => row.ownerId && activeOwners.has(row.ownerId))));
 });
 
 /* Active catalog entries remain selectable even before their first provider. */
@@ -441,7 +432,7 @@ router.post("/submit", requireAuth, async (req: any, res) => {
   }
 
   const [row] = await db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(731206, hashtext(${access.subscription.ownerId}))`);
+    await lockResource(tx, 731206, access.subscription.ownerId);
     const currentAccess = await ownerPlanAccess(req.user.id);
     if (!currentAccess.canSubmitActivities ||
         currentAccess.serviceCount >= currentAccess.serviceLimit) return [null];
@@ -811,7 +802,7 @@ router.post("/my/approved/:id/blocked-dates", requireAuth, async (req: any, res)
   if (!parsed.success) return res.status(422).json({ error: "تاريخ غير صحيح" });
 
   const result = await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${parsed.data.dateStr}))`);
+    await lockResource(tx, providerId, parsed.data.dateStr);
 
     const [activeAppointment] = await tx.select({ id: serviceAppointmentsTable.id })
       .from(serviceAppointmentsTable)
@@ -1002,7 +993,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
   const result = await db.transaction(async (tx) => {
     if (parsed.data.status !== "cancelled") {
       // Serialize all capacity-consuming writes for this provider and date.
-      await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${parsed.data.dateStr}))`);
+      await lockResource(tx, providerId, parsed.data.dateStr);
       const [blockedDate] = await tx
         .select({ id: serviceBlockedDatesTable.id })
         .from(serviceBlockedDatesTable)
@@ -1014,7 +1005,7 @@ router.post("/my/approved/:id/appointments", requireAuth, async (req: any, res) 
       if (blockedDate) return { blocked: true as const };
 
       const [capacityRow] = await tx
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: sql<number>`count(*)`.mapWith(Number) })
         .from(serviceAppointmentsTable)
         .where(and(
           eq(serviceAppointmentsTable.providerId, providerId),
@@ -1207,7 +1198,7 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
   const consumesNewCapacity = targetStatus !== "cancelled" && (targetDate !== row.dateStr || row.status === "cancelled");
   const result = await db.transaction(async (tx) => {
     if (consumesNewCapacity) {
-      await tx.execute(sql`select pg_advisory_xact_lock(${providerId}, hashtext(${targetDate}))`);
+      await lockResource(tx, providerId, targetDate);
       const [blockedDate] = await tx
         .select({ id: serviceBlockedDatesTable.id })
         .from(serviceBlockedDatesTable)
@@ -1219,7 +1210,7 @@ router.patch("/my/approved/:id/appointments/:apptId", requireAuth, async (req: a
       if (blockedDate) return { blocked: true as const };
 
       const [capacityRow] = await tx
-        .select({ count: sql<number>`count(*)::int` })
+        .select({ count: sql<number>`count(*)`.mapWith(Number) })
         .from(serviceAppointmentsTable)
         .where(and(
           eq(serviceAppointmentsTable.providerId, providerId),
