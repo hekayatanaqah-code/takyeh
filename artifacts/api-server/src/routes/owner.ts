@@ -20,7 +20,7 @@ import { sendBookingArchive } from "../lib/booking-archive";
 import { bookingCheckoutAt, INSURANCE_NOT_READY_MESSAGE, REVIEW_NOT_READY_MESSAGE } from "@workspace/booking-time";
 import multer from "multer";
 import sharp from "sharp";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { ObjectStorageService } from "#object-storage";
 import { db } from "@workspace/db";
 import {
   ownerBookingsTable,

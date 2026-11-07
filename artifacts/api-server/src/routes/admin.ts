@@ -11,7 +11,7 @@ import ownerServicesAdminRouter from "./owner-services-admin";
 import { inventoryOwnerNames } from "../lib/inventory-owner-names";
 import multer from "multer";
 import sharp from "sharp";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { ObjectStorageService } from "#object-storage";
 import broadcastRouter from "./broadcast";
 import { db } from "@workspace/db";
 import {

@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import sharp from "sharp";
 import { z } from "zod";
-import { ObjectStorageService } from "./objectStorage";
+import { ObjectStorageService } from "#object-storage";
 import { getObjectAclPolicy } from "./objectAcl";
 
 const storage = new ObjectStorageService();

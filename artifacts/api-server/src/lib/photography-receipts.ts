@@ -4,7 +4,7 @@ import sharp from "sharp";
 import { z } from "zod";
 import { db, photographyReceiptsTable, photographyReceiptUploadsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { ObjectStorageService } from "./objectStorage";
+import { ObjectStorageService } from "#object-storage";
 import { lockPhotographyReceipts } from "./photography-receipt-lock";
 
 export const receiptStorage = new ObjectStorageService();

@@ -7,7 +7,7 @@ import sharp from "sharp";
 import { db, providerCatalogItemsTable as items, providerOffersTable as offers, serviceProvidersTable as providers } from "@workspace/db";
 import { CreateProviderCatalogItemBody, CreateProviderOfferBody } from "@workspace/api-zod";
 import { catalogItemJson, currentCatalogDay, providerOfferJson, publicCatalogItem } from "../lib/provider-catalog";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { ObjectStorageService } from "#object-storage";
 
 const router = Router();
 const imageUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 } }).single("file");

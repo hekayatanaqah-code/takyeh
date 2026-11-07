@@ -28,5 +28,10 @@ export function hostingerConfig(
     throw new Error("Hostinger requires explicit schema/seed import; disable startup seeding.");
   }
   if (!env.FRONTEND_DIST_DIR) throw new Error("FRONTEND_DIST_DIR must point to the built public directory.");
+  if(!env.APP_STORAGE_DIR||!path.isAbsolute(env.APP_STORAGE_DIR))throw new Error("APP_STORAGE_DIR must be an absolute private directory.");
+  let publicUrl:URL;
+  try{publicUrl=new URL(env.PUBLIC_SITE_URL??"");}catch{throw new Error("PUBLIC_SITE_URL is required.");}
+  if(publicUrl.protocol!=="https:"||publicUrl.username||publicUrl.password||publicUrl.pathname!=="/"||publicUrl.search||publicUrl.hash)
+    throw new Error("PUBLIC_SITE_URL must be an HTTPS origin.");
   return { port: Number(env.PORT), frontendDirectory: path.resolve(env.FRONTEND_DIST_DIR) };
 }

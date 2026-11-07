@@ -141,3 +141,31 @@ mtime_ms = 1794058687266
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/9a6be9f4-3963-45a1-b829-d3d1cae6482c/d0c01470-bb28-453a-8a74-781c9ca7e965"
 storage_version_token = "1794058696858127"
 content_type = "text/html"
+
+[[outputs]]
+id = "2aOxazTaFqZwESiUhWXF1"
+uri = "file://generated-artifacts/hostinger/takyeh-hostinger-mariadb-local-storage.zip"
+type = "unspecified"
+title = "حزمة تكيّة — Hostinger وMariaDB"
+description = "حزمة التثبيت مع التخزين المحلي ودليل عربي. تتضمن تهيئة حساب المدير؛ احفظها بشكل خاص ولا ترفع مجلد database إلى جذر الويب."
+logical_id = "8706c48f-4f5c-4dcf-bde3-87673998a51c"
+content_hash = "sha256:2e2f2ba35e5e32b460b07df893511f357b138fe82e7bda8e6dbcd2746cdacc16"
+size = 12176134
+mtime_ms = 1794061162380
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/8706c48f-4f5c-4dcf-bde3-87673998a51c/f4227512-5325-42fa-8213-900cf842df18"
+storage_version_token = "1794061192851121"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "NbO3bKY5N2a-ltnPNRUNY"
+uri = "file://generated-artifacts/hostinger/takyeh-hostinger/reports/%D8%AC%D8%A7%D9%87%D8%B2%D9%8A%D8%A9-%D8%A7%D9%84%D8%AD%D8%B2%D9%85%D8%A9.html"
+type = "html"
+title = "تقرير فحص حزمة Hostinger"
+description = "نتائج اختبار ملف الإنتاج نفسه على MariaDB، وحدود التحقق وخطوات التفعيل على الاستضافة."
+logical_id = "d0625aa6-98bb-4f58-ac1b-9b6e8a9315d8"
+content_hash = "sha256:2d3ff4ea65b92fa1965ee1591450380d3acdb3b78f49d6d74fcef36f33f32088"
+size = 3713
+mtime_ms = 1794061161324
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/d0625aa6-98bb-4f58-ac1b-9b6e8a9315d8/d8dabfd1-2adf-4773-a8b6-125df0318797"
+storage_version_token = "1794061195124645"
+content_type = "text/html"

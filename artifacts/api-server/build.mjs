@@ -40,6 +40,7 @@ async function buildAll() {
     external: [
       "*.node",
       "sharp",
+      "ffmpeg-static",
       "better-sqlite3",
       "sqlite3",
       "canvas",
@@ -112,6 +113,7 @@ async function buildAll() {
       "electron",
     ],
     sourcemap: "linked",
+    metafile: true,
     plugins: [
       // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
       esbuildPluginPino({ transports: ["pino-pretty"] })
@@ -127,6 +129,11 @@ globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
+  }).then(async result=>{
+    if(hostinger){
+      const {writeFile}=await import("node:fs/promises");
+      await writeFile(path.join(distDir,"build-meta.json"),JSON.stringify(result.metafile,null,2));
+    }
   });
 }
 

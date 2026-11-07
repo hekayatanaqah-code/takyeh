@@ -41,7 +41,9 @@ async function main(): Promise<void> {
     });
     const seedRows: Record<string, Record<string, unknown>[]> = {
       admin_staff: admin.rows.map(item => item.row),
-      site_settings: settingsRows.map(item => item.row),
+      site_settings: settingsRows.map(item => ({...item.row,value:typeof item.row.value==="string"
+        ? item.row.value.replace(/https?:\/\/[^/\s"'<>]+(\/api\/storage\/(?:objects|public-objects)\/[A-Za-z0-9/_.%~-]+)/g,"$1")
+        : item.row.value})),
     };
     const seed = [
       "-- PRIVATE: contains the administrator password HASH and contact/settings data.",
@@ -96,6 +98,10 @@ async function main(): Promise<void> {
     await mkdir(staging, { mode: 0o700 });
     await writeFile(path.join(staging, "schema.sql"), schema.sql, { mode: 0o600 });
     await writeFile(path.join(staging, "seed.sql"), seedSql, { mode: 0o600 });
+    const mediaReferences=[...new Set(seedRows.site_settings.flatMap(row=>typeof row.value==="string"
+      ? [...row.value.matchAll(/(?:\/api\/storage\/(?:objects|public-objects)\/[A-Za-z0-9/_.%~-]+|https:\/\/storage\.googleapis\.com\/[A-Za-z0-9/_.%~-]+)/g)].map(match=>match[0])
+      : []))].sort();
+    await writeFile(path.join(staging,"media-references.json"),JSON.stringify(mediaReferences,null,2),{mode:0o600});
     await writeFile(path.join(staging, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n", { mode: 0o600 });
     const destination = path.join(outputRoot, runId);
     await rename(staging, destination);

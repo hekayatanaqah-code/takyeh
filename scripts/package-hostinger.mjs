@@ -1,0 +1,77 @@
+import {readdir,readFile,writeFile,mkdir,cp,rm} from "node:fs/promises";
+import path from "node:path";
+import {fileURLToPath} from "node:url";
+import {createHash} from "node:crypto";
+import {createRequire,builtinModules} from "node:module";
+import {execFileSync} from "node:child_process";
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
+const output=path.join(root,"generated-artifacts/hostinger"),release=path.join(output,"takyeh-hostinger");
+const command=(args,env={})=>execFileSync("pnpm",args,{cwd:root,env:{...process.env,...env},stdio:"inherit"});
+await mkdir(output,{recursive:true,mode:0o700});
+const audit=JSON.parse(await readFile(path.join(root,".local/hostinger-reports/runtime-audit.json"),"utf8"));
+if(!audit.staticAuditPassed||!audit.nativeRuntimeBindingsVerified)throw new Error("Native source gate is not clear.");
+await rm(release,{recursive:true,force:true});await mkdir(release,{mode:0o700});
+for(const name of ["app","database","private-storage","reports"])await mkdir(path.join(release,name),{mode:0o700});
+const exports=path.join(root,".local/mariadb-exports");
+const dirs=(await readdir(exports,{withFileTypes:true})).filter(item=>item.isDirectory()&&/^\d{4}-/.test(item.name)).map(item=>item.name).sort();
+const source=path.join(exports,dirs.at(-1)??"missing");
+const original=JSON.parse(await readFile(path.join(source,"manifest.json"),"utf8"));
+for(const name of ["schema.sql","seed.sql"]){
+  const content=await readFile(path.join(source,name));
+  if(createHash("sha256").update(content).digest("hex")!==original.sha256[name])throw new Error("Database export integrity failed.");
+  await writeFile(path.join(release,"database",name),content,{mode:0o600});
+}
+await cp(path.join(root,"lib/db/src/mariadb/001-application-contract.sql"),path.join(release,"database/001-application-contract.sql"));
+await cp(path.join(root,".local/mariadb-runtime/002-transaction-mutex.sql"),path.join(release,"database/002-transaction-mutex.sql"));
+command(["--filter","@workspace/api-server","exec","tsx","src/maintenance/export-hostinger-media.ts",path.join(source,"media-references.json"),path.join(release,"private-storage")],{NODE_ENV:"test"});
+command(["--filter","@workspace/chalet-marketplace","run","build"],{PORT:"5173",BASE_PATH:"/"});
+await cp(path.join(root,"artifacts/chalet-marketplace/dist/public"),path.join(release,"app/public"),{recursive:true});
+await cp(path.join(root,".local/hostinger-stage/server"),path.join(release,"app/server"),{recursive:true,filter:file=>!file.endsWith(".map")&&!file.endsWith("build-meta.json")});
+const api=JSON.parse(await readFile(path.join(root,"artifacts/api-server/package.json"),"utf8"));
+const req=createRequire(path.join(root,"artifacts/api-server/package.json"));
+const dependencies={};
+for(const name of ["mysql2","sharp","nodemailer","ffmpeg-static"]){
+  let location=path.dirname(req.resolve(name));
+  for(;;){
+    try{const p=JSON.parse(await readFile(path.join(location,"package.json"),"utf8"));if(p.name===name){dependencies[name]=p.version;break;}}catch{}
+    const parent=path.dirname(location);if(parent===location)throw new Error(`Cannot resolve ${name}`);location=parent;
+  }
+}
+dependencies["supports-color"]="8.1.1";
+const meta=JSON.parse(await readFile(path.join(root,".local/hostinger-stage/server/build-meta.json"),"utf8"));
+const builtins=new Set(builtinModules.flatMap(value=>[value,`node:${value}`]));
+for(const file of Object.values(meta.outputs))for(const item of file.imports){
+  if(!item.external||builtins.has(item.path))continue;
+  const name=item.path.startsWith("@")?item.path.split("/").slice(0,2).join("/"):item.path.split("/")[0];
+  if(!dependencies[name])throw new Error(`Unpackaged external dependency: ${name}`);
+}
+await writeFile(path.join(release,"app/package.json"),JSON.stringify({
+  name:"takyeh-hostinger",version:"1.0.0",private:true,type:"module",main:"server/hostinger.mjs",
+  engines:{node:">=22.9 <25"},scripts:{start:"node --env-file-if-exists=.env server/hostinger.mjs"},
+  dependencies,pnpm:{onlyBuiltDependencies:["ffmpeg-static","sharp"]},
+},null,2));
+await writeFile(path.join(release,"app/.env.example"),[
+  "NODE_ENV=production","PORT=3000","MARIADB_DATABASE_URL=mysql://DB_USER:DB_PASSWORD@localhost:3306/DB_NAME",
+  "SESSION_SECRET=","DISABLE_STARTUP_SEEDING=true","FRONTEND_DIST_DIR=./public",
+  "APP_STORAGE_DIR=/absolute/private/path/takyeh-storage","PUBLIC_SITE_URL=https://takyeh.sa",
+  "PUBLIC_URL=https://takyeh.sa","PASSWORD_RESET_PUBLIC_URL=https://takyeh.sa","TZ=UTC",
+  "# Optional integrations: configure existing payment/email credentials securely; never commit them.",
+  "MOYASAR_SECRET_KEY=","SMTP_HOST=","SMTP_PORT=587","SMTP_USER=","SMTP_PASS=","SMTP_FROM=","",
+].join("\n"));
+await cp(path.join(root,".local/hostinger-reports/review.html"),path.join(release,"reports/source-review.html"));
+await cp(path.join(root,"docs/hostinger-install-ar.md"),path.join(release,"اقرأني.md"));
+const files=[];
+async function walk(directory){
+  for(const item of await readdir(directory,{withFileTypes:true})){
+    const filename=path.join(directory,item.name);
+    if(item.isSymbolicLink())throw new Error("Release contains a symlink.");
+    if(item.isDirectory())await walk(filename);
+    else{const data=await readFile(filename);files.push({path:path.relative(release,filename),size:data.length,sha256:createHash("sha256").update(data).digest("hex")});}
+  }
+}
+await walk(release);
+await writeFile(path.join(release,"manifest.json"),JSON.stringify({createdAt:new Date().toISOString(),database:"MariaDB 10.11",
+  seedScope:"settings and current principal admin only",seedCounts:original.seedCounts,sourceBlockers:0,
+  storage:"private persistent local filesystem",hostingerLiveVerified:false,files},null,2),{mode:0o600});
+console.log(JSON.stringify({releaseDirectory:path.relative(root,release),files:files.length,seedCounts:original.seedCounts,
+  warning:"Installation and live domain activation are separate; no deployment performed."}));

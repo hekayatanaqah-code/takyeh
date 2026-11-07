@@ -8,7 +8,7 @@ import {
 import { eq, or } from "drizzle-orm";
 import { receiptStorage } from "./photography-receipts";
 import { lockPhotographyReceipts, type ReceiptTransaction } from "./photography-receipt-lock";
-import { ObjectNotFoundError } from "./objectStorage";
+import { ObjectNotFoundError } from "#object-storage";
 
 type Upload = typeof uploads.$inferSelect;
 const scopedPath = /^\/objects\/photography-receipts\/(source|prepared)\/[0-9a-f-]{36}$/;

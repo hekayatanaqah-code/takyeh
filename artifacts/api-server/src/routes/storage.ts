@@ -11,7 +11,7 @@ import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
-import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
+import { ObjectStorageService, ObjectNotFoundError } from "#object-storage";
 import { ObjectPermission } from "../lib/objectAcl";
 
 const router: IRouter = Router();
@@ -206,6 +206,10 @@ router.get("/storage/objects/uploads/*path", async (req: Request, res: Response)
     const objectPath = `/objects/uploads/${wildcardPath}`;
     const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
 
+    if("enforcesObjectAcl" in objectStorageService &&
+      !await objectStorageService.canAccessObjectEntity({objectFile,userId:req.user?.id,requestedPermission:ObjectPermission.READ})){
+      res.status(403).json({error:"الملف خاص وغير متاح من هذا الرابط"});return;
+    }
     const response = await objectStorageService.downloadObject(objectFile);
 
     res.status(response.status);
@@ -256,6 +260,10 @@ router.get("/storage/objects/*path", async (req: Request, res: Response) => {
       return;
     }
 
+    if("enforcesObjectAcl" in objectStorageService &&
+      !await objectStorageService.canAccessObjectEntity({objectFile,userId:req.user?.id,requestedPermission:ObjectPermission.READ})){
+      res.status(403).json({error:"لا تملك صلاحية الوصول إلى هذا الملف"});return;
+    }
     const response = await objectStorageService.downloadObject(objectFile);
 
     res.status(response.status);

@@ -7,6 +7,7 @@ const env: NodeJS.ProcessEnv = {
   MARIADB_DATABASE_URL: "mysql://localhost/offline_config_test",
   SESSION_SECRET: "offline-config-validation-only-not-a-live-secret",
   DISABLE_STARTUP_SEEDING: "true", FRONTEND_DIST_DIR: "./public",
+  APP_STORAGE_DIR:"/tmp/offline-private-storage",PUBLIC_SITE_URL:"https://example.test",
 };
 test("blocks legacy runtime before any environment/database work", () => {
   assert.throws(() => hostingerConfig({}, "postgresql"), /not been fully ported/);

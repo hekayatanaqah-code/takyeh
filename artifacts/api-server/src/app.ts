@@ -6,6 +6,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { authMiddleware } from "./middlewares/authMiddleware";
 import { attachFrontend } from "./lib/frontend-static";
+import { localStorageIngress } from "#storage-ingress";
 
 const app: Express = express();
 app.set("trust proxy", 1);
@@ -31,6 +32,9 @@ app.use(
 );
 app.use(cors({ credentials: true, origin: true }));
 app.use(cookieParser());
+// Signed byte uploads must precede JSON/urlencoded parsers. The bearer ticket
+// authorizes a single immutable destination, not a general filesystem path.
+if(localStorageIngress) app.use("/api/storage",localStorageIngress);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(authMiddleware);

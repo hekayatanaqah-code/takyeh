@@ -16,6 +16,17 @@ data should be transported. Do not infer permission to copy all operational data
 current principal account; protect files containing password hashes and contact
 settings from public serving, Git and deployment.
 
+## Destination file storage
+
+The user chose **local storage on Hostinger** for images and attachments.
+
+**Why:** The user explicitly selected this option instead of independent cloud storage.
+
+**How to apply:** Use a private persistent directory outside the web root and
+release directory. Preserve public/private access boundaries and include that
+directory in operator backups; do not keep Replit sidecar authentication in the
+Hostinger runtime.
+
 ## SQL export is not application compatibility
 
 Successful schema/seed import does not establish that PostgreSQL routes or
