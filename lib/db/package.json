@@ -6,7 +6,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
+    "./runtime-dialect": "./src/runtime-dialect.ts",
     "./mariadb": "./src/mariadb/connection.ts",
+    "./mariadb/transaction": "./src/mariadb/transaction.ts",
     "./mariadb/schema": "./src/mariadb/schema/index.ts"
   },
   "scripts": {

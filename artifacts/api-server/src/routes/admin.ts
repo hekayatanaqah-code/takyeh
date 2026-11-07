@@ -143,6 +143,7 @@ async function logLongPauseAlerts(chalets: Array<{ id: number; nameAr: string; p
 
 type PauseAlertGlobal = typeof globalThis & {
   __takyaPauseAlertTimer?: ReturnType<typeof setInterval>;
+  __takyaPauseAlertTask?: Promise<void>;
   __takyaPauseAlertRunning?: boolean;
 };
 
@@ -160,18 +161,25 @@ async function runLongPauseAlertCheck() {
 
 export function startLongPauseAlertCheck() {
   const g = globalThis as PauseAlertGlobal;
-  if (g.__takyaPauseAlertTimer) return;
+  const stop = async () => {
+    if (g.__takyaPauseAlertTimer) clearInterval(g.__takyaPauseAlertTimer);
+    g.__takyaPauseAlertTimer = undefined;
+    await g.__takyaPauseAlertTask;
+  };
+  if (g.__takyaPauseAlertTimer) return stop;
   const run = () => {
     if (g.__takyaPauseAlertRunning) return;
     g.__takyaPauseAlertRunning = true;
-    runLongPauseAlertCheck()
+    g.__takyaPauseAlertTask = runLongPauseAlertCheck()
       .catch(() => {})
       .finally(() => {
         g.__takyaPauseAlertRunning = false;
+        g.__takyaPauseAlertTask = undefined;
       });
   };
   run();
   g.__takyaPauseAlertTimer = setInterval(run, 60 * 60 * 1000);
+  return stop;
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {

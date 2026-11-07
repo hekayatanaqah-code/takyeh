@@ -5,6 +5,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { authMiddleware } from "./middlewares/authMiddleware";
+import { attachFrontend } from "./lib/frontend-static";
 
 const app: Express = express();
 app.set("trust proxy", 1);
@@ -44,5 +45,11 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 app.use("/api", router);
+
+// Explicitly opt in when deploying frontend + API in one Node.js service.
+// Replit's managed preview keeps its existing two-service routing unchanged.
+if (process.env.FRONTEND_DIST_DIR) {
+  attachFrontend(app, process.env.FRONTEND_DIST_DIR);
+}
 
 export default app;

@@ -127,3 +127,17 @@ mtime_ms = 1793961463764
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/92f8974e-a7ad-475b-97c4-4d773841c90d/c2811691-11b8-4346-b37a-26ae31375a51"
 storage_version_token = "1793961556725522"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "n_RMxFXZwKksqJEmukCqE"
+uri = "file://.local/hostinger-reports/review.html"
+type = "html"
+title = "تقرير مراجعة MariaDB وHostinger — التحويل غير مكتمل"
+description = "نتيجة فحص ٢٢٥ ملف مصدر، ومواقع اعتمادات PostgreSQL المتبقية، وما تم تجهيزه واختباره. هذا تقرير فني وليس حزمة نهائية جاهزة للرفع."
+logical_id = "9a6be9f4-3963-45a1-b829-d3d1cae6482c"
+content_hash = "sha256:124630a520b5cca5b1a1e2122bea9086c45244383aa140726ce177eeed81f62a"
+size = 92291
+mtime_ms = 1794048722212
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/9a6be9f4-3963-45a1-b829-d3d1cae6482c/cf723a42-2d65-4a3b-b8f1-3c66a3dee8b3"
+storage_version_token = "1794048781778641"
+content_type = "text/html"

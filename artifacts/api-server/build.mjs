@@ -11,11 +11,20 @@ globalThis.require = createRequire(import.meta.url);
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
 async function buildAll() {
-  const distDir = path.resolve(artifactDir, "dist");
+  const hostinger = process.argv.includes("--hostinger");
+  const distDir = path.resolve(artifactDir, hostinger ? "../../.local/hostinger-stage/server" : "dist");
+  if (hostinger) {
+    // Run the source audit before deleting/copying/building any release files.
+    const { execFileSync } = await import("node:child_process");
+    execFileSync("pnpm", ["--filter", "@workspace/scripts", "run", "audit:hostinger"], {
+      cwd: path.resolve(artifactDir, "../.."),
+      stdio: "inherit",
+    });
+  }
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    entryPoints: [path.resolve(artifactDir, hostinger ? "src/hostinger.ts" : "src/index.ts")],
     platform: "node",
     bundle: true,
     format: "esm",

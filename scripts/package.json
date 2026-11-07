@@ -9,6 +9,9 @@
     "generate:mariadb-schema": "tsx ./src/generate-mariadb-schema.ts",
     "verify:mariadb": "tsx ./src/verify-mariadb-export.ts",
     "test:mariadb": "tsx --test ./src/mariadb/schema-converter.test.ts",
+    "audit:hostinger": "tsx ./src/audit-hostinger.ts",
+    "test:runtime-audit": "tsx --test ./src/mariadb/runtime-audit.test.ts",
+    "test:mariadb-transactions": "tsx --test ./src/mariadb/transaction.integration.test.ts",
     "seed-chalets": "tsx ./src/seed-chalets.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
@@ -21,6 +24,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/pg": "^8.18.0",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "typescript": "~5.9.3"
   }
 }

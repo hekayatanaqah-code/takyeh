@@ -54,3 +54,17 @@ until directory-descendant deny rules were added.
 **How to apply:** Verify the actual response body, not just the HTTP status.
 Protect export/backup directory descendants in every preview server and never
 treat a hidden workspace directory as a security boundary by itself.
+
+## Local MariaDB test provisioning
+
+The sandbox process tracer may interrupt MariaDB system-table installation
+with a `/proc/.../fd/-1` error even when the database engine itself can run.
+Do not report that as a MariaDB schema or Hostinger compatibility failure.
+
+**Why:** This environment-specific bootstrap failure recurred during native
+schema and transaction verification. Socket-only throwaway tests could still
+exercise InnoDB, but did not validate authentication or production privileges.
+
+**How to apply:** Keep any grant-disabled workaround strictly local,
+socket-only and temporary. Never use it in the application configuration or on
+Hostinger, and distinguish engine/transaction tests from access-control tests.

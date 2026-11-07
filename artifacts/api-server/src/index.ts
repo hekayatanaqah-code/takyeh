@@ -7,7 +7,7 @@ import { startLongPauseAlertCheck } from "./routes/admin";
 import { runSubscriptionExpiryJob } from "./lib/subscription-expiry";
 import { runSubscriptionRenewalJob } from "./lib/subscription-renewals";
 import { runSubscriptionPaymentReconciliationJob } from "./lib/subscription-payment-reconciliation";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { ownerBookingsTable, ownerNotificationsTable, ownerSubscriptionsTable } from "@workspace/db/schema";
 import { eq, and, isNull, like } from "drizzle-orm";
 
@@ -21,8 +21,26 @@ if (!rawPort) {
 
 const port = Number(rawPort);
 
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
+if (!/^\d+$/.test(rawPort) || !Number.isInteger(port) || port <= 0 || port > 65535) {
+  throw new Error("Invalid PORT: expected an integer between 1 and 65535.");
+}
+
+const timers = new Set<ReturnType<typeof setInterval>>();
+const jobs = new Set<Promise<void>>();
+let stopping = false;
+let stopPauseAlerts: (() => Promise<void>) | undefined;
+function schedule(job: () => Promise<void>, intervalMs: number) {
+  let running = false;
+  const run = () => {
+    if (stopping || running) return;
+    running = true;
+    const pending = Promise.resolve().then(job).catch(error => {
+      logger.error({ err: error }, "Background job failed");
+    }).finally(() => { running = false; jobs.delete(pending); });
+    jobs.add(pending);
+  };
+  run();
+  timers.add(setInterval(run, intervalMs));
 }
 
 /** Booking reminder — runs every 30 minutes */
@@ -75,12 +93,7 @@ async function sendBookingReminders() {
   }
 }
 
-app.listen(port, async (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
-
+async function initialize() {
   logger.info({ port }, "Server listening");
 
   // An intentional full reset must stay empty across restarts until the
@@ -96,10 +109,10 @@ app.listen(port, async (err) => {
       logger.error({ err: e }, "Failed to seed catalog");
     }
   }
+  if (stopping) return;
 
   // Run booking reminder check on startup and every 30 minutes
-  sendBookingReminders();
-  setInterval(sendBookingReminders, 30 * 60 * 1000);
+  schedule(sendBookingReminders, 30 * 60 * 1000);
 
   // Check on startup and hourly; reminders precede the expiry transition.
   const checkSubscriptions = async () => {
@@ -117,12 +130,10 @@ app.listen(port, async (err) => {
       logger.error({ err: error }, "Subscription expiry check failed");
     }
   };
-  void checkSubscriptions();
-  setInterval(() => { void checkSubscriptions(); }, 60 * 60 * 1000);
+  schedule(checkSubscriptions, 60 * 60 * 1000);
 
   // Unified token renewals are idempotent in the database and with Moyasar given_id.
-  void runSubscriptionRenewalJob();
-  setInterval(() => { void runSubscriptionRenewalJob(); }, 15 * 60 * 1000);
+  schedule(runSubscriptionRenewalJob, 15 * 60 * 1000);
 
   // Captured checkout payments with stale quotes remain queued until refund identity
   // is verified or an operational manual-review state is reached.
@@ -133,9 +144,51 @@ app.listen(port, async (err) => {
       logger.error({ err: error }, "Failed to reconcile captured subscription payments");
     }
   };
-  void reconcileSubscriptionPayments();
-  setInterval(() => { void reconcileSubscriptionPayments(); }, 5 * 60 * 1000);
+  schedule(reconcileSubscriptionPayments, 5 * 60 * 1000);
 
   // Check for long-paused chalets on startup and every hour
-  startLongPauseAlertCheck();
+  stopPauseAlerts = startLongPauseAlertCheck();
+}
+
+const server = app.listen(port, "0.0.0.0", (err) => {
+  if (err) {
+    logger.error({ err }, "Error listening on port");
+    process.exit(1);
+  }
+  const initialization = initialize().catch(error => {
+    logger.error({ err: error }, "Server initialization failed");
+  });
+  jobs.add(initialization);
+  void initialization.finally(() => { jobs.delete(initialization); });
 });
+
+// Managed Node.js hosting sends SIGTERM during redeploy. Stop new work, drain
+// HTTP and in-flight jobs, then close the pool instead of abandoning writes.
+async function shutdown(signal: string) {
+  if (stopping) return;
+  stopping = true;
+  logger.info({ signal }, "Stopping server");
+  for (const timer of timers) clearInterval(timer);
+  const pauseAlertStopped = stopPauseAlerts?.();
+  const deadline = setTimeout(() => {
+    logger.error("Shutdown deadline exceeded; unfinished transactions require reconciliation");
+    process.exit(1);
+  }, 25000);
+  deadline.unref();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve());
+      server.closeIdleConnections();
+    });
+    await pauseAlertStopped;
+    await Promise.allSettled([...jobs]);
+    await pool.end();
+    clearTimeout(deadline);
+    logger.info("Server stopped");
+  } catch {
+    logger.error("Graceful shutdown failed");
+    process.exitCode = 1;
+  }
+}
+process.once("SIGTERM", () => { void shutdown("SIGTERM"); });
+process.once("SIGINT", () => { void shutdown("SIGINT"); });
