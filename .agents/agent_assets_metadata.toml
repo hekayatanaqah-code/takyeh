@@ -146,14 +146,14 @@ content_type = "text/html"
 id = "2aOxazTaFqZwESiUhWXF1"
 uri = "file://generated-artifacts/hostinger/takyeh-hostinger-mariadb-local-storage.zip"
 type = "unspecified"
-title = "حزمة Hostinger المحدثة — server.js ومنفذ ديناميكي"
-description = "ملف بدء موحد ومسارات مستقلة عن مجلد التشغيل، مع دليل التثبيت. ارفع محتويات app فقط؛ هذا التحديث لا يتطلب إعادة استيراد قاعدة البيانات."
+title = "حزمة Hostinger المحدثة — تهيئة قاعدة البيانات تلقائياً"
+description = "تتضمن setup-db.js وربطه بأوامر build وstart، مع ملفات هيكل MariaDB وتعليمات التثبيت. تحتوي الحزمة ملف إعدادات وحساب مدير حساساً؛ احفظها بشكل خاص."
 logical_id = "8706c48f-4f5c-4dcf-bde3-87673998a51c"
-content_hash = "sha256:94d4391ec0414ae45fb36d1cd3b93ac36c3e052a5f9986f7b67cd6f8427733a8"
-size = 12177495
-mtime_ms = 1794134929595
-storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/8706c48f-4f5c-4dcf-bde3-87673998a51c/451742d4-e196-48fb-b015-47073950f07f"
-storage_version_token = "1794134984750613"
+content_hash = "sha256:164daf0c5e22e8410a3586811afe5404619031860c396d47679781966fa04066"
+size = 12202098
+mtime_ms = 1794165954715
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/8706c48f-4f5c-4dcf-bde3-87673998a51c/ff3a17ef-9c8b-4de5-9b1b-002f7205b4ff"
+storage_version_token = "1794165971902722"
 content_type = "application/octet-stream"
 
 [[outputs]]

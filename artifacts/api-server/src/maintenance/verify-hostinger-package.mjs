@@ -48,8 +48,21 @@ const assert=(value,message)=>{if(!value)throw new Error(message);};
 try{
   await control.query(`CREATE DATABASE \`${database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_bin`);
   await control.query(`USE \`${database}\``);
-  for(const filename of ["schema.sql","001-application-contract.sql","002-transaction-mutex.sql","seed.sql"])
-    await control.query(await readFile(path.join(release,"database",filename),"utf8"));
+  const setupUrl=new URL(`mysql://root@localhost/${database}`);
+  setupUrl.searchParams.set("socketPath",process.env.MARIADB_VERIFY_SOCKET);
+  const setupEnv={PATH:process.env.PATH,HOME:process.env.HOME,MARIADB_DATABASE_URL:setupUrl.toString()};
+  execFileSync(process.execPath,[path.join(app,"setup-db.js")],{cwd:storage,env:setupEnv,stdio:"pipe"});
+  const [[mutex]]=await control.query("SELECT COUNT(*) AS total FROM application_transaction_mutex WHERE id BETWEEN 0 AND 10");
+  assert(mutex.total===11,"Required mutex rows were not created.");
+  await control.query(await readFile(path.join(release,"database/seed.sql"),"utf8"));
+  const [[adminBefore]]=await control.query("SELECT password_hash FROM admin_staff WHERE username='admin'");
+  execFileSync(process.execPath,[path.join(app,"setup-db.js")],{cwd:storage,env:setupEnv,stdio:"pipe"});
+  execFileSync("npm",["run","build"],{cwd:app,env:setupEnv,stdio:"pipe"});
+  const [[adminAfter]]=await control.query("SELECT password_hash FROM admin_staff WHERE username='admin'");
+  assert(adminBefore.password_hash===adminAfter.password_hash,"Repeated setup changed administrator data.");
+  const [[allMutex]]=await control.query("SELECT COUNT(*) AS total FROM application_transaction_mutex WHERE id BETWEEN 0 AND 4095");
+  assert(allMutex.total===4096,"Full transaction lock range was not preserved.");
+  checks.push("automatic-schema-setup-repeatable-build-mutex-0-to-10-and-existing-data-preserved");
   await control.query("SET SESSION sql_mode='STRICT_ALL_TABLES,ANSI_QUOTES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
   const [counts]=await control.query("SELECT (SELECT COUNT(*) FROM admin_staff) AS admins,(SELECT COUNT(*) FROM owner_bookings) AS bookings,(SELECT COUNT(*) FROM service_appointments) AS services,(SELECT COUNT(*) FROM quick_sales) AS sales");
   assert(counts[0].admins===1&&counts[0].bookings===0&&counts[0].services===0&&counts[0].sales===0,"Seed scope is incorrect.");

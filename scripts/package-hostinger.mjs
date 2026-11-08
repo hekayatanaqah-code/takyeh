@@ -39,6 +39,11 @@ await cp(path.join(root,"artifacts/chalet-marketplace/dist/public"),path.join(re
 await rm(path.join(release,"app/server"),{recursive:true,force:true});
 await cp(path.join(root,".local/hostinger-stage/server"),path.join(release,"app/server"),{recursive:true,filter:file=>!file.endsWith(".map")&&!file.endsWith("build-meta.json")});
 await cp(path.join(root,"artifacts/api-server/hostinger-start.mjs"),path.join(release,"app/server.js"));
+await cp(path.join(root,"artifacts/api-server/setup-db.js"),path.join(release,"app/setup-db.js"));
+await mkdir(path.join(release,"app/database"),{recursive:true});
+for(const filename of ["schema.sql","001-application-contract.sql","002-transaction-mutex.sql"]){
+  await cp(path.join(release,"database",filename),path.join(release,"app/database",filename));
+}
 const api=JSON.parse(await readFile(path.join(root,"artifacts/api-server/package.json"),"utf8"));
 const req=createRequire(path.join(root,"artifacts/api-server/package.json"));
 const dependencies={};
@@ -59,7 +64,11 @@ for(const file of Object.values(meta.outputs))for(const item of file.imports){
 }
 await writeFile(path.join(release,"app/package.json"),JSON.stringify({
   name:"takyeh-hostinger",version:"1.0.0",private:true,type:"module",main:"server.js",
-  engines:{node:">=22.9 <25"},scripts:{start:"node server.js"},
+  engines:{node:">=22.9 <25"},scripts:{
+    "setup-db":"node setup-db.js",
+    build:"node setup-db.js && node --check server.js",
+    start:"node setup-db.js && node server.js",
+  },
   dependencies,pnpm:{onlyBuiltDependencies:["ffmpeg-static","sharp"]},
 },null,2));
 await writeFile(path.join(release,"app/.env.example"),[

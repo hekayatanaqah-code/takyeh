@@ -107,14 +107,18 @@ Hostinger, and distinguish engine/transaction tests from access-control tests.
 
 ## Do not replay legacy startup repairs
 
-Migration startup must validate the installed schema rather than replay the
-legacy application's automatic seed/repair routine.
+Migration startup must not replay the legacy application's automatic seed/repair
+routine. The user subsequently requested automatic schema-only setup during
+Hostinger build/start; this is allowed, but must not replay account/settings seeds
+or financial-history repairs.
 
 **Why:** The legacy startup routine is not just reference-catalog initialization:
 it also backfills cancelled-booking insurance as refunded and rewrites message
 templates. Replaying that routine during the move could change financial history
 or owner wording without a reviewed data migration.
 
-**How to apply:** Keep destination schema and configuration imports explicit and
-reviewed. Treat historical insurance and template transformations as separate,
-authorized migrations, not as a prerequisite for starting the server.
+**How to apply:** Keep destination schema and configuration changes reviewed and
+separate. Automatic setup may create missing tables, constraints and technical
+lock rows without deleting existing data. Preserve the full runtime mutex range,
+even when asked to ensure only a smaller subset exists. Treat historical insurance
+and template transformations as separate, authorized migrations.
