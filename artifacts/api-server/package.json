@@ -33,7 +33,7 @@
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "build:hostinger": "node ./build.mjs --hostinger",
-    "test:hostinger": "tsx --test src/lib/hostinger-config.test.ts src/lib/frontend-static.test.ts",
+    "test:hostinger": "tsx --test src/lib/hostinger-config.test.ts src/lib/hostinger-launcher.test.ts src/lib/frontend-static.test.ts",
     "test:local-storage": "NODE_ENV=test tsx --test src/lib/local-storage/storage.test.ts",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "test:photography": "NODE_ENV=production tsx --test src/lib/photography-rules.test.ts src/lib/photography-targets.integration.test.ts src/lib/photography-operations.test.ts src/lib/photography-financial.integration.test.ts src/routes/photography.integration.test.ts",

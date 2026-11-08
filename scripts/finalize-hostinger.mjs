@@ -16,6 +16,8 @@ const html=`<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta
 <p class="pass"><strong>اجتازت الحزمة اختبار تشغيل مستقل محلياً على MariaDB 10.11، وهي مجهزة للتثبيت على استضافة Node.js.</strong></p>
 <h2>ما تم التحقق منه فعلياً</h2><ul>
 <li>تشغيل ملف الإنتاج المبني نفسه، دون قاعدة PostgreSQL أو خدمات تخزين Replit، مع فحص الهيكل والأقفال.</li>
+${smoke.checks.includes("production-launcher-from-foreign-cwd-dynamic-port-native-schema-and-health")?"<li>بدء server.js من مجلد عمل مختلف، باستخدام PORT ديناميكي ومسارات الواجهة النسبية لمجلد التطبيق.</li>":""}
+${smoke.checks.includes("port-conflict-clean-exit-with-original-server-healthy")?"<li>اختبار تعارض المنفذ: خروج العملية الثانية برمز فشل واضح، مع استمرار صحة الخادم الأول ودون بدء مهام خلفية للعملية الفاشلة.</li>":""}
 <li>تقديم الواجهة والإعدادات وAPI من خدمة Express واحدة، وحجب الملفات الخاصة والمسارات غير الصحيحة.</li>
 <li>استيراد الإعدادات وحساب المدير فقط؛ بقيت الحجوزات وطلبات الخدمات والبيع السريع فارغة.</li>
 <li>دخول مدير تجريبي في قاعدة مؤقتة معزولة، واستمرار الجلسة وفتح الملخص المالي للإدارة.</li>

@@ -18,7 +18,7 @@ const ffmpeg=req("ffmpeg-static");
 const binaryVersion=execFileSync(ffmpeg,["-version"],{encoding:"utf8"}).split("\n")[0];
 const reserver=createServer();reserver.listen(0,"127.0.0.1");await once(reserver,"listening");
 const port=reserver.address().port;await new Promise(resolve=>reserver.close(resolve));
-let child;const log=[];const checks=[];
+let child,childEnv;const log=[];const checks=[];
 const fixturePassword=`temporary-fixture-${randomBytes(12).toString("hex")}`;
 const base=`http://127.0.0.1:${port}`;
 async function stop(){
@@ -29,12 +29,13 @@ async function stop(){
 async function start(){
   const url=new URL(`mysql://root@localhost/${database}`);
   url.searchParams.set("socketPath",process.env.MARIADB_VERIFY_SOCKET);
-  child=spawn(process.execPath,["server/hostinger.mjs"],{cwd:app,env:{
-    PATH:process.env.PATH,HOME:process.env.HOME,NODE_ENV:"production",PORT:String(port),TZ:"UTC",
+  childEnv={
+    PATH:process.env.PATH,HOME:process.env.HOME,PORT:String(port),TZ:"UTC",
     MARIADB_DATABASE_URL:url.toString(),SESSION_SECRET:randomBytes(48).toString("hex"),
-    DISABLE_STARTUP_SEEDING:"true",FRONTEND_DIST_DIR:"./public",APP_STORAGE_DIR:storage,
+    DISABLE_STARTUP_SEEDING:"true",APP_STORAGE_DIR:storage,
     PUBLIC_SITE_URL:`https://127.0.0.1:${port}`,PUBLIC_URL:`https://127.0.0.1:${port}`,
-  },stdio:["ignore","pipe","pipe"]});
+  };
+  child=spawn(process.execPath,[path.join(app,"server.js")],{cwd:storage,env:childEnv,stdio:["ignore","pipe","pipe"]});
   for(const stream of [child.stdout,child.stderr])stream.on("data",bytes=>{log.push(bytes.toString());if(log.length>100)log.shift();});
   for(let attempt=0;attempt<60;attempt++){
     if(child.exitCode!==null)throw new Error(`Standalone process exited: ${log.join("").slice(-4500)}`);
@@ -55,7 +56,22 @@ try{
   // This changes ONLY the throwaway DB. Never read or send the real password.
   await control.execute("UPDATE admin_staff SET password_hash=? WHERE username='admin'",[await bcrypt.hash(fixturePassword,10)]);
   await cp(path.join(release,"private-storage"),storage,{recursive:true});
-  await start();checks.push("production-entry-native-schema-and-health");
+  await start();checks.push("production-launcher-from-foreign-cwd-dynamic-port-native-schema-and-health");
+  const conflict=spawn(process.execPath,[path.join(app,"server.js")],{cwd:storage,env:childEnv,stdio:["ignore","pipe","pipe"]});
+  let conflictLog="";
+  for(const stream of [conflict.stdout,conflict.stderr])stream.on("data",data=>{conflictLog+=data.toString();});
+  let conflictTimer;
+  try {
+    const [code]=await Promise.race([once(conflict,"exit"),new Promise((_,reject)=>{
+      conflictTimer=setTimeout(()=>reject(new Error("Port-conflict process did not terminate.")),10000);
+    })]);
+    assert(code===1&&conflictLog.includes("EADDRINUSE"),"Port conflict was not handled cleanly.");
+    assert((await fetch(base+"/api/healthz")).status===200,"Port-conflict process disturbed the original server.");
+    checks.push("port-conflict-clean-exit-with-original-server-healthy");
+  } finally {
+    clearTimeout(conflictTimer);
+    if(conflict.exitCode===null)conflict.kill("SIGKILL");
+  }
   assert((await fetch(base)).status===200,"Built frontend unavailable.");
   assert((await fetch(base+"/api/page-content")).status===200,"Native settings API failed.");
   assert((await fetch(base+"/api/not-a-real-route")).status===404,"Unknown API returned SPA.");

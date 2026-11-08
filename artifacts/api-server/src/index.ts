@@ -10,20 +10,9 @@ import { runSubscriptionPaymentReconciliationJob } from "./lib/subscription-paym
 import { db, pool } from "@workspace/db";
 import { ownerBookingsTable, ownerNotificationsTable, ownerSubscriptionsTable } from "@workspace/db/schema";
 import { eq, and, isNull, like } from "drizzle-orm";
+import { serverPort } from "./lib/server-port";
 
-const rawPort = process.env["PORT"];
-
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (!/^\d+$/.test(rawPort) || !Number.isInteger(port) || port <= 0 || port > 65535) {
-  throw new Error("Invalid PORT: expected an integer between 1 and 65535.");
-}
+const port = serverPort(process.env.PORT);
 
 const timers = new Set<ReturnType<typeof setInterval>>();
 const jobs = new Set<Promise<void>>();
@@ -150,16 +139,21 @@ async function initialize() {
   stopPauseAlerts = startLongPauseAlertCheck();
 }
 
-const server = app.listen(port, "0.0.0.0", (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+const server = app.listen(port, "0.0.0.0", (error?: Error) => {
+  // Express 5 invokes this callback on listen errors too. Never initialize
+  // schedulers after a failed bind; the error listener handles pool cleanup.
+  if (error) return;
   const initialization = initialize().catch(error => {
     logger.error({ err: error }, "Server initialization failed");
   });
   jobs.add(initialization);
   void initialization.finally(() => { jobs.delete(initialization); });
+});
+server.once("error", (error: NodeJS.ErrnoException) => {
+  stopping = true;
+  logger.error({ code: error.code, port }, "HTTP listener failed; check the hosting-assigned PORT and other processes");
+  process.exitCode = 1;
+  void pool.end().catch(() => undefined);
 });
 
 // Managed Node.js hosting sends SIGTERM during redeploy. Stop new work, drain

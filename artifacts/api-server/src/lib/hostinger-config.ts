@@ -1,16 +1,16 @@
 import path from "node:path";
+import { serverPort } from "./server-port";
 
 export function hostingerConfig(
   env: NodeJS.ProcessEnv,
   applicationDialect: string,
+  applicationRoot: string = process.cwd(),
 ): { port: number; frontendDirectory: string } {
   if (applicationDialect !== "mariadb") {
     throw new Error("Hostinger startup blocked: application queries have not been fully ported to MariaDB.");
   }
   if (env.NODE_ENV !== "production") throw new Error("Hostinger requires NODE_ENV=production.");
-  if (!env.PORT || !/^\d+$/.test(env.PORT) || Number(env.PORT) < 1 || Number(env.PORT) > 65535) {
-    throw new Error("Hostinger must supply a valid PORT.");
-  }
+  const port = serverPort(env.PORT);
   if (!env.MARIADB_DATABASE_URL) throw new Error("MARIADB_DATABASE_URL is required.");
   let databaseUrl: URL;
   try { databaseUrl = new URL(env.MARIADB_DATABASE_URL); }
@@ -27,11 +27,11 @@ export function hostingerConfig(
   if (env.DISABLE_STARTUP_SEEDING !== "true") {
     throw new Error("Hostinger requires explicit schema/seed import; disable startup seeding.");
   }
-  if (!env.FRONTEND_DIST_DIR) throw new Error("FRONTEND_DIST_DIR must point to the built public directory.");
+  if (env.FRONTEND_DIST_DIR === "") throw new Error("FRONTEND_DIST_DIR must point to the built public directory.");
   if(!env.APP_STORAGE_DIR||!path.isAbsolute(env.APP_STORAGE_DIR))throw new Error("APP_STORAGE_DIR must be an absolute private directory.");
   let publicUrl:URL;
   try{publicUrl=new URL(env.PUBLIC_SITE_URL??"");}catch{throw new Error("PUBLIC_SITE_URL is required.");}
   if(publicUrl.protocol!=="https:"||publicUrl.username||publicUrl.password||publicUrl.pathname!=="/"||publicUrl.search||publicUrl.hash)
     throw new Error("PUBLIC_SITE_URL must be an HTTPS origin.");
-  return { port: Number(env.PORT), frontendDirectory: path.resolve(env.FRONTEND_DIST_DIR) };
+  return { port, frontendDirectory: path.resolve(applicationRoot, env.FRONTEND_DIST_DIR ?? "public") };
 }

@@ -70,11 +70,3 @@ packages = ["mariadb_1011"]
 MOYASAR_PUBLISHABLE_KEY = "pk_test_vcFUHJDBwiyRypcFChTLtgpI4skLeU6R6Tez5SrF"
 MOYASAR_SECRET_KEY_PLACEHOLDER = "sk_test_vcFUHJDBwiyRypcFChTLtgpI4skLeU6R6Tez5SrF"
 DISABLE_STARTUP_SEEDING = "true"
-
-[[ports]]
-localPort = 8080
-externalPort = 80
-
-[[ports]]
-localPort = 22125
-externalPort = 3000

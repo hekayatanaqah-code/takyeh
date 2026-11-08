@@ -55,6 +55,17 @@ even when each implementation is safe in isolation.
 new technical mutex reference table on the destination; activate and verify
 the new writers together. Never delete/reseed mutex rows during active work.
 
+## Express startup failures
+
+Treat the Express 5 listen callback as error-aware, not success-only. Do not
+start background jobs unless binding actually succeeded.
+
+**Why:** A port-conflict test kept the failed process alive because Express 5
+also invoked its callback with the listen error and initialization started timers.
+
+**How to apply:** Test that an occupied port produces a clean nonzero exit,
+not merely an error log, whenever changing server bootstrap or shutdown logic.
+
 ## Native tooling limitations
 
 Drizzle Kit's MySQL introspection can crash on MariaDB check-constraint metadata;

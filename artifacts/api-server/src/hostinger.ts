@@ -1,5 +1,5 @@
 import { applicationDatabaseDialect } from "@workspace/db/runtime-dialect";
-import { verifyApplicationDatabase } from "@workspace/db";
+import { verifyApplicationDatabase, pool } from "@workspace/db";
 import { hostingerConfig } from "./lib/hostinger-config";
 import { logger } from "./lib/logger";
 import { initializeLocalStorage } from "./lib/local-storage/service";
@@ -7,13 +7,21 @@ import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import {access} from "node:fs/promises";
 import {constants} from "node:fs";
+import {fileURLToPath} from "node:url";
 
 /**
  * Hostinger Node.js entry. Fail BEFORE importing routes/jobs or the legacy
  * database singleton; never start a PostgreSQL application on a MariaDB URL.
  */
 async function main(): Promise<void> {
-  const config = hostingerConfig(process.env, applicationDatabaseDialect);
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  process.chdir(root);
+  let config: ReturnType<typeof hostingerConfig>;
+  try {
+    config = hostingerConfig(process.env, applicationDatabaseDialect, root);
+  } catch (error) {
+    throw new Error(`Hostinger startup blocked: ${error instanceof Error ? error.message : "Invalid configuration."}`);
+  }
   process.env.FRONTEND_DIST_DIR = config.frontendDirectory;
   await initializeLocalStorage();
   const videoBinary=process.env.FFMPEG_PATH??ffmpegPath;
@@ -24,7 +32,7 @@ async function main(): Promise<void> {
   await import("./index");
 }
 
-main().catch(error => {
+main().catch(async error => {
   // No driver errors/connection strings in logs; the operator can diagnose the
   // secure connection separately using the migration-verification command.
   logger.error({
@@ -32,4 +40,5 @@ main().catch(error => {
       ? error.message : "Hostinger preflight failed; check secure configuration and migration verification.",
   }, "Hostinger server did not start");
   process.exitCode = 1;
+  await pool.end().catch(() => undefined);
 });
