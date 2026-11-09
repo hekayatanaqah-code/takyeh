@@ -83,6 +83,18 @@ attach backend handlers to the same listener. Do not restore blocking database
 setup to the npm start/build command. Frontend availability is not proof of backend
 readiness; preserve separate liveness/readiness checks and explicit API failures.
 
+The user supplied Hostinger runtime logs reporting no listen() call within three
+seconds, despite successful local ESM entry tests. Keep the Hostinger entry as a
+synchronously required CommonJS module; import the ESM runtime only after binding.
+
+**Why:** Direct Node execution alone does not test a hosting loader's immediate
+listen detection. The logs establish a detection timeout, not its exact internal
+cause; do not claim an ESM incompatibility is proven without live confirmation.
+
+**How to apply:** Test that requiring the entry calls listen before require
+returns, without a main-module guard. Preserve the .cjs entry in deployment
+instructions and verify the uploaded root rather than reusing old nested paths.
+
 ## Upload archive versus private transfer archive
 
 For hPanel Node.js uploads, deliver an application-only archive with package.json

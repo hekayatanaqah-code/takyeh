@@ -15,12 +15,15 @@ await mkdir(staging, { recursive: true, mode: 0o700 });
 for (const name of ["server", "public", "database", "pnpm-lock.yaml", ".env.example"]) {
   await cp(path.join(source, name), path.join(staging, name), { recursive: true });
 }
-for (const [from, to] of [["hostinger-start.mjs", "server.js"],
+for (const [from, to] of [["hostinger-start.mjs", "launcher.mjs"], ["hostinger-entry.cjs", "server.cjs"],
   ["setup-db.js", "setup-db.js"], ["hostinger-deploy-check.mjs", "deploy-check.mjs"]]) {
   await cp(path.join(root, "artifacts/api-server", from), path.join(staging, to));
 }
 const manifest = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
 manifest.scripts.build = "node deploy-check.mjs";
+manifest.scripts.start = "node server.cjs";
+manifest.main = "server.cjs";
+await writeFile(path.join(staging, "server.js"), 'import "./server.cjs";\n');
 await writeFile(path.join(staging, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
 await cp(path.join(root, "docs/hostinger-install-ar.md"), path.join(staging, "HOSTINGER-README.md"));
 const files = [];
@@ -44,4 +47,4 @@ execFileSync("zip", ["-q", "-r", archive, "."], { cwd: staging });
 const bytes = await readFile(archive);
 await writeFile(archive + ".sha256", createHash("sha256").update(bytes).digest("hex") + "  " + path.basename(archive) + "\n");
 console.log(JSON.stringify({ archive: path.relative(root, archive), files: files.length, size: bytes.length,
-  applicationRoot: ".", entryFile: "server.js", databaseIncluded: "schema only; no settings/admin seed" }));
+  applicationRoot: ".", entryFile: "server.cjs", databaseIncluded: "schema only; no settings/admin seed" }));

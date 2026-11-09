@@ -1,4 +1,3 @@
-import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -153,37 +152,12 @@ async function shutdown(signal) {
     clearTimeout(deadline);
   } catch (_) { process.exitCode = 1; }
 }
-function main() {
-  try {
-    log("info", "Hostinger launcher starting", "NODE_" + process.versions.node);
-    process.chdir(root);
-    try { process.loadEnvFile(path.join(root, ".env")); }
-    catch (error) { if (error.code !== "ENOENT") throw error; }
-    if (!process.env.NODE_ENV) process.env.NODE_ENV = "production";
-    if (!process.env.PORT) process.env.PORT = "3000";
-    if (!/^\d+$/.test(process.env.PORT) || Number(process.env.PORT) < 1 || Number(process.env.PORT) > 65535) {
-      var portError = new Error("Invalid PORT");
-      portError.code = "INVALID_PORT";
-      throw portError;
-    }
-    publicDirectory = path.resolve(root, process.env.FRONTEND_DIST_DIR || "public");
-    process.env.FRONTEND_DIST_DIR = publicDirectory;
-    server = http.createServer(request);
-    server.once("error", function (error) {
-      closing = true;
-      log("error", "HTTP listener failed", error.code);
-      process.exitCode = 1;
-    });
-    process.once("SIGTERM", function () { shutdown("SIGTERM"); });
-    process.once("SIGINT", function () { shutdown("SIGINT"); });
-    server.listen(Number(process.env.PORT), "0.0.0.0", function () {
-      log("info", "Native HTTP listener ready on 0.0.0.0:" + process.env.PORT);
-      initialize();
-    });
-  } catch (error) {
-    log("error", "Hostinger launcher failed; check Node version and configuration",
-      /^[A-Z0-9_]+$/.test(error.code || "") ? error.code : "LAUNCHER_FAILED");
-    process.exitCode = 1;
-  }
+export function attachNativeServer(httpServer, pendingHandler) {
+  server = httpServer;
+  publicDirectory = path.resolve(root, process.env.FRONTEND_DIST_DIR || "public");
+  server.removeListener("request", pendingHandler);
+  server.on("request", request);
+  process.once("SIGTERM", function () { shutdown("SIGTERM"); });
+  process.once("SIGINT", function () { shutdown("SIGINT"); });
+  initialize();
 }
-main();

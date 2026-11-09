@@ -27,7 +27,8 @@ async function fixture(mode:"slow"|"failed",envPort=true){
   const directory=await mkdtemp(path.join(tmpdir(),"hostinger-start-"));
   const root=path.join(directory,"app تكية"),port=await freePort();
   await mkdir(path.join(root,"server"),{recursive:true});await mkdir(path.join(root,"public"));
-  await cp(new URL("../../hostinger-start.mjs",import.meta.url),path.join(root,"server.js"));
+  await cp(new URL("../../hostinger-start.mjs",import.meta.url),path.join(root,"launcher.mjs"));
+  await cp(new URL("../../hostinger-entry.cjs",import.meta.url),path.join(root,"server.cjs"));
   await writeFile(path.join(root,"package.json"),'{"type":"module"}');
   await writeFile(path.join(root,".env"),`PORT=${envPort?"3000":port}\n`);
   await writeFile(path.join(root,"public/index.html"),"<h1>واجهة الاختبار</h1>");
@@ -42,7 +43,7 @@ async function fixture(mode:"slow"|"failed",envPort=true){
           cwd:process.cwd(),port:process.env.PORT,frontend:process.env.FRONTEND_DIST_DIR,mode:process.env.NODE_ENV
         }));},shutdown(){return new Promise(resolve=>{server.close(resolve);server.closeIdleConnections();});}};
       } export async function closeHostingerResources(){}`);
-  const child=spawn(process.execPath,[path.join(root,"server.js")],{
+  const child=spawn(process.execPath,[path.join(root,"server.cjs")],{
     cwd:directory,env:{PATH:process.env.PATH,...(envPort?{PORT:String(port)}:{})},stdio:["ignore","pipe","pipe"],
   });
   let log="";for(const stream of [child.stdout!,child.stderr!])stream.on("data",data=>{log+=data.toString();});
@@ -94,7 +95,7 @@ test("deployment check validates the prebuilt release without any database conne
     await mkdir(path.join(directory,"database"));
     await mkdir(path.join(directory,"public/assets"),{recursive:true});
     await writeFile(path.join(directory,"package.json"),'{"type":"module","dependencies":{}}');
-    for(const name of ["server.js","setup-db.js","server/hostinger.mjs",
+    for(const name of ["server.js","server.cjs","launcher.mjs","setup-db.js","server/hostinger.mjs",
       "database/schema.sql","database/001-application-contract.sql","database/002-transaction-mutex.sql"]){
       await writeFile(path.join(directory,name),"");
     }
@@ -117,12 +118,34 @@ test("deployment check validates the prebuilt release without any database conne
 test("invalid hosting PORT exits with an actionable code before backend initialization",async()=>{
   const directory=await mkdtemp(path.join(tmpdir(),"hostinger-port-"));
   try{
-    await cp(new URL("../../hostinger-start.mjs",import.meta.url),path.join(directory,"server.mjs"));
-    const result=spawnSync(process.execPath,[path.join(directory,"server.mjs")],{
+    await cp(new URL("../../hostinger-entry.cjs",import.meta.url),path.join(directory,"server.cjs"));
+    const result=spawnSync(process.execPath,[path.join(directory,"server.cjs")],{
       env:{PATH:process.env.PATH,PORT:"not-a-port"},encoding:"utf8",
     });
     assert.equal(result.status,1);
     assert.match(result.stderr,/INVALID_PORT/);
     assert.doesNotMatch(result.stderr,/Native HTTP listener ready/);
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test("Hostinger-style require observes listen synchronously without a main-module guard",async()=>{
+  const directory=await mkdtemp(path.join(tmpdir(),"hostinger-require-"));
+  try{
+    await cp(new URL("../../hostinger-entry.cjs",import.meta.url),path.join(directory,"server.cjs"));
+    const result=spawnSync(process.execPath,["-e",`
+      const assert=require("node:assert/strict");
+      const http=require("http");
+      let calls=0;
+      http.Server.prototype.listen=function(port,host,callback){
+        calls++;assert.equal(port,34271);assert.equal(host,"0.0.0.0");
+        // Do not invoke callback: this proves no asynchronous import is needed.
+        return this;
+      };
+      require(${JSON.stringify(path.join(directory,"server.cjs"))});
+      assert.equal(calls,1,"listen must have been called before require returns");
+      console.log("SYNCHRONOUS_LISTEN_PASSED");
+    `],{env:{PATH:process.env.PATH,PORT:"34271"},encoding:"utf8",timeout:2500});
+    assert.equal(result.status,0,result.stderr);
+    assert.match(result.stdout,/SYNCHRONOUS_LISTEN_PASSED/);
   }finally{await rm(directory,{recursive:true,force:true});}
 });

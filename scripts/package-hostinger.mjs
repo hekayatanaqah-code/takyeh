@@ -38,7 +38,9 @@ await cp(path.join(root,"artifacts/chalet-marketplace/dist/public"),path.join(re
 }
 await rm(path.join(release,"app/server"),{recursive:true,force:true});
 await cp(path.join(root,".local/hostinger-stage/server"),path.join(release,"app/server"),{recursive:true,filter:file=>!file.endsWith(".map")&&!file.endsWith("build-meta.json")});
-await cp(path.join(root,"artifacts/api-server/hostinger-start.mjs"),path.join(release,"app/server.js"));
+await cp(path.join(root,"artifacts/api-server/hostinger-start.mjs"),path.join(release,"app/launcher.mjs"));
+await cp(path.join(root,"artifacts/api-server/hostinger-entry.cjs"),path.join(release,"app/server.cjs"));
+await writeFile(path.join(release,"app/server.js"),'import "./server.cjs";\n');
 await cp(path.join(root,"artifacts/api-server/setup-db.js"),path.join(release,"app/setup-db.js"));
 await cp(path.join(root,"artifacts/api-server/hostinger-deploy-check.mjs"),path.join(release,"app/deploy-check.mjs"));
 await mkdir(path.join(release,"app/database"),{recursive:true});
@@ -64,11 +66,11 @@ for(const file of Object.values(meta.outputs))for(const item of file.imports){
   if(!dependencies[name])throw new Error(`Unpackaged external dependency: ${name}`);
 }
 await writeFile(path.join(release,"app/package.json"),JSON.stringify({
-  name:"takyeh-hostinger",version:"1.0.0",private:true,type:"module",main:"server.js",
+  name:"takyeh-hostinger",version:"1.0.0",private:true,type:"module",main:"server.cjs",
   engines:{node:">=22.9 <25"},scripts:{
     "setup-db":"node setup-db.js",
     build:"node deploy-check.mjs",
-    start:"node server.js",
+    start:"node server.cjs",
   },
   dependencies,pnpm:{onlyBuiltDependencies:["ffmpeg-static","sharp"]},
 },null,2));

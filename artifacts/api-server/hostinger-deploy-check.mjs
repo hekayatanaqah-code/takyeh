@@ -12,11 +12,11 @@ const version = process.versions.node.split(".").map(Number);
 if (!((version[0] === 22 && version[1] >= 9) || version[0] === 24)) {
   failures.push("Select Node.js 22.9+ (22.x) or 24.x in Hostinger.");
 }
-for (const name of ["server.js", "setup-db.js", "server/hostinger.mjs", "public/index.html",
+for (const name of ["server.js", "server.cjs", "launcher.mjs", "setup-db.js", "server/hostinger.mjs", "public/index.html",
   "database/schema.sql", "database/001-application-contract.sql", "database/002-transaction-mutex.sql"]) {
   if (!fs.existsSync(path.join(root, name))) failures.push("Missing release file: " + name);
 }
-for (const name of ["server.js", "setup-db.js", "server/hostinger.mjs"]) {
+for (const name of ["server.js", "server.cjs", "launcher.mjs", "setup-db.js", "server/hostinger.mjs"]) {
   if (!fs.existsSync(path.join(root, name))) continue;
   const result = spawnSync(process.execPath, ["--check", path.join(root, name)], { encoding: "utf8" });
   if (result.status !== 0) failures.push("Syntax check failed: " + name);
