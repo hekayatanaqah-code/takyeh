@@ -83,6 +83,20 @@ attach backend handlers to the same listener. Do not restore blocking database
 setup to the npm start/build command. Frontend availability is not proof of backend
 readiness; preserve separate liveness/readiness checks and explicit API failures.
 
+## Upload archive versus private transfer archive
+
+For hPanel Node.js uploads, deliver an application-only archive with package.json
+and the entry file at its root, separate from any private migration archive.
+Never upload the settings/admin seed or private media exports as application code.
+
+**Why:** A complete migration archive has a nested app directory and sensitive
+siblings; it is not interchangeable with the archive Hostinger detects as a
+Node.js project. A generic Hostinger HTML 503 does not prove a PORT defect.
+
+**How to apply:** Check the extracted ZIP itself, its root, selected server preset,
+entry file and Node version. Obtain Hostinger Runtime Logs before naming the live
+startup failure; Replit logs and successful local tests cannot establish its cause.
+
 ## Native tooling limitations
 
 Drizzle Kit's MySQL introspection can crash on MariaDB check-constraint metadata;

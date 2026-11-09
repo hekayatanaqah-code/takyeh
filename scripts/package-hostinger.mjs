@@ -40,6 +40,7 @@ await rm(path.join(release,"app/server"),{recursive:true,force:true});
 await cp(path.join(root,".local/hostinger-stage/server"),path.join(release,"app/server"),{recursive:true,filter:file=>!file.endsWith(".map")&&!file.endsWith("build-meta.json")});
 await cp(path.join(root,"artifacts/api-server/hostinger-start.mjs"),path.join(release,"app/server.js"));
 await cp(path.join(root,"artifacts/api-server/setup-db.js"),path.join(release,"app/setup-db.js"));
+await cp(path.join(root,"artifacts/api-server/hostinger-deploy-check.mjs"),path.join(release,"app/deploy-check.mjs"));
 await mkdir(path.join(release,"app/database"),{recursive:true});
 for(const filename of ["schema.sql","001-application-contract.sql","002-transaction-mutex.sql"]){
   await cp(path.join(release,"database",filename),path.join(release,"app/database",filename));
@@ -66,7 +67,7 @@ await writeFile(path.join(release,"app/package.json"),JSON.stringify({
   name:"takyeh-hostinger",version:"1.0.0",private:true,type:"module",main:"server.js",
   engines:{node:">=22.9 <25"},scripts:{
     "setup-db":"node setup-db.js",
-    build:"node --check server.js && node --check setup-db.js",
+    build:"node deploy-check.mjs",
     start:"node server.js",
   },
   dependencies,pnpm:{onlyBuiltDependencies:["ffmpeg-static","sharp"]},

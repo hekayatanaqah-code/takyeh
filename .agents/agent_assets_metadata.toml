@@ -169,3 +169,17 @@ mtime_ms = 1794134928228
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/d0625aa6-98bb-4f58-ac1b-9b6e8a9315d8/7087c7cc-9703-47f0-89db-6e4b70e1c728"
 storage_version_token = "1794134986028403"
 content_type = "text/html"
+
+[[outputs]]
+id = "tXt-1ripyul1whOZBgtmL"
+uri = "file://generated-artifacts/hostinger/takyeh-hostinger-upload.zip"
+type = "unspecified"
+title = "حزمة التطبيق المجهزة لرفع Hostinger"
+description = "ملفات التشغيل في جذر ZIP، منفذ ديناميكي، وفحص جاهزية قبل التشغيل. مبنية مسبقاً؛ دون كلمات مرور أو بيانات المدير. اجتازت اختبارات محلية ولم تُنشر على Hostinger."
+logical_id = "17c73c7e-b304-4886-bd83-90ac5fb0fe10"
+content_hash = "sha256:ba9d584d2c044bc4d18f6f3ac2562d6a1797b3c25ecb587fa83e9ee5086e9d36"
+size = 12116685
+mtime_ms = 1794236317319
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/17c73c7e-b304-4886-bd83-90ac5fb0fe10/642a10ed-9082-4fda-8780-2a36e667a271"
+storage_version_token = "1794236375671212"
+content_type = "application/octet-stream"

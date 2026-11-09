@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, cp, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 import { once } from "node:events";
 
@@ -84,4 +84,45 @@ test("backend failure keeps frontend available, reports non-ready and loads .env
     assert.equal(api.status,503);assert.equal(((await api.json()) as {code:string}).code,"BACKEND_UNAVAILABLE");
     assert.doesNotMatch(item.log(),/fixture secure database failure/);
   }finally{await stop(item.child);await rm(item.directory,{recursive:true,force:true});}
+});
+
+test("deployment check validates the prebuilt release without any database connection", async()=>{
+  const directory=await mkdtemp(path.join(tmpdir(),"hostinger-check-"));
+  try{
+    await cp(new URL("../../hostinger-deploy-check.mjs",import.meta.url),path.join(directory,"deploy-check.mjs"));
+    await mkdir(path.join(directory,"server"));
+    await mkdir(path.join(directory,"database"));
+    await mkdir(path.join(directory,"public/assets"),{recursive:true});
+    await writeFile(path.join(directory,"package.json"),'{"type":"module","dependencies":{}}');
+    for(const name of ["server.js","setup-db.js","server/hostinger.mjs",
+      "database/schema.sql","database/001-application-contract.sql","database/002-transaction-mutex.sql"]){
+      await writeFile(path.join(directory,name),"");
+    }
+    await writeFile(path.join(directory,"public/index.html"),'<script src="/assets/app.js"></script>');
+    const run=()=>spawnSync(process.execPath,[path.join(directory,"deploy-check.mjs")],{
+      cwd:tmpdir(),env:{PATH:process.env.PATH},encoding:"utf8",
+    });
+    const missing=run();
+    assert.equal(missing.status,1);
+    assert.match(missing.stderr,/Missing frontend asset/);
+    await writeFile(path.join(directory,"public/assets/app.js"),"");
+    assert.equal(run().status,0);
+    await writeFile(path.join(directory,"package.json"),'{"type":"module","dependencies":{"not-installed-fixture":"1.0.0"}}');
+    assert.match(run().stderr,/Dependency not installed: not-installed-fixture/);
+    await rm(path.join(directory,"server/hostinger.mjs"));
+    assert.match(run().stderr,/Missing release file: server\/hostinger.mjs/);
+  }finally{await rm(directory,{recursive:true,force:true});}
+});
+
+test("invalid hosting PORT exits with an actionable code before backend initialization",async()=>{
+  const directory=await mkdtemp(path.join(tmpdir(),"hostinger-port-"));
+  try{
+    await cp(new URL("../../hostinger-start.mjs",import.meta.url),path.join(directory,"server.mjs"));
+    const result=spawnSync(process.execPath,[path.join(directory,"server.mjs")],{
+      env:{PATH:process.env.PATH,PORT:"not-a-port"},encoding:"utf8",
+    });
+    assert.equal(result.status,1);
+    assert.match(result.stderr,/INVALID_PORT/);
+    assert.doesNotMatch(result.stderr,/Native HTTP listener ready/);
+  }finally{await rm(directory,{recursive:true,force:true});}
 });
