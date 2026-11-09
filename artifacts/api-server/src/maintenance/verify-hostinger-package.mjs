@@ -86,6 +86,9 @@ try{
     if(conflict.exitCode===null)conflict.kill("SIGKILL");
   }
   assert((await fetch(base)).status===200,"Built frontend unavailable.");
+  assert((await fetch(base+"/readyz")).status===200,"Native listener reported API before readiness.");
+  assert((await(await fetch(base+"/healthz")).json()).applicationReady===true,"Native backend not attached.");
+  checks.push("native-http-listener-single-port-frontend-and-backend-readiness");
   assert((await fetch(base+"/api/page-content")).status===200,"Native settings API failed.");
   assert((await fetch(base+"/api/not-a-real-route")).status===404,"Unknown API returned SPA.");
   assert((await fetch(base+"/.env")).status===404,"Private environment path is exposed.");
@@ -126,6 +129,22 @@ try{
   const assets=JSON.parse(await readFile(path.join(storage,"site-assets-manifest.json"),"utf8"));
   for(const asset of assets.files)assert((await fetch(base+asset.reference)).status===200,"A migrated site asset failed.");
   checks.push("migrated-site-assets");
+  await stop();
+  child=spawn(process.execPath,[path.join(app,"server.js")],{cwd:storage,
+    env:{...childEnv,MARIADB_DATABASE_URL:"mysql://unavailable:unavailable@127.0.0.1:1/unavailable"},
+    stdio:["ignore","pipe","pipe"]});
+  for(const stream of [child.stdout,child.stderr])stream.on("data",bytes=>{log.push(bytes.toString());if(log.length>100)log.shift();});
+  let failed=false;
+  for(let attempt=0;attempt<60;attempt++){
+    if(child.exitCode!==null)throw new Error("Native listener exited when database failed.");
+    try{if((await(await fetch(base+"/healthz")).json()).status==="failed"){failed=true;break;}}catch{}
+    await new Promise(resolve=>setTimeout(resolve,150));
+  }
+  assert(failed,"Unavailable database did not produce a clear failed readiness state.");
+  assert((await fetch(base)).status===200,"Database failure also broke static frontend.");
+  assert((await fetch(base+"/readyz")).status===503,"Database failure was falsely reported ready.");
+  assert((await fetch(base+"/api/page-content")).status===503,"Unavailable API was served as SPA/empty data.");
+  checks.push("actual-database-failure-keeps-frontend-with-honest-api-unavailable-state");
   const result={passed:true,checkedAt:new Date().toISOString(),engine:"MariaDB 10.11",mode:"isolated production-bundle HTTP verification",
     databasePrivilegesVerified:false,liveHostingerVerified:false,externalPaymentsOrEmailSent:false,
     checks,binaryVersion,siteAssets:assets.files.length,

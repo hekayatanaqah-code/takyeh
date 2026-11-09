@@ -28,6 +28,7 @@ async function buildAll() {
     platform: "node",
     bundle: true,
     format: "esm",
+    target: hostinger ? "es2020" : "node22",
     conditions: hostinger ? ["mariadb"] : [],
     outdir: distDir,
     outExtension: { ".js": ".mjs" },

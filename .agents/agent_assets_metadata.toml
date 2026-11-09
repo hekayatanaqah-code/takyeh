@@ -146,14 +146,14 @@ content_type = "text/html"
 id = "2aOxazTaFqZwESiUhWXF1"
 uri = "file://generated-artifacts/hostinger/takyeh-hostinger-mariadb-local-storage.zip"
 type = "unspecified"
-title = "حزمة Hostinger المحدثة — تهيئة قاعدة البيانات تلقائياً"
-description = "تتضمن setup-db.js وربطه بأوامر build وstart، مع ملفات هيكل MariaDB وتعليمات التثبيت. تحتوي الحزمة ملف إعدادات وحساب مدير حساساً؛ احفظها بشكل خاص."
+title = "حزمة Hostinger المحدثة — إقلاع HTTP مباشر ووظائف المنصة كاملة"
+description = "server.js يبدأ المنفذ أولاً ويقدم الواجهة مباشرة ثم يفعّل خدمات المنصة على الخادم نفسه. الحزمة مبنية مسبقاً ومختبرة محلياً على MariaDB 10.11. احفظ ملف seed.sql الموجود بها بشكل خاص."
 logical_id = "8706c48f-4f5c-4dcf-bde3-87673998a51c"
-content_hash = "sha256:164daf0c5e22e8410a3586811afe5404619031860c396d47679781966fa04066"
-size = 12202098
-mtime_ms = 1794165954715
-storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/8706c48f-4f5c-4dcf-bde3-87673998a51c/ff3a17ef-9c8b-4de5-9b1b-002f7205b4ff"
-storage_version_token = "1794165971902722"
+content_hash = "sha256:a60461230ee82626093f4eea246784dee050df27e65e66a22e9c9ea6352188d4"
+size = 12208742
+mtime_ms = 1794214279575
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/8706c48f-4f5c-4dcf-bde3-87673998a51c/9814e825-dc9e-43ce-b956-39ffad98b4ea"
+storage_version_token = "1794214332862923"
 content_type = "application/octet-stream"
 
 [[outputs]]

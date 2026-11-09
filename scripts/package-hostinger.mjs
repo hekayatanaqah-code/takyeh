@@ -66,15 +66,15 @@ await writeFile(path.join(release,"app/package.json"),JSON.stringify({
   name:"takyeh-hostinger",version:"1.0.0",private:true,type:"module",main:"server.js",
   engines:{node:">=22.9 <25"},scripts:{
     "setup-db":"node setup-db.js",
-    build:"node setup-db.js && node --check server.js",
-    start:"node setup-db.js && node server.js",
+    build:"node --check server.js && node --check setup-db.js",
+    start:"node server.js",
   },
   dependencies,pnpm:{onlyBuiltDependencies:["ffmpeg-static","sharp"]},
 },null,2));
 await writeFile(path.join(release,"app/.env.example"),[
   "NODE_ENV=production","# PORT is supplied dynamically by Hostinger; do not hardcode it.",
   "MARIADB_DATABASE_URL=mysql://DB_USER:DB_PASSWORD@localhost:3306/DB_NAME",
-  "SESSION_SECRET=","DISABLE_STARTUP_SEEDING=true","FRONTEND_DIST_DIR=./public",
+  "SESSION_SECRET=","DISABLE_STARTUP_SEEDING=true","TAKYEH_AUTO_SETUP_DB=true","FRONTEND_DIST_DIR=./public",
   "APP_STORAGE_DIR=/absolute/private/path/takyeh-storage","PUBLIC_SITE_URL=https://takyeh.sa",
   "PUBLIC_URL=https://takyeh.sa","PASSWORD_RESET_PUBLIC_URL=https://takyeh.sa","TZ=UTC",
   "# Optional integrations: configure existing payment/email credentials securely; never commit them.",

@@ -11,6 +11,7 @@ import { db, pool } from "@workspace/db";
 import { ownerBookingsTable, ownerNotificationsTable, ownerSubscriptionsTable } from "@workspace/db/schema";
 import { eq, and, isNull, like } from "drizzle-orm";
 import { serverPort } from "./lib/server-port";
+import { createServer, type Server } from "node:http";
 
 const port = serverPort(process.env.PORT);
 
@@ -139,22 +140,26 @@ async function initialize() {
   stopPauseAlerts = startLongPauseAlertCheck();
 }
 
-const server = app.listen(port, "0.0.0.0", (error?: Error) => {
-  // Express 5 invokes this callback on listen errors too. Never initialize
-  // schedulers after a failed bind; the error listener handles pool cleanup.
-  if (error) return;
-  const initialization = initialize().catch(error => {
-    logger.error({ err: error }, "Server initialization failed");
+let server: Server;
+export function attachApplicationServer(httpServer: Server) {
+  server = httpServer;
+  const onListening = () => {
+    const initialization = initialize().catch(error => {
+      logger.error({ err: error }, "Server initialization failed");
+    });
+    jobs.add(initialization);
+    void initialization.finally(() => { jobs.delete(initialization); });
+  };
+  if (server.listening) onListening();
+  else server.once("listening", onListening);
+  server.once("error", (error: NodeJS.ErrnoException) => {
+    stopping = true;
+    logger.error({ code: error.code, port }, "HTTP listener failed; check the hosting-assigned PORT and other processes");
+    process.exitCode = 1;
+    void pool.end().catch(() => undefined);
   });
-  jobs.add(initialization);
-  void initialization.finally(() => { jobs.delete(initialization); });
-});
-server.once("error", (error: NodeJS.ErrnoException) => {
-  stopping = true;
-  logger.error({ code: error.code, port }, "HTTP listener failed; check the hosting-assigned PORT and other processes");
-  process.exitCode = 1;
-  void pool.end().catch(() => undefined);
-});
+  return { handler: app, shutdown };
+}
 
 // Managed Node.js hosting sends SIGTERM during redeploy. Stop new work, drain
 // HTTP and in-flight jobs, then close the pool instead of abandoning writes.
@@ -184,5 +189,12 @@ async function shutdown(signal: string) {
     process.exitCode = 1;
   }
 }
-process.once("SIGTERM", () => { void shutdown("SIGTERM"); });
-process.once("SIGINT", () => { void shutdown("SIGINT"); });
+// The Hostinger launcher owns its already-bound native HTTP server. Preview
+// and the default entry retain the existing standalone Express lifecycle.
+if (process.env.TAKYEH_EMBEDDED_HTTP !== "true") {
+  const httpServer = createServer(app);
+  attachApplicationServer(httpServer);
+  process.once("SIGTERM", () => { void shutdown("SIGTERM"); });
+  process.once("SIGINT", () => { void shutdown("SIGINT"); });
+  httpServer.listen(port, "0.0.0.0");
+}

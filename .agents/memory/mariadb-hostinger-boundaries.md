@@ -66,6 +66,23 @@ also invoked its callback with the listen error and initialization started timer
 **How to apply:** Test that an occupied port produces a clean nonzero exit,
 not merely an error log, whenever changing server bootstrap or shutdown logic.
 
+## Native Hostinger listener with full application functionality
+
+Keep the native HTTP listener independent of database/schema initialization and
+retain the existing backend handlers for all platform functions. The user chose
+full functionality after being warned that a static-only replacement would remove
+login, bookings and payments.
+
+**Why:** The user requested immediate port binding to avoid startup-related 503s,
+but explicitly approved preserving the complete application rather than replacing
+it with a static site.
+
+**How to apply:** Bind the hosting-provided port first (3000 only as the requested
+fallback when absent), serve the public SPA directly, then initialize schema and
+attach backend handlers to the same listener. Do not restore blocking database
+setup to the npm start/build command. Frontend availability is not proof of backend
+readiness; preserve separate liveness/readiness checks and explicit API failures.
+
 ## Native tooling limitations
 
 Drizzle Kit's MySQL introspection can crash on MariaDB check-constraint metadata;

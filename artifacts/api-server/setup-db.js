@@ -84,7 +84,7 @@ export async function prepareDatabase(connection, schemaDirectory = new URL("./d
   }
 }
 
-async function main() {
+export async function setupDatabase() {
   try { process.loadEnvFile(new URL(".env", import.meta.url)); }
   catch (error) { if (error.code !== "ENOENT") throw error; }
   const url = new URL(process.env.MARIADB_DATABASE_URL ?? "");
@@ -101,7 +101,7 @@ async function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(error => {
+  setupDatabase().catch(error => {
     // Never log SQL payloads, connection URLs, credentials or table contents.
     console.error(`تعذر تجهيز قاعدة البيانات؛ تم إيقاف التشغيل. رمز الخطأ: ${/^[A-Z0-9_]+$/.test(error.code ?? "") ? error.code : "DB_SETUP_FAILED"}`);
     process.exitCode = 1;
