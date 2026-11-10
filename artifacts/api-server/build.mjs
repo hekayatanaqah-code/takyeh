@@ -13,7 +13,9 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 async function buildAll() {
   const hostinger = process.argv.includes("--hostinger");
   const cloud = process.argv.includes("--cloud");
-  const mariadb = hostinger || cloud;
+  // Render uses the existing PostgreSQL database. MariaDB remains an explicit
+  // Hostinger export target, never an implicit consequence of cloud hosting.
+  const mariadb = hostinger;
   const distDir = path.resolve(artifactDir, hostinger ? "../../.local/hostinger-stage/server" : cloud ? "dist-cloud" : "dist");
   if (hostinger) {
     // Run the source audit before deleting/copying/building any release files.
@@ -133,7 +135,7 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
   }).then(async result=>{
-    if(hostinger){
+    if(hostinger || cloud){
       const {writeFile}=await import("node:fs/promises");
       await writeFile(path.join(distDir,"build-meta.json"),JSON.stringify(result.metafile,null,2));
     }

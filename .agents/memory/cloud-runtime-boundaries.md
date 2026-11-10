@@ -14,9 +14,27 @@ that change.
 **How to apply:** Build runtime outputs from tracked source, use the hosting PORT,
 and keep service readiness distinct from frontend availability. Moving hosts does
 not authorize a database conversion, seeding, deletion or financial repair.
-The MariaDB and private persistent-file boundaries remain applicable until the
-user explicitly changes them. Hostinger-specific export tools may remain for
+The user subsequently explicitly approved using the existing PostgreSQL database
+for Render, without converting or reseeding data. Private persistent-file
+boundaries remain applicable. Hostinger-specific export tools may remain for
 existing manual transfers but must not become a dependency of the cloud entry.
+
+**Why:** The preview uses PostgreSQL; selecting MariaDB solely because the build
+targets Render required an unrelated database the user did not intend to provision.
+
+**How to apply:** Keep Render on the PostgreSQL driver, query and lock implementations
+as a coherent set. MariaDB remains the separate explicit Hostinger export target.
+
+Approval to retain PostgreSQL is not approval to expose the sandbox database or
+silently provision a paid replacement.
+
+**Why:** The current development connection resolves privately; Replit's official
+documentation says that development endpoint is sandbox-only. Copying that URL
+to Render cannot provide connectivity.
+
+**How to apply:** Confirm external reachability before transferring credentials.
+An externally reachable PostgreSQL copy requires an approved migration and cost
+decision; preserve the existing data and do not create ad-hoc public DB tunnels.
 
 Application build assets must live in tracked application directories, not depend
 on the workspace's uploaded-file directory.
