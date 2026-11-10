@@ -12,7 +12,9 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
 async function buildAll() {
   const hostinger = process.argv.includes("--hostinger");
-  const distDir = path.resolve(artifactDir, hostinger ? "../../.local/hostinger-stage/server" : "dist");
+  const cloud = process.argv.includes("--cloud");
+  const mariadb = hostinger || cloud;
+  const distDir = path.resolve(artifactDir, hostinger ? "../../.local/hostinger-stage/server" : cloud ? "dist-cloud" : "dist");
   if (hostinger) {
     // Run the source audit before deleting/copying/building any release files.
     const { execFileSync } = await import("node:child_process");
@@ -24,12 +26,12 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, hostinger ? "src/hostinger.ts" : "src/index.ts")],
+    entryPoints: [path.resolve(artifactDir, hostinger ? "src/hostinger.ts" : cloud ? "src/cloud.ts" : "src/index.ts")],
     platform: "node",
     bundle: true,
     format: "esm",
     target: hostinger ? "es2020" : "node22",
-    conditions: hostinger ? ["mariadb"] : [],
+    conditions: mariadb ? ["mariadb"] : [],
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
