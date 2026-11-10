@@ -36,6 +36,19 @@ to Render cannot provide connectivity.
 An externally reachable PostgreSQL copy requires an approved migration and cost
 decision; preserve the existing data and do not create ad-hoc public DB tunnels.
 
+The user approved creating an external PostgreSQL copy for Render. Treat that
+copy as an independent database, not continuous replication from the preview.
+
+**Why:** The transfer preserves the original database and copies a consistent
+point-in-time snapshot. Replaying it after production starts accepting writes
+could overwrite newer bookings, payments or account changes.
+
+**How to apply:** Never restore development snapshots over an active production
+database as part of ordinary deploys or "sync". Verify transaction outcomes and
+row fingerprints before retrying an interrupted import; require an explicit
+cutover plan for subsequent copies. Persistent media storage remains separately
+approved infrastructure, not a reason to use a temporary directory.
+
 Application build assets must live in tracked application directories, not depend
 on the workspace's uploaded-file directory.
 
