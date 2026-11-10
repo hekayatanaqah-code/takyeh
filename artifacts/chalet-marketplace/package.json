@@ -12,7 +12,7 @@
     "test:preview-transform": "node --test scripts/check-preview-transform.test.mjs && tsc -p scripts/fixtures/preview-transform/tsconfig.json",
     "test:city-search": "tsx --test src/lib/city-name.test.ts",
     "test:inventory-filters": "tsx --test src/lib/inventory-filters.test.ts",
-    "test:route-loading": "tsx --test src/lib/route-import-retry.test.ts",
+    "test:route-loading": "tsx --test src/lib/route-import-retry.test.ts scripts/route-recovery-plugin.test.ts",
     "test": "NODE_ENV=production tsx --test src/lib/serviceReceipt.test.ts",
     "check:playwright-image-version": "node scripts/check-playwright-image-version.mjs",
     "test:e2e": "playwright test",

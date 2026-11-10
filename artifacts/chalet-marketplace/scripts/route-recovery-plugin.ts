@@ -3,6 +3,11 @@ import path from "node:path";
 import { readFileSync } from "node:fs";
 import type { Plugin } from "vite";
 
+/** The hosting checkout may itself be named "src" (as it is on Render). */
+export function recoveryRouteKey(root: string, moduleId: string): string {
+  return path.relative(path.join(root, "src"), moduleId).split(path.sep).join("/").replace(/\.tsx?$/, "");
+}
+
 /**
  * A fallback route has its static dependency graph in ONE module. Native ESM
  * caches failed dependency URLs, so changing only the route URL cannot recover
@@ -49,7 +54,7 @@ export function routeRecoveryPlugin(): Plugin {
 
       const routes: Record<string, { file: string; css: string[] }> = {};
       for (const chunk of chunks) {
-        const key = chunk.facadeModuleId?.split("/src/")[1]?.replace(/\.tsx?$/, "");
+        const key = chunk.facadeModuleId ? recoveryRouteKey(root, chunk.facadeModuleId) : undefined;
         if (!key || !(key.startsWith("pages/") || key === "features/photography/PhotographerPortal")) continue;
         const file = `assets/recover-${path.basename(chunk.fileName)}`;
         const css = new Set<string>();
@@ -93,7 +98,7 @@ export function routeRecoveryPlugin(): Plugin {
         routes[key] = { file, css: [...css] };
       }
       for (const id of routeIds) {
-        const key = id.split("/src/")[1].replace(/\.tsx?$/, "");
+        const key = recoveryRouteKey(root, id);
         if (!routes[key]) throw new Error(`Route lacks a recovery facade: ${key}`);
       }
       this.emitFile({

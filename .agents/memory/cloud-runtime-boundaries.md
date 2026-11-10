@@ -26,3 +26,13 @@ with uploaded images that are absent from GitHub and fail on a clean cloud build
 
 **How to apply:** Preserve the original artwork, move required build images into
 application assets, and verify builds from tracked files without attached_assets.
+
+Derive application module identifiers relative to the configured application root,
+never by splitting an absolute filename on `/src/`.
+
+**Why:** Render's checkout parent is also named `src`. Splitting at the first
+occurrence misidentifies route recovery entries and aborts the production build
+even though the UI components themselves resolve successfully.
+
+**How to apply:** Include a checkout path containing a parent `src` directory in
+route-build regression tests; distinguish fatal recovery errors from source-map warnings.
