@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { getOwnerDeposits } from "@workspace/api-client-react";
 import { toAr } from "@/lib/utils";
 import { formatDualDate, HIJRI_MONTHS_AR, toHijriComponents, getHijriMonthGregorianRange } from "@/lib/hijri";
-import takyahLogoSrc from "@assets/image_1783707669452.png";
+import takyahLogoSrc from "@/assets/platform-logo.png";
 import { motion } from "framer-motion";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";

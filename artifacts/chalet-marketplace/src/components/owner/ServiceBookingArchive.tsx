@@ -9,7 +9,7 @@ import { apiFetch } from "./owner-api";
 import { archiveCalendarMonth, archiveCalendarYear, archiveCalendarYears, archiveDateRange, EMPTY_ARCHIVE_FILTERS, getArchiveDateError } from "@/lib/bookingArchive";
 import { filterServiceBookingArchive, buildServiceBookingArchiveTable, type ServiceArchiveAppointment, type ServiceArchiveTab } from "@/lib/serviceBookingArchive";
 import type { ReportCalendar } from "@/lib/bookingArchiveReport";
-import takyahLogoSrc from "@assets/image_1783707669452.png";
+import takyahLogoSrc from "@/assets/platform-logo.png";
 
 type Props = {
   providerId: number;

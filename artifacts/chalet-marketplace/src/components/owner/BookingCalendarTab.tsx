@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSaudiDayClock } from "@/hooks/useSaudiDayClock";
 import { toAr, arabicTimeTo24h, time24hToArabic } from "@/lib/utils";
 import { useGetOwnerBookingArchive, getOwnerBookingArchive } from "@workspace/api-client-react";
-import takyahLogoSrc from "@assets/image_1783707669452.png";
+import takyahLogoSrc from "@/assets/platform-logo.png";
 import { DEFAULT_DETAILED_RECEIPT_TEMPLATE, detailedReceiptValues, renderDetailedReceipt } from "@/lib/detailedWhatsAppReceipt";
 import { Button } from "@/components/ui/button";
 import { Plus, Calendar, Clock, CheckCircle, XCircle, Home, BookOpen, Trash2, Building2, Globe, Phone, RotateCcw, Star, ChevronLeft, ChevronRight, Lock, ChevronDown, ChevronUp, Loader2, FileText, Archive, MessageSquare, Settings, Search, Activity, Banknote, X, ListChecks } from "lucide-react";

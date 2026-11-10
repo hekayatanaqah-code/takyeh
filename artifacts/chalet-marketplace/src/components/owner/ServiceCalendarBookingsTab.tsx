@@ -23,7 +23,7 @@ import { ServiceBookingPaymentDialog } from "@/components/owner/ServiceBookingPa
 import { ServiceBookingFilters } from "@/components/owner/ServiceBookingFilters";
 import { ServiceBookingArchive } from "@/components/owner/ServiceBookingArchive";
 import BookingArchivePagination from "@/components/owner/BookingArchivePagination";
-import takyahLogoSrc from "@assets/image_1783707669452.png";
+import takyahLogoSrc from "@/assets/platform-logo.png";
 import { BASE, apiFetch } from "@/components/owner/owner-api";
 import { serviceDurationLabel, toArN } from "@/components/owner/owner-formatting";
 import { useServiceErp } from "@/components/owner/OwnerDashboardContexts";

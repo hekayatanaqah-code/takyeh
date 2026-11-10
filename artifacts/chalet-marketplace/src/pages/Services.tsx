@@ -8,7 +8,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
-import servicesHeroBanner from "@assets/services-hero-banner.jpg";
+import servicesHeroBanner from "@/assets/services-hero-banner.jpg";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 

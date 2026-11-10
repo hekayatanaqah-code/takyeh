@@ -1,4 +1,4 @@
-import takyahLogoSrc from "@assets/image_1783707669452.png";
+import takyahLogoSrc from "@/assets/platform-logo.png";
 import QRCode from "qrcode";
 import { toAr } from "@/lib/utils";
 import { formatDateWithHijri, HIJRI_MONTHS_AR, toHijriComponents } from "@/lib/hijri";

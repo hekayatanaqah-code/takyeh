@@ -17,3 +17,12 @@ not authorize a database conversion, seeding, deletion or financial repair.
 The MariaDB and private persistent-file boundaries remain applicable until the
 user explicitly changes them. Hostinger-specific export tools may remain for
 existing manual transfers but must not become a dependency of the cloud entry.
+
+Application build assets must live in tracked application directories, not depend
+on the workspace's uploaded-file directory.
+
+**Why:** A global Git ignore excludes `attached_assets/*`; local builds can succeed
+with uploaded images that are absent from GitHub and fail on a clean cloud build.
+
+**How to apply:** Preserve the original artwork, move required build images into
+application assets, and verify builds from tracked files without attached_assets.
