@@ -9,15 +9,20 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const workspace = fileURLToPath(new URL("../", import.meta.url));
-async function fixture(failed = false) {
+async function fixture(failed = false, frontendDirectory = "dist") {
   const directory = await mkdtemp(path.join(tmpdir(), "takyeh-cloud-"));
   await mkdir(path.join(directory, "artifacts/api-server/dist-cloud"), { recursive: true });
-  await mkdir(path.join(directory, "public"));
+  await mkdir(path.join(directory, frontendDirectory), { recursive: true });
+  // A stale legacy public/ directory must not override the new dist build.
+  if (frontendDirectory !== "public") {
+    await mkdir(path.join(directory, "public"));
+    await writeFile(path.join(directory, "public/index.html"), "<h1>stale build</h1>");
+  }
   await writeFile(path.join(directory, "artifacts/api-server/package.json"), "{}");
   await symlink(path.join(workspace, "artifacts/api-server/node_modules"), path.join(directory, "artifacts/api-server/node_modules"));
   await cp(path.join(workspace, "server.cjs"), path.join(directory, "server.cjs"));
-  await writeFile(path.join(directory, "public/index.html"), "<h1>تكيّة</h1>");
-  await writeFile(path.join(directory, "public/app.js"), "window.ready=true;");
+  await writeFile(path.join(directory, frontendDirectory, "index.html"), "<h1>تكيّة</h1>");
+  await writeFile(path.join(directory, frontendDirectory, "app.js"), "window.ready=true;");
   await writeFile(path.join(directory, "artifacts/api-server/dist-cloud/cloud.mjs"), failed
     ? 'export async function startCloud(){throw new Error("private fixture");} export async function closeCloudResources(){}'
     : `export async function startCloud(server){
@@ -27,7 +32,10 @@ async function fixture(failed = false) {
   const socket = createServer(); socket.listen(0, "127.0.0.1"); await once(socket, "listening");
   const port = socket.address().port; await new Promise(resolve => socket.close(resolve));
   const child = spawn(process.execPath, [path.join(directory, "server.cjs")], {
-    cwd: tmpdir(), env: { PATH: process.env.PATH, PORT: String(port) }, stdio: ["ignore", "pipe", "pipe"],
+    cwd: tmpdir(), env: {
+      PATH: process.env.PATH, PORT: String(port),
+      ...(frontendDirectory === "dist" ? {} : { FRONTEND_DIST_DIR: frontendDirectory }),
+    }, stdio: ["ignore", "pipe", "pipe"],
   });
   let logs = ""; child.stdout.on("data", data => { logs += data; }); child.stderr.on("data", data => { logs += data; });
   const base = "http://127.0.0.1:" + port;
@@ -47,17 +55,26 @@ async function cleanup(item) {
   const deadline = setTimeout(() => item.child.kill("SIGKILL"), 4000);
   try { await done; } finally { clearTimeout(deadline); await rm(item.directory, { recursive: true, force: true }); }
 }
-test("generic cloud entry serves SPA and API on the supplied port without exported packages", async () => {
+test("generic cloud entry serves root dist SPA and API without stale public files", async () => {
   const item = await fixture();
   try {
     assert.equal((await fetch(item.base + "/readyz")).status, 200);
+    assert.match(await (await fetch(item.base + "/index.html")).text(), /تكيّة/);
     assert.match(await (await fetch(item.base + "/admin")).text(), /تكيّة/);
+    assert.equal(await (await fetch(item.base + "/app.js")).text(), "window.ready=true;");
     assert.equal((await fetch(item.base + "/app.js", { method: "HEAD" })).status, 200);
     assert.equal((await fetch(item.base + "/missing.js")).status, 404);
     assert.deepEqual(await (await fetch(item.base + "/api/test?x=1")).json(), { url: "/api/test?x=1" });
     for (const p of ["/.env", "/server.cjs", "/artifacts/api-server/package.json", "/database/schema.sql"]) {
       assert.equal((await fetch(item.base + p)).status, 404);
     }
+  } finally { await cleanup(item); }
+});
+test("an explicit frontend directory override still serves SPA and assets", async () => {
+  const item = await fixture(false, "custom/public");
+  try {
+    assert.match(await (await fetch(item.base + "/admin")).text(), /تكيّة/);
+    assert.equal((await fetch(item.base + "/app.js")).status, 200);
   } finally { await cleanup(item); }
 });
 test("cloud backend failure leaves public frontend available and readiness honestly fails", async () => {

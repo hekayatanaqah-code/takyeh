@@ -21,8 +21,9 @@ const express = apiRequire("express");
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
-const publicDirectory = path.resolve(root, process.env.FRONTEND_DIST_DIR ||
-  (fs.existsSync(path.join(root, "public/index.html")) ? "public" : "artifacts/chalet-marketplace/dist/public"));
+// Cloud builds publish the frontend directly to <repository>/dist.
+// An explicit override remains available for custom deployment layouts.
+const publicDirectory = path.resolve(root, process.env.FRONTEND_DIST_DIR || "dist");
 const backendFile = path.join(root, "artifacts/api-server/dist-cloud/cloud.mjs");
 process.env.FRONTEND_DIST_DIR = publicDirectory;
 let runtime;
