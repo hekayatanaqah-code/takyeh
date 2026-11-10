@@ -197,3 +197,17 @@ mtime_ms = 1794291237007
 storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/c27aaf55-17a7-45b1-91b6-aef387034f7b/36c7196c-1644-4f78-9bc2-723ade3d666e"
 storage_version_token = "1794291246012617"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "2mybz7WmLYXk4Cjr21DOw"
+uri = "file://generated-artifacts/hostinger/latest-update-clean.zip"
+type = "unspecified"
+title = "تحميل أحدث نسخة نظيفة — latest-update-clean.zip"
+description = "أعيد بناء الواجهة والخادم من الملفات الحالية. server.cjs وpackage.json في الجذر، دون node_modules أو .git أو .env أو بيانات القاعدة والنسخ الاحتياطية. تم التحقق من سلامة ZIP وبصمات 167 ملفاً."
+logical_id = "3c04ff0c-8c37-4e0a-88a6-b86d7b648f06"
+content_hash = "sha256:0d5433bfc159474678298bf20f9b9309a3f2a5545ccaa40107b7c8980574e2ea"
+size = 12118342
+mtime_ms = 1794295586550
+storage_uri = "gcs://replit-rams-assets-pike/rams/assets/repl:63c35d4f-3337-4802-b28d-643f3fb68a97/3c04ff0c-8c37-4e0a-88a6-b86d7b648f06/667037be-39d8-4143-8c41-9cd7b3130f20"
+storage_version_token = "1794295616709223"
+content_type = "application/octet-stream"
