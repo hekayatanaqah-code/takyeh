@@ -36,10 +36,12 @@ minimumReleaseAgeExclude:
   - stripe-replit-sync
 
 onlyBuiltDependencies:
+  - core-js
   - ffmpeg-static
   - '@swc/core'
   - esbuild
   - msw
+  - sharp
   - unrs-resolver
 
 overrides:
