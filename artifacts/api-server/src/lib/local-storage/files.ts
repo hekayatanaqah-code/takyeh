@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHash,randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import type { StorageMetadata } from "../storage-contract";
+import type { ObjectAclPolicy } from "../objectAcl";
 
 export class ObjectNotFoundError extends Error {
   constructor(){super("Object not found");this.name="ObjectNotFoundError";}
@@ -88,7 +89,7 @@ export class LocalFile {
     const fd=openSync(path.join(directory,".bytes"),constants.O_RDONLY|constants.O_NOFOLLOW);
     return createReadStream(path.join(directory,".bytes"),{...options,fd,autoClose:true});
   }
-  async saveStream(input:AsyncIterable<Uint8Array>,contentType:string,limit=maximumUploadBytes()):Promise<void>{
+  async saveStream(input:AsyncIterable<Uint8Array>,contentType:string,limit=maximumUploadBytes(),aclPolicy?:ObjectAclPolicy):Promise<void>{
     await initializeLocalStorage();
     segments(this.name);
     const parentName=this.name.split("/").slice(0,-1).join("/");
@@ -112,7 +113,7 @@ export class LocalFile {
       if(size===0)throw Object.assign(new Error("Empty upload."),{status:400});
       const generation=hash.digest("hex");
       const manifest:Manifest={size:String(size),generation,contentType,
-        metadata:{"custom:aclPolicy":JSON.stringify({owner:"platform",visibility:this.name.startsWith("public/")||this.name.startsWith("private/uploads/")?"public":"private"})}};
+        metadata:{"custom:aclPolicy":JSON.stringify(aclPolicy??{owner:"platform",visibility:this.name.startsWith("public/")||this.name.startsWith("private/uploads/")?"public":"private"})}};
       await writeFile(path.join(temporary,".meta.json"),JSON.stringify(manifest),{mode:0o600});
       const destination=checked(this.name,true);
       try{await rename(temporary,destination);}
@@ -121,6 +122,8 @@ export class LocalFile {
         const [existing]=await this.getMetadata();
         if(existing.generation!==generation||existing.contentType!==contentType||existing.size!==String(size))
           throw Object.assign(new Error("Immutable object already exists."),{status:409});
+        if(aclPolicy&&existing.metadata["custom:aclPolicy"]!==JSON.stringify(aclPolicy))
+          throw Object.assign(new Error("Immutable object policy differs."),{status:409});
       }
     }finally{await handle.close().catch(()=>{});await rm(temporary,{recursive:true,force:true});}
   }

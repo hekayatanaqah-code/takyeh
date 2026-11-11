@@ -9,6 +9,7 @@ import {ObjectStorageService,initializeLocalStorage,verifyTicket} from "./servic
 import {LocalFile} from "./files";
 import {localStorageIngress} from "./ingress";
 import {ObjectPermission} from "../objectAcl";
+import {createHmac} from "node:crypto";
 
 test("standalone storage: signed streamed uploads, immutable copies, ACL, traversal, expiry and persistent metadata",async()=>{
   const root=await mkdtemp(path.join(tmpdir(),"takyeh-storage-"));
@@ -38,6 +39,17 @@ test("standalone storage: signed streamed uploads, immutable copies, ACL, traver
     assert.equal(Buffer.from(await(await service.downloadObject(file)).arrayBuffer()).equals(bytes),true);
     assert.equal((await fetch(url,{method:"PUT",headers:{"Content-Type":"application/pdf"},body:bytes})).status,204);
     assert.equal((await fetch(url,{method:"PUT",headers:{"Content-Type":"application/pdf"},body:"different"})).status,409);
+    const importPolicy={owner:"owner_migration_fixture",visibility:"private" as const};
+    const payload=Buffer.from(JSON.stringify({name:"private/uploads/migrated-private-fixture",
+      expiry:Date.now()+60000,max:4096,aclPolicy:importPolicy})).toString("base64url");
+    const signature=createHmac("sha256",process.env.SESSION_SECRET!).update(`local-upload:${payload}`).digest("hex");
+    const importUrl=`${process.env.PUBLIC_SITE_URL}/api/storage/local-upload?ticket=${payload}.${signature}`;
+    assert.equal((await fetch(importUrl,{method:"PUT",headers:{"Content-Type":"application/pdf"},body:bytes})).status,204);
+    const imported=await service.getObjectEntityFile("/objects/uploads/migrated-private-fixture");
+    const [importedMeta]=await imported.getMetadata();
+    assert.deepEqual(JSON.parse(String(importedMeta.metadata["custom:aclPolicy"])),importPolicy);
+    assert.equal(await service.canAccessObjectEntity({objectFile:imported,userId:"owner_migration_fixture"}),true);
+    assert.equal(await service.canAccessObjectEntity({objectFile:imported,userId:"unrelated_owner"}),false);
     const destination=file.bucket.file(file.name.replace("/uploads/","/deliveries/"));
     await file.bucket.file(file.name,{generation:metadata.generation}).copy(destination);
     const deliveryPath=objectPath.replace("/uploads/","/deliveries/");

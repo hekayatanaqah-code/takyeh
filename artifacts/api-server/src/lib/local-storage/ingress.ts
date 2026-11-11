@@ -20,7 +20,7 @@ localStorageIngress.put("/local-upload",async(req,res)=>{
     if(req.headers["content-length"] && (!/^\d+$/.test(req.headers["content-length"])||Number(req.headers["content-length"])>ticket.max)){
       res.status(413).json({error:"حجم الملف أكبر من الحد المسموح"});return;
     }
-    await new LocalFile(ticket.name).saveStream(req,mime,ticket.max);res.sendStatus(204);
+    await new LocalFile(ticket.name).saveStream(req,mime,ticket.max,ticket.aclPolicy);res.sendStatus(204);
   }catch(error){
     const status=error instanceof ObjectNotFoundError?403:([400,409,413].includes((error as {status:number}).status)?(error as {status:number}).status:500);
     res.status(status).json({error:status===403?"رابط الرفع غير صالح أو منتهي":"تعذر حفظ الملف"});

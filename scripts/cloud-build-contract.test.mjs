@@ -10,4 +10,7 @@ test("cloud build selects PostgreSQL without the MariaDB implementation", () => 
   assert.ok(inputs.some(name => name.endsWith("/lib/db/src/transaction-lock.ts")), "Transaction locking must be bundled");
   assert.equal(inputs.some(name => /\/lib\/db\/src\/mariadb\//.test(name)), false, "Cloud must not mix database engines");
   assert.ok(inputs.some(name => name.endsWith("/src/cloud.ts")), "Cloud entry must be bundled");
+  assert.ok(inputs.some(name => name.endsWith("/local-storage/service.ts")), "Cloud uploads must use persistent storage");
+  assert.ok(inputs.some(name => name.endsWith("/local-storage/ingress.ts")), "Signed local uploads must be mounted");
+  assert.equal(inputs.some(name => name.endsWith("/lib/objectStorage.ts")), false, "Cloud must not require the Replit storage sidecar");
 });

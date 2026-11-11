@@ -3,7 +3,7 @@ import {Readable} from "node:stream";
 import {LocalFile,ObjectNotFoundError,maximumUploadBytes} from "./files";
 import {canAccessObject,getObjectAclPolicy,setObjectAclPolicy,ObjectPermission,type ObjectAclPolicy} from "../objectAcl";
 export {ObjectNotFoundError,initializeLocalStorage} from "./files";
-export interface Ticket {name:string;expiry:number;max:number;}
+export interface Ticket {name:string;expiry:number;max:number;aclPolicy?:ObjectAclPolicy;}
 function mac(encoded:string):string{
   const secret=process.env.SESSION_SECRET;
   if(!secret||secret.length<32)throw new Error("Storage signing is not configured.");
@@ -18,6 +18,16 @@ export function verifyTicket(token:string):Ticket{
     !Number.isSafeInteger(value.max)||value.max<1||value.max>maximumUploadBytes())throw new ObjectNotFoundError();
   new LocalFile(value.name);
   if(!value.name.startsWith("private/"))throw new ObjectNotFoundError();
+  // Only a server holding the signing secret can mint migration policies.
+  // Apply them atomically with the bytes, never publish a private import first.
+  if(value.aclPolicy!==undefined){
+    const policy=value.aclPolicy;
+    if(!policy||typeof policy!=="object"||typeof policy.owner!=="string"||
+      !policy.owner||policy.owner.length>256||/[\u0000-\u001f\u007f]/.test(policy.owner)||
+      !["private","public"].includes(policy.visibility)||
+      (policy.aclRules!==undefined&&(!Array.isArray(policy.aclRules)||policy.aclRules.length!==0)))
+      throw new ObjectNotFoundError();
+  }
   return value;
 }
 export class ObjectStorageService {

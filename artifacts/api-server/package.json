@@ -5,10 +5,12 @@
   "type": "module",
   "imports": {
     "#object-storage": {
+      "local-storage": "./src/lib/local-storage/service.ts",
       "mariadb": "./src/lib/local-storage/service.ts",
       "default": "./src/lib/objectStorage.ts"
     },
     "#storage-ingress": {
+      "local-storage": "./src/lib/local-storage/ingress.ts",
       "mariadb": "./src/lib/local-storage/ingress.ts",
       "default": "./src/lib/local-storage/disabled.ts"
     },

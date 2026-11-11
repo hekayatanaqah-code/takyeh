@@ -33,7 +33,7 @@ async function buildAll() {
     bundle: true,
     format: "esm",
     target: hostinger ? "es2020" : "node22",
-    conditions: mariadb ? ["mariadb"] : [],
+    conditions: mariadb ? ["mariadb", "local-storage"] : cloud ? ["local-storage"] : [],
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
