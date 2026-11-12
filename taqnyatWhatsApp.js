@@ -1,33 +1,40 @@
-const axios = require('axios');
+"use strict";
 
-async function sendTaqnyatOTP(recipient, otpCode) {
-    const token = process.env.TAQNYAT_BEARER_TOKEN;
-    if (!token) {
-        console.error("TAQNYAT_BEARER_TOKEN is not set in environment variables");
-        return { success: false, error: "Token missing" };
+async function sendTaqnyatOTP(phone, otpCode) {
+    const apiKey = process.env.TAQNYAT_API_KEY || "YOUR_API_KEY_HERE"; // مفتاح تقنيات الخاص بك
+    const senderName = process.env.TAQNYAT_SENDER || "Takyah"; // اسم المرسل المعتمد
+
+    // تنسيق رقم الهاتف (إزالة أي رموز زائدة والتأكد من البدء برمز الدولة 966)
+    let formattedPhone = phone.replace(/\D/g, '');
+    if (formattedPhone.startsWith('0')) {
+        formattedPhone = '966' + formattedPhone.substring(1);
+    } else if (!formattedPhone.startsWith('966')) {
+        formattedPhone = '966' + formattedPhone;
     }
 
     try {
-        const response = await axios.post(
-            'https://api.taqnyat.sa/wa/v1/send/template', 
-            {
-                phone: recipient,
-                templateName: 'otp_verification',
-                parameters: [otpCode]
+        const response = await fetch("https://api.taqnyat.sa/v1/messages", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json"
             },
-            {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+            body: JSON.stringify({
+                recipients: [formattedPhone],
+                body: `رمز التحقق الخاص بك في منصة تكية هو: ${otpCode}`,
+                sender: senderName
+            })
+        });
 
-        console.log('OTP WhatsApp sent successfully:', response.data);
-        return { success: true, data: response.data };
+        const data = await response.json();
+
+        if (response.ok) {
+            return { success: true, data };
+        } else {
+            return { success: false, error: data.message || "فشل إرسال الرسالة من تقنيات" };
+        }
     } catch (error) {
-        console.error('Error sending Taqnyat OTP:', error.response?.data || error.message);
-        return { success: false, error: error.response?.data || error.message };
+        return { success: false, error: error.message };
     }
 }
 
