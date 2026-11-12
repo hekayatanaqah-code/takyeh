@@ -16,12 +16,12 @@ const apiRequire = createRequire(path.join(root, "artifacts/api-server/package.j
 const express = apiRequire("express");
 const app = express();
 
-// استدعاء ملف واتساب تقنيات ومسار الـ OTP
+// استدعاء ملف واتساب تقنيات
 const { sendTaqnyatOTP } = require('./taqnyatWhatsApp');
 
 app.use(express.json());
 
-// مسار طلب رمز التحقق للملاك عبر واتساب تقنيات
+// مسار طلب رمز التحقق للملاك عبر واتساب تقنيات (موضوع في الأعلى ليتم تنفيذه مباشرة)
 app.post('/api/owner/send-otp', async (req, res) => {
     const { phone } = req.body;
     
