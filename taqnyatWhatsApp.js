@@ -1,8 +1,8 @@
 "use strict";
 
 async function sendTaqnyatOTP(phone, otpCode) {
-    const apiKey = process.env.TAQNYAT_API_KEY || "YOUR_API_KEY_HERE"; // مفتاح تقنيات الخاص بك
-    const senderName = process.env.TAQNYAT_SENDER || "Takyah"; // اسم المرسل المعتمد
+    const apiKey = process.env.TAQNYAT_API_KEY || "YOUR_API_KEY_HERE"; 
+    const senderName = process.env.TAQNYAT_SENDER || "Takyah"; 
 
     // تنسيق رقم الهاتف (إزالة أي رموز زائدة والتأكد من البدء برمز الدولة 966)
     let formattedPhone = phone.replace(/\D/g, '');
@@ -21,8 +21,9 @@ async function sendTaqnyatOTP(phone, otpCode) {
             },
             body: JSON.stringify({
                 recipients: [formattedPhone],
-                body: `رمز التحقق الخاص بك في منصة تكية هو: ${otpCode}`,
-                sender: senderName
+                sender: senderName,
+                templateName: "otp_verification",
+                params: [otpCode]
             })
         });
 
@@ -31,9 +32,11 @@ async function sendTaqnyatOTP(phone, otpCode) {
         if (response.ok) {
             return { success: true, data };
         } else {
+            console.error("خطأ من تقنيات:", data);
             return { success: false, error: data.message || "فشل إرسال الرسالة من تقنيات" };
         }
     } catch (error) {
+        console.error("خطأ في الاتصال:", error);
         return { success: false, error: error.message };
     }
 }
