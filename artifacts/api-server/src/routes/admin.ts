@@ -1569,7 +1569,7 @@ router.patch("/owners/:id/soft-delete", async (req, res) => {
   const body = z.object({ reason: z.string().trim().min(3, "سبب الحذف مطلوب (٣ أحرف على الأقل)") }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
   await db.execute(sql`
-    UPDATE owner_applications SET deleted_at = NOW(), delete_reason = ${body.data.reason} WHERE id = ${numId}
+   DELETE FROM owner_applications WHERE id = ${numId}
   `);
   return res.json({ ok: true });
 });
