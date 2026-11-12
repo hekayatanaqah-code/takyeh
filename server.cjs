@@ -1,3 +1,4 @@
+});
 "use strict";
 
 // Standard Node.js entry for a single frontend + API web service.
@@ -19,6 +20,24 @@ if (!/^\d+$/.test(process.env.PORT) || Number(process.env.PORT) < 1 || Number(pr
 const apiRequire = createRequire(path.join(root, "artifacts/api-server/package.json"));
 const express = apiRequire("express");
 const app = express();
+const { sendTaqnyatOTP } = require('./taqnyatWhatsApp');
+// مسار طلب رمز التحقق للملاك عبر واتساب تقنيات
+app.post('/api/owner/send-otp', async (req, res) => {
+    const { phone } = req.body;
+    
+    if (!phone) {
+        return res.status(400).json({ success: false, error: "رقم الهاتف مطلوب" });
+    }
+
+    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
+    const result = await sendTaqnyatOTP(phone, otpCode);
+
+    if (result.success) {
+        res.json({ success: true, message: "تم إرسال رمز التحقق بنجاح عبر الواتساب", otp: otpCode });
+    } else {
+        res.status(500).json({ success: false, error: "فشل إرسال رسالة الواتساب", details: result.error });
+    }
+});
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 // Cloud builds publish the frontend directly to <repository>/dist.
