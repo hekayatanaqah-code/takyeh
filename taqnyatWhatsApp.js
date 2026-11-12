@@ -13,7 +13,10 @@ async function sendTaqnyatOTP(phone, otpCode) {
     }
 
     try {
-        const response = await fetch("https://api.taqnyat.sa/v1/messages", {
+        console.log(`محاولة إرسال واتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
+        
+        // جرب مسار الواتساب المعتمد في تقنية، وفي حال اختلف المسار يظهر لنا في الخطأ
+        const response = await fetch("https://api.taqnyat.sa/v1/whatsapp/messages", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
@@ -22,12 +25,12 @@ async function sendTaqnyatOTP(phone, otpCode) {
             body: JSON.stringify({
                 recipients: [formattedPhone],
                 sender: senderName,
-                templateName: "otp_verification",
-                params: [otpCode]
+                body: `رمز التحقق الخاص بك في منصة تكية هو: ${otpCode}`
             })
         });
 
         const data = await response.json();
+        console.log("استجابة منصة تقنية:", data);
 
         if (response.ok) {
             return { success: true, data };
