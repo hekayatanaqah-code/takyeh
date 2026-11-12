@@ -1,7 +1,7 @@
 "use strict";
 
 async function sendTaqnyatOTP(phone, otpCode) {
-    const apiKey = process.env.TAQNYAT_API_KEY || "YOUR_API_KEY_HERE"; 
+    const apiKey = process.env.TAQNYAT_API_KEY; 
     const senderName = process.env.TAQNYAT_SENDER || "Takyah"; 
 
     // تنسيق رقم الهاتف (إزالة أي رموز زائدة والتأكد من البدء برمز الدولة 966)
@@ -13,9 +13,8 @@ async function sendTaqnyatOTP(phone, otpCode) {
     }
 
     try {
-        console.log(`محاولة إرسال واتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
+        console.log(`إرسال واتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
         
-        // جرب مسار الواتساب المعتمد في تقنية، وفي حال اختلف المسار يظهر لنا في الخطأ
         const response = await fetch("https://api.taqnyat.sa/v1/whatsapp/messages", {
             method: "POST",
             headers: {
@@ -30,16 +29,16 @@ async function sendTaqnyatOTP(phone, otpCode) {
         });
 
         const data = await response.json();
-        console.log("استجابة منصة تقنية:", data);
+        console.log("رد منصة تقنية الفعلي:", JSON.stringify(data));
 
-        if (response.ok) {
+        if (response.ok && (data.statusCode === 201 || data.statusCode === 200 || data.status === 'success' || data.success)) {
             return { success: true, data };
         } else {
-            console.error("خطأ من تقنيات:", data);
+            console.error("رفض من منصة تقنية:", data);
             return { success: false, error: data.message || "فشل إرسال الرسالة من تقنيات" };
         }
     } catch (error) {
-        console.error("خطأ في الاتصال:", error);
+        console.error("خطأ استثنائي في الاتصال ببوابة تقنية:", error);
         return { success: false, error: error.message };
     }
 }
