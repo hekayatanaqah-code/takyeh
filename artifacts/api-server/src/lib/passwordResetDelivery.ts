@@ -8,7 +8,6 @@ export type ResetLinkProvider = {
   prepare(): Promise<PreparedResetSender | null>;
 };
 
-// مزود الواتساب النشط عبر بوابة taqnyat.sa
 export const taqnyatWhatsAppResetProvider: ResetLinkProvider = {
   async prepare() {
     return {
