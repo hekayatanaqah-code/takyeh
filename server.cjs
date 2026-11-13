@@ -21,10 +21,12 @@ const { sendTaqnyatOTP } = require('./taqnyatWhatsApp');
 
 app.use(express.json());
 
-// مسار طلب رمز التحقق للملاك عبر واتساب تقنيات (موضوع في الأعلى ليتم تنفيذه مباشرة)
-app.post('/api/owner/send-otp', async (req, res) => {
+// مسار موحد لطلب رمز التحقق ليدعم المسارين معاً ويضمن وصول الطلب بشكل أكيد
+app.post(['/api/owner/send-otp', '/api/send-phone-otp'], async (req, res) => {
     const { phone } = req.body;
     
+    console.log("🔥 تم التقاط طلب الـ OTP برقم الهاتف:", phone);
+
     if (!phone) {
         return res.status(400).json({ success: false, error: "رقم الهاتف مطلوب" });
     }
@@ -32,10 +34,12 @@ app.post('/api/owner/send-otp', async (req, res) => {
     const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
     const result = await sendTaqnyatOTP(phone, otpCode);
 
-    if (result.success) {
+    console.log("🔥 نتيجة إرسال تقنيات النهائية:", JSON.stringify(result));
+
+    if (result && result.success) {
         res.json({ success: true, message: "تم إرسال رمز التحقق بنجاح عبر الواتساب", otp: otpCode });
     } else {
-        res.status(500).json({ success: false, error: "فشل إرسال رسالة الواتساب", details: result.error });
+        res.status(500).json({ success: false, error: "فشل إرسال رسالة الواتساب", details: result ? result.error : "خطأ غير معروف" });
     }
 });
 
