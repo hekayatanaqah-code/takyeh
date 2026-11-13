@@ -11,10 +11,10 @@ async function sendTaqnyatOTP(phone, otpCode) {
     }
 
     try {
-        console.log(`محاولة إرسال عبر مسار تقنيات البديل للرقم: ${formattedPhone} بررمز: ${otpCode}`);
+        console.log(`محاولة إرسال واتساب عبر تقنيات للرقم: ${formattedPhone} بررمز: ${otpCode}`);
         
-        // تجربة المسار العام المعتمد لدى تقنيات للرسائل والواتساب
-        const response = await fetch("https://api.taqnyat.sa/v1/messages", {
+        // استخدام مسار الواتساب المعتمد والمحدث من القسم التقني
+        const response = await fetch("https://api.taqnyat.sa/wa/v2/messages/", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
@@ -22,9 +22,36 @@ async function sendTaqnyatOTP(phone, otpCode) {
                 "Accept": "application/json"
             },
             body: JSON.stringify({
-                sender: "Takyeh",
-                recipients: [formattedPhone],
-                body: `رمز التحقق الخاص بك في منصة تكية هو: ${otpCode}`
+                "to": `+${formattedPhone}`,
+                "type": "template",
+                "template": {
+                    "name": "otp_verification",
+                    "language": {
+                        "code": "ar"
+                    },
+                    "components": [
+                        {
+                            "type": "body",
+                            "parameters": [
+                                {
+                                    "type": "text",
+                                    "text": String(otpCode)
+                                }
+                            ]
+                        },
+                        {
+                            "type": "button",
+                            "sub_type": "url",
+                            "index": "0",
+                            "parameters": [
+                                {
+                                    "type": "text",
+                                    "text": String(otpCode)
+                                }
+                            ]
+                        }
+                    ]
+                }
             })
         });
 
