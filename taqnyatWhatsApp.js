@@ -7,10 +7,12 @@ function isTaqnyatAccepted(httpOk, data) {
     if (["failed", "failure", "error", "rejected"].includes(String(data.status || "").toLowerCase())) {
         return false;
     }
-    // WhatsApp v2 acknowledges accepted messages using statuses[].message_id,
-    // not the statusCode/success fields used by other Taqnyat APIs.
-    if (data.type === "whatsapp" && Array.isArray(data.statuses)) {
-        return data.statuses.length > 0 && data.statuses.every(item =>
+    if (Number(data.statusCode) >= 400) return false;
+    // Live Taqnyat template replies use {type:"template", statuses:{message_id,...}}.
+    // The documented WhatsApp reply uses {type:"whatsapp", statuses:[...]}.
+    if (["whatsapp", "template"].includes(data.type) && data.statuses != null) {
+        const statuses = Array.isArray(data.statuses) ? data.statuses : [data.statuses];
+        return statuses.length > 0 && statuses.every(item =>
             item && typeof item.message_id === "string" && item.message_id.trim().length > 0 &&
             !item.error && !item.errors &&
             !["failed", "failure", "error", "rejected"].includes(String(item.status || item.state || "").toLowerCase())

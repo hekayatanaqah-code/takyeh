@@ -61,3 +61,21 @@ test("documented Taqnyat acknowledgement does not reject a stored OTP", async ()
   });
   assert.equal(stored, hashPhoneOtp(sent));
 });
+
+test("actual single-status template acknowledgement preserves the verifiable OTP", async () => {
+  let stored = "";
+  let sent = "";
+  await issuePhoneOtp("0500000000", async hash => {
+    stored = hash;
+  }, async (_phone, code) => {
+    sent = code;
+    return {
+      success: isTaqnyatAccepted(true, {
+        type: "template",
+        statuses: { message_id: "wamid.test-fixture", recipient: "+966500000000" },
+      }),
+    };
+  });
+  assert.match(sent, /^\d{4}$/);
+  assert.equal(stored, hashPhoneOtp(normalizePhoneOtp(sent)));
+});
