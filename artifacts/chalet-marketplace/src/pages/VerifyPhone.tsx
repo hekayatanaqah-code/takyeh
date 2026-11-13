@@ -444,7 +444,7 @@ export default function VerifyPhone() {
           <p className="text-sm text-[#656565] font-semibold mb-1">
             {otpSent
               ? `تم إرسال رمز مكوّن من ٤ أرقام إلى الواتساب على`
-              : "جاري إرسال رمز التحقق…"}
+              : error ? "تعذّر إرسال رمز التحقق، يمكنك إعادة المحاولة" : "جاري إرسال رمز التحقق…"}
           </p>
           {maskedPhone && (
             <div className="text-center whitespace-nowrap mt-1" dir="rtl">

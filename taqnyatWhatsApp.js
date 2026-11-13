@@ -1,5 +1,24 @@
 "use strict";
 
+function isTaqnyatAccepted(httpOk, data) {
+    if (!httpOk || !data || typeof data !== "object" || data.error || data.errors || data.success === false) {
+        return false;
+    }
+    if (["failed", "failure", "error", "rejected"].includes(String(data.status || "").toLowerCase())) {
+        return false;
+    }
+    // WhatsApp v2 acknowledges accepted messages using statuses[].message_id,
+    // not the statusCode/success fields used by other Taqnyat APIs.
+    if (data.type === "whatsapp" && Array.isArray(data.statuses)) {
+        return data.statuses.length > 0 && data.statuses.every(item =>
+            item && typeof item.message_id === "string" && item.message_id.trim().length > 0 &&
+            !item.error && !item.errors &&
+            !["failed", "failure", "error", "rejected"].includes(String(item.status || item.state || "").toLowerCase())
+        );
+    }
+    return [200, 201].includes(Number(data.statusCode)) || data.status === "success" || data.success === true;
+}
+
 async function sendTaqnyatOTP(phone, otpCode) {
     const apiKey = process.env.TAQNYAT_API_KEY; 
 
@@ -65,14 +84,14 @@ async function sendTaqnyatOTP(phone, otpCode) {
             return { success: false, error: "بوابة تقنيات أرجعت استجابة غير صالحة" };
         }
 
-        if (response.ok && (data.statusCode === 201 || data.statusCode === 200 || data.status === 'success' || data.success)) {
+        if (isTaqnyatAccepted(response.ok, data)) {
             return { success: true, data };
         } else {
-            return { success: false, error: data.message || "فشل إرسال الرسالة من تقنيات" };
+            return { success: false, error: "فشل إرسال الرسالة من تقنيات" };
         }
     } catch (error) {
         return { success: false, error: "تعذّر الاتصال بخدمة إرسال رمز التحقق" };
     }
 }
 
-module.exports = { sendTaqnyatOTP };
+module.exports = { sendTaqnyatOTP, isTaqnyatAccepted };
