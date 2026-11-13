@@ -13,8 +13,8 @@ async function sendTaqnyatOTP(phone, otpCode) {
     try {
         console.log(`إرسال قالب الواتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
         
-        // المسار الصحيح والمعتمد لخدمة واتساب تقنيات
-        const response = await fetch("https://api.taqnyat.sa/v1/whatsapp/messages", {
+        // الرابط الصحيح والمعتمد لإرسال القوالب في تقنيات
+        const response = await fetch("https://api.taqnyat.sa/v1/whatsapp/send", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
@@ -26,6 +26,13 @@ async function sendTaqnyatOTP(phone, otpCode) {
                 bodyParams: [otpCode]
             })
         });
+
+        const contentType = response.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            const textResponse = await response.text();
+            console.error("خطأ: تقنيات أرجعت HTML وليس JSON:", textResponse);
+            return { success: false, error: "رابط البوابة أرجع صفحة خطأ" };
+        }
 
         const data = await response.json();
         console.log("رد منصة تقنية الفعلي:", JSON.stringify(data, null, 2));
