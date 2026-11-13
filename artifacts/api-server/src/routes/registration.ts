@@ -7,6 +7,7 @@ import { usersTable } from "@workspace/db/schema";
 import { sendOtpEmail, sendWelcomeEmail } from "../lib/email";
 import { createSession, SESSION_COOKIE, SESSION_TTL } from "../lib/auth";
 import { loginWithRoles, roleLoginGuard } from "../lib/role-login";
+import { hashPhoneOtp, issuePhoneOtp, normalizePhoneOtp } from "../lib/phone-otp";
 
 const router = Router();
 
@@ -291,36 +292,43 @@ router.post("/resend-otp", async (req, res) => {
 
 router.post("/owner-login", roleLoginGuard, loginWithRoles);
 
-async function createPhoneOtp(phone: string, code: string) {
-  const codeHash = hashCode(code);
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-  await db.execute(
-    sql`INSERT INTO phone_otp_tokens (phone, code_hash, expires_at)
-        VALUES (${phone}, ${codeHash}, ${expiresAt.toISOString()})`
-  );
+async function createPhoneOtp(phone: string) {
+  await db.transaction(async tx => {
+    // Serialize issuance for the same owner, including concurrent resend requests.
+    await tx.execute(sql`SELECT id FROM owner_applications WHERE phone = ${phone} FOR UPDATE`);
+    await issuePhoneOtp(phone, async (codeHash, expiresAt) => {
+      await tx.execute(sql`UPDATE phone_otp_tokens SET used_at = now() WHERE phone = ${phone} AND used_at IS NULL`);
+      await tx.execute(
+        sql`INSERT INTO phone_otp_tokens (phone, code_hash, expires_at)
+            VALUES (${phone}, ${codeHash}, ${expiresAt.toISOString()})`
+      );
+    });
+  });
 }
 
 async function verifyAndConsumePhoneOtp(phone: string, code: string): Promise<boolean> {
   if (process.env.NODE_ENV === "development" && code.trim() === "1234") {
     return true;
   }
-  const codeHash = hashCode(code);
-  const result = await db.execute(
-    sql`SELECT id FROM phone_otp_tokens
-        WHERE phone = ${phone}
-          AND code_hash = ${codeHash}
-          AND expires_at > now()
-          AND used_at IS NULL
-        ORDER BY created_at DESC LIMIT 1`
-  );
-  const rows = (result as any).rows as Array<{ id: number }>;
-  const token = rows[0];
-  if (!token) return false;
-  await db.execute(sql`UPDATE phone_otp_tokens SET used_at = now() WHERE id = ${token.id}`);
-  return true;
+  const codeHash = hashPhoneOtp(code);
+  return db.transaction(async tx => {
+    const result = await tx.execute(
+      sql`SELECT id FROM phone_otp_tokens
+          WHERE phone = ${phone}
+            AND code_hash = ${codeHash}
+            AND expires_at > now()
+            AND used_at IS NULL
+          ORDER BY created_at DESC LIMIT 1 FOR UPDATE`
+    );
+    const rows = (result as any).rows as Array<{ id: number }>;
+    const token = rows[0];
+    if (!token) return false;
+    await tx.execute(sql`UPDATE phone_otp_tokens SET used_at = now() WHERE id = ${token.id}`);
+    return true;
+  });
 }
 
-router.post("/send-phone-otp", async (req, res) => {
+router.post(["/send-phone-otp", "/owner/send-otp"], async (req, res) => {
   const { email, phone } = req.body ?? {};
   if (!email && !phone) return res.status(400).json({ error: "البريد الإلكتروني أو رقم الجوال مطلوب" });
   const emailLower = String(email ?? "").trim().toLowerCase();
@@ -344,8 +352,7 @@ router.post("/send-phone-otp", async (req, res) => {
     if (!app.email_verified) return res.status(403).json({ error: "يرجى التحقق من البريد الإلكتروني أولاً" });
     if (app.phone_verified) return res.json({ ok: true, alreadyVerified: true, maskedPhone: maskPhone(app.phone) });
 
-    const code = String(randomInt(1000, 10000));
-    await createPhoneOtp(app.phone, code);
+    await createPhoneOtp(app.phone);
 
     return res.json({ ok: true, maskedPhone: maskPhone(app.phone) });
   } catch (err) {
@@ -363,7 +370,7 @@ router.post("/verify-phone-otp", async (req, res) => {
   if ((!email && !phone) || !code) return res.status(400).json({ error: "البريد أو رقم الجوال والرمز مطلوبان" });
   const emailLower = String(email ?? "").trim().toLowerCase();
   const phoneClean = normalizePhone(phone);
-  const cleanCode  = String(code).trim().replace(/\s/g, "");
+  const cleanCode = normalizePhoneOtp(code);
   if (!/^\d{4}$/.test(cleanCode)) {
     return res.status(400).json({ error: "رمز التحقق يجب أن يكون ٤ أرقام" });
   }
@@ -415,11 +422,7 @@ router.post("/resend-phone-otp", async (req, res) => {
     if (!app) return res.status(404).json({ error: "الحساب غير موجود" });
     if (app.phone_verified) return res.json({ ok: true, alreadyVerified: true });
 
-    await db.execute(
-      sql`UPDATE phone_otp_tokens SET used_at = now() WHERE phone = ${app.phone} AND used_at IS NULL`
-    );
-    const code = String(randomInt(1000, 10000));
-    await createPhoneOtp(app.phone, code);
+    await createPhoneOtp(app.phone);
 
     return res.json({ ok: true, maskedPhone: maskPhone(app.phone) });
   } catch (err) {
@@ -492,8 +495,7 @@ router.post("/change-phone", async (req, res): Promise<void> => {
           WHERE id = ${app.id}`
     );
 
-    const code = String(randomInt(1000, 10000));
-    await createPhoneOtp(newPhoneClean, code);
+    await createPhoneOtp(newPhoneClean);
     res.json({ ok: true, maskedPhone: maskPhone(newPhoneClean) });
   } catch (err) {
     res.status(500).json({ error: "حدث خطأ أثناء تحديث رقم الجوال" });

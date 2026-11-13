@@ -65,6 +65,14 @@ test("generic cloud entry serves root dist SPA and API without stale public file
     assert.equal((await fetch(item.base + "/app.js", { method: "HEAD" })).status, 200);
     assert.equal((await fetch(item.base + "/missing.js")).status, 404);
     assert.deepEqual(await (await fetch(item.base + "/api/test?x=1")).json(), { url: "/api/test?x=1" });
+    // A cloud-only sender used to bypass persistence and made every OTP invalid.
+    for (const endpoint of ["/api/send-phone-otp", "/api/owner/send-otp", "/api/resend-phone-otp", "/api/verify-phone-otp"]) {
+      const response = await fetch(item.base + endpoint, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "otp-fixture@example.invalid" }),
+      });
+      assert.deepEqual(await response.json(), { url: endpoint });
+    }
     for (const p of ["/.env", "/server.cjs", "/artifacts/api-server/package.json", "/database/schema.sql"]) {
       assert.equal((await fetch(item.base + p)).status, 404);
     }

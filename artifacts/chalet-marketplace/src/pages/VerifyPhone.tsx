@@ -83,6 +83,11 @@ export default function VerifyPhone() {
         body: JSON.stringify(accountBody),
       });
       const data = await r.json();
+      if (!r.ok) {
+        setError(data.error ?? "تعذّر إرسال رمز التحقق، حاول مرة أخرى");
+        setCanResend(true);
+        return;
+      }
       if (data.maskedPhone) setMaskedPhone(data.maskedPhone);
       if (data.alreadyVerified) {
         window.location.href = `${BASE}/onboarding/type?${onboardingQuery}`;
@@ -193,7 +198,12 @@ export default function VerifyPhone() {
         body: JSON.stringify(accountBody),
       });
       const data = await r.json();
+      if (!r.ok) {
+        setError(data.error ?? "فشل إعادة الإرسال، حاول مرة أخرى");
+        return;
+      }
       if (data.maskedPhone) setMaskedPhone(data.maskedPhone);
+      setOtpSent(true);
       setCountdown(RESEND_SECONDS);
       setCanResend(false);
       setDigits(Array(OTP_LENGTH).fill(""));

@@ -16,32 +16,8 @@ const apiRequire = createRequire(path.join(root, "artifacts/api-server/package.j
 const express = apiRequire("express");
 const app = express();
 
-// استدعاء ملف واتساب تقنيات
-const { sendTaqnyatOTP } = require('./taqnyatWhatsApp');
-
-app.use(express.json());
-
-// مسار موحد لطلب رمز التحقق ليدعم المسارين معاً ويضمن وصول الطلب بشكل أكيد
-app.post(['/api/owner/send-otp', '/api/send-phone-otp'], async (req, res) => {
-    const { phone } = req.body;
-    
-    console.log("🔥 تم التقاط طلب الـ OTP برقم الهاتف:", phone);
-
-    if (!phone) {
-        return res.status(400).json({ success: false, error: "رقم الهاتف مطلوب" });
-    }
-
-    const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
-    const result = await sendTaqnyatOTP(phone, otpCode);
-
-    console.log("🔥 نتيجة إرسال تقنيات النهائية:", JSON.stringify(result));
-
-    if (result && result.success) {
-        res.json({ success: true, message: "تم إرسال رمز التحقق بنجاح عبر الواتساب", otp: otpCode });
-    } else {
-        res.status(500).json({ success: false, error: "فشل إرسال رسالة الواتساب", details: result ? result.error : "خطأ غير معروف" });
-    }
-});
+// API routes, body parsing and OTP persistence belong to the backend.
+// Never intercept OTP delivery here: verification uses the database token.
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -67,7 +43,7 @@ app.use((req, res, next) => {
     if (req.path !== "/api" && !req.path.startsWith("/api/")) return next();
     if (runtime && !stopping) return runtime.handler(req, res);
     res.status(503).set("cache-control", "no-store").json({
-        error: "state === 'failed' ? 'جاري تجهيز خدمة المنصة' : 'الخدمة تعمل غير متاحة حالياً'",
+        error: state === "failed" ? "الخدمة غير متاحة حالياً" : "جاري تجهيز خدمة المنصة",
         code: state === "failed" ? "BACKEND_UNAVAILABLE" : "BACKEND_STARTING"
     });
 });
@@ -80,7 +56,7 @@ app.use((req, res, next) => {
         return res.sendStatus(400);
     }
     if (pathname.includes("\\") || pathname.split("/").some(part => part.startsWith("."))) {
-        return res.sendStatus(400);
+        return res.sendStatus(404);
     }
     next();
 });
@@ -94,7 +70,8 @@ app.use(express.static(publicDirectory, {
     }
 }));
 
-app.get(/^(?!\/api)/, (_req, res) => {
+app.get(/^(?!\/api)/, (req, res) => {
+    if (path.extname(req.path) && req.path !== "/index.html") return res.sendStatus(404);
     res.setHeader("Cache-Control", "no-store");
     res.sendFile(path.join(publicDirectory, "index.html"));
 });
@@ -118,7 +95,7 @@ import(pathToFileURL(backendFile).href).then(async module => {
     console.log("Application backend ready");
 }).catch(async error => {
     state = "failed";
-    console.error("Backend startup failed. Check build output, database and storage configuration.", error);
+    console.error("Backend startup failed. Check build output, database and storage configuration.");
     if (backend) await backend.closeCloudResources().catch(() => undefined);
 });
 
