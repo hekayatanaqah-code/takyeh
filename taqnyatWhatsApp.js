@@ -11,31 +11,33 @@ async function sendTaqnyatOTP(phone, otpCode) {
     }
 
     try {
-        console.log(`إرسال قالب الواتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
+        console.log(`محاولة إرسال عبر مسار تقنيات البديل للرقم: ${formattedPhone} بررمز: ${otpCode}`);
         
-        // الرابط الصحيح والمعتمد لإرسال القوالب في تقنيات
-        const response = await fetch("https://api.taqnyat.sa/v1/whatsapp/send", {
+        // تجربة المسار العام المعتمد لدى تقنيات للرسائل والواتساب
+        const response = await fetch("https://api.taqnyat.sa/v1/messages", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Accept": "application/json"
             },
             body: JSON.stringify({
+                sender: "Takyeh",
                 recipients: [formattedPhone],
-                templateName: "otp_verification",
-                bodyParams: [otpCode]
+                body: `رمز التحقق الخاص بك في منصة تكية هو: ${otpCode}`
             })
         });
 
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-            const textResponse = await response.text();
-            console.error("خطأ: تقنيات أرجعت HTML وليس JSON:", textResponse);
-            return { success: false, error: "رابط البوابة أرجع صفحة خطأ" };
-        }
+        const textResponse = await response.text();
+        console.log("النص الخام الراجع من تقنيات:", textResponse);
 
-        const data = await response.json();
-        console.log("رد منصة تقنية الفعلي:", JSON.stringify(data, null, 2));
+        let data;
+        try {
+            data = JSON.parse(textResponse);
+        } catch (e) {
+            console.error("الرد ليس JSON صحيح:", textResponse);
+            return { success: false, error: "بوابة تقنيات أرجعت استجابة غير صالحة" };
+        }
 
         if (response.ok && (data.statusCode === 201 || data.statusCode === 200 || data.status === 'success' || data.success)) {
             return { success: true, data };
@@ -43,7 +45,7 @@ async function sendTaqnyatOTP(phone, otpCode) {
             return { success: false, error: data.message || "فشل إرسال الرسالة من تقنيات" };
         }
     } catch (error) {
-        console.error("خطأ استثنائي في الاتصال ببوابة تقنية:", error);
+        console.error("خطأ استثنائي:", error);
         return { success: false, error: error.message };
     }
 }
