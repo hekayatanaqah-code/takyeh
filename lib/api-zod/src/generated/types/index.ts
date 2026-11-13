@@ -77,6 +77,7 @@ export * from './getOwnerDeposits200Item';
 export * from './getOwnerFinancialPeriods200';
 export * from './getOwnerFinancialPeriodsActivity';
 export * from './getOwnerFinancialPeriodsParams';
+export * from './getOwnerOnboardingStatus200';
 export * from './getOwnerPropertyPriceQuoteParams';
 export * from './getOwnerPropertyPriceQuotePeriod';
 export * from './getOwnerServiceRevenueSummaryParams';

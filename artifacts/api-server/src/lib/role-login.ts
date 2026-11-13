@@ -8,6 +8,7 @@ import { nationalPhoneSql } from "./contact-sql";
 import { RoleLoginBody, SelectLoginRoleBody } from "@workspace/api-zod";
 import { createSession, SESSION_COOKIE, SESSION_TTL } from "./auth";
 import { setPhotographerSession } from "./photographer-auth";
+import { hasCompletedOwnerVerification } from "./owner-verification";
 
 type Role = "owner" | "photographer" | "admin" | "staff";
 type Candidate = { role: Role; id: number; password_hash: string };
@@ -99,9 +100,16 @@ async function issueSession(req: Request, res: Response, candidate: Candidate, r
     return { ok: true, role: candidate.role, redirect: "/photographer" };
   }
   if (candidate.role === "owner") {
-    const result = await db.execute(sql`SELECT oa.id, oa.email, oa.full_name, link.user_id FROM owner_applications oa
+    const result = await db.execute(sql`SELECT oa.id, oa.email, oa.phone, oa.full_name,
+      oa.email_verified, oa.phone_verified, oa.phone_verified_at, oa.deleted_at, link.user_id FROM owner_applications oa
       LEFT JOIN owner_account_links link ON link.owner_application_id=oa.id WHERE oa.id = ${candidate.id}`);
     const row = (result as any).rows[0];
+    if (!hasCompletedOwnerVerification(row)) {
+      res.clearCookie(SESSION_COOKIE, { path: "/" });
+      res.clearCookie("owner_temp_session", { path: "/" });
+      return { ok: false, requiresPhoneVerification: true, role: "owner",
+        redirect: `/verify-phone?${row?.email ? `email=${encodeURIComponent(row.email)}` : `phone=${encodeURIComponent(row?.phone ?? "")}`}` };
+    }
     // Preserve established ordinary owner identities through durable links, not email matching.
     // A privileged external identity must not give an owner login administrative powers.
     const privilegedIds = new Set([process.env.ADMIN_USER_ID, ...(process.env.PLATFORM_ADMIN_IDS ?? "56719001").split(",").map(s => s.trim())]);
@@ -130,6 +138,10 @@ async function issueSession(req: Request, res: Response, candidate: Candidate, r
   res.clearCookie(SESSION_COOKIE, { path: "/" });
   res.clearCookie("owner_temp_session", { path: "/" });
   return { ok: true, role: "staff", redirect: "/dashboard" };
+}
+
+export async function issueVerifiedOwnerSession(req: Request, res: Response, applicationId: number) {
+  return issueSession(req, res, { role: "owner", id: applicationId, password_hash: "" }, false);
 }
 export async function loginWithRoles(req: Request, res: Response) {
   const rawIdentifier = req.body?.identifier ?? req.body?.email;

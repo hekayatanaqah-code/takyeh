@@ -5,14 +5,6 @@ import { Building2, Wrench, Layers2, ChevronLeft, Loader2 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-function getParams() {
-  const p = new URLSearchParams(window.location.search);
-  return {
-    email: p.get("email") ?? "",
-    phone: p.get("phone") ?? "",
-  };
-}
-
 type BizType = "chalet" | "service" | "both";
 
 const options: { type: BizType; icon: React.ReactNode; label: string; desc: string }[] = [
@@ -38,7 +30,6 @@ const options: { type: BizType; icon: React.ReactNode; label: string; desc: stri
 
 export default function OnboardingType() {
   const [, navigate] = useLocation();
-  const { email, phone } = getParams();
   const [selected, setSelected] = useState<BizType | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,12 +49,15 @@ export default function OnboardingType() {
     setSaving(true);
     setError(null);
     try {
-      if (email || phone) {
-        await fetch(`${BASE}/api/onboarding/type`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: email || undefined, phone: phone || undefined, businessType: selected }),
-        });
+      const response = await fetch(`${BASE}/api/onboarding/type`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ businessType: selected }),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        setError(data.error ?? "تعذّر الحفظ، يرجى المحاولة مرة أخرى");
+        return;
       }
       navigate(`/onboarding/welcome?type=${selected}`);
     } catch {

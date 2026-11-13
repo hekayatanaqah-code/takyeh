@@ -13,5 +13,6 @@ export type SelectLoginRole200 = {
   role?: SelectLoginRole200Role;
   redirect?: string;
   requiresRole?: boolean;
+  requiresPhoneVerification?: boolean;
   roles?: SelectLoginRole200RolesItem[];
 };

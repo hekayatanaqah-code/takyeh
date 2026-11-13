@@ -1963,6 +1963,10 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type GetOwnerOnboardingStatus200 = {
+  ok: boolean;
+};
+
 export type GetSuperAdminProfile200 = {
   username: string;
   email: string;
@@ -2455,6 +2459,7 @@ export type RoleLogin200 = {
   role?: RoleLogin200Role;
   redirect?: string;
   requiresRole?: boolean;
+  requiresPhoneVerification?: boolean;
   roles?: RoleLogin200RolesItem[];
 };
 
@@ -2501,6 +2506,7 @@ export type SelectLoginRole200 = {
   role?: SelectLoginRole200Role;
   redirect?: string;
   requiresRole?: boolean;
+  requiresPhoneVerification?: boolean;
   roles?: SelectLoginRole200RolesItem[];
 };
 

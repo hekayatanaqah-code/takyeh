@@ -7,13 +7,11 @@ import { toAr } from "@/lib/utils";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const RESEND_SECONDS = 60;
-const IS_DEV = import.meta.env.DEV;
 const OTP_LENGTH = 4;
 
 /* ── Arabic-Indic digit helpers ── */
 const EN_TO_AR: Record<string, string> = { '0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩' };
 const arToEn = (s: string) => s.replace(/[٠-٩]/g, n => String(n.charCodeAt(0) - 0x0660));
-const DEV_DIGITS = "١٢٣٤".split("");
 
 function normalizeLocalPhoneInput(value: string): string {
   const digits = arToEn(value).replace(/\D/g, "");
@@ -493,17 +491,6 @@ export default function VerifyPhone() {
             />
           ))}
         </div>
-
-        {/* Dev hint */}
-        {IS_DEV && otpSent && (
-          <button
-            type="button"
-            onClick={() => setDigits(DEV_DIGITS)}
-            className="w-full mb-4 py-2 rounded-xl border border-dashed border-[#D9C3B0] bg-[#FBF9F6] text-xs text-[#8C6246] font-medium hover:bg-[#F5EEE9] transition-colors"
-          >
-            🛠 بيئة تطوير — اضغط لملء الكود التجريبي: ١٢٣٤
-          </button>
-        )}
 
         {/* Progress hint */}
         {digits.filter(d => d !== "").length > 0 && digits.includes("") && (

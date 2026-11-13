@@ -72,6 +72,7 @@ import type {
   GetOwnerDeposits200Item,
   GetOwnerFinancialPeriods200,
   GetOwnerFinancialPeriodsParams,
+  GetOwnerOnboardingStatus200,
   GetOwnerPropertyPriceQuoteParams,
   GetOwnerServiceRevenueSummaryParams,
   GetOwnerWallet200,
@@ -231,6 +232,107 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getGetOwnerOnboardingStatusUrl = () => {
+
+
+
+
+  return `/api/onboarding/status`
+}
+
+/**
+ * @summary Allow onboarding only for a session whose owner completed phone OTP verification
+ */
+export const getOwnerOnboardingStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetOwnerOnboardingStatus200> => {
+
+  return customFetch<GetOwnerOnboardingStatus200>(getGetOwnerOnboardingStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOwnerOnboardingStatusQueryKey = () => {
+    return [
+    `/api/onboarding/status`
+    ] as const;
+    }
+
+
+export const getGetOwnerOnboardingStatusQueryOptions = <TData = Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOwnerOnboardingStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOwnerOnboardingStatus>>> = ({ signal }) => getOwnerOnboardingStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetOwnerOnboardingStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getOwnerOnboardingStatus>>>
+export type GetOwnerOnboardingStatusQueryError = ErrorType<void>
+
+
+export function useGetOwnerOnboardingStatus<TData = Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerOnboardingStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerOnboardingStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerOnboardingStatus<TData = Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getOwnerOnboardingStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getOwnerOnboardingStatus>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetOwnerOnboardingStatus<TData = Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Allow onboarding only for a session whose owner completed phone OTP verification
+ */
+
+export function useGetOwnerOnboardingStatus<TData = Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getOwnerOnboardingStatus>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetOwnerOnboardingStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetSuperAdminProfileUrl = () => {
 

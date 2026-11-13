@@ -71,6 +71,7 @@ import { checkPropertyIdentity } from "../lib/property-identity";
 import { hasPropertySocialConflict, socialAccountIdentity } from "../lib/property-social-account";
 import { normalizeSaudiMobile } from "../lib/passwordRecovery";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
+import { ownerVerificationForIdentity, hasCompletedOwnerVerification } from "../lib/owner-verification";
 import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys, getOwnerFreeAccess } from "../lib/subscription-access";
 import { getOwnerAccountDiscount } from "../lib/subscription-discounts";
 import { getReminderPreview } from "../lib/subscription-reminder-preview";
@@ -213,16 +214,22 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const tempToken = (req.cookies as Record<string, string>)?.owner_temp_session;
   if (tempToken) {
     const r = await db.execute<{ owner_id: string; created_by_replit_id: string | null }>(
-      sql`SELECT owner_id, created_by_replit_id
+      sql`SELECT owner_id, created_by_replit_id, admin_label
           FROM owner_temp_sessions
           WHERE token = ${tempToken} AND expires_at > now() LIMIT 1`
     );
-    const row = ((r as any).rows as Array<{ owner_id: string; created_by_replit_id: string | null }>)[0];
+    const row = ((r as any).rows as Array<{ owner_id: string; created_by_replit_id: string | null; admin_label: string | null }>)[0];
     if (row?.owner_id) {
       const currentReplitId = req.isAuthenticated() ? (req.user as any)?.id : null;
       const cookieOwner = row.created_by_replit_id;
       /* Accept when: no Replit session, OR creator field is null, OR creator matches current user */
       if (!currentReplitId || cookieOwner === null || cookieOwner === currentReplitId) {
+        if (row.admin_label === "__owner_self__" &&
+            !hasCompletedOwnerVerification(await ownerVerificationForIdentity(row.owner_id))) {
+          res.clearCookie("owner_temp_session", { path: "/" });
+          res.status(403).json({ error: "يجب توثيق الجوال برمز التحقق أولاً", requiresPhoneVerification: true });
+          return;
+        }
         (req as any).user = { id: row.owner_id, isImpersonated: true };
         next(); return;
       }
@@ -235,7 +242,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   /* ── Path 2: Normal owner Passport session ── */
-  if (req.isAuthenticated()) { next(); return; }
+  if (req.isAuthenticated()) {
+    if (!isPlatformAdmin(req) && !hasCompletedOwnerVerification(await ownerVerificationForIdentity(req.user.id))) {
+      res.status(403).json({ error: "يجب توثيق الجوال برمز التحقق أولاً", requiresPhoneVerification: true });
+      return;
+    }
+    next(); return;
+  }
 
   res.status(401).json({ error: "يجب تسجيل الدخول أولاً" });
 }
@@ -268,6 +281,13 @@ router.get("/enter-session", async (req, res) => {
   );
   const sessionRow = ((r as any).rows as Array<{ owner_id: string; expires_at: Date }>)[0];
   if (!sessionRow) return res.status(400).send("الرمز غير صالح أو منتهي الصلاحية");
+  const verification = await db.execute(sql`
+    SELECT admin_label FROM owner_temp_sessions WHERE token = ${token} LIMIT 1
+  `);
+  if ((verification as any).rows[0]?.admin_label === "__owner_self__" &&
+      !hasCompletedOwnerVerification(await ownerVerificationForIdentity(sessionRow.owner_id))) {
+    return res.status(403).send("يجب توثيق الجوال برمز التحقق أولاً");
+  }
 
   /* Extend session lifetime to 6 hours from now */
   const newExpiry = new Date(Date.now() + 6 * 60 * 60 * 1000);
@@ -329,6 +349,9 @@ router.post("/auto-session", async (req, res) => {
   if (!ownerId) return res.status(400).json({ error: "ownerId مطلوب" });
 
   if (!isPlatformAdmin(req)) {
+    if (!hasCompletedOwnerVerification(await ownerVerificationForIdentity(req.user!.id))) {
+      return res.status(403).json({ error: "يجب توثيق الجوال أولاً", requiresPhoneVerification: true });
+    }
     /* Non-admin: verify the requested ownerId belongs to this user */
     const email = await resolveOwnerEmail(req);
     if (!email) return res.status(403).json({ error: "غير مصرح" });

@@ -5,8 +5,8 @@ import { sql, eq } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { sendOtpEmail, sendWelcomeEmail } from "../lib/email";
-import { createSession, SESSION_COOKIE, SESSION_TTL } from "../lib/auth";
-import { loginWithRoles, roleLoginGuard } from "../lib/role-login";
+import { getSession, getSessionId } from "../lib/auth";
+import { loginWithRoles, roleLoginGuard, issueVerifiedOwnerSession } from "../lib/role-login";
 import { hashPhoneOtp, issuePhoneOtp, normalizePhoneOtp } from "../lib/phone-otp";
 
 const router = Router();
@@ -29,12 +29,6 @@ async function createOtp(email: string, code: string) {
   );
 }
 
-async function isDevModeEnabled(): Promise<boolean> {
-  return process.env.NODE_ENV === "development";
-}
-
-const DEV_MASTER_CODE = "123456";
-
 function normalizePhone(value: unknown): string {
   const digits = String(value ?? "").trim().replace(/[٠-٩]/g, digit =>
     String("٠١٢٣٤٥٦٧٨٩".indexOf(digit))
@@ -47,11 +41,6 @@ function normalizePhone(value: unknown): string {
 }
 
 async function verifyAndConsumeOtp(email: string, code: string): Promise<boolean> {
-  const devMode = await isDevModeEnabled();
-  if (devMode && code.trim() === DEV_MASTER_CODE) {
-    return true;
-  }
-
   const codeHash = hashCode(code);
   const result = await db.execute(
     sql`SELECT id FROM owner_otp_tokens
@@ -80,27 +69,31 @@ async function getSettings(keys: string[]): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map(r => [r.key, r.value]));
 }
 
-router.patch("/onboarding/type", async (req, res) => {
-  const { email, phone, businessType } = req.body ?? {};
-  if ((!email && !phone) || !businessType) {
-    return res.status(400).json({ error: "البريد أو رقم الجوال ونوع النشاط مطلوبان" });
+router.get("/onboarding/status", async (req, res) => {
+  const sid = getSessionId(req);
+  const session = sid ? await getSession(sid) : null;
+  if (session?.access_token !== "owner_password_auth" || !session.ownerApplicationId) {
+    return res.status(403).json({ error: "يجب توثيق الجوال وتسجيل الدخول أولاً" });
   }
+  return res.json({ ok: true });
+});
+
+router.patch("/onboarding/type", async (req, res) => {
+  const sid = getSessionId(req);
+  const session = sid ? await getSession(sid) : null;
+  if (session?.access_token !== "owner_password_auth" || !session.ownerApplicationId) {
+    return res.status(403).json({ error: "يجب توثيق الجوال برمز صحيح وتسجيل الدخول أولاً" });
+  }
+  const { businessType } = req.body ?? {};
   const allowed = ["chalet", "service", "both"];
   if (!allowed.includes(String(businessType))) {
     return res.status(400).json({ error: "نوع نشاط غير صحيح" });
   }
-  const emailLower = String(email ?? "").trim().toLowerCase();
-  const phoneClean = normalizePhone(phone);
   try {
-    if (emailLower) {
-      await db.execute(
-        sql`UPDATE owner_applications SET business_type = ${String(businessType)} WHERE LOWER(email) = LOWER(${emailLower})`
-      );
-    } else {
-      await db.execute(
-        sql`UPDATE owner_applications SET business_type = ${String(businessType)} WHERE phone = ${phoneClean}`
-      );
-    }
+    await db.execute(
+      sql`UPDATE owner_applications SET business_type = ${String(businessType)}
+          WHERE id = ${session.ownerApplicationId} AND phone_verified = true AND email_verified = true`
+    );
     return res.json({ ok: true });
   } catch (err) {
     console.error("[onboarding/type] Error:", err);
@@ -306,12 +299,14 @@ async function createPhoneOtp(phone: string) {
   });
 }
 
-async function verifyAndConsumePhoneOtp(phone: string, code: string): Promise<boolean> {
-  if (process.env.NODE_ENV === "development" && code.trim() === "1234") {
-    return true;
-  }
+async function verifyAndConsumePhoneOtp(applicationId: number, phone: string, code: string): Promise<boolean> {
   const codeHash = hashPhoneOtp(code);
   return db.transaction(async tx => {
+    const account = await tx.execute(sql`
+      SELECT id FROM owner_applications WHERE id = ${applicationId} AND phone = ${phone}
+      AND email_verified = true AND deleted_at IS NULL FOR UPDATE
+    `);
+    if (!(account as any).rows[0]) return false;
     const result = await tx.execute(
       sql`SELECT id FROM phone_otp_tokens
           WHERE phone = ${phone}
@@ -324,6 +319,8 @@ async function verifyAndConsumePhoneOtp(phone: string, code: string): Promise<bo
     const token = rows[0];
     if (!token) return false;
     await tx.execute(sql`UPDATE phone_otp_tokens SET used_at = now() WHERE id = ${token.id}`);
+    await tx.execute(sql`UPDATE owner_applications
+      SET phone_verified = true, phone_verified_at = now() WHERE id = ${applicationId}`);
     return true;
   });
 }
@@ -387,14 +384,15 @@ router.post("/verify-phone-otp", async (req, res) => {
     const rows = (result as any).rows as Array<{ id: number; phone: string; phone_verified: boolean }>;
     const app = rows[0];
     if (!app) return res.status(404).json({ error: "الحساب غير موجود" });
-    if (app.phone_verified) return res.json({ ok: true, alreadyVerified: true });
+    if (app.phone_verified) return res.status(403).json({ error: "الجوال موثّق مسبقاً، يرجى تسجيل الدخول بكلمة المرور" });
 
-    const valid = await verifyAndConsumePhoneOtp(app.phone, cleanCode);
+    const valid = await verifyAndConsumePhoneOtp(app.id, app.phone, cleanCode);
     if (!valid) return res.status(400).json({ error: "الرمز غير صحيح أو انتهت صلاحيته" });
 
-    await db.execute(
-      sql`UPDATE owner_applications SET phone_verified = true, phone_verified_at = now() WHERE id = ${app.id}`
-    );
+    const sessionResult = await issueVerifiedOwnerSession(req, res, app.id);
+    if (!sessionResult.ok) {
+      return res.status(403).json({ error: "تعذّر اعتماد التوثيق، يرجى تسجيل الدخول مجدداً" });
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error("[verify-phone-otp]", err);

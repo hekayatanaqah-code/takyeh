@@ -21,6 +21,23 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /onboarding/status:
+    get:
+      operationId: getOwnerOnboardingStatus
+      tags: [Auth]
+      summary: Allow onboarding only for a session whose owner completed phone OTP verification
+      responses:
+        "200":
+          description: The current owner session is verified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "403":
+          description: A verified owner session is required
   /admin/profile:
     get:
       operationId: getSuperAdminProfile

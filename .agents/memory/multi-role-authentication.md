@@ -19,3 +19,14 @@ Purely numeric login passwords accept equivalent Western, Eastern Arabic and Per
 **Why:** The user required Arabic and English digit entry to work for numeric credentials. Treating every Unicode digit in every password as interchangeable would change unrelated passwords and break existing credential semantics.
 
 **How to apply:** Apply the same verification rule at initial login and when a selected role requires its own password. Keep role proofs and session authorization independent of shared contact information.
+
+Owner access and account setup must remain blocked until a correct phone OTP
+has been matched in the database. Failed delivery, an incorrect code, a password
+login, or manually opening a setup URL must not substitute for phone verification.
+
+**Why:** The user reported that an owner could bypass failed WhatsApp verification
+and explicitly required a strict server-side gate, including account setup.
+
+**How to apply:** Enforce the gate on the server and on previously issued owner
+sessions, not just navigation controls. Preserve the independent administrator,
+photographer and employee authorization boundaries above.

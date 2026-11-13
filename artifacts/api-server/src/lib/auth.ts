@@ -4,6 +4,7 @@ import { type Request, type Response } from "express";
 import { db, sessionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import type { AuthUser } from "@workspace/api-zod";
+import { isVerifiedOwnerApplication, ownerVerificationForIdentity, hasCompletedOwnerVerification } from "./owner-verification";
 
 export const ISSUER_URL = process.env.ISSUER_URL ?? "https://replit.com/oidc";
 export const SESSION_COOKIE = "sid";
@@ -50,7 +51,22 @@ export async function getSession(sid: string): Promise<SessionData | null> {
     return null;
   }
 
-  return row.sess as unknown as SessionData;
+  const session = row.sess as unknown as SessionData;
+  // Recheck the database, including sessions issued before OTP enforcement.
+  if (session.access_token === "owner_password_auth" &&
+      (!session.ownerApplicationId || !await isVerifiedOwnerApplication(session.ownerApplicationId))) {
+    await deleteSession(sid);
+    return null;
+  }
+  const privilegedIds = new Set([process.env.ADMIN_USER_ID, ...(process.env.PLATFORM_ADMIN_IDS ?? "56719001").split(",").map(id => id.trim())]);
+  if (session.user?.id && session.access_token !== "owner_password_auth" && !privilegedIds.has(session.user.id)) {
+    const owner = await ownerVerificationForIdentity(session.user.id);
+    if (!hasCompletedOwnerVerification(owner)) {
+      await deleteSession(sid);
+      return null;
+    }
+  }
+  return session;
 }
 
 export async function updateSession(

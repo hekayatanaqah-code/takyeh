@@ -8,6 +8,14 @@
 import * as zod from 'zod';
 
 
+/**
+ * @summary Allow onboarding only for a session whose owner completed phone OTP verification
+ */
+export const GetOwnerOnboardingStatusResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
 export const GetSuperAdminProfileResponse = zod.object({
   "username": zod.string(),
   "email": zod.string(),
@@ -1991,6 +1999,7 @@ export const RoleLoginResponse = zod.object({
   "role": zod.enum(['owner', 'photographer', 'admin', 'staff']).optional(),
   "redirect": zod.string().optional(),
   "requiresRole": zod.boolean().optional(),
+  "requiresPhoneVerification": zod.boolean().optional(),
   "roles": zod.array(zod.object({
   "key": zod.string(),
   "role": zod.enum(['owner', 'photographer', 'admin', 'staff']),
@@ -2018,6 +2027,7 @@ export const SelectLoginRoleResponse = zod.object({
   "role": zod.enum(['owner', 'photographer', 'admin', 'staff']).optional(),
   "redirect": zod.string().optional(),
   "requiresRole": zod.boolean().optional(),
+  "requiresPhoneVerification": zod.boolean().optional(),
   "roles": zod.array(zod.object({
   "key": zod.string(),
   "role": zod.enum(['owner', 'photographer', 'admin', 'staff']),

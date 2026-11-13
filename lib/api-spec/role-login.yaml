@@ -57,6 +57,7 @@ Result:
     role: { type: string, enum: [owner, photographer, admin, staff] }
     redirect: { type: string }
     requiresRole: { type: boolean }
+    requiresPhoneVerification: { type: boolean }
     roles:
       type: array
       items:
