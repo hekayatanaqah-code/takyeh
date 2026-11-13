@@ -12,7 +12,7 @@ async function sendTaqnyatOTP(phone, otpCode) {
     }
 
     try {
-        console.log(`إرسال واتساب عبر تقنيات للرقم: ${formattedPhone} برمز: ${otpCode}`);
+        console.log(`إرسال قالب الواتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
         
         const response = await fetch("https://api.taqnyat.sa/v1/whatsapp/messages", {
             method: "POST",
@@ -21,13 +21,17 @@ async function sendTaqnyatOTP(phone, otpCode) {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                rcpts: [formattedPhone],
-                body: `رمز التحقق الخاص بك في منصة تكية هو: ${otpCode}`
+                recipients: [formattedPhone],
+                templateName: "otp_verification",
+                bodyParams: [otpCode]
             })
         });
 
         const data = await response.json();
-        console.log("رد منصة تقنية الفعلي:", JSON.stringify(data));
+        
+        console.log("========================================");
+        console.log("رد منصة تقنية الفعلي:", JSON.stringify(data, null, 2));
+        console.log("========================================");
 
         if (response.ok && (data.statusCode === 201 || data.statusCode === 200 || data.status === 'success' || data.success)) {
             return { success: true, data };
