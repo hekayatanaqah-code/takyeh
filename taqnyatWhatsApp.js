@@ -13,8 +13,8 @@ async function sendTaqnyatOTP(phone, otpCode) {
     try {
         console.log(`إرسال قالب الواتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
         
-        // استخدام الرابط الصحيح والمعتمد لبوابة تقنيات
-        const response = await fetch("https://api.taqnyat.sa/v1/messages", {
+        // المسار الصحيح والمعتمد لخدمة واتساب تقنيات
+        const response = await fetch("https://api.taqnyat.sa/v1/whatsapp/messages", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
@@ -22,23 +22,15 @@ async function sendTaqnyatOTP(phone, otpCode) {
             },
             body: JSON.stringify({
                 recipients: [formattedPhone],
-                body: `رمز التحقق الخاص بك في منصة تكية هو: ${otpCode}`,
-                sender: "Takyeh"
+                templateName: "otp_verification",
+                bodyParams: [otpCode]
             })
         });
-
-        // التحقق مما إذا كان الرد عبارة عن JSON صحيح أم لا
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-            const textResponse = await response.text();
-            console.error("خطأ: تقنيات أرجعت رد غير نصي/HTML:", textResponse);
-            return { success: false, error: "بوابة تقنيات أرجعت صفحة خطأ وليست بيانات" };
-        }
 
         const data = await response.json();
         console.log("رد منصة تقنية الفعلي:", JSON.stringify(data, null, 2));
 
-        if (response.ok) {
+        if (response.ok && (data.statusCode === 201 || data.statusCode === 200 || data.status === 'success' || data.success)) {
             return { success: true, data };
         } else {
             return { success: false, error: data.message || "فشل إرسال الرسالة من تقنيات" };
