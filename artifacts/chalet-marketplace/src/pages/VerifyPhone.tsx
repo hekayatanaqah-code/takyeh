@@ -8,11 +8,12 @@ import { toAr } from "@/lib/utils";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const RESEND_SECONDS = 60;
 const IS_DEV = import.meta.env.DEV;
+const OTP_LENGTH = 4;
 
 /* ── Arabic-Indic digit helpers ── */
 const EN_TO_AR: Record<string, string> = { '0':'٠','1':'١','2':'٢','3':'٣','4':'٤','5':'٥','6':'٦','7':'٧','8':'٨','9':'٩' };
 const arToEn = (s: string) => s.replace(/[٠-٩]/g, n => String(n.charCodeAt(0) - 0x0660));
-const DEV_DIGITS = "١٢٣٤٥٦".split("");
+const DEV_DIGITS = "١٢٣٤".split("");
 
 function normalizeLocalPhoneInput(value: string): string {
   const digits = arToEn(value).replace(/\D/g, "");
@@ -46,7 +47,7 @@ export default function VerifyPhone() {
     ? `email=${encodeURIComponent(email)}`
     : `phone=${encodeURIComponent(currentPhone)}`;
 
-  const [digits, setDigits]       = useState<string[]>(Array(6).fill(""));
+  const [digits, setDigits]       = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [loading, setLoading]     = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError]         = useState<string | null>(null);
@@ -59,7 +60,7 @@ export default function VerifyPhone() {
   const [newPhone, setNewPhone] = useState(() => normalizeLocalPhoneInput(phone));
   const [changingPhone, setChangingPhone] = useState(false);
   const [changePhoneError, setChangePhoneError] = useState<string | null>(null);
-  const inputRefs = useRef<Array<HTMLInputElement | null>>(Array(6).fill(null));
+  const inputRefs = useRef<Array<HTMLInputElement | null>>(Array(OTP_LENGTH).fill(null));
 
   const { data: pageContent } = useQuery<{ site_logo_url?: string }>({
     queryKey: ["page-content"],
@@ -102,7 +103,7 @@ export default function VerifyPhone() {
     return () => clearTimeout(t);
   }, [countdown, otpSent]);
 
-  /* ── Auto-submit when all 6 digits filled ── */
+  /* ── Auto-submit when all four digits are filled ── */
   useEffect(() => {
     if (!digits.includes("") && !loading && !verified) {
       handleVerify(digits.join(""));
@@ -124,14 +125,14 @@ export default function VerifyPhone() {
       const data = await r.json();
       if (!r.ok) {
         setError(data.error ?? "الرمز غير صحيح");
-        setDigits(Array(6).fill(""));
+        setDigits(Array(OTP_LENGTH).fill(""));
         setTimeout(() => inputRefs.current[0]?.focus(), 100);
         return;
       }
       setVerified(true);
     } catch {
       setError("تعذّر الاتصال بالخادم");
-      setDigits(Array(6).fill(""));
+      setDigits(Array(OTP_LENGTH).fill(""));
     } finally {
       setLoading(false);
     }
@@ -142,7 +143,7 @@ export default function VerifyPhone() {
     next[idx] = digit;
     setDigits(next);
     if (error) setError(null);
-    if (digit && idx < 5) inputRefs.current[idx + 1]?.focus();
+    if (digit && idx < OTP_LENGTH - 1) inputRefs.current[idx + 1]?.focus();
   }
 
   function handleKeyDown(idx: number, e: React.KeyboardEvent<HTMLInputElement>) {
@@ -159,7 +160,7 @@ export default function VerifyPhone() {
         const next = [...digits]; next[idx - 1] = ""; setDigits(next);
         if (error) setError(null);
       }
-    } else if (e.key === "ArrowLeft" && idx < 5) {
+    } else if (e.key === "ArrowLeft" && idx < OTP_LENGTH - 1) {
       e.preventDefault(); inputRefs.current[idx + 1]?.focus();
     } else if (e.key === "ArrowRight" && idx > 0) {
       e.preventDefault(); inputRefs.current[idx - 1]?.focus();
@@ -173,12 +174,12 @@ export default function VerifyPhone() {
 
   function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
     e.preventDefault();
-    const pasted = arToEn(e.clipboardData.getData("text")).replace(/\D/g, "").slice(0, 6);
+    const pasted = arToEn(e.clipboardData.getData("text")).replace(/\D/g, "").slice(0, OTP_LENGTH);
     if (!pasted) return;
-    const next = Array(6).fill("");
+    const next = Array(OTP_LENGTH).fill("");
     pasted.split("").forEach((d, i) => { next[i] = EN_TO_AR[d] ?? d; });
     setDigits(next);
-    setTimeout(() => inputRefs.current[Math.min(pasted.length, 5)]?.focus(), 50);
+    setTimeout(() => inputRefs.current[Math.min(pasted.length, OTP_LENGTH - 1)]?.focus(), 50);
   }
 
   async function handleResend() {
@@ -195,7 +196,7 @@ export default function VerifyPhone() {
       if (data.maskedPhone) setMaskedPhone(data.maskedPhone);
       setCountdown(RESEND_SECONDS);
       setCanResend(false);
-      setDigits(Array(6).fill(""));
+      setDigits(Array(OTP_LENGTH).fill(""));
       setTimeout(() => inputRefs.current[0]?.focus(), 100);
     } catch {
       setError("فشل إعادة الإرسال، حاول مرة أخرى");
@@ -247,7 +248,7 @@ export default function VerifyPhone() {
         `${window.location.pathname}?${params.toString()}${window.location.hash}`,
       );
       if (data.maskedPhone) setMaskedPhone(data.maskedPhone);
-      setDigits(Array(6).fill(""));
+      setDigits(Array(OTP_LENGTH).fill(""));
       setCountdown(RESEND_SECONDS);
       setCanResend(false);
       setOtpSent(true);
@@ -432,7 +433,7 @@ export default function VerifyPhone() {
           <h2 className="text-xl font-bold text-[#2D2D2D] mb-1">تفعيل الجوال عبر الواتساب</h2>
           <p className="text-sm text-[#656565] font-semibold mb-1">
             {otpSent
-              ? `تم إرسال رمز مكوّن من ٦ أرقام إلى الواتساب على`
+              ? `تم إرسال رمز مكوّن من ٤ أرقام إلى الواتساب على`
               : "جاري إرسال رمز التحقق…"}
           </p>
           {maskedPhone && (
@@ -455,7 +456,7 @@ export default function VerifyPhone() {
           )}
         </div>
 
-        {/* ── 6 digit inputs ── */}
+        {/* ── Four digit inputs ── */}
         <div className="flex items-center justify-center gap-2 mb-5" dir="ltr">
           {digits.map((d, i) => (
             <input
@@ -490,14 +491,14 @@ export default function VerifyPhone() {
             onClick={() => setDigits(DEV_DIGITS)}
             className="w-full mb-4 py-2 rounded-xl border border-dashed border-[#D9C3B0] bg-[#FBF9F6] text-xs text-[#8C6246] font-medium hover:bg-[#F5EEE9] transition-colors"
           >
-            🛠 بيئة تطوير — اضغط لملء الكود التجريبي: ١٢٣٤٥٦
+            🛠 بيئة تطوير — اضغط لملء الكود التجريبي: ١٢٣٤
           </button>
         )}
 
         {/* Progress hint */}
         {digits.filter(d => d !== "").length > 0 && digits.includes("") && (
           <p className="text-center text-xs text-[#555555] mb-3">
-            {digits.filter(d => d !== "").length}/٦ أرقام
+            {digits.filter(d => d !== "").length}/٤ أرقام
           </p>
         )}
 

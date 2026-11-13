@@ -350,7 +350,7 @@ async function createPhoneOtp(phone: string, code: string) {
 }
 
 async function verifyAndConsumePhoneOtp(phone: string, code: string): Promise<boolean> {
-  if (process.env.NODE_ENV === "development" && code.trim() === DEV_MASTER_CODE) {
+  if (process.env.NODE_ENV === "development" && code.trim() === "1234") {
     console.log(`[PHONE-OTP-DEV] Master-code bypass for ${phone}`);
     return true;
   }
@@ -395,7 +395,7 @@ router.post("/send-phone-otp", async (req, res) => {
     if (!app.email_verified) return res.status(403).json({ error: "يرجى التحقق من البريد الإلكتروني أولاً" });
     if (app.phone_verified) return res.json({ ok: true, alreadyVerified: true, maskedPhone: maskPhone(app.phone) });
 
-    const code = generateCode();
+    const code = String(randomInt(1000, 10000));
     await createPhoneOtp(app.phone, code);
 
     if (process.env.NODE_ENV === "development") {
@@ -421,6 +421,9 @@ router.post("/verify-phone-otp", async (req, res) => {
   const emailLower = String(email ?? "").trim().toLowerCase();
   const phoneClean = normalizePhone(phone);
   const cleanCode  = String(code).trim().replace(/\s/g, "");
+  if (!/^\d{4}$/.test(cleanCode)) {
+    return res.status(400).json({ error: "رمز التحقق يجب أن يكون ٤ أرقام" });
+  }
   try {
     const result = email
       ? await db.execute(sql`
@@ -473,7 +476,7 @@ router.post("/resend-phone-otp", async (req, res) => {
     await db.execute(
       sql`UPDATE phone_otp_tokens SET used_at = now() WHERE phone = ${app.phone} AND used_at IS NULL`
     );
-    const code = generateCode();
+    const code = String(randomInt(1000, 10000));
     await createPhoneOtp(app.phone, code);
 
     if (process.env.NODE_ENV === "development") {
@@ -554,7 +557,7 @@ router.post("/change-phone", async (req, res): Promise<void> => {
           WHERE id = ${app.id}`
     );
 
-    const code = generateCode();
+    const code = String(randomInt(1000, 10000));
     await createPhoneOtp(newPhoneClean, code);
     if (process.env.NODE_ENV === "development") {
       req.log.debug({ phone: newPhoneClean }, "Phone OTP issued after phone change");
