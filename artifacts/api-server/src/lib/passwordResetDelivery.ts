@@ -95,7 +95,7 @@ export function createPasswordResetEmailProvider(
 }
 
 /* No WhatsApp provider is configured in this application. Keep an explicit
-   provider seam; do not claim delivery or mint a usable token without one. */
+    provider seam; do not claim delivery or mint a usable token without one. */
 export const unavailableWhatsAppResetProvider: ResetLinkProvider = {
   async prepare() {
     return null;

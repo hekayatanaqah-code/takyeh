@@ -46,10 +46,8 @@ function normalizePhone(value: unknown): string {
 }
 
 async function verifyAndConsumeOtp(email: string, code: string): Promise<boolean> {
-  /* Dev-mode bypass: accept master code without touching the OTP table */
   const devMode = await isDevModeEnabled();
   if (devMode && code.trim() === DEV_MASTER_CODE) {
-    console.log(`[OTP-DEV] Master-code bypass accepted for ${email}`);
     return true;
   }
 
@@ -81,10 +79,6 @@ async function getSettings(keys: string[]): Promise<Record<string, string>> {
   return Object.fromEntries(rows.map(r => [r.key, r.value]));
 }
 
-/* ── PATCH /onboarding/type ─────────────────────────────────
-   Updates business_type on owner_applications for a given email.
-   Called after the user picks their activity type in onboarding.
-   ─────────────────────────────────────────────────────────── */
 router.patch("/onboarding/type", async (req, res) => {
   const { email, phone, businessType } = req.body ?? {};
   if ((!email && !phone) || !businessType) {
@@ -113,10 +107,6 @@ router.patch("/onboarding/type", async (req, res) => {
   }
 });
 
-/* ── POST /auth/check-exists ────────────────────────────────
-   Pre-validation: checks email + phone availability before the
-   user opens the terms modal. Returns field-level errors.
-   ─────────────────────────────────────────────────────────── */
 router.post("/auth/check-exists", async (req, res) => {
   const { email, phone } = req.body ?? {};
   const errors: { email?: string; phone?: string } = {};
@@ -151,10 +141,6 @@ router.post("/auth/check-exists", async (req, res) => {
   }
 });
 
-/* ── POST /register-owner ───────────────────────────────────
-   Public registration — only personal info required.
-   The owner account is active immediately; business details are collected next.
-   ─────────────────────────────────────────────────────────── */
 router.post("/register-owner", async (req, res) => {
   const { fullName, phone, email, password } = req.body ?? {};
 
@@ -188,7 +174,6 @@ router.post("/register-owner", async (req, res) => {
     const passwordHash = await bcrypt.hash(String(password), 10);
     const nameClean    = String(fullName).trim();
 
-    /* businessName = fullName, businessType = "chalet" (updated during onboarding) */
     await db.execute(
       sql`INSERT INTO owner_applications
             (full_name, business_name, business_type, phone, email, password_hash, status, email_verified)
@@ -197,17 +182,16 @@ router.post("/register-owner", async (req, res) => {
             ${nameClean},
             'chalet',
             ${phoneClean},
-             ${emailLower || null},
+            ${emailLower || null},
             ${passwordHash},
-             'approved',
-             ${!emailLower}
+            'approved',
+            ${!emailLower}
           )`
     );
 
     if (emailLower) {
-      /* Fetch settings to determine OTP behaviour */
       const settings = await getSettings(["email_otp_enabled", "email_otp_subject", "email_otp_template"]).catch(() => ({} as Record<string, string>));
-      const emailOtpEnabled = settings.email_otp_enabled !== "false"; // default: true
+      const emailOtpEnabled = settings.email_otp_enabled !== "false";
 
       const code = generateCode();
       await createOtp(emailLower, code);
@@ -217,12 +201,8 @@ router.post("/register-owner", async (req, res) => {
           subject: settings.email_otp_subject || undefined,
           template: settings.email_otp_template || undefined,
         }).catch(() => {});
-      } else {
-        console.log(`[OTP] Email OTP disabled by admin — Code for ${emailLower}: ${code}`);
       }
     }
-
-    console.log(`[New Owner Account] Name: ${nameClean}, Phone: ${phoneClean}, Email: ${emailLower || "not provided"}`);
 
     return res.status(201).json({ ok: true, requiresVerification: Boolean(emailLower), email: emailLower || null });
   } catch (err) {
@@ -231,10 +211,6 @@ router.post("/register-owner", async (req, res) => {
   }
 });
 
-/* ── POST /verify-otp ───────────────────────────────────────
-   Verify the 6-digit OTP code sent to owner's email.
-   On success: marks email verified + sends welcome email if enabled.
-   ─────────────────────────────────────────────────────────── */
 router.post("/verify-otp", async (req, res) => {
   const { email, code } = req.body ?? {};
   if (!email || !code) {
@@ -267,21 +243,6 @@ router.post("/verify-otp", async (req, res) => {
       sql`UPDATE owner_applications SET email_verified = true, email_verified_at = now() WHERE email = ${emailLower}`
     );
 
-    /* Send welcome email if enabled */
-    try {
-      const settings = await getSettings([
-        "welcome_email_enabled",
-        "welcome_email_subject",
-        "welcome_email_template",
-      ]);
-      if (settings.welcome_email_enabled === "true") {
-        sendWelcomeEmail(emailLower, app.full_name, {
-          subject: settings.welcome_email_subject || undefined,
-          template: settings.welcome_email_template || undefined,
-        }).catch(() => {});
-      }
-    } catch {}
-
     return res.json({ ok: true });
   } catch (err) {
     console.error("[verify-otp] Error:", err);
@@ -289,9 +250,6 @@ router.post("/verify-otp", async (req, res) => {
   }
 });
 
-/* ── POST /resend-otp ───────────────────────────────────────
-   Resend a fresh OTP to the owner's email (rate limited by client timer).
-   ─────────────────────────────────────────────────────────── */
 router.post("/resend-otp", async (req, res) => {
   const { email } = req.body ?? {};
   if (!email) return res.status(400).json({ error: "البريد الإلكتروني مطلوب" });
@@ -312,7 +270,6 @@ router.post("/resend-otp", async (req, res) => {
       return res.json({ ok: true, alreadyVerified: true });
     }
 
-    /* Invalidate previous tokens */
     await db.execute(
       sql`UPDATE owner_otp_tokens SET used_at = now() WHERE email = ${emailLower} AND used_at IS NULL`
     );
@@ -332,14 +289,8 @@ router.post("/resend-otp", async (req, res) => {
   }
 });
 
-/* ── POST /owner-login ──────────────────────────────────────
-   Compatibility entry point for shared-contact role login.
-   Delegates to the same credential verification and role selector
-   as the partner login page; never silently prefers an owner role.
-   ─────────────────────────────────────────────────────────── */
 router.post("/owner-login", roleLoginGuard, loginWithRoles);
 
-/* ── Phone OTP helpers ──────────────────────────────────────── */
 async function createPhoneOtp(phone: string, code: string) {
   const codeHash = hashCode(code);
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -351,7 +302,6 @@ async function createPhoneOtp(phone: string, code: string) {
 
 async function verifyAndConsumePhoneOtp(phone: string, code: string): Promise<boolean> {
   if (process.env.NODE_ENV === "development" && code.trim() === "1234") {
-    console.log(`[PHONE-OTP-DEV] Master-code bypass for ${phone}`);
     return true;
   }
   const codeHash = hashCode(code);
@@ -370,7 +320,6 @@ async function verifyAndConsumePhoneOtp(phone: string, code: string): Promise<bo
   return true;
 }
 
-/* ── POST /send-phone-otp ───────────────────────────────────── */
 router.post("/send-phone-otp", async (req, res) => {
   const { email, phone } = req.body ?? {};
   if (!email && !phone) return res.status(400).json({ error: "البريد الإلكتروني أو رقم الجوال مطلوب" });
@@ -398,11 +347,6 @@ router.post("/send-phone-otp", async (req, res) => {
     const code = String(randomInt(1000, 10000));
     await createPhoneOtp(app.phone, code);
 
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[PHONE-OTP] Code for ${app.phone} (${emailLower}): ${code}`);
-    }
-    /* TODO (production): send via WhatsApp Business API or SMS provider */
-
     return res.json({ ok: true, maskedPhone: maskPhone(app.phone) });
   } catch (err) {
     console.error("[send-phone-otp]", err);
@@ -414,7 +358,6 @@ function maskPhone(phone: string): string {
   return phone.replace(/^(\d{2})\d+(\d{3})$/, "$1*****$2");
 }
 
-/* ── POST /verify-phone-otp ─────────────────────────────────── */
 router.post("/verify-phone-otp", async (req, res) => {
   const { email, phone, code } = req.body ?? {};
   if ((!email && !phone) || !code) return res.status(400).json({ error: "البريد أو رقم الجوال والرمز مطلوبان" });
@@ -452,7 +395,6 @@ router.post("/verify-phone-otp", async (req, res) => {
   }
 });
 
-/* ── POST /resend-phone-otp ─────────────────────────────────── */
 router.post("/resend-phone-otp", async (req, res) => {
   const { email, phone } = req.body ?? {};
   if (!email && !phone) return res.status(400).json({ error: "البريد أو رقم الجوال مطلوب" });
@@ -479,9 +421,6 @@ router.post("/resend-phone-otp", async (req, res) => {
     const code = String(randomInt(1000, 10000));
     await createPhoneOtp(app.phone, code);
 
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[PHONE-OTP] Resend for ${app.phone}: ${code}`);
-    }
     return res.json({ ok: true, maskedPhone: maskPhone(app.phone) });
   } catch (err) {
     console.error("[resend-phone-otp]", err);
@@ -489,10 +428,6 @@ router.post("/resend-phone-otp", async (req, res) => {
   }
 });
 
-/* ── POST /change-phone ────────────────────────────────────────
-   Replaces the phone number for an unverified owner and issues a
-   fresh OTP for the new number.
-   ─────────────────────────────────────────────────────────── */
 router.post("/change-phone", async (req, res): Promise<void> => {
   const { email, phone, newPhone } = req.body ?? {};
   if (!email && !phone) {
@@ -559,19 +494,53 @@ router.post("/change-phone", async (req, res): Promise<void> => {
 
     const code = String(randomInt(1000, 10000));
     await createPhoneOtp(newPhoneClean, code);
-    if (process.env.NODE_ENV === "development") {
-      req.log.debug({ phone: newPhoneClean }, "Phone OTP issued after phone change");
-    }
     res.json({ ok: true, maskedPhone: maskPhone(newPhoneClean) });
   } catch (err) {
-    req.log.error({ err }, "Failed to change phone number");
     res.status(500).json({ error: "حدث خطأ أثناء تحديث رقم الجوال" });
   }
 });
 
-/* ── GET /admin/applications ────────────────────────────────
-   Returns all partner applications (admin only).
-   ─────────────────────────────────────────────────────────── */
+router.delete("/owner-account", async (req, res): Promise<void> => {
+  const { email, phone } = req.body ?? {};
+  if (!email && !phone) {
+    res.status(400).json({ error: "البريد الإلكتروني أو رقم الجوال مطلوب للحذف" });
+    return;
+  }
+
+  const emailLower = String(email ?? "").trim().toLowerCase();
+  const phoneClean = normalizePhone(phone);
+
+  try {
+    let result;
+    if (emailLower) {
+      result = await db.execute(
+        sql`DELETE FROM owner_applications WHERE LOWER(email) = LOWER(${emailLower}) RETURNING id`
+      );
+    } else {
+      result = await db.execute(
+        sql`DELETE FROM owner_applications WHERE phone = ${phoneClean} RETURNING id`
+      );
+    }
+
+    const deletedRows = (result as any).rows;
+    if (!deletedRows || deletedRows.length === 0) {
+      res.status(404).json({ error: "لم يتم العثور على الحساب المراد حذفه" });
+      return;
+    }
+
+    if (phoneClean) {
+      await db.execute(sql`DELETE FROM phone_otp_tokens WHERE phone = ${phoneClean}`).catch(() => {});
+    }
+    if (emailLower) {
+      await db.execute(sql`DELETE FROM owner_otp_tokens WHERE email = ${emailLower}`).catch(() => {});
+    }
+
+    res.json({ ok: true, message: "تم حذف الحساب نهائياً بنجاح، يمكنك التسجيل من جديد" });
+  } catch (err) {
+    res.status(500).json({ error: "حدث خطأ أثناء حذف الحساب" });
+  }
+});
+
 router.get("/admin/applications", async (_req, res) => {
   try {
     const result = await db.execute(
@@ -581,14 +550,10 @@ router.get("/admin/applications", async (_req, res) => {
     );
     return res.json((result as any).rows);
   } catch (err) {
-    console.error("[admin/applications] Error:", err);
     return res.status(500).json({ error: "حدث خطأ" });
   }
 });
 
-/* ── PATCH /admin/applications/:id ─────────────────────────
-   Update application status: approved | rejected | pending
-   ─────────────────────────────────────────────────────────── */
 router.patch("/admin/applications/:id", async (req, res) => {
   const { status } = req.body ?? {};
   if (!["approved", "rejected", "pending"].includes(status)) {
@@ -600,9 +565,6 @@ router.patch("/admin/applications/:id", async (req, res) => {
   return res.json({ ok: true });
 });
 
-/* ── PATCH /admin/applications/:id/manual-verify ───────────
-   Admin manually marks an owner as email-verified (bypasses OTP).
-   ─────────────────────────────────────────────────────────── */
 router.patch("/admin/applications/:id/manual-verify", async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: "معرّف غير صالح" });
