@@ -2,9 +2,8 @@
 
 async function sendTaqnyatOTP(phone, otpCode) {
     const apiKey = process.env.TAQNYAT_API_KEY; 
-    const senderName = process.env.TAQNYAT_SENDER || "Takyah"; 
 
-    // تنسيق رقم الهاتف (إزالة أي رموز زائدة والتأكد من البدء برمز الدولة 966)
+    // تنسيق رقم الهاتف (بدون علامة زائد ويبدأ بـ 966)
     let formattedPhone = phone.replace(/\D/g, '');
     if (formattedPhone.startsWith('0')) {
         formattedPhone = '966' + formattedPhone.substring(1);
@@ -13,7 +12,7 @@ async function sendTaqnyatOTP(phone, otpCode) {
     }
 
     try {
-        console.log(`إرسال واتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
+        console.log(`إرسال قالب واتساب للرقم: ${formattedPhone} برمز: ${otpCode}`);
         
         const response = await fetch("https://api.taqnyat.sa/v1/whatsapp/messages", {
             method: "POST",
@@ -23,8 +22,8 @@ async function sendTaqnyatOTP(phone, otpCode) {
             },
             body: JSON.stringify({
                 recipients: [formattedPhone],
-                sender: senderName,
-                body: `رمز التحقق الخاص بك في منصة تكية هو: ${otpCode}`
+                templateName: "otp_verification",
+                parameters: [otpCode]
             })
         });
 
