@@ -120,6 +120,8 @@ import type {
   OwnerWhatsAppSettingsInput,
   PayPhotographyWithWallet200,
   PaySubscriptionWithWallet200,
+  PermanentlyDeleteOwner200,
+  PermanentlyDeleteOwnerBody,
   PhotographerApplication,
   PhotographerImageCompletion,
   PhotographerImageResult,
@@ -232,6 +234,95 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getPermanentlyDeleteOwnerUrl = (ownerId: string,) => {
+
+
+
+
+  return `/api/admin/owners/${ownerId}`
+}
+
+/**
+ * @summary Permanently delete an owner and all owned activity in one transaction
+ */
+export const permanentlyDeleteOwner = async (ownerId: string,
+    permanentlyDeleteOwnerBody: PermanentlyDeleteOwnerBody, options?: Parameters<typeof customFetch>[1]): Promise<PermanentlyDeleteOwner200> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PermanentlyDeleteOwner200>(getPermanentlyDeleteOwnerUrl(ownerId),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(permanentlyDeleteOwnerBody)
+  }
+);}
+
+
+
+
+
+export const getPermanentlyDeleteOwnerMutationKey = () => ['permanentlyDeleteOwner'] as const;
+
+export const getPermanentlyDeleteOwnerMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof permanentlyDeleteOwner>>, TError,PermanentlyDeleteOwnerMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof permanentlyDeleteOwner>>, TError,PermanentlyDeleteOwnerMutationVariables, TContext> => {
+
+const mutationKey = getPermanentlyDeleteOwnerMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof permanentlyDeleteOwner>>, PermanentlyDeleteOwnerMutationVariables> = (props) => {
+          const {ownerId,data} = props ?? {};
+
+          return  permanentlyDeleteOwner(ownerId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PermanentlyDeleteOwnerMutationResult = NonNullable<Awaited<ReturnType<typeof permanentlyDeleteOwner>>>
+    export type PermanentlyDeleteOwnerMutationBody = BodyType<PermanentlyDeleteOwnerBody>
+    export type PermanentlyDeleteOwnerMutationError = ErrorType<void>
+    export type PermanentlyDeleteOwnerMutationVariables = {ownerId: string;data: BodyType<PermanentlyDeleteOwnerBody>}
+
+    /**
+ * @summary Permanently delete an owner and all owned activity in one transaction
+ */
+export const usePermanentlyDeleteOwner = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof permanentlyDeleteOwner>>, TError,PermanentlyDeleteOwnerMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof permanentlyDeleteOwner>>,
+        TError,
+        PermanentlyDeleteOwnerMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPermanentlyDeleteOwnerMutationOptions(options), queryClient);
+    }
 
 export const getGetOwnerOnboardingStatusUrl = () => {
 

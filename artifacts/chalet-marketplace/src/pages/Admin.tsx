@@ -1586,10 +1586,11 @@ function normaliseOwnerCategory(raw: string) {
 }
 
 function DeleteSafeModal({
-  target, entityLabel, onConfirm, onClose, isLoading = false,
+  target, entityLabel, onConfirm, onClose, isLoading = false, permanent = false,
 }: {
   target: { name: string }; entityLabel: string;
   onConfirm: (reason: string) => void; onClose: () => void; isLoading?: boolean;
+  permanent?: boolean;
 }) {
   const [reason, setReason] = useState("");
   const [confirmText, setConfirmText] = useState("");
@@ -1605,7 +1606,9 @@ function DeleteSafeModal({
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="bg-red-950/30 border border-red-800/50 rounded-xl p-3 text-sm text-red-200">
-            ️ سيتم حذف <span className="font-bold text-white">{target.name}</span> بشكل ناعم — يُخفى من كل الواجهات مع الاحتفاظ بالبيانات للتقارير والعقود.
+            {permanent
+              ? <>سيتم حذف <span className="font-bold text-white">{target.name}</span> نهائياً مع عقاراته وخدماته وحجوزاته ومعاملاته المالية وسجلاته المرتبطة. لا يمكن التراجع من هذه النافذة، والحذف لا ينفّذ أي استرداد مالي تلقائي.</>
+              : <>سيتم حذف <span className="font-bold text-white">{target.name}</span> بشكل ناعم — يُخفى من كل الواجهات مع الاحتفاظ بالبيانات للتقارير والعقود.</>}
           </div>
           <div className="space-y-1.5">
             <label className="text-sm text-slate-300 font-medium block">سبب الحذف <span className="text-red-400">*</span></label>
@@ -1980,9 +1983,9 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
 
   const softDeleteOwner = useMutation({
     mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const r = await apiFetch(`/admin/owners/${id}/soft-delete`, {
-        method: "PATCH",
-        body: JSON.stringify({ reason }),
+      const r = await apiFetch(`/admin/owners/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        body: JSON.stringify({ reason, permanentlyDelete: true }),
       });
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
@@ -1990,10 +1993,10 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       }
     },
     onSuccess: () => {
-      toast({ title: "تم الحذف", description: "تم حذف المالك وأرشفة بياناته بنجاح" });
+      toast({ title: "تم الحذف النهائي", description: "تم حذف المالك وعقاراته وخدماته والسجلات المرتبطة به من قاعدة البيانات" });
       setDeleteOwnerTarget(null);
       setSelected(new Set());
-      qc.invalidateQueries({ queryKey: ["admin", "owners"] });
+      qc.invalidateQueries({ queryKey: ["admin"] });
     },
     onError: (e: Error) => toast({ title: "خطأ", description: e.message, variant: "destructive" }),
   });
@@ -2495,7 +2498,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
                       )}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setDeleteOwnerTarget({ id: owner.ownerId, name: owner.ownerName })}
-                      className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20" title="حذف الأرشفة">
+                      className="h-8 text-xs text-red-400 hover:text-red-300 hover:bg-red-900/20" title="حذف المالك نهائياً">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                     {(owner.primaryPropertyId || owner.primaryServiceId) && (
@@ -2547,6 +2550,7 @@ function OwnersTab({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
       {deleteOwnerTarget && (
         <DeleteSafeModal
           target={deleteOwnerTarget}
+          permanent
           entityLabel="المالك"
           isLoading={softDeleteOwner.isPending}
           onClose={() => setDeleteOwnerTarget(null)}

@@ -1963,6 +1963,18 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type PermanentlyDeleteOwnerBody = {
+  /** @minLength 3 */
+  reason: string;
+  permanentlyDelete: true;
+};
+
+export type PermanentlyDeleteOwner200 = {
+  ok: boolean;
+  ownerId: string;
+  permanentlyDeleted: boolean;
+};
+
 export type GetOwnerOnboardingStatus200 = {
   ok: boolean;
 };

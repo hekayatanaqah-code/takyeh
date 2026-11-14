@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { fromAr, toAr } from "@/lib/utils";
+import { fromAr, toAr, registrationPhoneDigits, localRegistrationPhone } from "@/lib/utils";
 import { arabicServiceCategoryLabel, isArabicServiceCategoryName } from "@/lib/serviceCategoryLabel";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -234,7 +234,7 @@ export default function AddServiceProvider() {
       category: isKnownCategory ? submissionCategory : "other",
       city: matchedRegion && matchedRegionCities.includes(submissionCity) ? submissionCity : "",
       descriptionAr: editingSubmission.descriptionAr ?? "",
-      whatsappNumber: editingSubmission.whatsappNumber ?? "",
+      whatsappNumber: localRegistrationPhone(editingSubmission.whatsappNumber ?? ""),
       instagramAccount: editingSubmission.instagramAccount ?? "",
       yearsOfExperience: editingSubmission.yearsOfExperience == null ? "" : String(editingSubmission.yearsOfExperience),
       pricingUnit: editingSubmission.pricingUnit ?? "",
@@ -498,7 +498,7 @@ export default function AddServiceProvider() {
     if (!regionSelectVal) errs.region = "يرجى اختيار المنطقة";
     if (!resolvedCity) errs.city = "يرجى اختيار المدينة";
     if (!form.whatsappNumber) errs.whatsappNumber = "رقم الواتساب مطلوب";
-    else if (form.whatsappNumber.length < 9) errs.whatsappNumber = "رقم الواتساب يجب أن يكون 9 أرقام على الأقل";
+    else if (!/^05\d{8}$/.test(fromAr(form.whatsappNumber))) errs.whatsappNumber = "أدخل ١٠ أرقام تبدأ بـ ٠٥";
     if (!form.yearsOfExperience) errs.yearsOfExperience = "يرجى إدخال سنوات الخبرة";
     if (!form.pricingUnit) errs.pricingUnit = "يرجى اختيار وحدة التسعير";
     if (!form.dailyCapacity) errs.dailyCapacity = "يرجى إدخال أقصى عدد حجوزات باليوم";
@@ -872,11 +872,11 @@ export default function AddServiceProvider() {
                     <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
                       id="whatsapp"
+                      type="tel" inputMode="numeric" maxLength={10} pattern="[٠-٩]{10}" dir="rtl"
                       value={toAr(form.whatsappNumber)}
-                      onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value).replace(/[^\d]/g, ""))}
-                      placeholder="٠٥XXXXXXXX"
+                      onChange={(e) => handleChange("whatsappNumber", registrationPhoneDigits(e.target.value))}
+                      placeholder="٠٥xxxxxxxx"
                       className={`h-9 pr-10 ${fieldErrors.whatsappNumber ? "border-red-500 ring-1 ring-red-500" : ""}`}
-                      dir="ltr"
                       data-no-arabic=""
                       required
                     />

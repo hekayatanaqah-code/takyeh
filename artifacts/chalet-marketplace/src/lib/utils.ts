@@ -34,6 +34,20 @@ export function whatsappDigits(value: string): string {
   return fromAr(value).replace(/[۰-۹]/g, digit => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))).replace(/\D/g, "");
 }
 
+/** Registration inputs display Arabic digits, with a local ten-digit mobile only. */
+export function registrationPhoneDigits(value: string): string {
+  return whatsappDigits(value).slice(0, 10);
+}
+
+/** Normalize previously saved international numbers when reopening a registration. */
+export function localRegistrationPhone(value: string): string {
+  let digits = whatsappDigits(value);
+  if (/^009665\d{8}$/.test(digits)) digits = `0${digits.slice(5)}`;
+  else if (/^9665\d{8}$/.test(digits)) digits = `0${digits.slice(3)}`;
+  else if (/^5\d{8}$/.test(digits)) digits = `0${digits}`;
+  return registrationPhoneDigits(digits);
+}
+
 /**
  * hijriAndGregorian — formats a date as:
  * "١٢ ذو القعدة ١٤٤٧ هـ | ١ مايو ٢٠٢٦ م"

@@ -9,6 +9,33 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Permanently delete an owner and all owned activity in one transaction
+ */
+export const permanentlyDeleteOwnerPathOwnerIdMax = 160;
+
+
+
+export const PermanentlyDeleteOwnerParams = zod.object({
+  "ownerId": zod.coerce.string().min(1).max(permanentlyDeleteOwnerPathOwnerIdMax)
+})
+
+export const permanentlyDeleteOwnerBodyReasonMin = 3;
+
+
+
+export const PermanentlyDeleteOwnerBody = zod.object({
+  "reason": zod.string().min(permanentlyDeleteOwnerBodyReasonMin),
+  "permanentlyDelete": zod.literal(true)
+})
+
+export const PermanentlyDeleteOwnerResponse = zod.object({
+  "ok": zod.boolean(),
+  "ownerId": zod.string(),
+  "permanentlyDeleted": zod.boolean()
+})
+
+
+/**
  * @summary Allow onboarding only for a session whose owner completed phone OTP verification
  */
 export const GetOwnerOnboardingStatusResponse = zod.object({

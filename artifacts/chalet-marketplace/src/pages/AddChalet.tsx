@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { fromAr, toAr, whatsappDigits } from "@/lib/utils";
+import { fromAr, toAr, whatsappDigits, registrationPhoneDigits, localRegistrationPhone } from "@/lib/utils";
 import { useSearch, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -319,7 +319,7 @@ export default function AddChalet() {
     if (!propertyType) errs.propertyType = ["نوع العقار مطلوب"];
     if (!sections) errs.sections = ["عدد الأقسام مطلوب"];
     if (!(selectedDistrict === "__other__" ? customDistrict.trim() : selectedDistrict)) errs.district = ["الحي أو المنطقة مطلوب"];
-    if (!/^(?:05\d{8}|5\d{8}|(?:\+?966|00966)5\d{8})$/.test(fromAr(form.whatsappNumber).replace(/[\s()-]/g, ""))) errs.whatsappNumber = ["أدخل رقم واتساب سعودي صحيح، مثل ٠٥XXXXXXXX."];
+    if (!/^05\d{8}$/.test(fromAr(form.whatsappNumber))) errs.whatsappNumber = ["أدخل ١٠ أرقام تبدأ بـ ٠٥، مثل ٠٥xxxxxxxx."];
     if (!form.termsAndConditions.trim()) errs.termsAndConditions = ["الشروط والأحكام الخاصة مطلوبة"];
     if (propertyType === "__other__" && !suggestedCategoryName.trim()) errs.propertyType = ["يرجى كتابة اسم الفئة المقترحة"];
     return errs;
@@ -464,7 +464,7 @@ export default function AddChalet() {
     if (!editSub) return;
     setForm({
       nameAr: editSub.nameAr ?? "",
-      whatsappNumber: whatsappDigits(editSub.whatsappNumber ?? ""),
+      whatsappNumber: localRegistrationPhone(editSub.whatsappNumber ?? ""),
       location: editSub.location ?? "",
       mapsUrl: editSub.mapsUrl ?? editSub.websiteUrl ?? "",
       socialLink: editSub.socialLink ?? "",
@@ -569,7 +569,7 @@ export default function AddChalet() {
   }, [editSub, regions, selectedRegionId]);
 
   const handleChange = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: field === "whatsappNumber" ? whatsappDigits(value) : value }));
+    setForm((prev) => ({ ...prev, [field]: field === "whatsappNumber" ? registrationPhoneDigits(value) : value }));
     setFieldErrors(previous => {
       if (!previous[field]) return previous;
       const next = { ...previous };
@@ -1187,8 +1187,8 @@ export default function AddChalet() {
                       </Label>
                       <div className="relative">
                         <Phone className="absolute top-3.5 right-3 w-4 h-4 text-muted-foreground pointer-events-none" />
-                        <Input id="whatsappNumber" type="text" inputMode="numeric" pattern="[0-9٠-٩]*" data-no-arabic
-                          placeholder="٠٥XXXXXXXX" value={toAr(form.whatsappNumber)}
+                        <Input id="whatsappNumber" type="tel" inputMode="numeric" pattern="[٠-٩]{10}" maxLength={10} dir="rtl" data-no-arabic
+                          placeholder="٠٥xxxxxxxx" value={toAr(form.whatsappNumber)}
                           onChange={(e) => handleChange("whatsappNumber", fromAr(e.target.value))}
                           required aria-invalid={!!fieldErrors.whatsappNumber}
                           aria-describedby={fieldErrors.whatsappNumber ? "whatsappNumber-error" : undefined}

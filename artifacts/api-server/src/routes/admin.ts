@@ -14,6 +14,7 @@ import sharp from "sharp";
 import { ObjectStorageService } from "#object-storage";
 import broadcastRouter from "./broadcast";
 import { db } from "@workspace/db";
+import { deleteOwnerPermanently, OwnerDeletionError } from "../lib/delete-owner";
 import {
   chaletSubmissionsTable,
   chaletsTable,
@@ -375,8 +376,11 @@ function adminAuditOwnerId(req: Request): string | null {
   const segments = req.path.split("/").filter(Boolean);
   if (segments[0] === "partner-accounts" && segments[1] === "owner"
     && /^[1-9]\d*$/.test(segments[2] ?? "") && segments[3] === "password") return `owner_${segments[2]}`;
-  if (segments[0] !== "owners" || segments.length !== 3
-    || !["free-access", "discount", "subscription-grant"].includes(segments[2])) return null;
+  if (segments[0] !== "owners") return null;
+  const permanentDeletion = req.method === "DELETE" && segments.length === 2;
+  const ownerAction = segments.length === 3 &&
+    ["free-access", "discount", "subscription-grant", "soft-delete"].includes(segments[2]);
+  if (!permanentDeletion && !ownerAction) return null;
   const ownerId = segments[1];
   return ownerId && /^[A-Za-z0-9_:-]{1,200}$/.test(ownerId) ? ownerId : null;
 }
@@ -1556,23 +1560,25 @@ router.get("/owners", async (_req, res) => {
   return res.json(result);
 });
 
-router.patch("/owners/:id/soft-delete", async (req, res) => {
+async function permanentlyDeleteOwner(req: Request, res: Response) {
   const rawId = String(req.params.id);
-  let numId = Number(rawId.replace(/^owner_/, ""));
-  if ((!numId || isNaN(numId)) && !rawId.startsWith("owner_")) {
-    const link = await db.execute<{ owner_application_id: number }>(
-      sql`SELECT owner_application_id FROM owner_account_links WHERE user_id = ${rawId} LIMIT 1`
-    );
-    numId = Number(link.rows[0]?.owner_application_id);
-  }
-  if (!numId || isNaN(numId)) return res.status(400).json({ error: "معرّف غير صحيح" });
-  const body = z.object({ reason: z.string().trim().min(3, "سبب الحذف مطلوب (٣ أحرف على الأقل)") }).safeParse(req.body);
+  if (!rawId.trim() || rawId.length > 160) return res.status(400).json({ error: "معرّف غير صحيح" });
+  const body = z.object({
+    reason: z.string().trim().min(3, "سبب الحذف مطلوب (٣ أحرف على الأقل)"),
+    permanentlyDelete: z.literal(true, { errorMap: () => ({ message: "يلزم تأكيد الحذف النهائي؛ حدّث الصفحة وأعد التأكيد" }) }),
+  }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
-  await db.execute(sql`
-   DELETE FROM owner_applications WHERE id = ${numId}
-  `);
-  return res.json({ ok: true });
-});
+  try {
+    return res.json(await deleteOwnerPermanently(rawId));
+  } catch (error) {
+    if (error instanceof OwnerDeletionError) return res.status(error.status).json({ error: error.message });
+    logger.error({ err: error }, "Permanent owner deletion rolled back");
+    return res.status(500).json({ error: "تعذّر إتمام الحذف؛ تم التراجع عن العملية بالكامل. أعد المحاولة أو راجع الدعم." });
+  }
+}
+router.delete("/owners/:id", requireSuperAdmin, permanentlyDeleteOwner);
+// Older open clients must explicitly confirm permanence, never silently escalate soft deletion.
+router.patch("/owners/:id/soft-delete", requireSuperAdmin, permanentlyDeleteOwner);
 
 /* ── Independent service-location catalogs ───────────────── */
 

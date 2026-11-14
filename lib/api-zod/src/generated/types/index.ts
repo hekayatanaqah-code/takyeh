@@ -144,6 +144,8 @@ export * from './ownerWhatsAppSettingsInput';
 export * from './ownerWhatsAppTemplate';
 export * from './payPhotographyWithWallet200';
 export * from './paySubscriptionWithWallet200';
+export * from './permanentlyDeleteOwner200';
+export * from './permanentlyDeleteOwnerBody';
 export * from './photographerApplication';
 export * from './photographerAvailability';
 export * from './photographerAvailability134a8bd';

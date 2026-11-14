@@ -21,6 +21,42 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /admin/owners/{ownerId}:
+    delete:
+      operationId: permanentlyDeleteOwner
+      tags: [admin]
+      summary: Permanently delete an owner and all owned activity in one transaction
+      parameters:
+        - in: path
+          name: ownerId
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 160 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, permanentlyDelete]
+              properties:
+                reason: { type: string, minLength: 3 }
+                permanentlyDelete: { type: boolean, enum: [true] }
+      responses:
+        "200":
+          description: The owner and associated records were permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, ownerId, permanentlyDeleted]
+                properties:
+                  ok: { type: boolean }
+                  ownerId: { type: string }
+                  permanentlyDeleted: { type: boolean }
+        "400": { description: Invalid identifier or missing permanent deletion confirmation }
+        "403": { description: Superadmin permission required or protected identity }
+        "404": { description: Owner not found }
+        "500": { description: Deletion failed and the entire transaction was rolled back }
   /onboarding/status:
     get:
       operationId: getOwnerOnboardingStatus
