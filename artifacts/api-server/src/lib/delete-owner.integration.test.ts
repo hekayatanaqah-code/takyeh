@@ -98,3 +98,27 @@ it("also removes orphan activities left behind by the old registration-only dele
   assert.equal((await db.execute(sql`SELECT 1 FROM chalets WHERE id=${target.chalet}`)).rows.length, 0);
   assert.equal((await db.execute(sql`SELECT 1 FROM service_providers WHERE id=${target.provider}`)).rows.length, 0);
 });
+
+it("allows deleting an owner whose aliases are configured as administrative identities", async () => {
+  const target = await fixture("administrative-owner");
+  const previousAdminId = process.env.ADMIN_USER_ID;
+  const previousPlatformIds = process.env.PLATFORM_ADMIN_IDS;
+  try {
+    // Use only disposable fixture identities, never the real administrative account.
+    process.env.ADMIN_USER_ID = target.alias;
+    process.env.PLATFORM_ADMIN_IDS = target.owner;
+    assert.equal((await deleteOwnerPermanently(target.owner)).permanentlyDeleted, true);
+    for (const [table, id] of [
+      ["owner_applications", target.id], ["chalets", target.chalet],
+      ["service_providers", target.provider],
+    ] as const) {
+      assert.equal((await db.execute(sql`SELECT 1 FROM ${sql.raw(table)} WHERE id=${id}`)).rows.length, 0);
+    }
+    assert.equal((await db.execute(sql`SELECT 1 FROM quick_sales WHERE provider_id=${target.provider}`)).rows.length, 0);
+  } finally {
+    if (previousAdminId === undefined) delete process.env.ADMIN_USER_ID;
+    else process.env.ADMIN_USER_ID = previousAdminId;
+    if (previousPlatformIds === undefined) delete process.env.PLATFORM_ADMIN_IDS;
+    else process.env.PLATFORM_ADMIN_IDS = previousPlatformIds;
+  }
+});

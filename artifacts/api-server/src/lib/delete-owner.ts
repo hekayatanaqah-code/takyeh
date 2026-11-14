@@ -34,11 +34,8 @@ export async function deleteOwnerPermanently(rawId: string) {
       rawId, ...(applicationId ? [`owner_${applicationId}`] : []),
       ...(links?.rows.map(row => row.user_id).filter(id => !/^owner_\d+$/.test(id)) ?? []),
     ])];
-    const protectedIds = new Set([process.env.ADMIN_USER_ID, ...(process.env.PLATFORM_ADMIN_IDS ?? "56719001").split(",")]
-      .filter(Boolean).map(id => id!.trim()));
-    if (aliases.some(id => protectedIds.has(id))) {
-      throw new OwnerDeletionError(403, "لا يمكن حذف حساب الإدارة من قائمة الملاك");
-    }
+    // Administrative identity does not exempt the owner's records from deletion.
+    // Authorization belongs to the route; independent admin roles/audit remain separate.
     const metadata = await tx.execute<{ table_name: string; column_name: string }>(sql`
       SELECT c.table_name, c.column_name FROM information_schema.columns c
       JOIN information_schema.tables t ON t.table_schema=c.table_schema AND t.table_name=c.table_name
