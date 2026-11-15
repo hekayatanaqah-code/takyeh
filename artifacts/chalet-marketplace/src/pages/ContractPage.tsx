@@ -4,7 +4,7 @@ import { Loader2, CheckCircle, AlertCircle, Pen, Trash2, Printer, FileText } fro
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDualDate } from "@/lib/hijri";
-import { contractMoney, contractTermsText } from "@/lib/digitalContracts";
+import { contractMoney, contractTermsText, contractSignerDefaults } from "@/lib/digitalContracts";
 import { SAUDI_RIYAL_FONT_CSS } from "@/lib/saudiCurrencyFont";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -310,12 +310,10 @@ export default function ContractPage() {
         else {
           setBooking(data);
           if (!data.contractSigned) {
-            // Pre-fill from previous signing history for returning guests
-            if (data.prevSignerName) {
-              setFullName(data.prevSignerName);
-              if (data.prevSignerId) setIdNumber(data.prevSignerId);
-              setWasAutoFilled(true);
-            }
+            const defaults = contractSignerDefaults(data);
+            setFullName(defaults.fullName);
+            setIdNumber(defaults.idNumber);
+            setWasAutoFilled(Boolean(defaults.fullName || defaults.idNumber));
           }
           if (data.contractSigned) {
             setAlreadySigned(true);

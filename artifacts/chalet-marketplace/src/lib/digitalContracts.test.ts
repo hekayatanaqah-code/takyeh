@@ -1,6 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { contractMoney, contractTermsText, propertyContractClauses, EMPTY_CONTRACT_TERMS, publicContractUrl, contractInvitationText, contractWhatsAppActionText, CONTRACT_STATUS_STYLES } from "./digitalContracts";
+import { contractMoney, contractTermsText, propertyContractClauses, EMPTY_CONTRACT_TERMS, publicContractUrl, contractInvitationText, contractWhatsAppActionText, CONTRACT_STATUS_STYLES, contractSignerDefaults } from "./digitalContracts";
+
+test("signer defaults use the booking name and restore known customer fields independently", () => {
+  assert.deepEqual(contractSignerDefaults({ clientName: " عميل جديد " }), { fullName: "عميل جديد", idNumber: "" });
+  assert.deepEqual(contractSignerDefaults({ clientName: "اسم مختصر", prevSignerName: "الاسم الكامل", prevSignerId: "1000000000" }),
+    { fullName: "الاسم الكامل", idNumber: "1000000000" });
+  assert.deepEqual(contractSignerDefaults({ clientName: "عميل", prevSignerId: "2000000000" }),
+    { fullName: "عميل", idNumber: "2000000000" });
+  assert.deepEqual(contractSignerDefaults({ contractSignerName: "الاسم المحفوظ", prevSignerName: "قديم", contractSignerId: "1000000000" }),
+    { fullName: "الاسم المحفوظ", idNumber: "1000000000" });
+});
 
 test("property clauses preserve only saved property wording, including customized former defaults", () => {
   const saved = "يُلزَم المستأجر بسداد تأمين خاص بالاتفاق\nشروط أخرى للعقار الثاني";

@@ -397,7 +397,7 @@ router.get("/contract/:bookingId", async (req, res) => {
   if (!id || isNaN(id)) return res.status(400).json({ error: "معرّف الحجز غير صالح." });
 
   const rows = await db.execute<{
-    id: number; client_name: string; client_phone: string | null; booking_date: string; duration_days: number;
+    id: number; owner_id: string; client_name: string; client_phone: string | null; booking_date: string; duration_days: number;
     period: string | null; total_price: string | null; deposit_paid: string | null;
     insurance_fee: string | null; contract_signed: boolean;
     contract_signer_name: string | null; contract_signer_id: string | null;
@@ -410,7 +410,7 @@ router.get("/contract/:bookingId", async (req, res) => {
     evening_check_in: string | null; evening_check_out: string | null;
     full_day_check_in: string | null; full_day_check_out: string | null;
   }>(sql`
-    SELECT b.id, b.client_name, b.client_phone, b.booking_date, b.duration_days, b.period,
+    SELECT b.id, b.owner_id, b.client_name, b.client_phone, b.booking_date, b.duration_days, b.period,
            b.total_price, b.deposit_paid, b.insurance_fee,
            b.contract_signed, b.contract_signer_name, b.contract_signer_id,
            b.contract_signature_data_url, b.contract_signed_at,
@@ -432,22 +432,29 @@ router.get("/contract/:bookingId", async (req, res) => {
   // Look up previous signing history for this guest's phone (returning guest auto-fill)
   let prevSignerName: string | null = null;
   let prevSignerId: string | null = null;
-  if (row.client_phone && !row.contract_signed) {
+  const customerPhone = normalizeCustomerPhone(row.client_phone ?? "");
+  if (/^05\d{8}$/.test(customerPhone) && !row.contract_signed) {
+    const [customer] = await db.select({
+      name: ownerCustomersTable.name,
+      idNumber: ownerCustomersTable.clientIdNumber,
+    }).from(ownerCustomersTable).where(and(
+      eq(ownerCustomersTable.ownerId, row.owner_id),
+      eq(ownerCustomersTable.phoneNormalized, customerPhone),
+    )).limit(1);
     const prevRows = await db.execute<{ contract_signer_name: string | null; contract_signer_id: string | null }>(
       sql`SELECT contract_signer_name, contract_signer_id
           FROM owner_bookings
-          WHERE client_phone = ${row.client_phone}
+          WHERE owner_id = ${row.owner_id}
+            AND ${customerPhoneSql(sql`client_phone`)} = ${customerPhone}
             AND contract_signed = true
             AND contract_signer_name IS NOT NULL
             AND id != ${row.id}
-          ORDER BY contract_signed_at DESC
+          ORDER BY contract_signed_at DESC, id DESC
           LIMIT 1`
     );
     const prevRow = ((prevRows as any).rows as typeof prevRows.rows)[0];
-    if (prevRow?.contract_signer_name) {
-      prevSignerName = prevRow.contract_signer_name;
-      prevSignerId = prevRow.contract_signer_id ?? null;
-    }
+    prevSignerName = prevRow?.contract_signer_name?.trim() || customer?.name?.trim() || null;
+    prevSignerId = prevRow?.contract_signer_id?.trim() || customer?.idNumber?.trim() || null;
   }
 
   return res.json({
