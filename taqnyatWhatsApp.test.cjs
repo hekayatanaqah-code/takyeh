@@ -5,6 +5,24 @@ const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
 const { isTaqnyatAccepted } = require("./taqnyatWhatsApp.js");
 
+test("utility template sender uses the existing endpoint, key and Arabic parameters", () => {
+    const result = spawnSync(process.execPath, ["-e", `
+        const assert = require("node:assert/strict");
+        globalThis.fetch = async (url, options) => {
+            assert.equal(url, "https://api.taqnyat.sa/wa/v2/messages/");
+            assert.equal(options.headers.Authorization, "Bearer fixture-only");
+            const body = JSON.parse(options.body);
+            assert.equal(body.to, "966500000000");
+            assert.equal(body.template.name, "fixture_approved");
+            assert.deepEqual(body.template.components[0].parameters, [{type:"text",text:"مالك"}]);
+            return new Response(JSON.stringify({type:"template",statuses:{message_id:"fixture"}}),{status:200});
+        };
+        require("./taqnyatWhatsApp.js").sendTaqnyatTemplate("٠٥٠٠٠٠٠٠٠٠","fixture_approved",["مالك"])
+          .then(result => assert.equal(result.success,true)).catch(() => {process.exitCode=1});
+    `], {cwd:__dirname,env:{PATH:process.env.PATH,TAQNYAT_API_KEY:"fixture-only"},encoding:"utf8"});
+    assert.equal(result.status, 0, result.stderr);
+});
+
 const accepted = {
     type: "whatsapp",
     statuses: [{ message_id: "wamid.test-fixture", recipient: "+966500000000" }]

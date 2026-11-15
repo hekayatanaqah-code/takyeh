@@ -26,6 +26,11 @@ const trialOwnerIds: string[] = [];
 const propertySubmissionIds: number[] = [];
 const originalAdminUserId = process.env.ADMIN_USER_ID;
 const testAdminId = `service-approval-admin-${randomUUID()}`;
+const originalFetch = globalThis.fetch;
+const notificationKeys = ["TAQNYAT_API_KEY", "TAQNYAT_SUBMISSION_APPROVED_TEMPLATE", "TAQNYAT_SUBMISSION_REVISION_TEMPLATE"] as const;
+const originalNotificationEnv = new Map(notificationKeys.map(key => [key, process.env[key]]));
+const notifications: any[] = [];
+let failNotification = false;
 
 async function listen(serverToStart: Server): Promise<string> {
   await new Promise<void>((resolve, reject) => {
@@ -70,6 +75,24 @@ async function approve(submissionId: number) {
 }
 
 before(async () => {
+  process.env.TAQNYAT_API_KEY = "fixture-not-real";
+  process.env.TAQNYAT_SUBMISSION_APPROVED_TEMPLATE = "fixture_approved";
+  process.env.TAQNYAT_SUBMISSION_REVISION_TEMPLATE = "fixture_revision";
+  globalThis.fetch = async (input, options) => {
+    if (String(input).startsWith("https://api.taqnyat.sa/")) {
+      const payload = JSON.parse(String(options?.body));
+      // Prove the notification is attempted after the decision has committed.
+      const name = payload.template.components[0].parameters[1].text;
+      const services = await db.select().from(serviceProviderSubmissionsTable).where(eq(serviceProviderSubmissionsTable.businessName, name));
+      const properties = await db.select().from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.nameAr, name));
+      const expected = payload.template.name === "fixture_approved" ? "approved" : "needs_revision";
+      assert.ok([...services, ...properties].some(row => row.status === expected), "decision must already be committed");
+      notifications.push(payload);
+      if (failNotification) throw new Error("fixture provider offline");
+      return new Response(JSON.stringify({type:"template", statuses:{message_id:"fixture-only"}}), {status:200});
+    }
+    return originalFetch(input, options);
+  };
   process.env.ADMIN_USER_ID = testAdminId;
   sessionId = await createSession({
     user: {
@@ -133,6 +156,12 @@ it("starts the trial on the actual service approval endpoint and never restarts 
 });
 
 after(async () => {
+  globalThis.fetch = originalFetch;
+  for (const key of notificationKeys) {
+    const original = originalNotificationEnv.get(key);
+    if (original === undefined) delete process.env[key];
+    else process.env[key] = original;
+  }
   for (const id of propertySubmissionIds) {
     await db.delete(chaletsTable).where(eq(chaletsTable.submissionId, id));
     await db.delete(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id, id));
@@ -165,6 +194,57 @@ after(async () => {
 });
 
 describe("service provider approval idempotency", () => {
+  it("notifies both property/service decisions once, keeps saved state on provider failure, and republishes services", async () => {
+    for (const kind of ["property", "service"]) {
+      let id: number;
+      let activityName: string;
+      if (kind === "service") {
+        const service = await createSubmission();
+        id = service.id;
+        activityName = service.businessName;
+      } else {
+        const ownerId = `notice-owner-${randomUUID()}`;
+        trialOwnerIds.push(ownerId);
+        activityName = `عقار إشعار ${randomUUID()}`;
+        const [property] = await db.insert(chaletSubmissionsTable).values({
+          ownerId, nameAr: activityName, whatsappNumber: "٠٥٠٠٠٠٠٠٠٠",
+          location: "بريدة", descriptionAr: "اختبار إشعار", pricePerNight: "100",
+        }).returning();
+        id = property.id;
+        propertySubmissionIds.push(id);
+      }
+      const decideNotice = (status: string, adminNote?: string) => fetch(
+        `${baseUrl}/api/admin/${kind === "service" ? "service-submissions" : "submissions"}/${id}/status`, {
+          method: "PATCH", headers: {authorization:`Bearer ${sessionId}`,"content-type":"application/json"},
+          body: JSON.stringify({status, adminNote}),
+        });
+      const start = notifications.length;
+      assert.equal((await decideNotice("approved")).status, 200);
+      assert.equal(notifications.length, start + 1);
+      assert.equal(notifications.at(-1).to, "966500000000");
+      assert.equal(notifications.at(-1).template.components[0].parameters[1].text, activityName);
+      assert.equal((await decideNotice("approved")).status, 200);
+      assert.equal(notifications.length, start + 1, "same approval is not resent");
+      try {
+        failNotification = true;
+        assert.equal((await decideNotice("needs_revision", "أضف الصور")).status, 200);
+      } finally { failNotification = false; }
+      assert.equal(notifications.length, start + 2);
+      assert.equal(notifications.at(-1).template.components[0].parameters[2].text, "أضف الصور");
+      if (kind === "service") {
+        const [saved] = await db.select().from(serviceProviderSubmissionsTable).where(eq(serviceProviderSubmissionsTable.id,id));
+        assert.equal(saved.status, "needs_revision");
+        const [mirror] = await db.select().from(serviceProvidersTable).where(eq(serviceProvidersTable.submissionId,id));
+        assert.equal(mirror.isActive, false);
+        assert.equal((await decideNotice("approved")).status, 200);
+        const [republished] = await db.select().from(serviceProvidersTable).where(eq(serviceProvidersTable.submissionId,id));
+        assert.equal(republished.isActive, true);
+      } else {
+        const [saved] = await db.select().from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.id,id));
+        assert.equal(saved.status, "needs_revision");
+      }
+    }
+  });
   it("approves with an empty note and preserves the submitted service fields", async () => {
     const submission = await createSubmission();
     await db.update(serviceProviderSubmissionsTable).set({

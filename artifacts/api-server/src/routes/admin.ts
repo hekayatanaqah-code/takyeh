@@ -15,6 +15,7 @@ import { ObjectStorageService } from "#object-storage";
 import broadcastRouter from "./broadcast";
 import { db } from "@workspace/db";
 import { deleteOwnerPermanently, OwnerDeletionError } from "../lib/delete-owner";
+import { notifySubmissionDecision, type SubmissionNotice } from "../lib/submission-whatsapp";
 import {
   chaletSubmissionsTable,
   chaletsTable,
@@ -968,6 +969,7 @@ router.patch("/submissions/:id/status", requireChaletApprovalsAdmin, async (req,
     status: body.data.status,
     adminNote: body.data.adminNote ?? null,
   };
+  let notice: SubmissionNotice | undefined;
   const result = await db.transaction(async (tx) => {
     if (subscription) {
       await lockResource(tx, 731205, subscription.ownerId);
@@ -1052,11 +1054,17 @@ router.patch("/submissions/:id/status", requireChaletApprovalsAdmin, async (req,
     .update(chaletSubmissionsTable)
     .set(updateData)
     .where(eq(chaletSubmissionsTable.id, id));
+    notice = {
+      kind: "property", id, ownerId: submission.ownerId, activityName: submission.nameAr,
+      phone: submission.whatsappNumber, previousStatus: submission.status,
+      status: body.data.status, previousNote: submission.adminNote, adminNote: body.data.adminNote,
+    };
     return "ok";
   });
   if (result === "missing") return res.status(404).json({ error: "الطلب غير موجود" });
   if (result === "closed") return res.status(409).json({ error: "الطلب مرفوض ومغلق نهائياً. يجب تقديم طلب جديد." });
 
+  if (notice) await notifySubmissionDecision(notice, (details, message) => req.log.warn(details, message));
   return res.json({ ok: true });
 });
 
@@ -2103,15 +2111,12 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
     adminNote: adminNote || null,
   };
 
+  let notice: SubmissionNotice | undefined;
   const result = await db.transaction(async (tx) => {
+    const [submission] = await tx.select().from(serviceProviderSubmissionsTable)
+      .where(eq(serviceProviderSubmissionsTable.id, id)).for("update").limit(1);
+    if (!submission) return { conflict: false, missing: true };
     if (body.data.status === "approved") {
-      const [submission] = await tx
-        .select()
-        .from(serviceProviderSubmissionsTable)
-        .where(eq(serviceProviderSubmissionsTable.id, id))
-        .for("update")
-        .limit(1);
-
       if (submission) {
         const linkedProvider = await tx
           .select({ id: serviceProvidersTable.id })
@@ -2121,7 +2126,7 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
 
         if (linkedProvider.length > 0) {
           await tx.update(serviceProvidersTable)
-            .set({ instagramAccount: submission.instagramAccount })
+            .set({ instagramAccount: submission.instagramAccount, isActive: true })
             .where(eq(serviceProvidersTable.id, linkedProvider[0].id));
         }
 
@@ -2147,7 +2152,7 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
           if (legacyProviders.length === 1) {
             await tx
               .update(serviceProvidersTable)
-              .set({ submissionId: submission.id, instagramAccount: submission.instagramAccount })
+              .set({ submissionId: submission.id, instagramAccount: submission.instagramAccount, isActive: true })
               .where(and(
                 eq(serviceProvidersTable.id, legacyProviders[0].id),
                 isNull(serviceProvidersTable.submissionId),
@@ -2189,6 +2194,10 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
       }
     }
 
+    if (body.data.status !== "approved") {
+      await tx.update(serviceProvidersTable).set({ isActive: false })
+        .where(eq(serviceProvidersTable.submissionId, id));
+    }
     if (body.data.status === "approved") {
       const [approved] = await tx.select({ ownerId: serviceProviderSubmissionsTable.ownerId })
         .from(serviceProviderSubmissionsTable).where(eq(serviceProviderSubmissionsTable.id, id)).limit(1);
@@ -2199,15 +2208,22 @@ router.patch("/service-submissions/:id/status", requireChaletApprovalsAdmin, asy
       .set(updateData)
       .where(eq(serviceProviderSubmissionsTable.id, id));
 
+    notice = {
+      kind: "service", id, ownerId: submission.ownerId, activityName: submission.businessName,
+      phone: submission.whatsappNumber, previousStatus: submission.status,
+      status: body.data.status, previousNote: submission.adminNote, adminNote,
+    };
     return { conflict: false };
   });
 
+  if ("missing" in result && result.missing) return res.status(404).json({ error: "الطلب غير موجود" });
   if (result.conflict) {
     return res.status(409).json({
       error: "تعذر ربط الطلب تلقائياً لوجود أكثر من مزود مطابق",
     });
   }
 
+  if (notice) await notifySubmissionDecision(notice, (details, message) => req.log.warn(details, message));
   return res.json({ ok: true });
 });
 

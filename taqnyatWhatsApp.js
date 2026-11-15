@@ -96,4 +96,46 @@ async function sendTaqnyatOTP(phone, otpCode) {
     }
 }
 
-module.exports = { sendTaqnyatOTP, isTaqnyatAccepted };
+function normalizeTaqnyatPhone(phone) {
+    let digits = String(phone || "")
+        .replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))
+        .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06F0))
+        .replace(/\D/g, "");
+    if (digits.startsWith("00966")) digits = digits.slice(2);
+    if (/^05\d{8}$/.test(digits)) digits = "966" + digits.slice(1);
+    else if (/^5\d{8}$/.test(digits)) digits = "966" + digits;
+    return /^9665\d{8}$/.test(digits) ? digits : null;
+}
+
+// Transactional notices require their own approved utility templates, not the OTP template.
+async function sendTaqnyatTemplate(phone, name, parameters, language = "ar") {
+    const to = normalizeTaqnyatPhone(phone);
+    if (!to) return { success: false, error: "invalid_phone" };
+    if (!process.env.TAQNYAT_API_KEY || !name) return { success: false, error: "not_configured" };
+    try {
+        const response = await fetch("https://api.taqnyat.sa/wa/v2/messages/", {
+            method: "POST",
+            signal: AbortSignal.timeout(15000),
+            headers: {
+                Authorization: `Bearer ${process.env.TAQNYAT_API_KEY}`,
+                "Content-Type": "application/json",
+                Accept: "application/json"
+            },
+            body: JSON.stringify({
+                to, type: "template",
+                template: {
+                    name, language: { code: language },
+                    components: [{ type: "body", parameters: parameters.map(text => ({ type: "text", text: String(text) })) }]
+                }
+            })
+        });
+        const data = await response.json();
+        return isTaqnyatAccepted(response.ok, data)
+            ? { success: true }
+            : { success: false, error: "provider_rejected" };
+    } catch (_) {
+        return { success: false, error: "provider_unavailable" };
+    }
+}
+
+module.exports = { sendTaqnyatOTP, isTaqnyatAccepted, normalizeTaqnyatPhone, sendTaqnyatTemplate };
