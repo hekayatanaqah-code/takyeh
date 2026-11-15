@@ -24,9 +24,9 @@ test("contract and PDF amounts preserve halalas and always use Eastern digits an
 });
 
 test("all customer signature links use the verified published domain, not the current origin", () => {
-  assert.equal(publicContractUrl(12), "https://takyah.replit.app/contract/12");
-  assert.equal(publicContractUrl(12, "service", "/"), "https://takyah.replit.app/service-contract/12");
-  assert.equal(publicContractUrl(12, "property", "/market/"), "https://takyah.replit.app/market/contract/12");
+  assert.equal(publicContractUrl(12), "https://takyeh.sa/contract/12");
+  assert.equal(publicContractUrl(12, "service", "/"), "https://takyeh.sa/service-contract/12");
+  assert.equal(publicContractUrl(12, "property", "/market/"), "https://takyeh.sa/market/contract/12");
   assert.throws(() => publicContractUrl(-1));
   assert.throws(() => publicContractUrl(NaN));
 });
@@ -39,7 +39,7 @@ test("invitation is consistent and personal without assuming gender or promising
   assert.ok(text.startsWith("مرحباً ضيف"));
   assert.ok(text.includes("العقار الثاني"));
   assert.ok(text.includes("الشروط والأحكام"));
-  assert.ok(text.includes("https://takyah.replit.app/contract/12"));
+  assert.ok(text.includes("https://takyeh.sa/contract/12"));
   assert.doesNotMatch(text, /أخونا|المبدئي|replit\.dev|localhost/);
 });
 

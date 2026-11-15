@@ -33,12 +33,12 @@ const OG_HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="description" content="منصة تكية لحجز الوجهات والخدمات، نضع بين أيديكم خيارات متنوعة وتجربة حجز فريدة وموثوقة." />
-  <link rel="canonical" href="https://takyah.replit.app/" />
+  <link rel="canonical" href="https://takyeh.sa/" />
   <meta property="og:type"        content="website" />
   <meta property="og:site_name"   content="منصة تكية" />
   <meta property="og:title"       content="منصة تكية - لحجز الوجهات والخدمات" />
   <meta property="og:description" content="منصة تكية لحجز الوجهات والخدمات، نضع بين أيديكم خيارات متنوعة وتجربة حجز فريدة وموثوقة." />
-  <meta property="og:url"         content="https://takyah.replit.app/" />
+  <meta property="og:url"         content="https://takyeh.sa/" />
   <meta property="og:locale"      content="ar_SA" />
   <meta name="twitter:card"        content="summary" />
   <meta name="twitter:title"       content="منصة تكية - لحجز الوجهات والخدمات" />

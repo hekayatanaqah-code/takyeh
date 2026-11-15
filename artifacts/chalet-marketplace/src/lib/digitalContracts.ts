@@ -1,7 +1,7 @@
 import { saudiMoneyMessage, SAUDI_RIYAL_SIGN } from "./saudiCurrency";
 
 /** Verified published primary URL; do not derive customer links from the preview origin. */
-export const PLATFORM_PUBLIC_ORIGIN = "https://takyah.replit.app";
+export const PLATFORM_PUBLIC_ORIGIN = "https://takyeh.sa";
 
 export function publicContractUrl(id: number, kind: "property" | "service" = "property", basePath = "") {
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("رقم العقد غير صالح");

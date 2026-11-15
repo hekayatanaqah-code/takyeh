@@ -69,7 +69,7 @@ describe("password recovery input and token utilities", () => {
       assert.equal(link.searchParams.get("token"), "opaque-token");
 
       delete process.env.PUBLIC_URL;
-      assert.equal(new URL(makePasswordResetUrl("x", "public")).origin, "https://takyah.replit.app");
+      assert.equal(new URL(makePasswordResetUrl("x", "public")).origin, "https://takyeh.sa");
     } finally {
       if (previousResetUrl === undefined) delete process.env.PASSWORD_RESET_PUBLIC_URL;
       else process.env.PASSWORD_RESET_PUBLIC_URL = previousResetUrl;
@@ -133,7 +133,7 @@ describe("password reset delivery seams", () => {
 
     const sender = await provider.prepare();
     assert(sender);
-    await sender.send("owner@example.net", "https://takyah.replit.app/reset-password?token=secret");
+    await sender.send("owner@example.net", "https://takyeh.sa/reset-password?token=secret");
     assert.equal(sent.length, 1);
     assert.equal(sent[0]?.to, "owner@example.net");
     assert.match(sent[0]?.text ?? "", /token=secret/);

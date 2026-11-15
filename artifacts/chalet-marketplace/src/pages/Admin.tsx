@@ -4934,7 +4934,7 @@ function reminderWhatsAppNumber(phone: string | null): string | null {
 function reminderRenewalUrl(): string {
   const host = window.location.hostname;
   if (host === "localhost" || host === "127.0.0.1" || host.endsWith(".replit.dev")) {
-    return "https://takyah.replit.app/subscription";
+    return "https://takyeh.sa/subscription";
   }
   return new URL(`${import.meta.env.BASE_URL}subscription`, window.location.origin).href;
 }
