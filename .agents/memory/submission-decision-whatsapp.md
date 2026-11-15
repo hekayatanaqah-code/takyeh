@@ -16,3 +16,12 @@ operational messages. Business-initiated notices require separately approved
 utility templates; do not claim delivery is active without confirmed template
 configuration. Preserve OTP behavior and do not treat gateway acceptance as
 handset delivery.
+
+Administrators must be able to edit the two submission-notice template names in
+system settings without code changes or another deployment.
+
+**Why:** The user explicitly requested self-service template-name configuration.
+
+**How to apply:** Saved settings take precedence over environment defaults, are
+read for each notice, and an explicitly saved blank disables that notice rather
+than silently restoring an old environment value.

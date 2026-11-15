@@ -15,6 +15,7 @@ import {
   chaletSubmissionsTable,
   chaletsTable,
   sessionsTable,
+  siteSettingsTable,
 } from "@workspace/db";
 
 let server: Server;
@@ -85,7 +86,7 @@ before(async () => {
       const name = payload.template.components[0].parameters[1].text;
       const services = await db.select().from(serviceProviderSubmissionsTable).where(eq(serviceProviderSubmissionsTable.businessName, name));
       const properties = await db.select().from(chaletSubmissionsTable).where(eq(chaletSubmissionsTable.nameAr, name));
-      const expected = payload.template.name === "fixture_approved" ? "approved" : "needs_revision";
+      const expected = payload.template.name.includes("revision") ? "needs_revision" : "approved";
       assert.ok([...services, ...properties].some(row => row.status === expected), "decision must already be committed");
       notifications.push(payload);
       if (failNotification) throw new Error("fixture provider offline");
@@ -194,6 +195,39 @@ after(async () => {
 });
 
 describe("service provider approval idempotency", () => {
+  it("persists editable template names, applies changes immediately and validates settings without erasing saved names", async () => {
+    const key = "taqnyat_submission_approved_template";
+    const [original] = await db.select().from(siteSettingsTable).where(eq(siteSettingsTable.key,key));
+    const settingsRequest = (method: string, data?: Record<string,string>, authenticated = true) => fetch(`${baseUrl}/api/admin/settings`, {
+      method, headers: {"content-type":"application/json", ...(authenticated ? {authorization:`Bearer ${sessionId}`} : {})},
+      ...(data ? {body:JSON.stringify(data)} : {}),
+    });
+    try {
+      assert.equal((await settingsRequest("PATCH", {[key]:"fixture_updated"}, false)).status,401);
+      const save = await settingsRequest("PATCH", {[key]:"fixture_updated"});
+      assert.equal(save.status,200);
+      assert.equal(((await save.json()) as any).settings[key], "fixture_updated");
+      assert.equal(((await (await settingsRequest("GET")).json()) as any)[key], "fixture_updated");
+      const submission = await createSubmission();
+      const count = notifications.length;
+      assert.equal((await approve(submission.id)).status,200);
+      assert.equal(notifications.length, count+1);
+      assert.equal(notifications.at(-1).template.name,"fixture_updated");
+      for (const invalid of ["اسم عربي", "has spaces", "UpperCase", "x".repeat(513)]) {
+        assert.equal((await settingsRequest("PATCH", {[key]:invalid})).status,400);
+      }
+      assert.equal(((await (await settingsRequest("GET")).json()) as any)[key], "fixture_updated");
+      assert.equal((await settingsRequest("PATCH", {[key]:""})).status,200);
+      const disabledSubmission = await createSubmission();
+      const beforeDisabled = notifications.length;
+      assert.equal((await approve(disabledSubmission.id)).status,200);
+      assert.equal(notifications.length,beforeDisabled,"blank DB name disables notification despite configured environment");
+      assert.equal(((await (await settingsRequest("GET")).json()) as any)[key], "");
+    } finally {
+      await db.delete(siteSettingsTable).where(eq(siteSettingsTable.key,key));
+      if(original) await db.insert(siteSettingsTable).values(original);
+    }
+  });
   it("notifies both property/service decisions once, keeps saved state on provider failure, and republishes services", async () => {
     for (const kind of ["property", "service"]) {
       let id: number;

@@ -1,6 +1,7 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { normalizeTaqnyatPhone, sendTaqnyatTemplate } from "../../../../taqnyatWhatsApp.js";
+import { loadSubmissionTemplates } from "./submission-template-settings";
 
 export type SubmissionNotice = {
   kind: "property" | "service";
@@ -31,7 +32,7 @@ async function findOwner(ownerId: string | null): Promise<{ name: string; phone:
 export async function notifySubmissionDecision(
   notice: SubmissionNotice,
   warn: (details: { kind: string; submissionId: number; reason: string }, message: string) => void,
-  dependencies = { findOwner, send: sendTaqnyatTemplate },
+  dependencies = { findOwner, send: sendTaqnyatTemplate, getTemplates: loadSubmissionTemplates },
 ) {
   if (!["approved", "needs_revision"].includes(notice.status)) return "skipped";
   if (notice.previousStatus === notice.status &&
@@ -41,9 +42,10 @@ export async function notifySubmissionDecision(
     const phone = normalizeTaqnyatPhone(owner?.phone || notice.phone);
     if (!phone) throw new Error("invalid_phone");
     const approved = notice.status === "approved";
+    const templates = await dependencies.getTemplates();
     const template = approved
-      ? process.env.TAQNYAT_SUBMISSION_APPROVED_TEMPLATE
-      : process.env.TAQNYAT_SUBMISSION_REVISION_TEMPLATE;
+      ? templates.taqnyat_submission_approved_template
+      : templates.taqnyat_submission_revision_template;
     if (!template) throw new Error("template_not_configured");
     const parameters = [owner?.name?.trim() || "شريكنا العزيز", notice.activityName];
     if (!approved) parameters.push(notice.adminNote?.trim() || "يرجى مراجعة البيانات واستكمالها من لوحة التحكم.");

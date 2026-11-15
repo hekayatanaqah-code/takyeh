@@ -544,6 +544,38 @@ function SettingsTab() {
         </div>
       </div>
 
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="bg-gradient-to-l from-green-500/10 to-transparent px-6 py-4 border-b border-slate-700">
+          <h3 className="text-slate-100 font-bold text-lg">قوالب تقنيات لإشعارات الطلبات</h3>
+          <p className="text-sm text-slate-300 mt-2 leading-relaxed">
+            أدخل اسم القالب المعتمد في تقنيات، وليس نص الرسالة. تُستخدم هذه الإعدادات للعقارات والخدمات.
+          </p>
+        </div>
+        <div className="p-6 space-y-5">
+          {[
+            { key: "taqnyat_submission_approved_template", label: "اسم قالب إشعار القبول والنشر", example: "listing_approved", hint: "ترتيب متغيرات القالب: اسم المالك، ثم اسم العقار أو الخدمة." },
+            { key: "taqnyat_submission_revision_template", label: "اسم قالب إشعار الإرجاع للتعديل", example: "listing_revision", hint: "ترتيب متغيرات القالب: اسم المالك، ثم اسم العقار أو الخدمة، ثم ملاحظات المدير." },
+          ].map(field => (
+            <div key={field.key} className="space-y-2">
+              <label htmlFor={field.key} className="text-sm font-semibold text-slate-100">{field.label}</label>
+              <Input id={field.key} value={form[field.key] ?? ""}
+                onChange={e => setForm(f => ({ ...f, [field.key]: e.target.value }))}
+                onBlur={e => setForm(f => ({ ...f, [field.key]: e.target.value.trim() }))}
+                placeholder={field.example} maxLength={512} pattern="[a-z0-9_]*"
+                autoCapitalize="none" autoCorrect="off" spellCheck={false} dir="ltr" data-no-arabic
+                aria-describedby={`${field.key}-hint`}
+                className="bg-slate-900 border-slate-600 text-white placeholder:text-slate-500 font-mono text-left" />
+              <p id={`${field.key}-hint`} className="text-sm text-slate-300 leading-relaxed">{field.hint}</p>
+            </div>
+          ))}
+          <p className="text-sm text-slate-300 leading-relaxed">
+            تسري التغييرات بعد الحفظ على الإشعارات الجديدة دون إعادة نشر الموقع. اترك الحقل فارغاً لتعطيل إشعاره.
+            يجب اعتماد القالب لدى تقنيات وواتساب أولاً؛ فشل الإرسال لا يمنع حفظ قرار الإدارة.
+          </p>
+          <SaveBtn label="حفظ إعدادات قوالب تقنيات" />
+        </div>
+      </div>
+
       {/* ══ 3.5. WhatsApp Booking Message Template ══ */}
       <div className="bg-slate-800 rounded-xl border border-green-500/30 overflow-hidden">
         <div className="bg-gradient-to-l from-green-500/10 to-transparent px-6 py-4 border-b border-slate-700 flex items-center gap-3">

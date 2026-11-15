@@ -16,6 +16,7 @@ import broadcastRouter from "./broadcast";
 import { db } from "@workspace/db";
 import { deleteOwnerPermanently, OwnerDeletionError } from "../lib/delete-owner";
 import { notifySubmissionDecision, type SubmissionNotice } from "../lib/submission-whatsapp";
+import { effectiveSubmissionTemplates, submissionTemplateKeys, validSubmissionTemplateName } from "../lib/submission-template-settings";
 import {
   chaletSubmissionsTable,
   chaletsTable,
@@ -2041,7 +2042,7 @@ router.get("/settings", requirePlatformSettingsAdmin, async (_req, res) => {
     if (row.key.startsWith(REMINDER_PREVIEW_PREFIX)) continue;
     map[row.key] = row.value;
   }
-  return res.json(map);
+  return res.json({ ...map, ...effectiveSubmissionTemplates(map) });
 });
 
 /* ── Service Provider Submissions (Admin) ──────────────────── */
@@ -2236,6 +2237,9 @@ router.delete("/service-submissions/:id", requireChaletApprovalsAdmin, async (re
 router.patch("/settings", requirePlatformSettingsAdmin, async (req, res) => {
   const body = z.record(z.string(), z.string()).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "بيانات غير صحيحة" });
+  if (submissionTemplateKeys.some(key => key in body.data && !validSubmissionTemplateName(body.data[key]))) {
+    return res.status(400).json({ error: "اسم قالب تقنيات يجب أن يحتوي على حروف إنجليزية صغيرة أو أرقام أو شرطة سفلية فقط، بحد أقصى ٥١٢ حرفاً وبدون مسافات. اتركه فارغاً لتعطيل الإشعار." });
+  }
   if (["legal_entity_name_ar", "legal_entity_name_en"].some(key => (body.data[key]?.length ?? 0) > 250)) {
     return res.status(400).json({ error: "يجب ألا يتجاوز الاسم القانوني ٢٥٠ حرفاً." });
   }

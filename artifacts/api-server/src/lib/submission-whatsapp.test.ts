@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { notifySubmissionDecision, type SubmissionNotice } from "./submission-whatsapp";
 import { normalizeTaqnyatPhone } from "../../../../taqnyatWhatsApp.js";
+import { effectiveSubmissionTemplates, validSubmissionTemplateName } from "./submission-template-settings";
 
 const base: SubmissionNotice = {
   kind: "property", id: 1, ownerId: "owner_1", activityName: "عقار اختبار",
@@ -24,6 +25,7 @@ it("uses owner identity/contact and correct positional template values for both 
       const calls: unknown[][] = [];
       const deps = {
         findOwner: async () => ({ name: "مالك اختبار", phone: "٠٥١١١١١١١١" }),
+        getTemplates: async () => effectiveSubmissionTemplates({}),
         send: async (...args: [string, string, string[], string?]) => { calls.push(args); return { success: true }; },
       };
       const warn = () => assert.fail("No failure expected");
@@ -48,8 +50,37 @@ it("catches lookup errors and redacts private failure details", async () => {
   const warnings: unknown[] = [];
   const outcome = await notifySubmissionDecision(base, details => warnings.push(details), {
     findOwner: async () => { throw new Error("private-provider-contact-and-token"); },
+    getTemplates: async () => effectiveSubmissionTemplates({}),
     send: async () => assert.fail("Must not send after identity lookup fails"),
   });
   assert.equal(outcome, "failed");
   assert.equal(JSON.stringify(warnings).includes("private"), false);
+});
+
+it("stored template names override environment values, while an explicit blank disables the notice", () => {
+  const settings = effectiveSubmissionTemplates({
+    taqnyat_submission_approved_template: "new_approved",
+    taqnyat_submission_revision_template: "",
+  });
+  assert.equal(settings.taqnyat_submission_approved_template, "new_approved");
+  assert.equal(settings.taqnyat_submission_revision_template, "");
+  for (const value of ["listing_approved", "new_template_2", ""]) assert.equal(validSubmissionTemplateName(value), true);
+  for (const value of ["Uppercase", "has space", " اسم ", "<script>", "x".repeat(513)]) assert.equal(validSubmissionTemplateName(value), false);
+});
+
+it("reads saved names on every send without a restart, including disabling by blank name", async () => {
+  let current = "first_template";
+  const calls: string[] = [];
+  const deps = {
+    findOwner: async () => ({ name: "اختبار", phone: base.phone }),
+    getTemplates: async () => effectiveSubmissionTemplates({ taqnyat_submission_approved_template: current }),
+    send: async (_phone: string, template: string) => { calls.push(template); return {success: true}; },
+  };
+  const warn = () => {};
+  assert.equal(await notifySubmissionDecision(base, warn, deps), "accepted");
+  current = "second_template";
+  assert.equal(await notifySubmissionDecision(base, warn, deps), "accepted");
+  current = "";
+  assert.equal(await notifySubmissionDecision(base, warn, deps), "failed");
+  assert.deepEqual(calls, ["first_template", "second_template"]);
 });
