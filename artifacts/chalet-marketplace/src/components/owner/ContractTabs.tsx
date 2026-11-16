@@ -15,6 +15,7 @@ import { encodeWhatsAppText } from "@/components/owner/owner-message-templates";
 import { OwnerBooking } from "@/components/owner/owner-booking-types";
 import { GREGORIAN_MONTHS_AR, getBookingMonthKey, getCalCorrespondenceHint } from "@/components/owner/owner-calendar";
 import { SectionGuideButton } from "@/components/owner/SectionGuideButton";
+import { PropertyContractPreview } from "./PropertyContractPreview";
 
 
 /* ── Contract Settings Tab ────────────────────────────────── */
@@ -425,6 +426,7 @@ export function ContractsArchiveTab() {
   const [settSubId, setSettSubId] = useState<number | null>(null);
   const [logoUrl, setLogoUrl] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -685,7 +687,12 @@ export function ContractsArchiveTab() {
         </div>
 
         {/* Save */}
-        <div className="flex justify-end">
+        <div className="flex flex-wrap justify-end gap-3">
+          <button type="button" disabled={!selectedSub} onClick={() => setTemplatePreviewOpen(true)}
+            data-testid="button-preview-contract-template"
+            className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-5 py-2 text-sm font-semibold text-primary hover:bg-primary/10 disabled:opacity-50">
+            <Eye className="h-4 w-4" /> معاينة قالب العقد
+          </button>
           <button
             type="button"
             disabled={savingSettings || !settSubId}
@@ -696,6 +703,14 @@ export function ContractsArchiveTab() {
             {savingSettings ? "جارٍ الحفظ…" : "حفظ إعدادات العقد"}
           </button>
         </div>
+        <Dialog open={templatePreviewOpen} onOpenChange={setTemplatePreviewOpen}>
+          <DialogContent dir="rtl" className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto">
+            <DialogHeader className="text-right">
+              <DialogTitle>معاينة قالب العقد الرقمي</DialogTitle>
+            </DialogHeader>
+            {selectedSub && <PropertyContractPreview property={selectedSub} logoUrl={logoUrl} />}
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* ── Header ── */}

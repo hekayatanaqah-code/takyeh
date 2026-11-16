@@ -590,11 +590,9 @@ export function StaffTab() {
                   }}
                 />
               </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {addGrantAccess
-                  ? "بعد توفر خدمة واتساب، تُرسل دعوة تفعيل إلى الجوال المدخل ليعيّن الموظف كلمة مروره بنفسه ويستخدم الصلاحيات المحددة فقط."
-                  : "يُضاف كموظف تشغيلي لحساب الرواتب والمصروفات، دون بيانات دخول أو صلاحيات على المنصة."}
-              </p>
+              {!addGrantAccess && <p className="text-xs text-muted-foreground leading-relaxed">
+                يُضاف كموظف تشغيلي لحساب الرواتب والمصروفات، دون بيانات دخول أو صلاحيات على المنصة.
+              </p>}
               {addGrantAccess && (
                 <p role="status" className="text-xs text-amber-700 dark:text-amber-400">إرسال دعوات التفعيل يتطلب ربط خدمة واتساب. لن يُحفظ حساب دخول حتى تصبح الخدمة متاحة.</p>
               )}

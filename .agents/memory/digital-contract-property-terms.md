@@ -10,6 +10,12 @@ Property contract terms come from that property's saved settings. Do not insert 
 
 Service digital-contract management must match the approved property contract-management structure and styling: logo card, colored summary boxes, archive table and filtering. Keep a service-specific editable terms-and-conditions field.
 
+Property contract settings must offer a live, clearly marked sample of the final customer document, including the property's current logo, saved terms and Saudi-local current date. Reuse the real document renderer rather than another approximate template; previewing must never create a booking, signature or message.
+
+**Why:** The owner explicitly requested seeing the final contract before sending it, without changing real customer records.
+
+**How to apply:** Keep illustrative names and amounts labelled as samples, and show unsaved logo edits immediately without presenting the sample as a real signed contract.
+
 **Why:** The user explicitly requested full visual and structural parity with the property standard, while retaining each service's own terms.
 
 **How to apply:** Use the existing property interface as the visual reference rather than inventing a separate service design. Preserve service-scoped data, wording, signature options and links; visual parity must never query or change property contracts or terms.

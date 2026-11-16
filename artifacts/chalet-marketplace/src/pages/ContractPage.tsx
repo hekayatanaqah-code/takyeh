@@ -12,7 +12,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const toAr = (n: number | string) =>
   String(n).replace(/[0-9]/g, (d) => "٠١٢٣٤٥٦٧٨٩"[+d]);
 
-interface ContractBooking {
+export interface ContractBooking {
   id: number;
   clientName: string;
   clientPhone?: string | null;
@@ -88,7 +88,7 @@ async function printContract() {
   window.print();
 }
 
-function ContractLetterhead({
+export function ContractLetterhead({
   booking,
   signedData,
   signedAtFormatted,

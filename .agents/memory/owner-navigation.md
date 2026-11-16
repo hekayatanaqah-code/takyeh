@@ -63,6 +63,12 @@ The activity selector governs property/service calendars, seasons, financial vie
 
 **How to apply:** Retain activity selection across navigation/reload and reconcile removed activities without exposing a different activity under the old label. Preserve provider-linked service components when rendering grouped activity views.
 
+مركز الدعم والطلبات متاح لكل مالك من شريط لوحة التحكم العلوي، بغض النظر عن الباقة أو تفعيل النشاط أو الشؤون المالية.
+
+**Why:** المستخدم طلب صراحة ألا يبقى الوصول لدعم المنصة محصوراً بالشؤون الإدارية والمالية.
+
+**How to apply:** أبقِ مسار الدعم مستقلاً عن قيود ترقية الشؤون المالية؛ لا يفتح زر الدعم صلاحيات مالية أو يعرض بيانات مالك آخر.
+
 Property-management subscriptions retain property-management tabs. Financial/administrative management stays visible as a locked navigation item when the plan lacks it; clicking opens an upgrade card rather than hiding the section or silently granting access.
 
 **Why:** The user explicitly requested an understandable upgrade path without restricting the property tools included in the current plan.

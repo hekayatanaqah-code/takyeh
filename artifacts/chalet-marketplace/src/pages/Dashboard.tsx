@@ -90,6 +90,7 @@ export default function Dashboard() {
   const [selectedServiceTab, setSelectedServiceTab] = useState<string>("details");
   const [activeTab, setActiveTab] = useState<"chalets" | "reviews" | "services" | "calendar" | "deposits" | "seasons" | "offers" | "messageSettings" | "customers" | "digitalContracts" | "notifications">("chalets");
   const [accountSettingsOpen, setAccountSettingsOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [activityChoiceOpen, setActivityChoiceOpen] = useState(false);
   const [showHeaderAddon, setShowHeaderAddon] = useState<"chalet" | "service" | null>(null);
   const [serviceFinanceMode, setServiceFinanceMode] = useState<"separate" | "consolidated">(() => (localStorage.getItem("svc_finance_mode") as any) ?? "separate");
@@ -880,6 +881,8 @@ export default function Dashboard() {
             activityChoiceOpen={activityChoiceOpen}
             onActivityChoiceOpenChange={setActivityChoiceOpen}
             onAccountSettings={() => setAccountSettingsOpen(true)}
+            onSupport={() => setSupportOpen(true)}
+            supportUnreadCount={unreadSupportCount}
             onSubscription={() => navigate("/subscription")}
             onManageRequests={openRegistrationRequests}
             onOwnerServices={() => switchOwnerDashboard("owner-services")}
@@ -1087,6 +1090,15 @@ export default function Dashboard() {
           addonType={showHeaderAddon ?? "chalet"}
           selectableType
         />
+        <Dialog open={supportOpen} onOpenChange={setSupportOpen}>
+          <DialogContent dir="rtl" className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl overflow-y-auto">
+            <DialogHeader className="text-right">
+              <DialogTitle>مركز الدعم والطلبات</DialogTitle>
+              <DialogDescription>تواصل مع إدارة تكيّة وتابع طلباتك، مهما كانت باقتك أو حالة أنشطتك.</DialogDescription>
+            </DialogHeader>
+            {supportOpen && <OwnerSupportTab />}
+          </DialogContent>
+        </Dialog>
         <Dialog open={accountSettingsOpen} onOpenChange={open => {
           setAccountSettingsOpen(open);
           if (!open && ownerView === "account") {

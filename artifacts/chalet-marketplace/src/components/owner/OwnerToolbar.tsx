@@ -7,6 +7,7 @@ import {
   CreditCard,
   ClipboardList,
   LogOut,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,8 @@ export interface OwnerToolbarProps {
   canAddService: boolean;
   onAddActivity: (kind: "chalet" | "service") => void;
   onAccountSettings: () => void;
+  onSupport: () => void;
+  supportUnreadCount?: number;
   onSubscription: () => void;
   onManageRequests: () => void;
   onOwnerServices: () => void;
@@ -67,7 +70,7 @@ export default function OwnerToolbar(p: OwnerToolbarProps) {
           </Button>
         </div>
         <div
-          className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5"
+          className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
           data-testid="owner-toolbar-actions"
         >
           <Actions p={p} canAny={canAny} onAdd={() => setOpen(true)} />
@@ -139,6 +142,10 @@ function Actions({
       </Button>
       <Button variant="outline" className={actionClassName} onClick={p.onAccountSettings} data-testid="button-account-settings">
         <Settings /> الإعدادات الشخصية
+      </Button>
+      <Button variant="outline" className={`${actionClassName} border-primary/30 text-primary`} onClick={p.onSupport} data-testid="button-owner-support">
+        <MessageSquare /> مركز الدعم والطلبات
+        {!!p.supportUnreadCount && <span className="rounded-full bg-primary px-2 text-sm text-primary-foreground" aria-label="ردود غير مقروءة">{p.supportUnreadCount.toLocaleString("ar-SA")}</span>}
       </Button>
       <Button
         variant={p.requestsOpen ? "default" : "outline"}
