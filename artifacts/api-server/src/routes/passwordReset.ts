@@ -233,8 +233,9 @@ async function consumeAndResetPassword(
         `);
         break;
       case "admin_staff":
+      case "admin_staff_invite":
         lockedTarget = await tx.execute(sql`
-          SELECT id FROM admin_staff WHERE id = ${Number(identity.target_id)} FOR UPDATE
+          SELECT id, username, password_hash, is_active, is_super_admin FROM admin_staff WHERE id = ${Number(identity.target_id)} FOR UPDATE
         `);
         break;
       case "owner_staff":
@@ -247,9 +248,10 @@ async function consumeAndResetPassword(
         return "invalid";
     }
     if (readRows<{ id: number }>(lockedTarget).length !== 1) return "invalid";
-    const staffActivation = identity.target_type === "owner_staff_invite";
-    const invited = readRows<{ username: string; password_hash: string | null; is_active: boolean }>(lockedTarget)[0];
-    if (staffActivation && (!invited.is_active || invited.password_hash || !invited.username?.startsWith("staff_"))) return "invalid";
+    const staffActivation = ["owner_staff_invite", "admin_staff_invite"].includes(identity.target_type);
+    const invited = readRows<{ username: string; password_hash: string | null; is_active: boolean; is_super_admin?: boolean }>(lockedTarget)[0];
+    if (staffActivation && (!invited.is_active || invited.password_hash || !invited.username
+      || (identity.target_type === "admin_staff_invite" && invited.is_super_admin))) return "invalid";
 
     const tokenResult = await tx.execute(sql`
       SELECT id, target_type, target_id, expires_at, used
@@ -270,6 +272,7 @@ async function consumeAndResetPassword(
           eq(ownerApplicationsQueryTable.id, Number(row.target_id)), { id: ownerApplicationsQueryTable.id }) };
         break;
       case "admin_staff":
+      case "admin_staff_invite":
         updated = { rows: await updateRecords(tx, adminStaffTable, { passwordHash: newPasswordHash },
           eq(adminStaffTable.id, Number(row.target_id)), { id: adminStaffTable.id }) };
         break;
@@ -300,6 +303,10 @@ async function consumeAndResetPassword(
     if (row.target_type === "owner_staff" || row.target_type === "owner_staff_invite") {
       await tx.execute(sql`UPDATE password_reset_tokens SET used = true
         WHERE target_type IN ('owner_staff', 'owner_staff_invite') AND target_id = ${row.target_id} AND used = false`);
+    }
+    if (row.target_type === "admin_staff" || row.target_type === "admin_staff_invite") {
+      await tx.execute(sql`UPDATE password_reset_tokens SET used = true
+        WHERE target_type IN ('admin_staff', 'admin_staff_invite') AND target_id = ${row.target_id} AND used = false`);
     }
 
     switch (row.target_type) {
@@ -341,6 +348,7 @@ async function consumeAndResetPassword(
         break;
       }
       case "admin_staff":
+      case "admin_staff_invite":
         await tx.execute(sql`
           DELETE FROM admin_sessions
           WHERE admin_staff_id = ${Number(row.target_id)}

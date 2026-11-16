@@ -21,6 +21,32 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /admin/staff/{id}/invitation:
+    post:
+      operationId: resendAdminStaffInvitation
+      summary: Resend a one-use WhatsApp activation link for a pending administrative employee
+      tags: [admin]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Invitation accepted by the WhatsApp provider
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitation]
+                properties:
+                  invitation: { type: string, enum: [accepted] }
+        "400": { description: Invalid employee identifier }
+        "401": { description: Authentication required }
+        "403": { description: Superadmin only }
+        "409": { description: Employee is not awaiting activation }
+        "429": { description: Wait one minute before resending }
+        "503": { description: Delivery failed; the employee remains pending }
   /owner/staff/{id}/invitation:
     post:
       operationId: resendOwnerStaffInvitation

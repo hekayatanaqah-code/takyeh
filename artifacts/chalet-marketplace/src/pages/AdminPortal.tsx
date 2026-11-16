@@ -82,6 +82,7 @@ export default function AdminPortal() {
                 value={username}
                 onChange={(e) => { setUsername(e.target.value); setError(null); }}
                 autoComplete="username"
+                data-no-arabic="true"
                 dir="ltr"
                 className="h-10 text-left text-slate-100 placeholder:text-slate-600 bg-slate-800 border-slate-700 focus:border-amber-500 focus:ring-amber-500/20"
                 required

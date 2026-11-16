@@ -9,7 +9,7 @@ import quickSalesRouter from "./quick-sales";
 import { propertyOffersRouter } from "./property-offers";
 import { quotePropertyPrice } from "../lib/property-offer-pricing";
 import { staffMobileSchema, staffNationalIdSchema } from "../lib/staff-contact-validation";
-import { inviteOwnerStaff, staffInvitationsConfigured } from "../lib/staff-invitation";
+import { inviteOwnerStaff } from "../lib/staff-invitation";
 import { paySalaryWithExpense } from "../lib/salary-expenses";
 import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
 import { SaveOwnerWhatsAppSettingsBody, ResendOwnerStaffInvitationParams, ResendOwnerStaffInvitationResponse } from "@workspace/api-zod";
@@ -70,7 +70,7 @@ import { sendOtpEmail, sendReportEmail } from "../lib/email";
 import { customerPhoneSql, normalizeCustomerPhone } from "../lib/customerPhone";
 import { checkPropertyIdentity } from "../lib/property-identity";
 import { hasPropertySocialConflict, socialAccountIdentity } from "../lib/property-social-account";
-import { normalizeSaudiMobile } from "../lib/passwordRecovery";
+import { normalizeSaudiMobile, normalizeStaffUsername } from "../lib/passwordRecovery";
 import { ensureOwnerProfile } from "../lib/ownerProfile";
 import { ownerVerificationForIdentity, hasCompletedOwnerVerification } from "../lib/owner-verification";
 import { getOrStartOwnerSubscription, isSubscriptionActive, ownerPlanAccess, subscriptionOwnerKeys, getOwnerFreeAccess } from "../lib/subscription-access";
@@ -3593,7 +3593,7 @@ router.get("/staff", async (req, res) => {
     .where(inArray(ownerStaffTable.ownerId, allOwnerIds))
     .orderBy(ownerStaffTable.createdAt);
   return res.json(rows.map(({ passwordHash: _ph, ...r }) => ({
-    ...r, invitationPending: Boolean(r.username?.startsWith("staff_") && !_ph),
+    ...r, invitationPending: Boolean(r.username && !_ph),
   })));
 });
 
@@ -3620,13 +3620,6 @@ router.post("/staff", async (req, res) => {
     hireDate: z.string().optional(),
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
-
-  if (body.data.grantAccess && !staffInvitationsConfigured()) {
-    return res.status(503).json({
-      code: "staff_invitation_unavailable",
-      error: "إعدادات إرسال دعوات واتساب غير متاحة حالياً. لم تتم إضافة الموظف.",
-    });
-  }
 
   const values: Record<string, unknown> = {
     ownerId,
@@ -3669,7 +3662,6 @@ router.post("/staff/:id/invitation", async (req, res) => {
   const params = ResendOwnerStaffInvitationParams.safeParse(req.params);
   if (!params.success) return res.status(400).json({ error: "معرّف الموظف غير صالح" });
   const id = params.data.id;
-  if (!staffInvitationsConfigured()) return res.status(503).json({ error: "إرسال دعوات واتساب غير متاح حالياً" });
   const invitation = await inviteOwnerStaff(id, req.user!.id, await staffInvitingOwnerName(req));
   if (invitation === "not_pending") return res.status(409).json({ error: "الموظف غير موجود أو لا ينتظر التفعيل" });
   if (invitation === "cooldown") return res.status(429).json({ error: "انتظر دقيقة قبل إعادة إرسال الدعوة" });
@@ -3696,11 +3688,18 @@ router.patch("/staff/:id", async (req, res) => {
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
 
+  if (body.data.password) {
+    const [member] = await db.select({ username: ownerStaffTable.username, passwordHash: ownerStaffTable.passwordHash })
+      .from(ownerStaffTable).where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)));
+    if (member && !member.passwordHash) {
+      return res.status(409).json({ error: "الموظف بانتظار التفعيل؛ يعيّن كلمة مروره بنفسه عبر رابط دعوة واتساب" });
+    }
+  }
   const staffPatch: Record<string, unknown> = {};
   if (body.data.name !== undefined) staffPatch.name = body.data.name;
   if (body.data.isActive !== undefined) staffPatch.isActive = body.data.isActive;
   if (body.data.baseSalary !== undefined) staffPatch.baseSalary = String(body.data.baseSalary);
-  if (body.data.username !== undefined) staffPatch.username = body.data.username.trim() || null;
+  if (body.data.username !== undefined) staffPatch.username = normalizeStaffUsername(body.data.username) || null;
   if (body.data.password) staffPatch.passwordHash = await bcrypt.hash(body.data.password, 10);
   if (body.data.permissions !== undefined) staffPatch.permissions = body.data.permissions;
   if (body.data.assignedToType !== undefined) staffPatch.assignedToType = body.data.assignedToType;

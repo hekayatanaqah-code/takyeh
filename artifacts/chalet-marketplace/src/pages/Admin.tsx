@@ -9366,6 +9366,7 @@ interface AdminStaffRow {
   permissions: AdminStaffPermissions;
   isActive: boolean;
   createdAt: string;
+  invitationPending: boolean;
 }
 
 function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuperAdmin?: boolean; currentUserName?: string }) {
@@ -9378,7 +9379,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
   const [newUsername, setNewUsername] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newMobile, setNewMobile] = useState("");
-  const [newPassword, setNewPassword] = useState("");
+  const [invitationNotice, setInvitationNotice] = useState("");
   const [newIsActive, setNewIsActive] = useState(true);
   const [newPerms, setNewPerms] = useState<AdminStaffPermissions>(
     () => Object.fromEntries(ALL_ADMIN_PERM_KEYS.map((key) => [key, false])),
@@ -9419,11 +9420,14 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
 
   const { data: staffList = [], isLoading } = useQuery<AdminStaffRow[]>({
     queryKey: ["admin", "staff"],
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     queryFn: async () => {
       const r = await fetch(`${API}/admin/staff`, { credentials: "include" });
       if (!r.ok) throw new Error("failed");
       return r.json();
     },
+    refetchInterval: query => query.state.data?.some(member => member.invitationPending && member.isActive) ? 30_000 : false,
   });
 
   const addMutation = useMutation({
@@ -9435,19 +9439,33 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
         body: JSON.stringify({
           name: newName.trim(), username: newUsername.trim(),
           personalEmail: newEmail.trim(), mobile: newMobile.trim(),
-          password: newPassword, isActive: newIsActive, permissions: newPerms,
+          grantAccess: newIsActive, isActive: newIsActive, permissions: newPerms,
         }),
       });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "فشل الحفظ"); }
       return r.json();
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["admin", "staff"] });
       setShowAdd(false);
       setNewName(""); setNewUsername(""); setNewEmail(""); setNewMobile("");
-      setNewPassword(""); setNewIsActive(true);
+      setNewIsActive(true);
+      setInvitationNotice(result.invitation === "accepted"
+        ? "حُفظ الموظف بانتظار التفعيل، وقُبل إرسال دعوة واتساب."
+        : result.invitation === "not_requested" ? "حُفظ الموظف مع تعطيل الدخول دون إرسال دعوة."
+        : "حُفظ الموظف بانتظار التفعيل، لكن تعذّر إرسال الدعوة. يمكنك إعادة إرسالها من بطاقته.");
       setNewPerms(Object.fromEntries(ALL_ADMIN_PERM_KEYS.map((key) => [key, false])));
     },
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(`${API}/admin/staff/${id}/invitation`, { method: "POST", credentials: "include" });
+      const result = await r.json();
+      if (!r.ok) throw new Error(result.error || "تعذّر إرسال الدعوة");
+    },
+    onSuccess: () => setInvitationNotice("قُبل إرسال دعوة التفعيل عبر واتساب. الرابط الجديد صالح ليوم واحد."),
+    onError: (error: Error) => setInvitationNotice(error.message),
   });
 
   const permMutation = useMutation({
@@ -9472,7 +9490,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
         body: JSON.stringify({
           name: editCredName.trim(), username: editCredUsername.trim(),
           personalEmail: editCredEmail.trim(), mobile: editCredMobile.trim(),
-          password: editCredPassword || undefined,
+          password: staffList.find(member => member.id === id)?.invitationPending ? undefined : editCredPassword || undefined,
         }),
       });
       if (!r.ok) { const d = await r.json(); throw new Error(d.error ?? "فشل تحديث بيانات الموظف"); }
@@ -9507,6 +9525,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
 
   return (
     <div dir="rtl">
+      {invitationNotice && <p role="status" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-950/30 p-4 text-sm text-amber-200">{invitationNotice}</p>}
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -9611,22 +9630,14 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
               <label className="block text-sm text-slate-400 mb-1">اسم المستخدم</label>
               <Input
                 value={newUsername}
+                data-no-arabic="true"
                 onChange={(e) => setNewUsername(e.target.value)}
                 placeholder="اسم_المستخدم"
                 dir="auto"
                 className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
               />
             </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">كلمة المرور</label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="••••••••"
-                className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500"
-              />
-            </div>
+            <p className="text-sm leading-relaxed text-slate-200">يعيّن الموظف كلمة مروره بنفسه عبر رابط دعوة واتساب. الرابط صالح لمدة ٢٤ ساعة ولمرة واحدة، ولا يمكنه الدخول قبل التفعيل.</p>
             <div>
               <label className="block text-sm text-slate-400 mb-1">البريد الإلكتروني الشخصي</label>
               <Input type="email" dir="auto" value={newEmail} onChange={(e) => setNewEmail(e.target.value)}
@@ -9634,16 +9645,15 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">رقم الجوال</label>
-              <Input type="tel" dir="ltr" value={newMobile} onChange={(e) => setNewMobile(e.target.value)}
+              <Input type="tel" inputMode="numeric" maxLength={10} dir="rtl" value={toAr(newMobile)} onChange={(e) => setNewMobile(e.target.value.replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660)).replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06f0)).replace(/\D/g, "").slice(0, 10))}
                 placeholder="٠٥١٢٣٤٥٦٧٨" className="bg-slate-700 border-slate-600 text-white placeholder:text-slate-500" />
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-2">حالة الحساب</label>
+              <label className="block text-sm text-slate-400 mb-2">منح الموظف صلاحية دخول</label>
               <div className="flex items-center gap-3 min-h-10">
                 <Switch checked={newIsActive} onCheckedChange={setNewIsActive} aria-label="تفعيل حساب الموظف" />
-                <span className="text-sm text-slate-200">{newIsActive ? "مفعّل — يمكنه الدخول فوراً" : "معطّل — لا يمكنه الدخول"}</span>
+                <span className="text-sm text-slate-200">{newIsActive ? "إرسال دعوة — الدخول بعد التفعيل فقط" : "معطّل — لا تُرسل دعوة"}</span>
               </div>
-              <p className="text-xs text-slate-400">لا يتطلب تفعيل الحساب رمز تحقق خارجي.</p>
             </div>
           </div>
 
@@ -9688,7 +9698,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
             </Button>
             <Button
               onClick={() => addMutation.mutate()}
-              disabled={!newName.trim() || !newUsername.trim() || !newEmail.trim() || !newMobile.trim() || newPassword.length < 8 || addMutation.isPending}
+              disabled={!newName.trim() || !newUsername.trim() || !newEmail.trim() || (newIsActive && !newMobile.trim()) || addMutation.isPending}
               className="bg-amber-600 hover:bg-amber-700 text-white"
             >
               {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "حفظ الموظف"}
@@ -9726,14 +9736,17 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-white font-semibold">{member.name}</span>
-                      <span className="text-slate-500 text-xs font-mono">@{member.username}</span>
+                      <span data-no-arabic="true" className="text-slate-400 text-xs font-mono">@{member.username}</span>
+                      {member.invitationPending && <span className="rounded-full border border-amber-700 bg-amber-900/40 px-2 py-0.5 text-xs text-amber-300">بانتظار التفعيل</span>}
                       {!member.isActive && (
                         <span className="bg-red-900/40 text-red-400 text-xs px-2 py-0.5 rounded-full border border-red-800">موقوف</span>
                       )}
                     </div>
                     {(member.personalEmail || member.mobile) && (
                       <p className="text-slate-400 text-xs mt-1" dir="auto">
-                        {[member.personalEmail, member.mobile].filter(Boolean).join(" · ")}
+                        {member.personalEmail && <span data-no-arabic="true">{member.personalEmail}</span>}
+                        {member.personalEmail && member.mobile && " · "}
+                        {member.mobile && <span>{member.mobile}</span>}
                       </p>
                     )}
                     {activePerms.length === 0 ? (
@@ -9749,6 +9762,12 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {member.invitationPending && <button
+                      disabled={!member.isActive || inviteMutation.isPending}
+                      onClick={() => inviteMutation.mutate(member.id)}
+                      className="rounded border border-amber-600 px-2 py-1 text-xs text-amber-300 disabled:opacity-50">
+                      إعادة إرسال دعوة واتساب
+                    </button>}
                     <button
                       onClick={() => {
                         setCredEditId(isCredOpen ? null : member.id); setPermEditId(null);
@@ -9804,6 +9823,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                         <label className="block text-xs text-slate-400 mb-1">اسم المستخدم الجديد</label>
                         <Input
                           value={editCredUsername}
+                          data-no-arabic="true"
                           onChange={(e) => setEditCredUsername(e.target.value)}
                           placeholder={member.username}
                           dir="ltr"
@@ -9823,6 +9843,7 @@ function AdminStaffTab({ isSuperAdmin = false, currentUserName = "" }: { isSuper
                         <Input
                           type="password"
                           value={editCredPassword}
+                          disabled={member.invitationPending}
                           onChange={(e) => setEditCredPassword(e.target.value)}
                           placeholder="••••••••"
                           className="bg-slate-700 border-slate-600 text-white text-sm h-8"

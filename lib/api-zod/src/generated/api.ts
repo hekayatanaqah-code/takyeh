@@ -9,6 +9,21 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Resend a one-use WhatsApp activation link for a pending administrative employee
+ */
+
+
+
+export const ResendAdminStaffInvitationParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const ResendAdminStaffInvitationResponse = zod.object({
+  "invitation": zod.enum(['accepted'])
+})
+
+
+/**
  * @summary Resend an expiring WhatsApp activation link for a pending employee
  */
 

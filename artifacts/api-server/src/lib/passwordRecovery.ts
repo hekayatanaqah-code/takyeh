@@ -21,6 +21,10 @@ function westernizeDigits(value: string): string {
     .replace(/[۰-۹]/g, digit => String(PERSIAN_DIGITS.indexOf(digit)));
 }
 
+export function normalizeStaffUsername(value: string): string {
+  return westernizeDigits(value).trim();
+}
+
 export function normalizeSaudiMobile(value: string): string | null {
   const western = westernizeDigits(value).trim();
   if (!western || !/^\+?[\d\s().-]+$/.test(western) || (western.match(/\+/g) ?? []).length > 1) return null;

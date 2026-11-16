@@ -44,6 +44,8 @@ export function normalizeRolePhone(value: string) {
 }
 /** Separate role records remain separate; contacts discover roles, never authorize them. */
 async function candidates(identifier: string): Promise<Candidate[]> {
+  identifier = identifier.replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, d => String(d.charCodeAt(0) - 0x06f0));
   const phone = normalizeRolePhone(identifier);
   const email = identifier.toLowerCase();
   const result = await db.execute(sql`

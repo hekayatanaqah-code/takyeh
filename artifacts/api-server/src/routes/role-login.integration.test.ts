@@ -37,8 +37,8 @@ before(async () => {
   const ownerHash = await bcrypt.hash(ownerPassword, 4);
   const photoHash = await bcrypt.hash(photoPassword, 4);
   const adminHash = await bcrypt.hash(adminPassword, 4);
-  const owner = await db.execute(sql`INSERT INTO owner_applications(full_name,business_name,business_type,phone,email,password_hash,status,email_verified)
-    VALUES(${prefix},${prefix},'chalet',${phone},${email},${ownerHash},'approved',true) RETURNING id`);
+  const owner = await db.execute(sql`INSERT INTO owner_applications(full_name,business_name,business_type,phone,email,password_hash,status,email_verified,phone_verified,phone_verified_at)
+    VALUES(${prefix},${prefix},'chalet',${phone},${email},${ownerHash},'approved',true,true,now()) RETURNING id`);
   ownerId = (owner as any).rows[0].id;
   const [photo] = await db.insert(photographersTable).values({ name: prefix, whatsapp: `966${phone.slice(1)}`, email, passwordHash: photoHash, status: "approved" }).returning();
   photoId = photo.id;
@@ -84,8 +84,8 @@ test("numeric owner credentials accept English, Eastern and mixed digits but rej
   const numericPhone = `058${randomInt(1000000, 9999999)}`;
   const eastern = (value: string) => value.replace(/[0-9]/g, d => "٠١٢٣٤٥٦٧٨٩"[Number(d)]);
   const hash = await bcrypt.hash(numericPassword, 4);
-  const inserted = await db.execute(sql`INSERT INTO owner_applications(full_name,business_name,business_type,phone,email,password_hash,status,email_verified)
-    VALUES(${prefix},${prefix},'chalet',${numericPhone},${`${prefix}-numeric@example.invalid`},${hash},'approved',true) RETURNING id`);
+  const inserted = await db.execute(sql`INSERT INTO owner_applications(full_name,business_name,business_type,phone,email,password_hash,status,email_verified,phone_verified,phone_verified_at)
+    VALUES(${prefix},${prefix},'chalet',${numericPhone},${`${prefix}-numeric@example.invalid`},${hash},'approved',true,true,now()) RETURNING id`);
   const id = Number(inserted.rows[0].id);
   try {
     for (const identifier of [numericPhone, eastern(numericPhone)]) {

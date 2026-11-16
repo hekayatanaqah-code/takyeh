@@ -169,6 +169,7 @@ import type {
   RequestPhotographySessionUploadBody,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
+  ResendAdminStaffInvitation200,
   ResendOwnerStaffInvitation200,
   RetryPhotographyAssignment200,
   ReviewPhotographer200,
@@ -235,6 +236,80 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getResendAdminStaffInvitationUrl = (id: number,) => {
+
+
+
+
+  return `/api/admin/staff/${id}/invitation`
+}
+
+/**
+ * @summary Resend a one-use WhatsApp activation link for a pending administrative employee
+ */
+export const resendAdminStaffInvitation = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<ResendAdminStaffInvitation200> => {
+
+  return customFetch<ResendAdminStaffInvitation200>(getResendAdminStaffInvitationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResendAdminStaffInvitationMutationKey = () => ['resendAdminStaffInvitation'] as const;
+
+export const getResendAdminStaffInvitationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendAdminStaffInvitation>>, TError,ResendAdminStaffInvitationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resendAdminStaffInvitation>>, TError,ResendAdminStaffInvitationMutationVariables, TContext> => {
+
+const mutationKey = getResendAdminStaffInvitationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resendAdminStaffInvitation>>, ResendAdminStaffInvitationMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  resendAdminStaffInvitation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResendAdminStaffInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof resendAdminStaffInvitation>>>
+
+    export type ResendAdminStaffInvitationMutationError = ErrorType<void>
+    export type ResendAdminStaffInvitationMutationVariables = {id: number}
+
+    /**
+ * @summary Resend a one-use WhatsApp activation link for a pending administrative employee
+ */
+export const useResendAdminStaffInvitation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendAdminStaffInvitation>>, TError,ResendAdminStaffInvitationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof resendAdminStaffInvitation>>,
+        TError,
+        ResendAdminStaffInvitationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getResendAdminStaffInvitationMutationOptions(options), queryClient);
+    }
 
 export const getResendOwnerStaffInvitationUrl = (id: number,) => {
 

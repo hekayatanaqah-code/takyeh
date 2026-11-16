@@ -194,6 +194,8 @@ export function StaffTab() {
   /* ── queries ── */
   const { data: staff = [], isLoading } = useQuery<StaffMember[]>({
     queryKey: ["owner", "staff"],
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
     queryFn: async () => { const r = await apiFetch("/owner/staff"); if (!r.ok) return []; return r.json(); },
     refetchInterval: query => query.state.data?.some(member => (member as any).invitationPending) ? 30_000 : false,
   });
@@ -609,9 +611,6 @@ export function StaffTab() {
               {!addGrantAccess && <p className="text-xs text-muted-foreground leading-relaxed">
                 يُضاف كموظف تشغيلي لحساب الرواتب والمصروفات، دون بيانات دخول أو صلاحيات على المنصة.
               </p>}
-              {addGrantAccess && (
-                <p role="status" className="text-xs text-amber-700 dark:text-amber-400">إرسال دعوات التفعيل يتطلب ربط خدمة واتساب. لن يُحفظ حساب دخول حتى تصبح الخدمة متاحة.</p>
-              )}
             </div>
 
             {/* Permissions */}

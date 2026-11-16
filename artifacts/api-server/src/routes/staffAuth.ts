@@ -9,6 +9,7 @@ import {
 import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import { normalizeStaffUsername } from "../lib/passwordRecovery";
 
 const router = Router();
 
@@ -35,7 +36,7 @@ router.post("/unified-login", async (req, res) => {
   if (!username || !password) {
     return res.status(400).json({ error: "يرجى إدخال اسم المستخدم وكلمة المرور" });
   }
-  const user   = String(username).trim();
+  const user   = normalizeStaffUsername(String(username));
   const cookieTtl = rememberMe ? REMEMBER_TTL_MS : undefined; // undefined = session cookie
   const dbTtl     = rememberMe ? REMEMBER_TTL_MS : SHORT_TTL_MS;
 
@@ -46,10 +47,10 @@ router.post("/unified-login", async (req, res) => {
     .where(eq(ownerStaffTable.username, user));
 
   if (ownerStaff) {
-    /* Account found but no password set → tell the user exactly what's wrong */
+    /* Pending invitations never authenticate or disclose their activation state. */
     if (!ownerStaff.passwordHash) {
       return res.status(401).json({
-        error: "هذا الحساب لا يملك كلمة مرور — تواصل مع مديرك لإضافة بيانات الدخول من لوحة التحكم",
+        error: "بيانات الدخول غير صحيحة",
       });
     }
     if (!ownerStaff.isActive) {
@@ -93,7 +94,7 @@ router.post("/admin-portal-login", async (req, res) => {
   if (!username || !password) {
     return res.status(400).json({ error: "يرجى إدخال اسم المستخدم وكلمة المرور" });
   }
-  const user      = String(username).trim();
+  const user      = normalizeStaffUsername(String(username));
   const cookieTtl = rememberMe ? REMEMBER_TTL_MS : undefined;
   const dbTtl     = rememberMe ? REMEMBER_TTL_MS : SHORT_TTL_MS;
 
@@ -106,7 +107,7 @@ router.post("/admin-portal-login", async (req, res) => {
     return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
   }
   if (!adminStaff.passwordHash) {
-    return res.status(401).json({ error: "هذا الحساب لا يملك كلمة مرور — تواصل مع المشرف العام" });
+    return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });
   }
   if (!adminStaff.isActive) {
     return res.status(403).json({ error: "هذا الحساب موقوف" });
@@ -134,7 +135,7 @@ router.post("/staff/login", async (req, res) => {
     return res.status(400).json({ error: "يرجى إدخال اسم المستخدم وكلمة المرور" });
   }
 
-  const user = String(username).trim();
+  const user = normalizeStaffUsername(String(username));
 
   /* Try owner_staff first */
   const [member] = await db

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, createHash } from "node:crypto";
 import { after, before, describe, it } from "node:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import app from "../app";
 import { createSession } from "../lib/auth";
 import { db, pool, sessionsTable, ownerSupportRequestsTable, adminAuditLogsTable, siteSettingsTable } from "@workspace/db";
@@ -129,10 +129,10 @@ describe("admin staff account and permissions", () => {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
-    assert.equal(disabledLogin.status, 403);
+    assert.equal(disabledLogin.status, 401);
   });
 
-  it("activates without OTP, updates profile fields and enforces individual permissions", async () => {
+  it("requires invitation activation before login, updates profile fields and enforces individual permissions", async () => {
     assert(staffId);
     const status = await fetch(`${baseUrl}/api/admin/staff/${staffId}/status`, {
       method: "PUT", headers: adminHeaders(), body: JSON.stringify({ isActive: true }),
@@ -143,6 +143,16 @@ describe("admin staff account and permissions", () => {
       .orderBy(adminAuditLogsTable.id);
     assert.equal((activationAudit?.metadata.before as Record<string, unknown>)?.isActive, false);
     assert.equal((activationAudit?.metadata.after as Record<string, unknown>)?.isActive, true);
+
+    const token = randomBytes(32).toString("base64url");
+    await db.execute(sql`INSERT INTO password_reset_tokens (target_type, target_id, token, expires_at)
+      VALUES ('admin_staff_invite', ${String(staffId)}, ${createHash("sha256").update(token).digest("hex")},
+        ${new Date(Date.now() + 86400000)})`);
+    const activation = await fetch(`${baseUrl}/api/reset-password`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, newPassword: password }),
+    });
+    assert.equal(activation.status, 200);
 
     const login = await fetch(`${baseUrl}/api/admin-staff/login`, {
       method: "POST", headers: { "content-type": "application/json" },

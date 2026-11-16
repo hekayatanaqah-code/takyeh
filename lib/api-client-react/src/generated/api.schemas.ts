@@ -1963,6 +1963,17 @@ export interface AdminPhotographerProfileInput {
  */
 export type AuthorizationSessionHeaderParameter = string;
 
+export type ResendAdminStaffInvitation200Invitation = typeof ResendAdminStaffInvitation200Invitation[keyof typeof ResendAdminStaffInvitation200Invitation];
+
+
+export const ResendAdminStaffInvitation200Invitation = {
+  accepted: 'accepted',
+} as const;
+
+export type ResendAdminStaffInvitation200 = {
+  invitation: ResendAdminStaffInvitation200Invitation;
+};
+
 export type ResendOwnerStaffInvitation200Invitation = typeof ResendOwnerStaffInvitation200Invitation[keyof typeof ResendOwnerStaffInvitation200Invitation];
 
 

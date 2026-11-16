@@ -16,6 +16,9 @@ import broadcastRouter from "./broadcast";
 import { db } from "@workspace/db";
 import { deleteOwnerPermanently, OwnerDeletionError } from "../lib/delete-owner";
 import { notifySubmissionDecision, type SubmissionNotice } from "../lib/submission-whatsapp";
+import { inviteAdminStaff } from "../lib/staff-invitation";
+import { normalizeStaffUsername, normalizeSaudiMobile } from "../lib/passwordRecovery";
+import { ResendAdminStaffInvitationParams, ResendAdminStaffInvitationResponse } from "@workspace/api-zod";
 import { effectiveSubmissionTemplates, submissionTemplateKeys, validSubmissionTemplateName } from "../lib/submission-template-settings";
 import {
   chaletSubmissionsTable,
@@ -759,10 +762,11 @@ const adminPermissionKeys = [
 const adminPermissionsSchema = z.record(z.enum(adminPermissionKeys), z.boolean());
 const staffCreateSchema = z.object({
   name: z.string().trim().min(1, "الاسم الكامل مطلوب"),
-  username: z.string().trim().min(3, "اسم المستخدم يجب أن يكون ٣ أحرف على الأقل"),
+  username: z.string().trim().min(3, "اسم المستخدم يجب أن يكون ٣ أحرف على الأقل").transform(normalizeStaffUsername),
   personalEmail: z.string().trim().email("البريد الإلكتروني غير صحيح").optional(),
   mobile: z.string().trim().regex(/^\+?[0-9٠-٩۰-۹\s-]{8,20}$/, "رقم الجوال غير صحيح").optional(),
-  password: z.string().min(8, "كلمة المرور يجب أن تكون ٨ أحرف على الأقل"),
+  password: z.string().min(8, "كلمة المرور يجب أن تكون ٨ أحرف على الأقل").optional(),
+  grantAccess: z.boolean().default(true),
   isActive: z.boolean().default(true),
   permissions: adminPermissionsSchema.default({}),
 });
@@ -834,6 +838,7 @@ router.get("/staff", requireSuperAdmin, async (_req, res) => {
     isActive: adminStaffTable.isActive,
     isSuperAdmin: adminStaffTable.isSuperAdmin,
     createdAt: adminStaffTable.createdAt,
+    invitationPending: sql<boolean>`${adminStaffTable.passwordHash} = ''`,
   }).from(adminStaffTable)
     .where(eq(adminStaffTable.isSuperAdmin, false))
     .orderBy(adminStaffTable.createdAt);
@@ -843,17 +848,31 @@ router.get("/staff", requireSuperAdmin, async (_req, res) => {
 router.post("/staff", requireSuperAdmin, async (req, res) => {
   const parsed = staffCreateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" });
-  const { password, ...fields } = parsed.data;
+  const { password: _ignoredPassword, grantAccess, ...fields } = parsed.data;
+  const access = grantAccess && fields.isActive;
+  const mobile = fields.mobile ? normalizeSaudiMobile(fields.mobile) : null;
+  if (access && !mobile) return res.status(400).json({ error: "رقم جوال سعودي صحيح مطلوب لإرسال دعوة التفعيل" });
   const [existing] = await db.select({ id: adminStaffTable.id }).from(adminStaffTable).where(eq(adminStaffTable.username, fields.username));
   if (existing) return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
-  const passwordHash = await bcrypt.hash(password, 10);
   try {
-    const [staff] = await insertRecords(db, adminStaffTable, { ...fields, passwordHash }, { returning: { id: adminStaffTable.id, name: adminStaffTable.name, username: adminStaffTable.username, personalEmail: adminStaffTable.personalEmail, mobile: adminStaffTable.mobile, permissions: adminStaffTable.permissions, isActive: adminStaffTable.isActive, createdAt: adminStaffTable.createdAt } });
-    return res.status(201).json(staff);
+    const [staff] = await insertRecords(db, adminStaffTable, { ...fields, mobile,
+      isActive: access, passwordHash: "" }, { returning: { id: adminStaffTable.id, name: adminStaffTable.name, username: adminStaffTable.username, personalEmail: adminStaffTable.personalEmail, mobile: adminStaffTable.mobile, permissions: adminStaffTable.permissions, isActive: adminStaffTable.isActive, createdAt: adminStaffTable.createdAt } });
+    const invitation = access ? await inviteAdminStaff(staff.id).catch(() => "failed" as const) : "not_requested";
+    return res.status(201).json({ ...staff, invitationPending: true, invitation });
   } catch (error) {
     if (isUniqueViolation(error)) return res.status(409).json({ error: "اسم المستخدم مستخدم بالفعل" });
     throw error;
   }
+});
+
+router.post("/staff/:id/invitation", requireSuperAdmin, async (req, res) => {
+  const params = ResendAdminStaffInvitationParams.safeParse(req.params);
+  if (!params.success) return res.status(400).json({ error: "معرّف الموظف غير صحيح" });
+  const invitation = await inviteAdminStaff(params.data.id);
+  if (invitation === "not_pending") return res.status(409).json({ error: "الموظف غير موجود أو معطّل أو لا ينتظر التفعيل" });
+  if (invitation === "cooldown") return res.status(429).json({ error: "انتظر دقيقة قبل إعادة إرسال الدعوة" });
+  if (invitation !== "accepted") return res.status(503).json({ error: "حُفظ الموظف بانتظار التفعيل، لكن تعذّر إرسال دعوة واتساب" });
+  return res.json(ResendAdminStaffInvitationResponse.parse({ invitation }));
 });
 
 router.put("/staff/:id/permissions", requireSuperAdmin, async (req, res) => {
@@ -872,6 +891,16 @@ router.put("/staff/:id/credentials", requireSuperAdmin, async (req, res) => {
   const parsed = staffCredentialsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "بيانات غير صحيحة" });
   const { password, ...fields } = parsed.data;
+  const [existingStaff] = await db.select({ passwordHash: adminStaffTable.passwordHash }).from(adminStaffTable)
+    .where(and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)));
+  if (password && existingStaff && !existingStaff.passwordHash) {
+    return res.status(409).json({ error: "الموظف بانتظار التفعيل؛ يعيّن كلمة مروره بنفسه عبر رابط الدعوة" });
+  }
+  if (fields.mobile) {
+    const mobile = normalizeSaudiMobile(fields.mobile);
+    if (!mobile) return res.status(400).json({ error: "رقم الجوال السعودي غير صحيح" });
+    fields.mobile = mobile;
+  }
   const updates: Partial<typeof adminStaffTable.$inferInsert> = {
     ...fields,
     ...(fields.personalEmail !== undefined ? { personalEmail: fields.personalEmail || null } : {}),
@@ -896,7 +925,8 @@ router.put("/staff/:id/status", requireSuperAdmin, async (req, res) => {
   const [updated] = await updateRecords(db, adminStaffTable, { isActive }, and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)), { id: adminStaffTable.id });
   if (!updated) return res.status(404).json({ error: "الموظف غير موجود" });
   if (!isActive) await db.delete(adminSessionsTable).where(eq(adminSessionsTable.adminStaffId, id));
-  return res.json({ ok: true });
+  const invitation = isActive ? await inviteAdminStaff(id).catch(() => "failed" as const) : undefined;
+  return res.json({ ok: true, invitation });
 });
 
 router.delete("/staff/:id", requireSuperAdmin, async (req, res) => {
@@ -904,6 +934,8 @@ router.delete("/staff/:id", requireSuperAdmin, async (req, res) => {
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "معرّف الموظف غير صحيح" });
   const [deleted] = await deleteRecords(db, adminStaffTable, and(eq(adminStaffTable.id, id), eq(adminStaffTable.isSuperAdmin, false)), { id: adminStaffTable.id });
   if (!deleted) return res.status(404).json({ error: "الموظف غير موجود" });
+  await db.execute(sql`DELETE FROM password_reset_tokens
+    WHERE target_type IN ('admin_staff', 'admin_staff_invite') AND target_id = ${String(id)}`);
   return res.json({ ok: true });
 });
 

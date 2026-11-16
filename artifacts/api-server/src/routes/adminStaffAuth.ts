@@ -5,6 +5,7 @@ import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { clearSession, getSession, getSessionId } from "../lib/auth";
+import { normalizeStaffUsername } from "../lib/passwordRecovery";
 
 const router = Router();
 
@@ -21,7 +22,7 @@ router.post("/admin-staff/login", async (req, res) => {
   const [member] = await db
     .select()
     .from(adminStaffTable)
-    .where(eq(adminStaffTable.username, String(username).trim()));
+    .where(eq(adminStaffTable.username, normalizeStaffUsername(String(username))));
 
   if (!member || !member.passwordHash) {
     return res.status(401).json({ error: "بيانات الدخول غير صحيحة" });

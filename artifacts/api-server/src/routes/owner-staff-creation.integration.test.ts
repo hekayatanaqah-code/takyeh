@@ -168,16 +168,19 @@ it("persists optional job title and email with normalized identity and retains t
   assert.equal(reloaded?.email, row.email);
 });
 
-it("never creates a partial login account or claims WhatsApp delivery while the provider is unavailable", async () => {
+it("saves a pending employee without requiring WhatsApp setup and never claims delivery on failure", async () => {
   const original = process.env.TAQNYAT_API_KEY;
   delete process.env.TAQNYAT_API_KEY;
   try {
   const beforeRows = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
   const response = await createStaff({ ...valid, grantAccess: true, permissions: { dashboardAccess: true } });
-  assert.equal(response.status, 503);
-  assert.equal((await response.json() as { code: string }).code, "staff_invitation_unavailable");
+  assert.equal(response.status, 201);
+  const pending = await response.json() as SafeStaff & { invitation: string; invitationPending: boolean };
+  assert.equal(pending.invitation, "failed");
+  assert.equal(pending.invitationPending, true);
   const afterRows = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
-  assert.equal(afterRows.length, beforeRows.length);
+  assert.equal(afterRows.length, beforeRows.length + 1);
+  assert.equal(afterRows.find(row => row.id === pending.id)?.passwordHash, null);
   } finally {
     if (original === undefined) delete process.env.TAQNYAT_API_KEY;
     else process.env.TAQNYAT_API_KEY = original;
@@ -218,6 +221,11 @@ it("creates one pending employee and calls the real provider adapter with the ap
     assert.equal(stored.permissions.dashboardAccess, true);
     assert.equal(stored.permissions.financialAccess, false);
     assert(!("unknownPermission" in stored.permissions));
+    const bypass = await fetch(`${baseUrl}/api/owner/staff/${employee.id}`, {
+      method: "PATCH", headers: { authorization: `Bearer ${sessionId}`, "content-type": "application/json" },
+      body: JSON.stringify({ password: "MustNotBypassActivation123!" }),
+    });
+    assert.equal(bypass.status, 409);
     const resend = await fetch(`${baseUrl}/api/owner/staff/${employee.id}/invitation`, {
       method: "POST", headers: { authorization: `Bearer ${sessionId}` },
     });
