@@ -9,9 +9,10 @@ import quickSalesRouter from "./quick-sales";
 import { propertyOffersRouter } from "./property-offers";
 import { quotePropertyPrice } from "../lib/property-offer-pricing";
 import { staffMobileSchema, staffNationalIdSchema } from "../lib/staff-contact-validation";
+import { inviteOwnerStaff, staffInvitationsConfigured } from "../lib/staff-invitation";
 import { paySalaryWithExpense } from "../lib/salary-expenses";
 import { readOwnerMessageTemplates } from "../lib/owner-message-templates";
-import { SaveOwnerWhatsAppSettingsBody } from "@workspace/api-zod";
+import { SaveOwnerWhatsAppSettingsBody, ResendOwnerStaffInvitationParams, ResendOwnerStaffInvitationResponse } from "@workspace/api-zod";
 import { capturePropertyCheckout, propertyStayComplete } from "../lib/booking-completion";
 import { sendCrmHistory, sendCrmProfile } from "#crm-history";
 import { sendCrmCustomers } from "#crm-directory";
@@ -3591,7 +3592,9 @@ router.get("/staff", async (req, res) => {
     .from(ownerStaffTable)
     .where(inArray(ownerStaffTable.ownerId, allOwnerIds))
     .orderBy(ownerStaffTable.createdAt);
-  return res.json(rows.map(({ passwordHash: _ph, ...r }) => r));
+  return res.json(rows.map(({ passwordHash: _ph, ...r }) => ({
+    ...r, invitationPending: Boolean(r.username?.startsWith("staff_") && !_ph),
+  })));
 });
 
 const PERM_KEYS = [
@@ -3618,12 +3621,10 @@ router.post("/staff", async (req, res) => {
   }).safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: body.error.errors[0].message });
 
-  if (body.data.grantAccess) {
-    // Do not create credentials or claim an invitation until a functioning
-    // WhatsApp activation provider has been connected.
+  if (body.data.grantAccess && !staffInvitationsConfigured()) {
     return res.status(503).json({
       code: "staff_invitation_unavailable",
-      error: "دعوات تفعيل الموظفين عبر واتساب غير متاحة حالياً. لم تتم إضافة الموظف؛ يلزم ربط خدمة واتساب أولاً لمنحه صلاحية دخول.",
+      error: "إعدادات إرسال دعوات واتساب غير متاحة حالياً. لم تتم إضافة الموظف.",
     });
   }
 
@@ -3631,8 +3632,9 @@ router.post("/staff", async (req, res) => {
     ownerId,
     name: body.data.name,
     baseSalary: String(body.data.baseSalary),
-    permissions: {},
-    username: null,
+    permissions: body.data.grantAccess
+      ? Object.fromEntries(PERM_KEYS.map(key => [key, Boolean(body.data.permissions?.[key])])) : {},
+    username: body.data.grantAccess ? `staff_${randomBytes(10).toString("hex")}` : null,
     passwordHash: null,
     assignedToType: body.data.assignedToType ?? "all",
     assignedToId: body.data.assignedToId ?? null,
@@ -3644,9 +3646,35 @@ router.post("/staff", async (req, res) => {
     hireDate: body.data.hireDate || null,
   };
 
+  const invitingName = body.data.grantAccess ? await staffInvitingOwnerName(req) : "";
   const [row] = await insertRecords(db, ownerStaffTable, values as any);
+  const invitation = body.data.grantAccess
+    ? await inviteOwnerStaff(row.id, ownerId, invitingName).catch(() => "failed" as const)
+    : undefined;
   const { passwordHash: _ph, ...safe } = row;
-  return res.status(201).json(safe);
+  return res.status(201).json({ ...safe, invitation, invitationPending: Boolean(body.data.grantAccess) });
+});
+
+async function staffInvitingOwnerName(req: Request): Promise<string> {
+  const account = await resolveOwnerApplication(req);
+  if (account) {
+    const result = await db.execute<{ full_name: string }>(sql`
+      SELECT full_name FROM owner_applications WHERE id = ${account.id}`);
+    if (result.rows[0]?.full_name?.trim()) return result.rows[0].full_name.trim();
+  }
+  return req.user?.firstName?.trim() || "إدارة النشاط";
+}
+
+router.post("/staff/:id/invitation", async (req, res) => {
+  const params = ResendOwnerStaffInvitationParams.safeParse(req.params);
+  if (!params.success) return res.status(400).json({ error: "معرّف الموظف غير صالح" });
+  const id = params.data.id;
+  if (!staffInvitationsConfigured()) return res.status(503).json({ error: "إرسال دعوات واتساب غير متاح حالياً" });
+  const invitation = await inviteOwnerStaff(id, req.user!.id, await staffInvitingOwnerName(req));
+  if (invitation === "not_pending") return res.status(409).json({ error: "الموظف غير موجود أو لا ينتظر التفعيل" });
+  if (invitation === "cooldown") return res.status(429).json({ error: "انتظر دقيقة قبل إعادة إرسال الدعوة" });
+  if (invitation !== "accepted") return res.status(503).json({ error: "حُفظ الموظف، لكن تعذّر إرسال الدعوة. يمكنك إعادة المحاولة لاحقاً" });
+  return res.json(ResendOwnerStaffInvitationResponse.parse({ invitation }));
 });
 
 router.patch("/staff/:id", async (req, res) => {
@@ -3705,8 +3733,15 @@ router.delete("/staff/:id", async (req, res) => {
   const [holding] = await db.select({ id: staffHoldingsTable.id }).from(staffHoldingsTable)
     .where(and(eq(staffHoldingsTable.ownerId, ownerId), eq(staffHoldingsTable.staffId, id))).limit(1);
   if (holding) return res.status(409).json({ error: "لا يمكن حذف موظف له سجل عهد أو تأمينات؛ يمكنك تعطيل الموظف مع الاحتفاظ بسجله." });
-  await db.delete(staffSessionsTable).where(eq(staffSessionsTable.staffId, id));
-  await db.delete(ownerStaffTable).where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)));
+  await db.transaction(async tx => {
+    const [member] = await tx.select({ id: ownerStaffTable.id }).from(ownerStaffTable)
+      .where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId))).for("update");
+    if (!member) return;
+    await tx.execute(sql`DELETE FROM password_reset_tokens
+      WHERE target_type IN ('owner_staff', 'owner_staff_invite') AND target_id = ${String(id)}`);
+    await tx.delete(staffSessionsTable).where(eq(staffSessionsTable.staffId, id));
+    await tx.delete(ownerStaffTable).where(and(eq(ownerStaffTable.id, id), eq(ownerStaffTable.ownerId, ownerId)));
+  });
   return res.json({ ok: true });
 });
 

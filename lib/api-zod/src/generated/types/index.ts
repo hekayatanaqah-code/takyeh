@@ -221,6 +221,8 @@ export * from './requestPhotographySessionUploadBody';
 export * from './requestPhotographySessionUploadBodyContentType';
 export * from './requestUploadUrlBody';
 export * from './requestUploadUrlResponse';
+export * from './resendOwnerStaffInvitation200';
+export * from './resendOwnerStaffInvitation200Invitation';
 export * from './retryPhotographyAssignment200';
 export * from './reviewPhotographer200';
 export * from './reviewPhotographerBody';

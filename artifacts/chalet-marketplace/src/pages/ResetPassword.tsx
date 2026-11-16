@@ -11,6 +11,8 @@ export default function ResetPassword() {
   const params = new URLSearchParams(useSearch());
   const token = params.get("token") ?? "";
   const isAdmin = params.get("portalType") === "admin";
+  const isStaffInvite = params.get("invite") === "staff";
+  const [activatedUsername, setActivatedUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -43,6 +45,7 @@ export default function ResetPassword() {
         setError(data.error ?? "حدث خطأ أثناء إعادة التعيين");
         return;
       }
+      setActivatedUsername(data.activated ? data.username || "" : "");
       setDone(true);
     } catch {
       setError("تعذّر الاتصال بالخادم. يرجى المحاولة مرة أخرى");
@@ -80,7 +83,8 @@ export default function ResetPassword() {
               ? <CheckCircle2 className={`w-8 h-8 ${isAdmin ? "text-amber-400" : "text-[#8C6246]"}`} />
               : <XCircle className="w-8 h-8 text-red-500" />}
           </div>
-          <h2 className={`text-lg font-bold mb-2 ${title}`} role="status">{ok ? "تم تحديث كلمة المرور" : "الرابط غير صالح"}</h2>
+          <h2 className={`text-lg font-bold mb-2 ${title}`} role="status">{ok ? (activatedUsername ? "تم تفعيل حساب الموظف" : "تم تحديث كلمة المرور") : "الرابط غير صالح"}</h2>
+          {ok && activatedUsername && <p className={`${sub} mb-4 text-sm`}>اسم المستخدم لتسجيل الدخول: <b dir="ltr" data-no-arabic="true" className="select-all">{activatedUsername}</b></p>}
           <p className={`text-sm mb-6 ${sub}`}>
             {ok ? "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة." : "هذا الرابط منتهي الصلاحية أو تم استخدامه مسبقاً. يرجى طلب رابط جديد."}
           </p>
@@ -94,8 +98,8 @@ export default function ResetPassword() {
     <div className={shell} dir="rtl">
       {brand}
       <div className={card}>
-        <h1 className={`text-xl font-bold mb-1 text-center ${title}`}>إعادة تعيين كلمة المرور</h1>
-        <p className={`text-sm mb-6 text-center ${sub}`}>أدخل كلمة المرور الجديدة</p>
+        <h1 className={`text-xl font-bold mb-1 text-center ${title}`}>{isStaffInvite ? "تفعيل حساب الموظف" : "إعادة تعيين كلمة المرور"}</h1>
+        <p className={`text-sm mb-6 text-center ${sub}`}>{isStaffInvite ? "اختر كلمة مرورك لتفعيل الدخول. رابط الدعوة صالح ليوم واحد ويُستخدم مرة واحدة." : "أدخل كلمة المرور الجديدة"}</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="rp-new" className={label}>كلمة المرور الجديدة</label>
@@ -122,7 +126,7 @@ export default function ResetPassword() {
           )}
           <button type="submit" disabled={loading} className={btn}>
             {loading && <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>}
-            {loading ? "جاري التحديث…" : "تحديث كلمة المرور"}
+            {loading ? "جاري التحديث…" : isStaffInvite ? "تفعيل الحساب" : "تحديث كلمة المرور"}
           </button>
         </form>
       </div>

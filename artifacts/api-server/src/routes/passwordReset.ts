@@ -212,7 +212,7 @@ async function consumeAndResetPassword(
   database: RecoveryDatabase,
   tokenHash: string,
   newPasswordHash: string,
-): Promise<"consumed" | "invalid"> {
+): Promise<"consumed" | "invalid" | { username: string }> {
   return database.transaction(async (tx) => {
     /* Lock the target first so concurrent sibling links serialize without
        deadlocking while each transaction revokes the other's token. */
@@ -238,14 +238,18 @@ async function consumeAndResetPassword(
         `);
         break;
       case "owner_staff":
+      case "owner_staff_invite":
         lockedTarget = await tx.execute(sql`
-          SELECT id FROM owner_staff WHERE id = ${Number(identity.target_id)} FOR UPDATE
+          SELECT id, username, password_hash, is_active FROM owner_staff WHERE id = ${Number(identity.target_id)} FOR UPDATE
         `);
         break;
       default:
         return "invalid";
     }
     if (readRows<{ id: number }>(lockedTarget).length !== 1) return "invalid";
+    const staffActivation = identity.target_type === "owner_staff_invite";
+    const invited = readRows<{ username: string; password_hash: string | null; is_active: boolean }>(lockedTarget)[0];
+    if (staffActivation && (!invited.is_active || invited.password_hash || !invited.username?.startsWith("staff_"))) return "invalid";
 
     const tokenResult = await tx.execute(sql`
       SELECT id, target_type, target_id, expires_at, used
@@ -270,6 +274,7 @@ async function consumeAndResetPassword(
           eq(adminStaffTable.id, Number(row.target_id)), { id: adminStaffTable.id }) };
         break;
       case "owner_staff":
+      case "owner_staff_invite":
         updated = { rows: await updateRecords(tx, ownerStaffTable, { passwordHash: newPasswordHash },
           eq(ownerStaffTable.id, Number(row.target_id)), { id: ownerStaffTable.id }) };
         break;
@@ -292,6 +297,10 @@ async function consumeAndResetPassword(
         AND target_id = ${row.target_id}
         AND used = false
     `);
+    if (row.target_type === "owner_staff" || row.target_type === "owner_staff_invite") {
+      await tx.execute(sql`UPDATE password_reset_tokens SET used = true
+        WHERE target_type IN ('owner_staff', 'owner_staff_invite') AND target_id = ${row.target_id} AND used = false`);
+    }
 
     switch (row.target_type) {
       case "owner_application": {
@@ -338,13 +347,14 @@ async function consumeAndResetPassword(
         `);
         break;
       case "owner_staff":
+      case "owner_staff_invite":
         await tx.execute(sql`
           DELETE FROM staff_sessions
           WHERE staff_id = ${Number(row.target_id)}
         `);
         break;
     }
-    return "consumed";
+    return staffActivation ? { username: invited.username } : "consumed";
   });
 }
 
@@ -453,7 +463,7 @@ export function createPasswordResetRouter(dependencies: RouteDependencies = {}) 
         return res.status(410).json({ error: "الرابط منتهي الصلاحية أو تم استخدامه مسبقاً" });
       }
 
-      return res.json({ ok: true });
+      return res.json({ ok: true, ...(typeof result === "object" ? { username: result.username, activated: true } : {}) });
     } catch {
       return res.status(500).json({ error: "تعذّر تحديث كلمة المرور حالياً" });
     }

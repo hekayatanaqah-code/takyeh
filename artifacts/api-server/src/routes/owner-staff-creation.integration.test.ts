@@ -1,19 +1,30 @@
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { after, before, it } from "node:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import app from "../app";
 import { createSession } from "../lib/auth";
-import { db, pool, ownerStaffTable, sessionsTable } from "@workspace/db";
+import { db, pool, ownerStaffTable, ownerSubscriptionsTable, sessionsTable } from "@workspace/db";
 
 const ownerId = `staff-creation-test-${randomUUID()}`;
 type SafeStaff = Omit<typeof ownerStaffTable.$inferSelect, "passwordHash">;
 let sessionId: string;
 let server: Server;
 let baseUrl: string;
+let applicationId: number;
 
 before(async () => {
+  const application = await db.execute<{ id: number }>(sql`
+    INSERT INTO owner_applications
+      (full_name, business_name, business_type, phone, email, password_hash, status, email_verified, phone_verified, phone_verified_at)
+    VALUES ('مالك اختبار دعوة الموظفين', 'نشاط اختبار الدعوة', 'chalet', ${`055${randomInt(1000000, 9999999)}`},
+      ${`${ownerId}@example.invalid`}, '', 'approved', true, true, now()) RETURNING id`);
+  applicationId = application.rows[0].id;
+  await db.execute(sql`INSERT INTO owner_account_links (user_id, owner_application_id) VALUES (${ownerId}, ${applicationId})`);
+  await db.insert(ownerSubscriptionsTable).values({
+    ownerId, plan: "monthly", status: "active", expiresAt: new Date(Date.now() + 86400000),
+  });
   sessionId = await createSession({
     user: { id: ownerId, email: null, firstName: "Synthetic", lastName: "Owner", profileImageUrl: null },
     access_token: "integration-test",
@@ -26,7 +37,13 @@ before(async () => {
 });
 
 after(async () => {
+  await db.execute(sql`DELETE FROM password_reset_tokens
+    WHERE target_type = 'owner_staff_invite' AND target_id IN
+      (SELECT CAST(id AS TEXT) FROM owner_staff WHERE owner_id = ${ownerId})`);
   await db.delete(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
+  await db.delete(ownerSubscriptionsTable).where(eq(ownerSubscriptionsTable.ownerId, ownerId));
+  await db.execute(sql`DELETE FROM owner_account_links WHERE user_id = ${ownerId}`);
+  if (applicationId) await db.execute(sql`DELETE FROM owner_applications WHERE id = ${applicationId}`);
   if (sessionId) await db.delete(sessionsTable).where(eq(sessionsTable.sid, sessionId));
   if (server) {
     server.closeAllConnections();
@@ -152,10 +169,63 @@ it("persists optional job title and email with normalized identity and retains t
 });
 
 it("never creates a partial login account or claims WhatsApp delivery while the provider is unavailable", async () => {
+  const original = process.env.TAQNYAT_API_KEY;
+  delete process.env.TAQNYAT_API_KEY;
+  try {
   const beforeRows = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
   const response = await createStaff({ ...valid, grantAccess: true, permissions: { dashboardAccess: true } });
   assert.equal(response.status, 503);
   assert.equal((await response.json() as { code: string }).code, "staff_invitation_unavailable");
   const afterRows = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.ownerId, ownerId));
   assert.equal(afterRows.length, beforeRows.length);
+  } finally {
+    if (original === undefined) delete process.env.TAQNYAT_API_KEY;
+    else process.env.TAQNYAT_API_KEY = original;
+  }
+});
+
+it("creates one pending employee and calls the real provider adapter with the approved three variables", async () => {
+  const originalKey = process.env.TAQNYAT_API_KEY;
+  const originalFetch = globalThis.fetch;
+  const messages: { to: string; template: { name: string; components: { parameters: { text: string }[] }[] } }[] = [];
+  process.env.TAQNYAT_API_KEY = "synthetic-test-key-not-a-real-credential";
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "https://api.taqnyat.sa/wa/v2/messages/") {
+      messages.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ type: "template", statuses: { message_id: "synthetic-only" } }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }
+    return originalFetch(input, init);
+  };
+  try {
+    const response = await createStaff({ ...valid, phoneNum: "٠٥٥١٢٣٤٥٦٧", grantAccess: true,
+      permissions: { dashboardAccess: true, financialAccess: false, unknownPermission: true } });
+    assert.equal(response.status, 201);
+    const employee = await response.json();
+    assert.equal(employee.invitation, "accepted");
+    assert.equal(employee.invitationPending, true);
+    assert(!("passwordHash" in employee));
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].to, "966551234567");
+    assert.equal(messages[0].template.name, "owner_staff_invite");
+    const parameters = messages[0].template.components[0].parameters.map(p => p.text);
+    assert.equal(parameters.length, 3);
+    assert.deepEqual(parameters.slice(0, 2), [valid.name, "مالك اختبار دعوة الموظفين"]);
+    assert.equal(new URL(parameters[2]).searchParams.get("invite"), "staff");
+    const [stored] = await db.select().from(ownerStaffTable).where(eq(ownerStaffTable.id, employee.id));
+    assert.equal(stored.passwordHash, null);
+    assert.equal(stored.permissions.dashboardAccess, true);
+    assert.equal(stored.permissions.financialAccess, false);
+    assert(!("unknownPermission" in stored.permissions));
+    const resend = await fetch(`${baseUrl}/api/owner/staff/${employee.id}/invitation`, {
+      method: "POST", headers: { authorization: `Bearer ${sessionId}` },
+    });
+    assert.equal(resend.status, 429);
+    assert.equal(messages.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey === undefined) delete process.env.TAQNYAT_API_KEY;
+    else process.env.TAQNYAT_API_KEY = originalKey;
+  }
 });

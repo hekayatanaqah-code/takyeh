@@ -169,6 +169,7 @@ import type {
   RequestPhotographySessionUploadBody,
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
+  ResendOwnerStaffInvitation200,
   RetryPhotographyAssignment200,
   ReviewPhotographer200,
   ReviewPhotographerBody,
@@ -234,6 +235,80 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   }
   return result;
 };
+
+export const getResendOwnerStaffInvitationUrl = (id: number,) => {
+
+
+
+
+  return `/api/owner/staff/${id}/invitation`
+}
+
+/**
+ * @summary Resend an expiring WhatsApp activation link for a pending employee
+ */
+export const resendOwnerStaffInvitation = async (id: number, options?: Parameters<typeof customFetch>[1]): Promise<ResendOwnerStaffInvitation200> => {
+
+  return customFetch<ResendOwnerStaffInvitation200>(getResendOwnerStaffInvitationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResendOwnerStaffInvitationMutationKey = () => ['resendOwnerStaffInvitation'] as const;
+
+export const getResendOwnerStaffInvitationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendOwnerStaffInvitation>>, TError,ResendOwnerStaffInvitationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resendOwnerStaffInvitation>>, TError,ResendOwnerStaffInvitationMutationVariables, TContext> => {
+
+const mutationKey = getResendOwnerStaffInvitationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resendOwnerStaffInvitation>>, ResendOwnerStaffInvitationMutationVariables> = (props) => {
+          const {id} = props ?? {};
+
+          return  resendOwnerStaffInvitation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResendOwnerStaffInvitationMutationResult = NonNullable<Awaited<ReturnType<typeof resendOwnerStaffInvitation>>>
+
+    export type ResendOwnerStaffInvitationMutationError = ErrorType<void>
+    export type ResendOwnerStaffInvitationMutationVariables = {id: number}
+
+    /**
+ * @summary Resend an expiring WhatsApp activation link for a pending employee
+ */
+export const useResendOwnerStaffInvitation = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resendOwnerStaffInvitation>>, TError,ResendOwnerStaffInvitationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof resendOwnerStaffInvitation>>,
+        TError,
+        ResendOwnerStaffInvitationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getResendOwnerStaffInvitationMutationOptions(options), queryClient);
+    }
 
 export const getPermanentlyDeleteOwnerUrl = (ownerId: string,) => {
 

@@ -110,6 +110,7 @@ function PasswordLogin() {
             </label>
             <input
               id="login-identifier"
+              data-no-arabic="true"
               inputMode="text"
               type="text"
               placeholder={AUTH_LABELS.identifierPlaceholder}

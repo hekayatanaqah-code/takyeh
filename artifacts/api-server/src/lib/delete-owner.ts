@@ -96,7 +96,7 @@ export async function deleteOwnerPermanently(rawId: string) {
     if (columns.has("password_reset_tokens")) {
       predicates.set("password_reset_tokens", [sql`
         (target_type IN ('owner', 'owner_application') AND ${anyOf("target_id", applicationId ? [...aliases, String(applicationId)] : aliases)})
-        OR (target_type IN ('staff', 'owner_staff') AND ${anyOf("target_id", staff.map(String))})`]);
+        OR (target_type IN ('staff', 'owner_staff', 'owner_staff_invite') AND ${anyOf("target_id", staff.map(String))})`]);
     }
     // Delete only owner sessions/challenges, not independent admin or photographer sessions.
     predicates.set("sessions", [sql`

@@ -9,6 +9,21 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Resend an expiring WhatsApp activation link for a pending employee
+ */
+
+
+
+export const ResendOwnerStaffInvitationParams = zod.object({
+  "id": zod.coerce.number().int().min(1)
+})
+
+export const ResendOwnerStaffInvitationResponse = zod.object({
+  "invitation": zod.enum(['accepted'])
+})
+
+
+/**
  * @summary Permanently delete an owner and all owned activity in one transaction
  */
 export const permanentlyDeleteOwnerPathOwnerIdMax = 160;

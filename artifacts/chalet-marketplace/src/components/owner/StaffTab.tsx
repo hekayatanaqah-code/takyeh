@@ -195,6 +195,7 @@ export function StaffTab() {
   const { data: staff = [], isLoading } = useQuery<StaffMember[]>({
     queryKey: ["owner", "staff"],
     queryFn: async () => { const r = await apiFetch("/owner/staff"); if (!r.ok) return []; return r.json(); },
+    refetchInterval: query => query.state.data?.some(member => (member as any).invitationPending) ? 30_000 : false,
   });
 
   const { data: staffChalets = [] } = useQuery<{ id: number; nameAr: string | null; submissionId: number | null }[]>({
@@ -244,7 +245,7 @@ export function StaffTab() {
       if (!r.ok) throw new Error(result.error ?? "تعذّر إضافة الموظف");
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["owner", "staff"] });
       setAddForm({ ...EMPTY_NEW_STAFF_FORM });
       setAddGrantAccess(false);
@@ -252,9 +253,24 @@ export function StaffTab() {
       setAddAssignType("all");
       setAddAssignId("");
       setShowAddStaff(false);
-      toast({ title: "تمت إضافة الموظف التشغيلي", description: "حُفظ الموظف لحساب الرواتب والمصروفات دون صلاحية دخول للمنصة." });
+      toast(result.invitationPending
+        ? { title: "تمت إضافة الموظف بانتظار التفعيل", description: result.invitation === "accepted"
+          ? "قُبل إرسال دعوة واتساب. يختار الموظف كلمة مروره من الرابط الصالح ليوم واحد."
+          : "حُفظ الموظف دون تفعيل الدخول، لكن تعذّر إرسال الدعوة. أعد إرسالها من سجل الموظفين.",
+          variant: result.invitation === "accepted" ? "default" : "destructive" }
+        : { title: "تمت إضافة الموظف التشغيلي", description: "حُفظ الموظف لحساب الرواتب والمصروفات دون صلاحية دخول للمنصة." });
     },
     onError: (error: Error) => toast({ title: "لم تتم إضافة الموظف", description: error.message, variant: "destructive" }),
+  });
+
+  const resendInvitation = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await apiFetch(`/owner/staff/${id}/invitation`, { method: "POST" });
+      const result = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(result.error || "تعذّر إرسال الدعوة");
+    },
+    onSuccess: () => toast({ title: "قُبل إرسال دعوة التفعيل عبر واتساب" }),
+    onError: (error: Error) => toast({ title: "لم تُرسل الدعوة", description: error.message, variant: "destructive" }),
   });
 
   const updatePermissions = useMutation({
@@ -698,7 +714,14 @@ export function StaffTab() {
                               title="ملف الموظف"
                               onClick={() => { if (!isMock) { setStaffProfileTab("profile"); setStaffProfileTarget(member); setStaffProfileEditing(false); } }}
                             >{member.name}</p>
-                            {!isMock && member.username && <p className="text-[10px] text-muted-foreground">@{member.username}</p>}
+                            {!isMock && member.username && <p data-no-arabic="true" className="text-[10px] text-muted-foreground">@{member.username}</p>}
+                            {!isMock && (member as any).invitationPending && (
+                              <div className="mt-1 space-y-1">
+                                <p className="text-xs font-semibold text-amber-700">بانتظار تفعيل الموظف</p>
+                                <Button size="sm" variant="outline" disabled={resendInvitation.isPending}
+                                  onClick={() => resendInvitation.mutate(member.id)}>إعادة إرسال دعوة واتساب</Button>
+                              </div>
+                            )}
                             {isMock && <p className="text-[10px] text-amber-600 font-medium">بيانات تجريبية</p>}
                           </div>
                         </div>

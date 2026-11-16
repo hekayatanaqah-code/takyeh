@@ -48,6 +48,6 @@ export function currentSalaryMonth(now = new Date()): string {
   return `${parts.find(p => p.type === "year")!.value}-${parts.find(p => p.type === "month")!.value}`;
 }
 
-export function hasStaffPlatformAccess(member: { username: string | null; isActive: boolean }): boolean {
-  return member.isActive && !!member.username?.trim();
+export function hasStaffPlatformAccess(member: { username: string | null; isActive: boolean; invitationPending?: boolean }): boolean {
+  return member.isActive && !!member.username?.trim() && !member.invitationPending;
 }

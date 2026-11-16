@@ -21,6 +21,32 @@ tags:
   - name: admin
     description: Superadmin owner management operations
 paths:
+  /owner/staff/{id}/invitation:
+    post:
+      operationId: resendOwnerStaffInvitation
+      summary: Resend an expiring WhatsApp activation link for a pending employee
+      tags: [Auth]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: Provider accepted the invitation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitation]
+                properties:
+                  invitation: { type: string, enum: [accepted] }
+        "400": { description: Invalid employee identifier }
+        "401": { description: Owner authentication required }
+        "403": { description: Owner staff-management permission required }
+        "409": { description: Employee is not awaiting activation or belongs to another owner }
+        "429": { description: Wait one minute before resending }
+        "503": { description: Invitation delivery unavailable or rejected }
   /admin/owners/{ownerId}:
     delete:
       operationId: permanentlyDeleteOwner

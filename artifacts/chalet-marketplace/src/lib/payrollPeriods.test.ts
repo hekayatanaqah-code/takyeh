@@ -3,6 +3,10 @@ import { test } from "node:test";
 import { currentSalaryMonth, hasStaffPlatformAccess, paidPayrollPeriods, paidPayrollRecords, payrollPeriod, payrollPeriodLabel } from "./payrollPeriods";
 import { toHijriComponents } from "./hijri";
 
+test("an invited employee stays pending until the activation password is set", () => {
+  assert.equal(hasStaffPlatformAccess({ username: "staff_pending", isActive: true, invitationPending: true }), false);
+});
+
 const records = [
   { id: 1, month: "2023-12", paidAt: "2024-01-03" },
   { id: 2, month: "2026-01", paidAt: "2026-02-01" },
