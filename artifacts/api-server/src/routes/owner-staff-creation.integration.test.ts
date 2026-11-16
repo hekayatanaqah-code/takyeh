@@ -202,7 +202,7 @@ it("creates one pending employee and calls the real provider adapter with the ap
     const response = await createStaff({ ...valid, phoneNum: "٠٥٥١٢٣٤٥٦٧", grantAccess: true,
       permissions: { dashboardAccess: true, financialAccess: false, unknownPermission: true } });
     assert.equal(response.status, 201);
-    const employee = await response.json();
+    const employee = await response.json() as SafeStaff & { invitation: string; invitationPending: boolean };
     assert.equal(employee.invitation, "accepted");
     assert.equal(employee.invitationPending, true);
     assert(!("passwordHash" in employee));
