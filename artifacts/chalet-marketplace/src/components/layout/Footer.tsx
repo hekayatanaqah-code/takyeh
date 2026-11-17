@@ -1,8 +1,10 @@
 import { Link, useLocation } from "wouter";
-import { MapPin, Mail, Instagram, Twitter, Building2, LogIn } from "lucide-react";
+import { MapPin, Mail, Instagram, Twitter, Building2, LogIn, LayoutDashboard } from "lucide-react";
+import { useAuth } from "@workspace/replit-auth-web";
 import { useQuery } from "@tanstack/react-query";
 import { toHijriComponents } from "@/lib/hijri";
 import { saudiWhatsappPhone } from "@/lib/saudiPhone";
+import { getFooterPartnerPortal } from "@/lib/footer-partner-portal";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -25,6 +27,8 @@ function TikTokIcon({ className }: { className?: string }) {
 export function Footer() {
   const [location] = useLocation();
   const isHomepage = location === "/";
+  const { isAuthenticated, isLoading } = useAuth();
+  const partnerPortal = getFooterPartnerPortal(isHomepage, isLoading, isAuthenticated);
   const { data: settings = {} } = useQuery<Record<string, string>>({
     queryKey: ["page-content"],
     queryFn: async () => {
@@ -163,7 +167,7 @@ export function Footer() {
         </div>
 
         {/* Dedicated owner and provider portal */}
-        {isHomepage && <div className="mt-10 rounded-2xl border border-primary/40 bg-background/10 px-5 py-6 sm:px-8">
+        {partnerPortal && <div className="mt-10 rounded-2xl border border-primary/40 bg-background/10 px-5 py-6 sm:px-8">
           <div className="flex flex-col gap-5 text-center sm:flex-row sm:items-center sm:justify-between sm:text-right">
             <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-start">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
@@ -172,17 +176,17 @@ export function Footer() {
               <div>
                 <h3 className="text-xl font-bold text-background">بوابة الشركاء</h3>
                 <p className="mt-1 text-sm leading-relaxed text-background/65">
-                  بوابة الشركاء - دخول أصحاب الوجهات ومزودي الخدمات لإدارة الحجوزات والخدمات
+                  {partnerPortal.description}
                 </p>
               </div>
             </div>
             <Link
-              href="/login"
+              href={partnerPortal.href}
               className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-7 py-3 font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-xl"
-              data-testid="link-partner-login"
+              data-testid={isAuthenticated ? "link-partner-dashboard" : "link-partner-login"}
             >
-              <LogIn className="h-5 w-5" />
-              دخول الشركاء
+              {isAuthenticated ? <LayoutDashboard className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
+              {partnerPortal.label}
             </Link>
           </div>
         </div>}
