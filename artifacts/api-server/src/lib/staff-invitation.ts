@@ -7,6 +7,8 @@ import { normalizeTaqnyatPhone, sendTaqnyatTemplate } from "../../../../taqnyatW
 export const STAFF_INVITE_TTL = 24 * 60 * 60 * 1000;
 export const STAFF_INVITE_TARGET = "owner_staff_invite";
 export const ADMIN_INVITE_TARGET = "admin_staff_invite";
+// Provider template names are independent of the stored activation-token target.
+export const ADMIN_INVITE_TEMPLATE = "owner_staff_invite";
 type Dependencies = { database: typeof db; send: typeof sendTaqnyatTemplate };
 type InvitationResult = "accepted" | "failed" | "unavailable" | "not_pending" | "cooldown";
 const defaults: Dependencies = { database: db, send: sendTaqnyatTemplate };
@@ -48,7 +50,8 @@ async function inviteStaff(
   try {
     const parameters = kind === "admin"
       ? [issued.name, url.toString()] : [issued.name, ownerName || "إدارة النشاط", url.toString()];
-    const result = await dependencies.send(issued.phone, target, parameters, "ar");
+    const template = kind === "admin" ? ADMIN_INVITE_TEMPLATE : STAFF_INVITE_TARGET;
+    const result = await dependencies.send(issued.phone, template, parameters, "ar");
     if (result.success) return "accepted";
   } catch {
     // A delivery failure never removes the saved employee or gives them usable credentials.

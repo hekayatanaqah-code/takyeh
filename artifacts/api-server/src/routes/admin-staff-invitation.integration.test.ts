@@ -83,7 +83,7 @@ it("creates pending staff without an assigned password and sends exactly the app
   assert(!("passwordHash" in employee));
   const message = messages.at(-1)!;
   assert.equal(message.to, "966551234567");
-  assert.equal(message.template.name, "admin_staff_invite");
+  assert.equal(message.template.name, "owner_staff_invite");
   const parameters = message.template.components[0].parameters.map(p => p.text);
   assert.equal(parameters.length, 2);
   assert.equal(parameters[0], "موظف اختبار الدعوة الإداري");
