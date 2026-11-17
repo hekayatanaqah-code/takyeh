@@ -134,11 +134,11 @@ export default function Home() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: cities = [] } = useQuery<{ id: number; name: string; regionId: number | null }[]>({
+  const { data: cities = [], isLoading: citiesLoading, isError: citiesError } = useQuery<{ id: number; name: string; regionId: number | null }[]>({
     queryKey: ["catalog", "cities"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
-      if (!r.ok) return [];
+      if (!r.ok) throw new Error("تعذر تحميل المدن");
       return r.json();
     },
     staleTime: 1000 * 60 * 5,
@@ -206,7 +206,11 @@ export default function Home() {
   };
 
   const handleSearch = () => {
-    const cityOk = searchCity && searchCity !== "all" && searchCity.trim() !== "";
+    if (!regions.some((region) => String(region.id) === searchRegion)) {
+      setSearchError("يرجى اختيار المنطقة أولاً، ثم المدينة وتاريخ الحجز للمتابعة");
+      return;
+    }
+    const cityOk = !!selectedCityId;
     const dateOk = bookingDate && bookingDate.trim() !== "";
     if (!cityOk || !dateOk) {
       setSearchError(
@@ -368,15 +372,20 @@ export default function Home() {
                     <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
-                      <Select dir="rtl" value={searchCity} onValueChange={(v) => {
+                      <Select dir="rtl" value={searchCity} disabled={!searchRegion || citiesLoading || citiesError || regionCities.length === 0} onValueChange={(v) => {
+                        if (!regionCities.some((city) => city.name === v)) return;
                         setSearchCity(v);
                         setSearchDistricts([]);
-                        const city = regionCities.find((item) => sameCityName(item.name, v));
-                        if (city?.regionId != null) setSearchRegion(String(city.regionId));
                         setSearchError("");
                       }}>
                         <SelectTrigger aria-label="المدينة" className="w-full min-w-0 border-0 p-0 h-5 focus:ring-0 shadow-none text-right text-foreground font-medium text-sm [&>span]:truncate [&>svg]:shrink-0" dir="rtl">
-                          <SelectValue placeholder="اختر المدينة" />
+                          <SelectValue placeholder={
+                            !searchRegion ? "اختر المنطقة أولاً"
+                              : citiesError ? "تعذر تحميل المدن"
+                              : citiesLoading ? "جارٍ تحميل المدن"
+                              : regionCities.length === 0 ? "لا توجد مدن في هذه المنطقة"
+                              : "اختر المدينة"
+                          } />
                         </SelectTrigger>
                         <SelectContent dir="rtl" className="text-right">
                           {regionCities.map((city) => (
@@ -402,7 +411,8 @@ export default function Home() {
                             className="flex w-full items-center justify-between gap-2 text-right text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <span className="min-w-0 truncate">
-                              {searchDistricts.length === 0
+                              {!selectedCityId ? "اختر المدينة أولاً"
+                                : searchDistricts.length === 0
                                 ? "كافة الأحياء"
                                 : searchDistricts.length === 1
                                   ? searchDistricts[0]

@@ -11,8 +11,9 @@ const cities = [
   { id: 4, name: "مدينة قديمة", regionId: null },
 ];
 
-test("shows the catalog before choosing a region", () => {
-  assert.deepEqual(getRegionCities(cities, ""), cities);
+test("never shows cities before choosing a region", () => {
+  assert.deepEqual(getRegionCities(cities, ""), []);
+  assert.deepEqual(getRegionCities(cities, "null"), []);
 });
 
 test("filters cities by the chosen region without replacing their identities", () => {
@@ -26,6 +27,16 @@ test("changing regions excludes the previous region and unassigned cities", () =
   assert.deepEqual(getRegionCities(cities, "1"), [cities[2]]);
   assert.deepEqual(getRegionCities(cities, "999"), []);
   assert.deepEqual(getRegionCities([], "3"), []);
+  assert.deepEqual(getRegionCities(cities, ""), []);
+});
+
+test("city selection requires a region and region changes reset both dependent fields", () => {
+  const home = readFileSync(new URL("../pages/Home.tsx", import.meta.url), "utf8");
+  assert.match(home, /value=\{searchCity\} disabled=\{!searchRegion \|\| citiesLoading \|\| citiesError \|\| regionCities\.length === 0\}/);
+  assert.match(home, /setSearchRegion\(value\);\s*setSearchCity\(""\);\s*setSearchDistricts\(\[\]\)/);
+  assert.match(home, /if \(!regions\.some\(\(region\) => String\(region\.id\) === searchRegion\)\)/);
+  assert(home.includes("اختر المنطقة أولاً"));
+  assert(home.includes('const cityOk = !!selectedCityId;'));
 });
 
 const source = ts.createSourceFile("Home.tsx",
