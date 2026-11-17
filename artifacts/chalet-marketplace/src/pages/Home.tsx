@@ -6,6 +6,7 @@ import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
 import { toGregorianStr } from "@/lib/hijri";
 import { useQuery } from "@tanstack/react-query";
 import { sameCityName } from "@/lib/city-name";
+import { getRegionCities } from "@/lib/property-search-location";
 import { useGlobalSeasons } from "@/hooks/useGlobalSeasons";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -93,6 +94,7 @@ export default function Home() {
   const _initDate  = _urlParams.get("date") ?? "";
 
   const [searchCity, setSearchCity]         = useState<string>("");
+  const [searchRegion, setSearchRegion]     = useState<string>("");
   const [searchDistricts, setSearchDistricts] = useState<string[]>([]);
   const [searchCategory, setSearchCategory] = useState<string>("");
   const [searchSections, setSearchSections] = useState<string>("");
@@ -122,7 +124,17 @@ export default function Home() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const { data: cities = [] } = useQuery<{ id: number; name: string }[]>({
+  const { data: regions = [], isError: regionsError, isLoading: regionsLoading } = useQuery<{ id: number; name: string }[]>({
+    queryKey: ["catalog", "regions"],
+    queryFn: async () => {
+      const r = await fetch(`${BASE}/api/regions`, { credentials: "include" });
+      if (!r.ok) throw new Error("تعذر تحميل المناطق");
+      return r.json();
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: cities = [] } = useQuery<{ id: number; name: string; regionId: number | null }[]>({
     queryKey: ["catalog", "cities"],
     queryFn: async () => {
       const r = await fetch(`${BASE}/api/cities`, { credentials: "include" });
@@ -132,7 +144,8 @@ export default function Home() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const selectedCityId = cities.find((c) => sameCityName(c.name, searchCity))?.id;
+  const regionCities = getRegionCities(cities, searchRegion);
+  const selectedCityId = regionCities.find((c) => sameCityName(c.name, searchCity))?.id;
   const { data: districts = [] } = useQuery<{ id: number; name: string; cityId: number }[]>({
     queryKey: ["catalog", "districts", selectedCityId],
     enabled: !!selectedCityId,
@@ -325,20 +338,48 @@ export default function Home() {
               {/* ── Search Card ─────────────────────────────────────── */}
               <div className="bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-2xl shadow-2xl flex flex-col gap-3">
 
-                {/* ── Row 1: location + category + period ── */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {/* Region → city → district → category, in RTL reading order. */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" dir="rtl" data-testid="property-search-location-row">
+
+                  <div className="h-20 min-w-0 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="w-full min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المنطقة</p>
+                      <Select dir="rtl" value={searchRegion} disabled={regionsLoading || regionsError} onValueChange={(value) => {
+                        setSearchRegion(value);
+                        setSearchCity("");
+                        setSearchDistricts([]);
+                        setSearchError("");
+                      }}>
+                        <SelectTrigger aria-label="المنطقة" className="w-full min-w-0 border-0 p-0 h-5 focus:ring-0 shadow-none text-right text-foreground font-medium text-sm [&>span]:truncate [&>svg]:shrink-0">
+                          <SelectValue placeholder={regionsError ? "تعذر تحميل المناطق" : regionsLoading ? "جارٍ تحميل المناطق" : "اختر المنطقة"} />
+                        </SelectTrigger>
+                        <SelectContent dir="rtl">
+                          {regions.map((region) => (
+                            <SelectItem key={region.id} value={String(region.id)}>{region.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
 
                   {/* City */}
-                  <div className="min-h-16 min-w-0 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  <div className="h-20 min-w-0 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">المدينة</p>
-                      <Select dir="rtl" value={searchCity} onValueChange={(v) => { setSearchCity(v); setSearchDistricts([]); }}>
+                      <Select dir="rtl" value={searchCity} onValueChange={(v) => {
+                        setSearchCity(v);
+                        setSearchDistricts([]);
+                        const city = regionCities.find((item) => sameCityName(item.name, v));
+                        if (city?.regionId != null) setSearchRegion(String(city.regionId));
+                        setSearchError("");
+                      }}>
                         <SelectTrigger aria-label="المدينة" className="w-full min-w-0 border-0 p-0 h-5 focus:ring-0 shadow-none text-right text-foreground font-medium text-sm [&>span]:truncate [&>svg]:shrink-0" dir="rtl">
                           <SelectValue placeholder="اختر المدينة" />
                         </SelectTrigger>
                         <SelectContent dir="rtl" className="text-right">
-                          {cities.map((city) => (
+                          {regionCities.map((city) => (
                             <SelectItem key={city.id} value={city.name} className="justify-start text-right">
                               {city.name}
                             </SelectItem>
@@ -349,7 +390,7 @@ export default function Home() {
                   </div>
 
                   {/* District */}
-                  <div className="min-h-16 min-w-0 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  <div className="h-20 min-w-0 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center gap-2">
                     <MapPin className="w-4 h-4 text-primary/70 shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الحي</p>
@@ -408,15 +449,15 @@ export default function Home() {
                   </div>
 
                   {/* Category */}
-                  <div className="min-h-16 min-w-0 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                  <div className="h-20 min-w-0 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center gap-2">
                     <Tag className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفئة</p>
-                      <Select value={searchCategory} onValueChange={(v) => { setSearchCategory(v); setSearchSections(""); }}>
-                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm !whitespace-normal [&>span]:!line-clamp-none [&>span]:!whitespace-normal">
+                      <Select dir="rtl" value={searchCategory} onValueChange={(v) => { setSearchCategory(v); setSearchSections(""); }}>
+                        <SelectTrigger aria-label="الفئة" className="w-full min-w-0 border-0 p-0 h-5 focus:ring-0 shadow-none text-right text-foreground font-medium text-sm [&>span]:truncate [&>svg]:shrink-0">
                           <SelectValue placeholder="جميع الفئات" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent dir="rtl">
                           <SelectItem value="all">جميع الفئات</SelectItem>
                           {categories.map((cat) => (
                             <SelectItem key={cat.id} value={cat.nameAr}>{cat.emoji || "🏠"} {cat.nameAr}</SelectItem>
@@ -426,16 +467,19 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Period */}
-                  <div className="min-h-16 min-w-0 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                </div>
+
+                {/* Period → booking date → duration → search. */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3" dir="rtl" data-testid="property-search-booking-row">
+                  <div className="h-20 min-w-0 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-muted-foreground text-right mb-1">الفترة</p>
-                      <Select value={searchPeriod} onValueChange={setSearchPeriod}>
-                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
+                      <Select dir="rtl" value={searchPeriod} onValueChange={setSearchPeriod}>
+                        <SelectTrigger aria-label="الفترة" className="w-full min-w-0 border-0 p-0 h-5 focus:ring-0 shadow-none text-right text-foreground font-medium text-sm [&>span]:truncate [&>svg]:shrink-0">
                           <SelectValue placeholder="جميع الفترات" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent dir="rtl">
                           <SelectItem value="all">جميع الفترات</SelectItem>
                           <SelectItem value="morning">🌅 صباحي</SelectItem>
                           <SelectItem value="evening">🌙 مسائي</SelectItem>
@@ -444,33 +488,7 @@ export default function Home() {
                       </Select>
                     </div>
                   </div>
-                </div>
-
-                {/* ── Row 2: sections (conditional, full width) ── */}
-                {showSectionsField && (
-                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
-                    <span className="text-base shrink-0">🔑</span>
-                    <div className="w-full min-w-0">
-                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الأقسام</p>
-                      <Select value={searchSections} onValueChange={setSearchSections}>
-                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
-                          <SelectValue placeholder="الكل" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">الكل</SelectItem>
-                          <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
-                          <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Row 3: date + days (equal width) + search button (remaining) ── */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-stretch">
-
-                  {/* Allow longer Hijri dates extra room on medium-width screens. */}
-                  <div className="min-w-0 md:col-span-2 xl:col-span-1 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center gap-2">
+                  <div className="h-20 min-w-0 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground shrink-0" />
                     <div className="flex-1 min-w-0">
                       <DualCalendarPicker
@@ -478,7 +496,7 @@ export default function Home() {
                         onChange={setBookingDate}
                         placeholder="يوم الحجز"
                         label="يوم الحجز"
-                        className="min-w-0 [&>div>p]:whitespace-nowrap [&>div>p:first-child]:text-xs"
+                        className="min-w-0 [&>div>p]:whitespace-nowrap [&>div>p]:truncate [&>div>p:first-child]:text-xs"
                         minDate={todayStr}
                         seasons={globalSeasons}
                       />
@@ -486,7 +504,7 @@ export default function Home() {
                   </div>
 
                   {/* Number of days — 1 col */}
-                  <div className="md:col-span-1 bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center justify-center gap-3">
+                  <div className="h-20 min-w-0 bg-white dark:bg-card rounded-xl px-3 py-2.5 flex items-center justify-center gap-2">
                     <div className="flex flex-col items-center gap-1">
                       <p className="text-xs font-semibold text-muted-foreground whitespace-nowrap">عدد الأيام</p>
                       <div className="flex items-center gap-3" dir="ltr">
@@ -514,22 +532,37 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Search button uses the remaining columns at each breakpoint. */}
-                  <div className="min-w-0 col-span-1 xl:col-span-2 flex flex-col gap-1">
+                  <div className="h-20 min-w-0">
                     <Button
                       onClick={handleSearch}
-                      className="w-full h-full py-3.5 px-8 rounded-xl text-base font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
+                      className="w-full h-full px-3 rounded-xl text-base font-bold shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
                     >
                       <Search className="w-5 h-5 me-2" />
                       ابحث الآن
                     </Button>
-                    {searchError && (
-                      <p className="text-xs text-red-300 font-medium text-center px-1 animate-pulse">
-                        {searchError}
-                      </p>
-                    )}
                   </div>
                 </div>
+                {searchError && (
+                  <p role="alert" className="text-sm text-red-200 font-medium text-center px-1">{searchError}</p>
+                )}
+                {showSectionsField && (
+                  <div className="bg-white dark:bg-card rounded-xl px-4 py-2.5 flex items-center gap-3">
+                    <span className="text-base shrink-0">🔑</span>
+                    <div className="w-full min-w-0">
+                      <p className="text-xs font-semibold text-muted-foreground text-right mb-1">عدد الأقسام</p>
+                      <Select value={searchSections} onValueChange={setSearchSections}>
+                        <SelectTrigger className="w-full border-0 p-0 h-auto focus:ring-0 shadow-none text-foreground font-medium text-sm">
+                          <SelectValue placeholder="الكل" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">الكل</SelectItem>
+                          <SelectItem value="قسم واحد">🔑 قسم واحد</SelectItem>
+                          <SelectItem value="قسمين منفصلة">🔑🔑 قسمين منفصلة</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* ── Booking summary ─────────────────────────────────── */}

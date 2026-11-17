@@ -143,7 +143,7 @@ function Actions({
       <Button variant="outline" className={actionClassName} onClick={p.onAccountSettings} data-testid="button-account-settings">
         <Settings /> الإعدادات الشخصية
       </Button>
-      <Button variant="outline" className={`${actionClassName} border-primary/30 text-primary`} onClick={p.onSupport} data-testid="button-owner-support">
+      <Button variant="outline" className={actionClassName} onClick={p.onSupport} data-testid="button-owner-support">
         <MessageSquare /> مركز الدعم والطلبات
         {!!p.supportUnreadCount && <span className="rounded-full bg-primary px-2 text-sm text-primary-foreground" aria-label="ردود غير مقروءة">{p.supportUnreadCount.toLocaleString("ar-SA")}</span>}
       </Button>
