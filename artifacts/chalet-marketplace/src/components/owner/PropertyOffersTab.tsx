@@ -15,6 +15,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { DualCalendarPicker } from "@/components/ui/DualCalendarPicker";
+import { SectionGuideButton } from "./SectionGuideButton";
 import { useToast } from "@/hooks/use-toast";
 import { formatDualDate } from "@/lib/hijri";
 import { cn } from "@/lib/utils";
@@ -231,6 +232,9 @@ export function PropertyOffersTab({ ownerChalets, apiFetch }: PropertyOffersTabP
         <div className="min-w-0">
           <h2 className="text-xl font-extrabold text-foreground">العروض والخصومات</h2>
           <p className="mt-1 text-sm font-medium text-slate-700">خصومات مؤقتة على أيام محددة لكل عقار.</p>
+          <div className="mt-2">
+            <SectionGuideButton sectionKey="offers" activity="property" />
+          </div>
         </div>
         {ownerChalets.length > 0 && (
           <div className="flex gap-2">

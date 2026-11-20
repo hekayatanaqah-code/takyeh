@@ -34,6 +34,26 @@ test("gives both activities their own finance overview and all four required fin
   }
 });
 
+test("offers guides appear in both admin catalogs and stay isolated for owners", () => {
+  for (const group of SECTION_GUIDE_GROUPS) {
+    const key = sectionGuideKey("offers", group.activity);
+    assert.deepEqual(group.sections.filter(section => section.key === key), [
+      { key, label: "العروض والخصومات" },
+    ]);
+  }
+  const guides = [
+    { id: 1, section_key: "offers", title: "عروض العقارات" },
+    { id: 2, section_key: "service_offers", title: "عروض الخدمات" },
+  ];
+  assert.deepEqual(sectionGuidesFor(guides, sectionGuideKey("offers", "property")).map(row => row.id), [1]);
+  assert.deepEqual(sectionGuidesFor(guides, sectionGuideKey("offers", "service")).map(row => row.id), [2]);
+  const source = readFileSync(new URL("../components/owner/PropertyOffersTab.tsx", import.meta.url), "utf8");
+  assert.ok(source.includes('<SectionGuideButton sectionKey="offers" activity="property" />'));
+  assert.equal(SERVICE_TAB_GUIDE_KEYS.offers, "offers");
+  const serviceSource = readFileSync(new URL("../components/owner/ServiceManagementContent.tsx", import.meta.url), "utf8");
+  assert.ok(serviceSource.includes('<SectionGuideButton sectionKey={guide} activity="service" />'));
+});
+
 test("covers every service operational tab, including optional sales, insurance and contracts", () => {
   const tabs = serviceDashboardTabs([{ requiresInsurance: true, insuranceAmount: "100", requiresContract: true }], true);
   for (const tab of tabs) {
@@ -77,5 +97,7 @@ test("the admin view retains both independently keyed groups and financial subgr
   assert.equal(new Set(rendered).size, keys(0).length + keys(1).length);
   assert.equal((html.match(/role="tab"/g) ?? []).length, 2);
   assert.equal((html.match(/role="tabpanel"/g) ?? []).length, 2);
+  assert.ok(html.includes('data-section="offers"'));
+  assert.ok(html.includes('data-section="service_offers"'));
   for (const label of ["شروحات العقارات", "شروحات الخدمات", "الشؤون الإدارية والمالية (للعقارات)", "الشؤون الإدارية والمالية (للخدمات)"]) assert.ok(html.includes(label));
 });

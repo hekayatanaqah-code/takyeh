@@ -36,7 +36,8 @@ const financeSections: GuideSection[] = [
 ];
 const propertySections: GuideSection[] = [
   { key: "dashboard", label: "الصفحة الرئيسية" }, { key: "chalets", label: "إدارة عقاراتي والشاليهات" },
-  { key: "seasons", label: "المواسم والأعياد" }, { key: "reviews", label: "التقييمات" },
+  { key: "seasons", label: "المواسم والأعياد" }, { key: "offers", label: "العروض والخصومات" },
+  { key: "reviews", label: "التقييمات" },
   { key: "calendar", label: "التقويم والحجوزات" }, { key: "deposits", label: "إدارة التأمينات" },
   { key: "customers", label: "قاعدة العملاء" }, { key: "services", label: "إدارة الخدمات والمرافق العقارية" },
   { key: "messageSettings", label: "إعدادات الرسائل الآلية وواتساب" }, { key: "digitalContracts", label: "العقود الرقمية" },
