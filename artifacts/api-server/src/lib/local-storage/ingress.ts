@@ -2,6 +2,7 @@ import {Router,type IRouter} from "express";
 import {LocalFile,ObjectNotFoundError} from "./files";
 import {verifyTicket} from "./service";
 import {logger} from "../logger";
+import {StorageCapacityError} from "./capacity";
 export const localStorageIngress:IRouter=Router();
 const allowed=new Set(["image/jpeg","image/png","image/webp","application/pdf","application/zip","video/mp4","video/quicktime","video/webm"]);
 const attempts=new Map<string,{until:number;count:number}>();
@@ -24,7 +25,8 @@ localStorageIngress.put("/local-upload",async(req,res)=>{
     if(req.headers["content-length"] && (!/^\d+$/.test(req.headers["content-length"])||Number(req.headers["content-length"])>ticket.max)){
       res.status(413).json({error:"حجم الملف أكبر من الحد المسموح",code:"UPLOAD_TOO_LARGE",requestId});return;
     }
-    await new LocalFile(ticket.name).saveStream(req,mime,ticket.max,ticket.aclPolicy);res.sendStatus(204);
+    const expectedBytes=req.headers["content-length"]===undefined?undefined:Number(req.headers["content-length"]);
+    await new LocalFile(ticket.name).saveStream(req,mime,ticket.max,ticket.aclPolicy,expectedBytes);res.sendStatus(204);
   }catch(error){
     const cause=error as NodeJS.ErrnoException & {status?:number};
     const status=error instanceof ObjectNotFoundError?403
@@ -37,8 +39,10 @@ localStorageIngress.put("/local-upload",async(req,res)=>{
     // Never log the ticket-bearing URL or file contents.
     (req.log??logger).error({code,status,requestId,systemCode:cause.code,errorName:cause.name,
       reason:cause.message?.replace(/https?:\/\/\S+/g,"[redacted]").slice(0,300),
+      ...(error instanceof StorageCapacityError?{availableBytes:error.availableBytes,requiredBytes:error.requiredBytes}:{}),
       contentLength:req.headers["content-length"],elapsedMs:Date.now()-started},"Storage upload failed");
     if(!res.destroyed)res.status(status).json({error:status===403?"رابط الرفع غير صالح أو منتهي"
+      :error instanceof StorageCapacityError?`مساحة ملفات الفيديو لا تكفي: المتاح ${Math.floor(error.availableBytes/1048576)} MiB، والمطلوب ${Math.ceil(error.requiredBytes/1048576)} MiB شاملاً هامش الأمان`
       :status===507?"مساحة التخزين المتاحة لا تكفي لحفظ الملف"
       :code==="UPLOAD_STORAGE_NOT_WRITABLE"?"خادم التخزين لا يسمح بكتابة الملفات":"تعذر حفظ الملف",code,requestId});
   }

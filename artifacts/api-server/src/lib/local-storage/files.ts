@@ -5,6 +5,7 @@ import { createHash,randomUUID } from "node:crypto";
 import type { Readable } from "node:stream";
 import type { StorageMetadata } from "../storage-contract";
 import type { ObjectAclPolicy } from "../objectAcl";
+import {assertUploadCapacity} from "./capacity";
 
 export class ObjectNotFoundError extends Error {
   constructor(){super("Object not found");this.name="ObjectNotFoundError";}
@@ -89,7 +90,7 @@ export class LocalFile {
     const fd=openSync(path.join(directory,".bytes"),constants.O_RDONLY|constants.O_NOFOLLOW);
     return createReadStream(path.join(directory,".bytes"),{...options,fd,autoClose:true});
   }
-  async saveStream(input:AsyncIterable<Uint8Array>,contentType:string,limit=maximumUploadBytes(),aclPolicy?:ObjectAclPolicy):Promise<void>{
+  async saveStream(input:AsyncIterable<Uint8Array>,contentType:string,limit=maximumUploadBytes(),aclPolicy?:ObjectAclPolicy,expectedBytes?:number):Promise<void>{
     await initializeLocalStorage();
     segments(this.name);
     const parentName=this.name.split("/").slice(0,-1).join("/");
@@ -99,7 +100,7 @@ export class LocalFile {
       if((await lstat(parent)).isSymbolicLink()||!(await lstat(parent)).isDirectory())throw new Error("Unsafe storage parent.");
     }
     const available=await statfs(parent);
-    if(available.bavail*available.bsize<Math.min(limit,64*1024*1024)+64*1024*1024)throw new Error("Insufficient storage space.");
+    assertUploadCapacity(available,limit,expectedBytes);
     const temporary=await mkdtemp(path.join(parent,".pending-"));
     const {open}=await import("node:fs/promises");
     const handle=await open(path.join(temporary,".bytes"),"wx",0o600);
@@ -111,6 +112,8 @@ export class LocalFile {
       }
       await handle.sync();await handle.close();
       if(size===0)throw Object.assign(new Error("Empty upload."),{status:400});
+      if(expectedBytes!==undefined&&size!==expectedBytes)
+        throw Object.assign(new Error("Incomplete upload."),{status:400});
       const generation=hash.digest("hex");
       const manifest:Manifest={size:String(size),generation,contentType,
         metadata:{"custom:aclPolicy":JSON.stringify(aclPolicy??{owner:"platform",visibility:this.name.startsWith("public/")||this.name.startsWith("private/uploads/")?"public":"private"})}};
