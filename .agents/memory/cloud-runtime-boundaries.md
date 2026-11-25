@@ -67,3 +67,14 @@ even though the UI components themselves resolve successfully.
 
 **How to apply:** Include a checkout path containing a parent `src` directory in
 route-build regression tests; distinguish fatal recovery errors from source-map warnings.
+
+Confirm which host actually serves the custom domain before investigating production.
+Replit deployment metadata can still name takyeh.sa while Render has the verified
+domain and serves its traffic.
+
+**Why:** Upload failures were present in Render logs but absent from the otherwise
+successful Replit deployment's telemetry. Treating the latter as current production
+would misdiagnose the incident.
+
+**How to apply:** Correlate the custom domain's response headers and the hosting
+provider's verified-domain records with the service whose logs are being queried.
