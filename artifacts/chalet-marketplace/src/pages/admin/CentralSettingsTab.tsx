@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { SectionGuideCatalogView } from "@/components/admin/SectionGuideCatalogView";
+import { uploadGuideFile, uploadFailure } from "@/lib/guide-video-upload";
 import { toast, useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import {
@@ -1401,6 +1402,7 @@ type NewEntry = {
   source: "youtube" | "upload";
   fileName: string;
   uploading: boolean;
+  progress: number;
   saving: boolean;
 };
 
@@ -1410,6 +1412,7 @@ const EMPTY_GUIDE_ENTRY: NewEntry = {
   source: "youtube",
   fileName: "",
   uploading: false,
+  progress: 0,
   saving: false,
 };
 
@@ -1469,7 +1472,7 @@ export function SectionGuidesAdminTab() {
     }
     setNewEntries(n => ({
       ...n,
-      [key]: { ...n[key], uploading: true, fileName: file.name, url: "" },
+      [key]: { ...n[key], uploading: true, progress: 0, fileName: file.name, url: "" },
     }));
     try {
       const request = await fetch(`${BASE}/api/storage/uploads/request-url`, {
@@ -1482,16 +1485,15 @@ export function SectionGuidesAdminTab() {
         }),
         credentials: "include",
       });
-      const uploadData = await request.json();
-      if (!request.ok || !uploadData.uploadURL || !uploadData.objectPath) {
-        throw new Error(uploadData.error || "تعذّر تجهيز رفع الفيديو");
+      const responseText = await request.text();
+      if (!request.ok) throw uploadFailure(request.status, responseText, request.headers.get("x-request-id"));
+      const uploadData = JSON.parse(responseText);
+      if (!uploadData.uploadURL || !uploadData.objectPath) {
+        throw new Error("استجابة تجهيز الرفع غير مكتملة (UPLOAD_INVALID_RESPONSE)");
       }
-      const upload = await fetch(uploadData.uploadURL, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "video/mp4" },
-        body: file,
+      await uploadGuideFile(uploadData.uploadURL, file, progress => {
+        setNewEntries(n => ({ ...n, [key]: { ...n[key], progress } }));
       });
-      if (!upload.ok) throw new Error("تعذّر رفع الفيديو إلى التخزين");
       const videoUrl = `${BASE}/api/storage${uploadData.objectPath}`;
       setNewEntries(n => ({
         ...n,
@@ -1680,7 +1682,13 @@ export function SectionGuidesAdminTab() {
                           }}
                         />
                         {entry.uploading ? (
-                          <><Loader2 className="h-4 w-4 animate-spin" /><span className="text-xs font-semibold">جاري رفع ومعالجة الفيديو...</span></>
+                          <div className="w-full space-y-2" role="status" aria-live="polite">
+                            <span className="flex items-center justify-center gap-2 text-sm font-semibold">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              {entry.progress === 100 ? "اكتمل نقل الفيديو، جارٍ تأكيد الحفظ..." : `جارٍ رفع الفيديو — ${toAr(entry.progress)}٪`}
+                            </span>
+                            <progress className="h-2 w-full accent-primary" max={100} value={entry.progress} aria-label="نسبة رفع الفيديو" />
+                          </div>
                         ) : entry.url ? (
                           <><CheckCircle className="h-4 w-4" /><span className="min-w-0 truncate text-xs font-semibold">{entry.fileName} — تم الرفع، اضغط للتغيير</span></>
                         ) : (

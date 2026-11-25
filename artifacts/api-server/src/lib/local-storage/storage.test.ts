@@ -10,6 +10,7 @@ import {LocalFile} from "./files";
 import {localStorageIngress} from "./ingress";
 import {ObjectPermission} from "../objectAcl";
 import {createHmac} from "node:crypto";
+import {Readable} from "node:stream";
 
 test("standalone storage: signed streamed uploads, immutable copies, ACL, traversal, expiry and persistent metadata",async()=>{
   const root=await mkdtemp(path.join(tmpdir(),"takyeh-storage-"));
@@ -73,6 +74,49 @@ test("standalone storage: signed streamed uploads, immutable copies, ACL, traver
     await assert.rejects(new LocalFile("private/unsafe/escape/object").save(bytes,{contentType:"application/pdf"}),/Unsafe/);
     await destination.delete();await assert.rejects(service.getObjectEntityFile(deliveryPath));
     assert.equal((await file.exists())[0],true,"deleting a copy never deletes its source");
+  }finally{
+    await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+    for(const [key,value]of Object.entries(env)){if(value===undefined)delete process.env[key];else process.env[key]=value;}
+    await rm(root,{recursive:true,force:true});
+  }
+});
+
+test("video ingress streams 28, 94 and 200 MiB without JSON buffering or video truncation",async()=>{
+  const root=await mkdtemp(path.join(tmpdir(),"takyeh-video-storage-"));
+  const env={APP_STORAGE_DIR:process.env.APP_STORAGE_DIR,PUBLIC_SITE_URL:process.env.PUBLIC_SITE_URL,
+    SESSION_SECRET:process.env.SESSION_SECRET,MAX_UPLOAD_BYTES:process.env.MAX_UPLOAD_BYTES};
+  Object.assign(process.env,{APP_STORAGE_DIR:root,SESSION_SECRET:"video-stream-fixture-only-".repeat(3),
+    MAX_UPLOAD_BYTES:String(200*1024*1024)});
+  const app=express();app.use("/api/storage",localStorageIngress);app.use(express.json());
+  const server=app.listen(0,"127.0.0.1");await once(server,"listening");
+  const address=server.address();assert.ok(address&&typeof address!=="string");
+  process.env.PUBLIC_SITE_URL=`http://127.0.0.1:${address.port}`;
+  const service=new ObjectStorageService();
+  try{
+    await initializeLocalStorage();
+    // Generate chunks lazily: the test and server never hold the whole video in RAM.
+    const chunk=Buffer.alloc(1024*1024,0x76);
+    for(const mib of [28,94,200]){
+      const url=await service.getObjectEntityUploadURL();
+      const response=await fetch(url,{method:"PUT",headers:{"Content-Type":"video/mp4","Content-Length":String(mib*chunk.length)},
+        body:Readable.from((async function*(){for(let i=0;i<mib;i++)yield chunk;})()),
+        duplex:"half"} as RequestInit);
+      assert.equal(response.status,204,`${mib} MiB: ${await response.text()}`);
+      const file=await service.getObjectEntityFile(service.normalizeObjectEntityPath(url));
+      const [metadata]=await file.getMetadata();
+      assert.equal(Number(metadata.size),mib*chunk.length);
+      assert.equal(metadata.contentType,"video/mp4");
+      let readBytes=0;for await(const bytes of file.createReadStream())readBytes+=bytes.length;
+      assert.equal(readBytes,mib*chunk.length,"full content remains readable, without 30-second processing");
+      await file.delete();
+    }
+    process.env.MAX_UPLOAD_BYTES=String(chunk.length);
+    const response=await fetch(await service.getObjectEntityUploadURL(),{method:"PUT",
+      headers:{"Content-Type":"video/mp4"},
+      body:Readable.from((async function*(){yield chunk;yield chunk;})()),duplex:"half"} as RequestInit);
+    assert.equal(response.status,413,"chunked uploads cannot bypass the ticket size limit");
+    const failure=await response.json() as {code:string};
+    assert.equal(failure.code,"UPLOAD_TOO_LARGE");
   }finally{
     await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
     for(const [key,value]of Object.entries(env)){if(value===undefined)delete process.env[key];else process.env[key]=value;}
