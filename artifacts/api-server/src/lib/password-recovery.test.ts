@@ -7,6 +7,7 @@ import {
   hashRecoveryToken,
   isValidRecoveryPassword,
   makePasswordResetUrl,
+  makeStaffActivationUrl,
   normalizeRecoveryEmail,
   normalizeSaudiMobile,
 } from "./passwordRecovery";
@@ -59,7 +60,9 @@ describe("password recovery input and token utilities", () => {
   it("hashes reset tokens, keeps password bounds, and creates links only on trusted origins", () => {
     const previousResetUrl = process.env.PASSWORD_RESET_PUBLIC_URL;
     const previousPublicUrl = process.env.PUBLIC_URL;
+    const previousSiteUrl = process.env.PUBLIC_SITE_URL;
     try {
+      delete process.env.PUBLIC_SITE_URL;
       process.env.PASSWORD_RESET_PUBLIC_URL = "javascript:alert(1)";
       process.env.PUBLIC_URL = "https://public.example.com/some/path";
       const link = new URL(makePasswordResetUrl("opaque-token", "admin"));
@@ -75,6 +78,8 @@ describe("password recovery input and token utilities", () => {
       else process.env.PASSWORD_RESET_PUBLIC_URL = previousResetUrl;
       if (previousPublicUrl === undefined) delete process.env.PUBLIC_URL;
       else process.env.PUBLIC_URL = previousPublicUrl;
+      if (previousSiteUrl === undefined) delete process.env.PUBLIC_SITE_URL;
+      else process.env.PUBLIC_SITE_URL = previousSiteUrl;
     }
 
     assert.equal(hashRecoveryToken("token").includes("token"), false);
@@ -84,6 +89,38 @@ describe("password recovery input and token utilities", () => {
     assert.equal(isValidRecoveryPassword("x".repeat(72)), true);
     assert.equal(isValidRecoveryPassword("x".repeat(73)), false);
     assert.equal(isValidRecoveryPassword("ك".repeat(37)), false);
+  });
+
+  it("uses the canonical site for both staff portals while retaining configurable development origins", () => {
+    const keys = ["PUBLIC_SITE_URL", "PASSWORD_RESET_PUBLIC_URL", "PUBLIC_URL", "NODE_ENV"] as const;
+    const saved = keys.map(key => process.env[key]);
+    try {
+      process.env.NODE_ENV = "production";
+      process.env.PUBLIC_SITE_URL = "https://takyeh.sa/";
+      process.env.PASSWORD_RESET_PUBLIC_URL = "https://legacy.example.test";
+      process.env.PUBLIC_URL = "https://legacy.example.test";
+      for (const portal of ["admin", "public"] as const) {
+        const url = new URL(makeStaffActivationUrl("opaque-token", portal));
+        assert.equal(url.origin, "https://takyeh.sa");
+        assert.equal(url.pathname, "/activate-staff");
+        assert.equal(url.searchParams.get("invite"), "staff");
+        assert.equal(url.searchParams.get("token"), "opaque-token");
+        assert.equal(url.searchParams.get("portalType"), portal);
+      }
+      process.env.PUBLIC_SITE_URL = "https://staging.example.test/path";
+      assert.equal(new URL(makeStaffActivationUrl("x", "public")).origin, "https://staging.example.test");
+      process.env.NODE_ENV = "development";
+      process.env.PUBLIC_SITE_URL = "http://localhost:3000";
+      assert.equal(new URL(makeStaffActivationUrl("x", "public")).origin, "http://localhost:3000");
+      process.env.NODE_ENV = "production";
+      assert.equal(new URL(makeStaffActivationUrl("x", "public")).origin, "https://legacy.example.test");
+      process.env.PUBLIC_SITE_URL = "https://user:password@untrusted.example.test";
+      assert.equal(new URL(makeStaffActivationUrl("x", "public")).origin, "https://legacy.example.test");
+    } finally {
+      keys.forEach((key, index) => {
+        if (saved[index] === undefined) delete process.env[key]; else process.env[key] = saved[index];
+      });
+    }
   });
 
   it("limits both IP and hashed identifier buckets", () => {

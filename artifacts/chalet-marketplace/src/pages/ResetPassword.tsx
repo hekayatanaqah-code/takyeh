@@ -7,11 +7,11 @@ import { AUTH_LABELS } from "@/lib/authLabels";
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function ResetPassword() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const params = new URLSearchParams(useSearch());
   const token = params.get("token") ?? "";
   const isAdmin = params.get("portalType") === "admin";
-  const isStaffInvite = params.get("invite") === "staff";
+  const isStaffInvite = location === "/activate-staff" || params.get("invite") === "staff";
   const [activatedUsername, setActivatedUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -22,6 +22,9 @@ export default function ResetPassword() {
   const [invalid, setInvalid] = useState(false);
 
   useEffect(() => { if (!token) setInvalid(true); }, [token]);
+  useEffect(() => {
+    document.title = isStaffInvite ? "تفعيل حساب الموظف | تكية" : "إعادة تعيين كلمة المرور | تكية";
+  }, [isStaffInvite]);
 
   const goLogin = () => { if (isAdmin) window.location.href = `${BASE}/admin-login`; else navigate("/login"); };
   const goForgot = () => navigate(isAdmin ? "/forgot-password/admin" : "/forgot-password");
@@ -42,7 +45,7 @@ export default function ResetPassword() {
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
         if (r.status === 410) { setInvalid(true); return; }
-        setError(data.error ?? "حدث خطأ أثناء إعادة التعيين");
+        setError(data.error ?? (isStaffInvite ? "تعذّر تفعيل حساب الموظف" : "حدث خطأ أثناء إعادة التعيين"));
         return;
       }
       setActivatedUsername(data.activated ? data.username || "" : "");
@@ -86,9 +89,11 @@ export default function ResetPassword() {
           <h2 className={`text-lg font-bold mb-2 ${title}`} role="status">{ok ? (activatedUsername ? "تم تفعيل حساب الموظف" : "تم تحديث كلمة المرور") : "الرابط غير صالح"}</h2>
           {ok && activatedUsername && <p className={`${sub} mb-4 text-sm`}>اسم المستخدم لتسجيل الدخول: <b dir="ltr" data-no-arabic="true" className="select-all">{activatedUsername}</b></p>}
           <p className={`text-sm mb-6 ${sub}`}>
-            {ok ? "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة." : "هذا الرابط منتهي الصلاحية أو تم استخدامه مسبقاً. يرجى طلب رابط جديد."}
+            {ok ? "يمكنك الآن تسجيل الدخول بكلمة المرور الجديدة." : isStaffInvite
+              ? "رابط دعوة الموظف غير صالح أو انتهت صلاحيته أو استُخدم مسبقاً. اطلب من المسؤول إعادة إرسال الدعوة عبر واتساب."
+              : "هذا الرابط منتهي الصلاحية أو تم استخدامه مسبقاً. يرجى طلب رابط جديد."}
           </p>
-          <button onClick={ok ? goLogin : goForgot} className={btn}>{ok ? "تسجيل الدخول" : "طلب رابط جديد"}</button>
+          <button onClick={ok || isStaffInvite ? goLogin : goForgot} className={btn}>{ok ? "تسجيل الدخول" : isStaffInvite ? "العودة لتسجيل الدخول" : "طلب رابط جديد"}</button>
         </div>
       </div>
     );
@@ -98,8 +103,8 @@ export default function ResetPassword() {
     <div className={shell} dir="rtl">
       {brand}
       <div className={card}>
-        <h1 className={`text-xl font-bold mb-1 text-center ${title}`}>{isStaffInvite ? "تفعيل حساب الموظف" : "إعادة تعيين كلمة المرور"}</h1>
-        <p className={`text-sm mb-6 text-center ${sub}`}>{isStaffInvite ? "اختر كلمة مرورك لتفعيل الدخول. رابط الدعوة صالح ليوم واحد ويُستخدم مرة واحدة." : "أدخل كلمة المرور الجديدة"}</p>
+        <h1 className={`text-xl font-bold mb-1 text-center ${title}`}>{isStaffInvite ? (isAdmin ? "تفعيل حساب موظف الإدارة" : "تفعيل حساب الموظف") : "إعادة تعيين كلمة المرور"}</h1>
+        <p className={`text-sm mb-6 text-center ${sub}`}>{isStaffInvite ? "مرحباً بك في تكية. عيّن كلمة مرورك لإتمام تفعيل حساب الموظف، ثم سجّل الدخول. رابط الدعوة صالح لمدة ٢٤ ساعة ولمرة واحدة فقط." : "أدخل كلمة المرور الجديدة"}</p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="rp-new" className={label}>كلمة المرور الجديدة</label>
@@ -126,7 +131,7 @@ export default function ResetPassword() {
           )}
           <button type="submit" disabled={loading} className={btn}>
             {loading && <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>}
-            {loading ? "جاري التحديث…" : isStaffInvite ? "تفعيل الحساب" : "تحديث كلمة المرور"}
+            {loading ? (isStaffInvite ? "جارٍ تفعيل الحساب…" : "جاري التحديث…") : isStaffInvite ? "تعيين كلمة المرور وتفعيل الحساب" : "تحديث كلمة المرور"}
           </button>
         </form>
       </div>

@@ -76,7 +76,7 @@ it("sends exactly the approved three variables, normalizes Arabic phones, and pe
   assert.equal(message.parameters.length, 3);
   const url = new URL(message.parameters[2]);
   assert.equal(url.origin, "https://takyeh.sa");
-  assert.equal(url.pathname, "/reset-password");
+  assert.equal(url.pathname, "/activate-staff");
   const token = url.searchParams.get("token")!;
   const result = await db.execute<{ token: string }>(sql`
     SELECT token FROM password_reset_tokens WHERE target_type = ${STAFF_INVITE_TARGET} AND target_id = ${String(row.id)}`);

@@ -96,7 +96,7 @@ export function isValidRecoveryPassword(password: string): boolean {
 }
 
 function configuredResetOrigin(): string {
-  for (const configured of [process.env.PASSWORD_RESET_PUBLIC_URL, process.env.PUBLIC_URL]) {
+  for (const configured of [process.env.PUBLIC_SITE_URL, process.env.PASSWORD_RESET_PUBLIC_URL, process.env.PUBLIC_URL]) {
     if (!configured) continue;
     try {
       const parsed = new URL(configured);
@@ -117,6 +117,13 @@ export function makePasswordResetUrl(token: string, portal: RecoveryPortal): str
   const url = new URL("/reset-password", configuredResetOrigin());
   url.searchParams.set("token", token);
   url.searchParams.set("portalType", portal);
+  return url.toString();
+}
+
+export function makeStaffActivationUrl(token: string, portal: RecoveryPortal): string {
+  const url = new URL(makePasswordResetUrl(token, portal));
+  url.pathname = "/activate-staff";
+  url.searchParams.set("invite", "staff");
   return url.toString();
 }
 

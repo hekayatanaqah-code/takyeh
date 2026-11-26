@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
-import { hashRecoveryToken, makePasswordResetUrl } from "./passwordRecovery";
+import { hashRecoveryToken, makeStaffActivationUrl } from "./passwordRecovery";
 import { normalizeTaqnyatPhone, sendTaqnyatTemplate } from "../../../../taqnyatWhatsApp.js";
 
 export const STAFF_INVITE_TTL = 24 * 60 * 60 * 1000;
@@ -45,11 +45,10 @@ async function inviteStaff(
     return { phone, name: staff.name };
   });
   if (typeof issued === "string") return issued;
-  const url = new URL(makePasswordResetUrl(token, kind === "admin" ? "admin" : "public"));
-  url.searchParams.set("invite", "staff");
+  const url = makeStaffActivationUrl(token, kind === "admin" ? "admin" : "public");
   try {
     const parameters = kind === "admin"
-      ? [issued.name, url.toString()] : [issued.name, ownerName || "إدارة النشاط", url.toString()];
+      ? [issued.name, url] : [issued.name, ownerName || "إدارة النشاط", url];
     const template = kind === "admin" ? ADMIN_INVITE_TEMPLATE : STAFF_INVITE_TARGET;
     const result = await dependencies.send(issued.phone, template, parameters, "ar");
     if (result.success) return "accepted";
