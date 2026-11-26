@@ -9,7 +9,7 @@ import { isInRevenuePeriod, revenueMonthKey, revenueSalesTitle } from "@/lib/rev
 import { serviceRevenueBookings, serviceRevenueTotals } from "@/lib/serviceRevenue";
 import { propertyPrincipal, servicePrincipal } from "@/lib/financialPrincipal";
 import { cashBreakdownTotal } from "@/lib/revenueLiquidity";
-import { Clock, Trash2, RotateCcw, TrendingUp, Wallet, Receipt, Loader2, Banknote } from "lucide-react";
+import { Clock, Trash2, RotateCcw, TrendingUp, Receipt, Loader2, Banknote } from "lucide-react";
 import { RevenueFilterBar } from "@/components/owner/RevenueFilterBar";
 import { revenueMonthLabel } from "@/lib/revenueMonthLabel";
 import { Button } from "@/components/ui/button";
@@ -33,13 +33,11 @@ import { PaginatedItems, PaginationBar } from "@/components/owner/finance-shared
 import { fromEasternArabic, toEasternArabic } from "@/components/owner/SubscriptionAccountBanner";
 import { ProofViewerDialog } from "@/components/owner/PropertyBookingDialogs";
 import { inFinancialSelection } from "@/lib/financialSelection";
-import { ServiceCollectionChannels } from "./ServiceCollectionChannels";
 
 
 export function RevenueTab() {
   const { unit, financialSelection } = useAdminFinance();
   const selection = financialSelection === undefined ? unit.type === "all" ? null : [unit] : financialSelection;
-  const canDepositCash = selection === null || selection.length === 1;
   const [selectedRevenueSource, setRevenueSource] = useState<RevenueSource>("all");
   const quickSalesQuery = useListQuickSales(undefined, { query: {
     enabled: unit.type !== "chalet", staleTime: 0, refetchOnMount: "always", refetchInterval: 30_000,
@@ -104,9 +102,6 @@ export function RevenueTab() {
   const effectiveMonth = selectedMonth || currentMonth;
 
   const [cashBreakdownOpen, setCashBreakdownOpen] = useState(false);
-  const [depositCashOpen, setDepositCashOpen] = useState(false);
-  const [depositingCash, setDepositingCash] = useState(false);
-  const [depositAmount, setDepositAmount] = useState("");
   const [revSubTab, setRevSubTab] = useState<"monthly" | "receivables">("monthly");
   const showAllFuture = revSubTab === "receivables";
   const [pendingFilterMonth, setPendingFilterMonth] = useState<string>("");
@@ -219,7 +214,7 @@ export function RevenueTab() {
     .map(a => servicePrincipal(a).date)
     .concat(activityQuickSales.filter(sale => sale.status === "completed").map(sale => sale.dateStr));
 
-  const { data: depositLogs = [], refetch: refetchDepositLogs } = useQuery<Array<{ id: number; ownerId: number; submissionId: number | null; amount: string; note: string | null; createdAt: string }>>({
+  const { data: depositLogs = [] } = useQuery<Array<{ id: number; ownerId: number; submissionId: number | null; amount: string; note: string | null; createdAt: string }>>({
     queryKey: ["owner", "cash-deposit-logs"],
     queryFn: async () => {
       const r = await apiFetch("/owner/cash-deposit-logs");
@@ -1018,8 +1013,6 @@ export function RevenueTab() {
             </PaginatedItems>
           )}
         </div>
-        <ServiceCollectionChannels selection={selection} period={selectedServicePeriod}
-          source={revenueSource} bookings={serviceAppts} loading={svcLoading} />
       </div>
     );
   }
@@ -1228,104 +1221,7 @@ export function RevenueTab() {
       )}
 
       {unit.type !== "chalet" && revenueSource !== "bookings" && <QuickSalesRevenueDetails sales={combinedQuickSales} />}
-      {unit.type === "all" && revenueProviders.length > 0 && <ServiceCollectionChannels
-        selection={revenueProviders.map(provider => ({ type: "service", id: provider.id, name: provider.businessName }))}
-        period={revenuePeriod} source={revenueSource} bookings={serviceAppts} loading={svcLoading} />}
       <div className={unit.type !== "chalet" && revenueSource === "quick_sales" ? "hidden" : "contents"}>
-      {/* ── FINANCIAL CHANNELS DISTRIBUTION ── */}
-      <div className="bg-card border border-border rounded-2xl overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
-          <Wallet className="w-4 h-4 text-primary" />
-          <h3 className="font-bold text-sm text-foreground">توزيع قنوات التحصيل</h3>
-          <span className="text-[11px] text-muted-foreground ms-auto">الوضع الراهن — {unit.type === "all" && revenueProviders.length > 0 ? "حجوزات العقارات" : "جميع الحجوزات"}</span>
-        </div>
-        {/* Column headers */}
-        <div className="flex items-center justify-between px-5 py-2 bg-muted/30 border-b border-border">
-          <span className="text-xs font-bold text-muted-foreground">القناة المالية</span>
-          <span className="text-xs font-bold text-muted-foreground">المبلغ المحصّل</span>
-        </div>
-        <div className="divide-y divide-border">
-          {/* Row 1: Bank / Transfers */}
-          <div className="flex items-center justify-between px-5 py-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 text-lg">🏦</div>
-              <div>
-                <div className="font-semibold text-sm text-foreground">الحساب البنكي / حوالات</div>
-                <div className="text-[11px] text-muted-foreground">مجموع التحويلات البنكية والشبكة المستلمة</div>
-              </div>
-            </div>
-            {loading ? <Skeleton className="h-7 w-28" /> : (
-              <div className="text-xl font-extrabold text-blue-600 dark:text-blue-400 tabular-nums shrink-0">
-                {fmtN(channels.bankTransfers)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
-              </div>
-            )}
-          </div>
-          {/* Row 2: Cash Deposited to Bank */}
-          <div className="flex items-center justify-between px-5 py-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0 text-lg">✅</div>
-              <div>
-                <div className="font-semibold text-sm text-foreground">كاش تم إيداعه في البنك</div>
-                <div className="text-[11px] text-muted-foreground">نقدي سبق تحويله للحساب البنكي</div>
-              </div>
-            </div>
-            {loading ? <Skeleton className="h-7 w-28" /> : (
-              <div className="text-xl font-extrabold text-green-600 dark:text-green-400 tabular-nums shrink-0">
-                {fmtN(channels.cashDeposited)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
-              </div>
-            )}
-          </div>
-          {/* Row 3: Un-deposited Cash — info click → breakdown, action → deposit */}
-          <div className="flex items-center justify-between px-5 py-4 border-t border-border/50">
-            <button
-              type="button"
-              onClick={() => setCashBreakdownOpen(true)}
-              className="flex items-center gap-3 flex-1 text-right hover:opacity-80 transition-opacity"
-            >
-              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 text-lg">💵</div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm text-foreground">كاش لم يودَع / عهدة معلقة</span>
-                  <span className="text-[10px] bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded-full">تفاصيل ↓</span>
-                </div>
-                <div className="text-sm text-muted-foreground">{canDepositCash ? "نقدي بيد المشرف — لم يُودَع في البنك بعد"
-                  : "لإيداع الكاش، اختر نشاطاً واحداً لتحديد مصدر الإيداع بدقة."}</div>
-              </div>
-            </button>
-            <div className="flex items-center gap-3 shrink-0">
-              {loading ? <Skeleton className="h-7 w-28" /> : (
-                <span className="text-xl font-extrabold text-amber-600 dark:text-amber-400 tabular-nums">
-                  {fmtN(channels.cashUndeposited)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
-                </span>
-              )}
-              {!loading && channels.cashUndeposited > 0 && canDepositCash && (
-                <button
-                  type="button"
-                  onClick={() => setDepositCashOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg transition-colors whitespace-nowrap"
-                >
-                  🏦 تسجيل إيداع
-                </button>
-              )}
-            </div>
-          </div>
-          {/* Row 4: Insurance Custody */}
-          <div className="flex items-center justify-between px-5 py-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 text-lg">🔒</div>
-              <div>
-                <div className="font-semibold text-sm text-foreground">عهدة التأمينات المستلمة</div>
-                <div className="text-[11px] text-muted-foreground">مبالغ تأمين محتجزة — تُعاد للعملاء لاحقاً</div>
-              </div>
-            </div>
-            {loading ? <Skeleton className="h-7 w-28" /> : (
-              <div className="text-xl font-extrabold text-slate-600 dark:text-slate-400 tabular-nums shrink-0">
-                {fmtN(channels.insuranceCustody)} <span className="text-xs font-normal text-muted-foreground">ر.س</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Cash Breakdown Dialog */}
       <Dialog open={cashBreakdownOpen} onOpenChange={setCashBreakdownOpen}>
@@ -1591,79 +1487,6 @@ export function RevenueTab() {
 
       </div>
       </>}
-
-      {/* ══ DEPOSIT CASH CONFIRMATION DIALOG ══════════════════════════════ */}
-      <Dialog open={depositCashOpen} onOpenChange={setDepositCashOpen}>
-        <DialogContent dir="rtl" className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-right">
-              <span className="text-xl">🏦</span>
-              تسجيل إيداع نقدي في البنك
-            </DialogTitle>
-            <DialogDescription className="text-right text-sm mt-2">
-              هل أنت متأكد من تسجيل تحويل هذا المبلغ الكاش إلى الحساب البنكي؟
-            </DialogDescription>
-          </DialogHeader>
-          <div className="my-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4 text-center">
-            <div className="text-3xl font-extrabold text-amber-700 dark:text-amber-300 tabular-nums">
-              {fmtN(channels.cashUndeposited)}
-              <span className="text-lg font-normal text-muted-foreground ms-2">ر.س</span>
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">إجمالي الكاش غير المودَع حالياً</div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-foreground">مبلغ الإيداع (ر.س)</label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={depositAmount ? toEasternArabic(depositAmount) : ""}
-              onChange={e => setDepositAmount(fromEasternArabic(e.target.value).replace(/[^\d]/g, ""))}
-              placeholder={toEasternArabic(channels.cashUndeposited)}
-              className={`w-full border rounded-lg px-3 py-2 text-right text-sm bg-background focus:outline-none focus:ring-2 ${depositAmount && Number(depositAmount) > channels.cashUndeposited ? "border-destructive focus:ring-destructive" : "border-border focus:ring-blue-500"}`}
-            />
-            {depositAmount && Number(depositAmount) > channels.cashUndeposited && (
-              <p className="text-xs font-semibold text-destructive">⚠️ المبلغ يتجاوز الكاش المتاح ({channels.cashUndeposited.toLocaleString("ar-SA")} ر.س)</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              اترك الحقل فارغاً لإيداع المبلغ الكامل ({channels.cashUndeposited.toLocaleString("ar-SA")} ر.س)
-            </p>
-          </div>
-          <p className="text-xs text-muted-foreground text-right bg-muted/40 rounded-lg p-3 leading-relaxed">
-            سيتم تسجيل الإيداع في سجل الحساب البنكي وخصمه من رصيد الكاش غير المودَع.
-          </p>
-          <DialogFooter className="flex gap-2 mt-2">
-            <Button variant="outline" onClick={() => { setDepositCashOpen(false); setDepositAmount(""); }} disabled={depositingCash} className="flex-1">
-              إلغاء
-            </Button>
-            <Button
-              onClick={async () => {
-                const amt = depositAmount ? Number(depositAmount) : channels.cashUndeposited;
-                if (!amt || amt <= 0 || !canDepositCash) return;
-                setDepositingCash(true);
-                try {
-                  const submissionId = unit.type === "chalet" ? (unit as any).submissionId : undefined;
-                  const r = await apiFetch("/owner/mark-cash-deposited", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ amount: amt, submissionId }),
-                  });
-                  if (r.ok) {
-                    await Promise.all([refetchBookings(), refetchDepositLogs(), refetchFinancial()]);
-                    setDepositCashOpen(false);
-                    setDepositAmount("");
-                  }
-                } finally {
-                  setDepositingCash(false);
-                }
-              }}
-              disabled={!canDepositCash || depositingCash || channels.cashUndeposited === 0 || (!!depositAmount && Number(depositAmount) > channels.cashUndeposited)}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
-            >
-              {depositingCash ? "جارٍ التسجيل..." : "✓ تأكيد الإيداع"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ProofViewerDialog booking={proofTarget} open={!!proofTarget} onClose={() => setProofTarget(null)} />
 

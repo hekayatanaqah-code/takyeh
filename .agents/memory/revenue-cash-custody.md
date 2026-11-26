@@ -12,4 +12,10 @@ Keep the guest-receivables total label fixed as «إجمالي المبالغ ا
 
 **Why:** The user explicitly distinguishes current outstanding guest balances from monthly, annual and all-time sales reporting.
 
+Cash deposits are entered from «تسجيل إيداع بالبنك» in booking-calendar details, not a collection-channel section in the revenue tab.
+
+**Why:** The user chose booking-linked deposits and explicitly required preserving historical data, revenue cards, bank statements and financial reports.
+
+**How to apply:** Do not reintroduce the general collection-channel panel or general deposit action into revenue when changing financial displays.
+
 **How to apply:** Apply dynamic sales titles only to monthly-accounts sales. Do not change the receivables calculation or current custody balances when extending sales-period filters.
